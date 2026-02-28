@@ -11,15 +11,21 @@ namespace Rend.Pdf.Internal
     internal static class FlateHelper
     {
         /// <summary>
-        /// Compress data using Deflate. Returns the compressed bytes.
+        /// Compress data using Deflate with Optimal level. Returns the compressed bytes.
         /// </summary>
         public static byte[] Compress(byte[] data)
+            => Compress(data, CompressionLevel.Optimal);
+
+        /// <summary>
+        /// Compress data using Deflate at the specified compression level. Returns the compressed bytes.
+        /// </summary>
+        public static byte[] Compress(byte[] data, CompressionLevel level)
         {
             if (data.Length == 0) return data;
 
             using (var output = new MemoryStream(data.Length / 2))
             {
-                using (var deflate = new DeflateStream(output, CompressionLevel.Optimal, leaveOpen: true))
+                using (var deflate = new DeflateStream(output, level, leaveOpen: true))
                 {
                     deflate.Write(data, 0, data.Length);
                 }
@@ -28,12 +34,18 @@ namespace Rend.Pdf.Internal
         }
 
         /// <summary>
-        /// Compress data from a stream. Writes compressed bytes to the output stream.
-        /// Uses pooled buffers for the copy.
+        /// Compress data from a stream with Optimal level. Writes compressed bytes to the output stream.
         /// </summary>
         public static void Compress(Stream input, Stream output)
+            => Compress(input, output, CompressionLevel.Optimal);
+
+        /// <summary>
+        /// Compress data from a stream at the specified compression level. Writes compressed bytes to the output stream.
+        /// Uses pooled buffers for the copy.
+        /// </summary>
+        public static void Compress(Stream input, Stream output, CompressionLevel level)
         {
-            using (var deflate = new DeflateStream(output, CompressionLevel.Optimal, leaveOpen: true))
+            using (var deflate = new DeflateStream(output, level, leaveOpen: true))
             {
                 var buffer = ArrayPool<byte>.Shared.Rent(8192);
                 try

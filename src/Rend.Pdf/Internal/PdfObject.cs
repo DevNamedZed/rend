@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO.Compression;
 
 namespace Rend.Pdf.Internal
 {
@@ -165,6 +166,57 @@ namespace Rend.Pdf.Internal
         public static readonly PdfName XYZ = new PdfName("XYZ");
         public static readonly PdfName ca = new PdfName("ca");
         public static readonly PdfName CA = new PdfName("CA");
+
+        // XMP Metadata
+        public static readonly PdfName Metadata = new PdfName("Metadata");
+        public static readonly PdfName XML = new PdfName("XML");
+
+        // ICC Color Profiles
+        public static readonly PdfName ICCBased = new PdfName("ICCBased");
+        public static readonly PdfName Alternate = new PdfName("Alternate");
+        public static readonly PdfName N = new PdfName("N");
+
+        // AcroForms
+        public static readonly PdfName AcroForm = new PdfName("AcroForm");
+        public static readonly PdfName Fields = new PdfName("Fields");
+        public static readonly PdfName NeedAppearances = new PdfName("NeedAppearances");
+        public static readonly PdfName DA = new PdfName("DA");
+        public static readonly PdfName DR = new PdfName("DR");
+        public static readonly PdfName Widget = new PdfName("Widget");
+        public static readonly PdfName FT = new PdfName("FT");
+        public static readonly PdfName T = new PdfName("T");
+        public static readonly PdfName V = new PdfName("V");
+        public static readonly PdfName Ff = new PdfName("Ff");
+        public static readonly PdfName Tx = new PdfName("Tx");
+        public static readonly PdfName Btn = new PdfName("Btn");
+        public static readonly PdfName Ch = new PdfName("Ch");
+        public static readonly PdfName AP = new PdfName("AP");
+        public static readonly PdfName AS = new PdfName("AS");
+        public static readonly PdfName MK = new PdfName("MK");
+        public static readonly PdfName BC = new PdfName("BC");
+        public static readonly PdfName BG = new PdfName("BG");
+        public static readonly PdfName Opt = new PdfName("Opt");
+        public static readonly PdfName TI = new PdfName("TI");
+        public static readonly PdfName Yes = new PdfName("Yes");
+        public static readonly PdfName Off = new PdfName("Off");
+        public static readonly PdfName MaxLen = new PdfName("MaxLen");
+        public static readonly PdfName Q = new PdfName("Q");
+        public static readonly PdfName P = new PdfName("P");
+
+        // Gradients / Shadings
+        public static readonly PdfName Shading = new PdfName("Shading");
+        public static readonly PdfName ShadingType = new PdfName("ShadingType");
+        public static readonly PdfName Function = new PdfName("Function");
+        public static readonly PdfName FunctionType = new PdfName("FunctionType");
+        public static readonly PdfName Domain = new PdfName("Domain");
+        public static readonly PdfName Range = new PdfName("Range");
+        public static readonly PdfName Coords = new PdfName("Coords");
+        public static readonly PdfName Extend = new PdfName("Extend");
+        public static readonly PdfName C0 = new PdfName("C0");
+        public static readonly PdfName C1 = new PdfName("C1");
+        public static readonly PdfName Functions = new PdfName("Functions");
+        public static readonly PdfName Bounds = new PdfName("Bounds");
+        public static readonly PdfName Encode = new PdfName("Encode");
 
         public bool Equals(PdfName? other) => other != null && Value == other.Value;
         public override bool Equals(object? obj) => obj is PdfName other && Equals(other);
@@ -332,6 +384,7 @@ namespace Rend.Pdf.Internal
         public PdfDictionary Dict { get; }
         public byte[] Data { get; set; }
         public bool Compress { get; set; }
+        public CompressionLevel CompressionLevel { get; set; } = CompressionLevel.Optimal;
 
         public PdfStream(byte[] data, bool compress = true)
         {
@@ -345,7 +398,7 @@ namespace Rend.Pdf.Internal
             byte[] writeData;
             if (Compress && Data.Length > 0)
             {
-                writeData = FlateHelper.Compress(Data);
+                writeData = FlateHelper.Compress(Data, CompressionLevel);
                 Dict[PdfName.Filter] = PdfName.FlateDecode;
             }
             else

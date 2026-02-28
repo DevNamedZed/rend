@@ -14,7 +14,8 @@ namespace Rend.Pdf.Fonts
         /// <summary>
         /// Parse a TrueType/OpenType font file and create a PdfFont.
         /// </summary>
-        public static PdfFont Parse(byte[] fontData, int fontIndex)
+        public static PdfFont Parse(byte[] fontData, int fontIndex,
+                                     FontEmbedMode embedMode = FontEmbedMode.Subset)
         {
             var reader = new FontReader(fontData);
 
@@ -46,6 +47,14 @@ namespace Rend.Pdf.Fonts
             var nameStr = ParseName(fontData, tables["name"]);
             var os2 = tables.ContainsKey("OS/2") ? ParseOs2(fontData, tables["OS/2"]) : default;
             var cmap = ParseCmap(fontData, tables["cmap"]);
+            var post = tables.ContainsKey("post") ? ParsePost(fontData, tables["post"]) : default;
+
+            // Parse kerning tables (GPOS takes priority over kern per OpenType spec)
+            Dictionary<uint, short>? kerningPairs = null;
+            if (tables.ContainsKey("GPOS"))
+                kerningPairs = ParseGposKerning(fontData, tables["GPOS"]);
+            if (kerningPairs == null && tables.ContainsKey("kern"))
+                kerningPairs = ParseKern(fontData, tables["kern"]);
 
             // Build font name
             string baseFontName = SanitizeFontName(nameStr.PostScriptName ?? nameStr.FamilyName ?? $"Font{fontIndex}");
@@ -68,6 +77,11 @@ namespace Rend.Pdf.Fonts
                 }
             }
 
+            // Use post table for accurate italic angle (fallback to macStyle heuristic from head)
+            float italicAngle = post.HasData ? post.ItalicAngle : head.ItalicAngle;
+            // Use post table isFixedPitch if available, otherwise fall back to OS/2 heuristic
+            bool isFixedPitch = post.HasData ? post.IsFixedPitch : os2.IsFixedPitch;
+
             // Build metrics
             float unitsPerEm = head.UnitsPerEm;
             var metrics = new FontMetrics(
@@ -76,13 +90,15 @@ namespace Rend.Pdf.Fonts
                 capHeight: os2.CapHeight != 0 ? os2.CapHeight : hhea.Ascent * 0.7f,
                 xHeight: os2.XHeight != 0 ? os2.XHeight : hhea.Ascent * 0.5f,
                 stemV: 80, // Approximate; could be computed from glyph data
-                italicAngle: head.ItalicAngle,
+                italicAngle: italicAngle,
                 bBox: new RectF(head.XMin, head.YMin, head.XMax - head.XMin, head.YMax - head.YMin),
                 unitsPerEm: unitsPerEm,
-                flags: ComputeFontFlags(os2, head)
+                flags: ComputeFontFlags(isFixedPitch, italicAngle)
             );
 
-            return new PdfFont(baseFontName, metrics, charToGlyph, hmtx, supplementaryMap, isStandard14: false);
+            return new PdfFont(baseFontName, metrics, charToGlyph, hmtx, supplementaryMap,
+                               isStandard14: false, kerningPairs: kerningPairs,
+                               embedMode: embedMode);
         }
 
         private static string SanitizeFontName(string name)
@@ -98,18 +114,15 @@ namespace Rend.Pdf.Fonts
             return sb.Length > 0 ? sb.ToString() : "UnknownFont";
         }
 
-        private static int ComputeFontFlags(Os2Data os2, HeadData head)
+        private static int ComputeFontFlags(bool isFixedPitch, float italicAngle)
         {
             int flags = 0;
-            // Bit 1 (2): FixedPitch
-            if (os2.IsFixedPitch) flags |= 1;
-            // Bit 2 (4): Serif (rough heuristic)
-            // Bit 3 (8): Symbolic
-            // Bit 4 (16): Script
-            // Bit 6 (64): Italic
-            if (head.ItalicAngle != 0) flags |= 64;
-            // Bit 6 is Nonsymbolic (32) — set for Latin fonts
+            // Bit 0 (1): FixedPitch
+            if (isFixedPitch) flags |= 1;
+            // Bit 5 (32): Nonsymbolic — set for Latin fonts
             flags |= 32;
+            // Bit 6 (64): Italic
+            if (italicAngle != 0) flags |= 64;
             return flags;
         }
 
@@ -278,6 +291,379 @@ namespace Rend.Pdf.Fonts
                 CapHeight = capHeight,
                 XHeight = xHeight,
                 IsFixedPitch = avgCharWidth == 500 // crude heuristic
+            };
+        }
+
+        // ═══════════════════════════════════════════
+        // Kerning table parsers
+        // ═══════════════════════════════════════════
+
+        private static Dictionary<uint, short>? ParseKern(byte[] data, TableEntry entry)
+        {
+            if (entry.Length < 4) return null;
+
+            var r = new FontReader(data, (int)entry.Offset);
+            ushort version = r.ReadUInt16();
+
+            // Only support version 0 (Microsoft/Apple classic format)
+            if (version != 0) return null;
+
+            ushort nTables = r.ReadUInt16();
+            var pairs = new Dictionary<uint, short>();
+
+            for (int t = 0; t < nTables; t++)
+            {
+                int subtableStart = r.Position;
+                ushort subVersion = r.ReadUInt16();
+                ushort subLength = r.ReadUInt16();
+                ushort coverage = r.ReadUInt16();
+
+                // Format 0 = horizontal kerning pairs
+                int format = coverage >> 8;
+                bool horizontal = (coverage & 0x01) != 0;
+                bool crossStream = (coverage & 0x04) != 0;
+
+                if (format == 0 && horizontal && !crossStream)
+                {
+                    ushort nPairs = r.ReadUInt16();
+                    r.Skip(6); // searchRange, entrySelector, rangeShift
+
+                    for (int i = 0; i < nPairs; i++)
+                    {
+                        ushort left = r.ReadUInt16();
+                        ushort right = r.ReadUInt16();
+                        short value = r.ReadInt16();
+
+                        if (value != 0)
+                        {
+                            uint key = ((uint)left << 16) | right;
+                            pairs[key] = value;
+                        }
+                    }
+                }
+                else
+                {
+                    // Skip unsupported subtable
+                    r.Position = subtableStart + subLength;
+                }
+            }
+
+            return pairs.Count > 0 ? pairs : null;
+        }
+
+        private static Dictionary<uint, short>? ParseGposKerning(byte[] data, TableEntry entry)
+        {
+            if (entry.Length < 10) return null;
+
+            int baseOffset = (int)entry.Offset;
+            var r = new FontReader(data, baseOffset);
+
+            // GPOS header
+            ushort majorVersion = r.ReadUInt16();
+            ushort minorVersion = r.ReadUInt16();
+            ushort scriptListOffset = r.ReadUInt16();
+            ushort featureListOffset = r.ReadUInt16();
+            ushort lookupListOffset = r.ReadUInt16();
+
+            // Find "kern" feature in feature list
+            int featureListBase = baseOffset + featureListOffset;
+            var fr = new FontReader(data, featureListBase);
+            ushort featureCount = fr.ReadUInt16();
+
+            var kernLookupIndices = new List<ushort>();
+            for (int i = 0; i < featureCount; i++)
+            {
+                string tag = fr.ReadTag();
+                ushort offset = fr.ReadUInt16();
+
+                if (tag == "kern")
+                {
+                    // Read feature table to get lookup indices
+                    var ft = new FontReader(data, featureListBase + offset);
+                    ushort featureParams = ft.ReadUInt16();
+                    ushort lookupCount = ft.ReadUInt16();
+                    for (int j = 0; j < lookupCount; j++)
+                        kernLookupIndices.Add(ft.ReadUInt16());
+                }
+            }
+
+            if (kernLookupIndices.Count == 0) return null;
+
+            // Read lookup list
+            int lookupListBase = baseOffset + lookupListOffset;
+            var llr = new FontReader(data, lookupListBase);
+            ushort lookupCount2 = llr.ReadUInt16();
+
+            var pairs = new Dictionary<uint, short>();
+
+            foreach (ushort lookupIdx in kernLookupIndices)
+            {
+                if (lookupIdx >= lookupCount2) continue;
+
+                // Read lookup offset
+                var idxReader = new FontReader(data, lookupListBase + 2 + lookupIdx * 2);
+                ushort lookupOffset = idxReader.ReadUInt16();
+                int lookupBase = lookupListBase + lookupOffset;
+
+                var lr = new FontReader(data, lookupBase);
+                ushort lookupType = lr.ReadUInt16();
+                ushort lookupFlag = lr.ReadUInt16();
+                ushort subtableCount = lr.ReadUInt16();
+
+                // Only process PairPos (type 2) lookups
+                if (lookupType != 2) continue;
+
+                for (int s = 0; s < subtableCount; s++)
+                {
+                    ushort subtableOffset = lr.ReadUInt16();
+                    int subtableBase = lookupBase + subtableOffset;
+
+                    ParseGposPairPos(data, subtableBase, pairs);
+                }
+            }
+
+            return pairs.Count > 0 ? pairs : null;
+        }
+
+        private static void ParseGposPairPos(byte[] data, int offset, Dictionary<uint, short> pairs)
+        {
+            if (offset + 10 > data.Length) return;
+
+            var r = new FontReader(data, offset);
+            ushort posFormat = r.ReadUInt16();
+            ushort coverageOffset = r.ReadUInt16();
+            ushort valueFormat1 = r.ReadUInt16();
+            ushort valueFormat2 = r.ReadUInt16();
+
+            // We only extract XAdvance from value record 1 (bit 0x0004)
+            int valueRecord1Size = CountValueRecordBytes(valueFormat1);
+            int valueRecord2Size = CountValueRecordBytes(valueFormat2);
+            bool hasXAdvance1 = (valueFormat1 & 0x0004) != 0;
+            int xAdvanceOffset1 = GetXAdvanceOffset(valueFormat1);
+
+            if (!hasXAdvance1) return;
+
+            if (posFormat == 1)
+            {
+                // Format 1: Individual glyph pairs
+                ushort pairSetCount = r.ReadUInt16();
+
+                // Read coverage table to get first glyph IDs
+                var coverageGlyphs = ParseCoverageTable(data, offset + coverageOffset);
+                if (coverageGlyphs == null) return;
+
+                for (int i = 0; i < pairSetCount && i < coverageGlyphs.Length; i++)
+                {
+                    ushort pairSetOffset = r.ReadUInt16();
+                    int pairSetBase = offset + pairSetOffset;
+
+                    var pr = new FontReader(data, pairSetBase);
+                    ushort pairValueCount = pr.ReadUInt16();
+
+                    ushort firstGlyph = coverageGlyphs[i];
+                    for (int j = 0; j < pairValueCount; j++)
+                    {
+                        ushort secondGlyph = pr.ReadUInt16();
+
+                        // Read XAdvance from value record 1
+                        int valueStart = pr.Position;
+                        pr.Position = valueStart + xAdvanceOffset1;
+                        short xAdvance = pr.ReadInt16();
+                        // Skip rest of both value records
+                        pr.Position = valueStart + valueRecord1Size + valueRecord2Size;
+
+                        if (xAdvance != 0)
+                        {
+                            uint key = ((uint)firstGlyph << 16) | secondGlyph;
+                            pairs[key] = xAdvance;
+                        }
+                    }
+                }
+            }
+            else if (posFormat == 2)
+            {
+                // Format 2: Class-based pair adjustment
+                ushort classDef1Offset = r.ReadUInt16();
+                ushort classDef2Offset = r.ReadUInt16();
+                ushort class1Count = r.ReadUInt16();
+                ushort class2Count = r.ReadUInt16();
+
+                // Parse class definitions
+                var classDef1 = ParseClassDef(data, offset + classDef1Offset);
+                var classDef2 = ParseClassDef(data, offset + classDef2Offset);
+                var coverageGlyphs = ParseCoverageTable(data, offset + coverageOffset);
+
+                if (classDef1 == null || classDef2 == null || coverageGlyphs == null) return;
+
+                // Build reverse mapping: class -> glyph list
+                var class1Glyphs = new Dictionary<ushort, List<ushort>>();
+                var class2Glyphs = new Dictionary<ushort, List<ushort>>();
+
+                // Coverage glyphs belong to their class (or class 0)
+                foreach (ushort glyph in coverageGlyphs)
+                {
+                    ushort cls = classDef1.TryGetValue(glyph, out var c) ? c : (ushort)0;
+                    if (!class1Glyphs.TryGetValue(cls, out var list))
+                    {
+                        list = new List<ushort>();
+                        class1Glyphs[cls] = list;
+                    }
+                    list.Add(glyph);
+                }
+
+                foreach (var kvp in classDef2)
+                {
+                    if (!class2Glyphs.TryGetValue(kvp.Value, out var list))
+                    {
+                        list = new List<ushort>();
+                        class2Glyphs[kvp.Value] = list;
+                    }
+                    list.Add(kvp.Key);
+                }
+
+                // Read class pair values
+                int recordSize = valueRecord1Size + valueRecord2Size;
+                for (ushort c1 = 0; c1 < class1Count; c1++)
+                {
+                    for (ushort c2 = 0; c2 < class2Count; c2++)
+                    {
+                        int recordStart = r.Position;
+                        r.Position = recordStart + xAdvanceOffset1;
+                        short xAdvance = r.ReadInt16();
+                        r.Position = recordStart + recordSize;
+
+                        if (xAdvance != 0 &&
+                            class1Glyphs.TryGetValue(c1, out var glyphs1) &&
+                            class2Glyphs.TryGetValue(c2, out var glyphs2))
+                        {
+                            foreach (ushort g1 in glyphs1)
+                            {
+                                foreach (ushort g2 in glyphs2)
+                                {
+                                    uint key = ((uint)g1 << 16) | g2;
+                                    pairs[key] = xAdvance;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private static ushort[]? ParseCoverageTable(byte[] data, int offset)
+        {
+            if (offset + 4 > data.Length) return null;
+
+            var r = new FontReader(data, offset);
+            ushort format = r.ReadUInt16();
+
+            if (format == 1)
+            {
+                ushort glyphCount = r.ReadUInt16();
+                var glyphs = new ushort[glyphCount];
+                for (int i = 0; i < glyphCount; i++)
+                    glyphs[i] = r.ReadUInt16();
+                return glyphs;
+            }
+            else if (format == 2)
+            {
+                ushort rangeCount = r.ReadUInt16();
+                var glyphs = new List<ushort>();
+                for (int i = 0; i < rangeCount; i++)
+                {
+                    ushort startGlyph = r.ReadUInt16();
+                    ushort endGlyph = r.ReadUInt16();
+                    ushort startCoverageIndex = r.ReadUInt16();
+                    for (ushort g = startGlyph; g <= endGlyph; g++)
+                        glyphs.Add(g);
+                }
+                return glyphs.ToArray();
+            }
+
+            return null;
+        }
+
+        private static Dictionary<ushort, ushort>? ParseClassDef(byte[] data, int offset)
+        {
+            if (offset + 4 > data.Length) return null;
+
+            var r = new FontReader(data, offset);
+            ushort format = r.ReadUInt16();
+            var classes = new Dictionary<ushort, ushort>();
+
+            if (format == 1)
+            {
+                ushort startGlyph = r.ReadUInt16();
+                ushort glyphCount = r.ReadUInt16();
+                for (int i = 0; i < glyphCount; i++)
+                {
+                    ushort cls = r.ReadUInt16();
+                    if (cls != 0)
+                        classes[(ushort)(startGlyph + i)] = cls;
+                }
+            }
+            else if (format == 2)
+            {
+                ushort rangeCount = r.ReadUInt16();
+                for (int i = 0; i < rangeCount; i++)
+                {
+                    ushort startGlyph = r.ReadUInt16();
+                    ushort endGlyph = r.ReadUInt16();
+                    ushort cls = r.ReadUInt16();
+                    if (cls != 0)
+                    {
+                        for (ushort g = startGlyph; g <= endGlyph; g++)
+                            classes[g] = cls;
+                    }
+                }
+            }
+
+            return classes;
+        }
+
+        private static int CountValueRecordBytes(ushort valueFormat)
+        {
+            int count = 0;
+            for (int bit = 0; bit < 8; bit++)
+            {
+                if ((valueFormat & (1 << bit)) != 0)
+                    count += 2;
+            }
+            return count;
+        }
+
+        private static int GetXAdvanceOffset(ushort valueFormat)
+        {
+            // XAdvance is bit 2 (0x0004). Count bytes for bits before it.
+            int offset = 0;
+            if ((valueFormat & 0x0001) != 0) offset += 2; // XPlacement
+            if ((valueFormat & 0x0002) != 0) offset += 2; // YPlacement
+            return offset;
+        }
+
+        // ═══════════════════════════════════════════
+        // Post table parser
+        // ═══════════════════════════════════════════
+
+        private static PostData ParsePost(byte[] data, TableEntry entry)
+        {
+            var r = new FontReader(data, (int)entry.Offset);
+            // version (Fixed 32-bit, skip)
+            r.Skip(4);
+            // italicAngle: Fixed 16.16 (16-bit integer part + 16-bit fraction)
+            short intPart = r.ReadInt16();
+            ushort fracPart = r.ReadUInt16();
+            float italicAngle = intPart + fracPart / 65536f;
+            // underlinePosition, underlineThickness (skip)
+            r.Skip(4);
+            // isFixedPitch: uint32, nonzero means fixed pitch
+            uint isFixedPitch = r.ReadUInt32();
+
+            return new PostData
+            {
+                ItalicAngle = italicAngle,
+                IsFixedPitch = isFixedPitch != 0,
+                HasData = true
             };
         }
 
@@ -453,6 +839,13 @@ namespace Rend.Pdf.Fonts
             public short Ascent, Descent;
             public short CapHeight, XHeight;
             public bool IsFixedPitch;
+        }
+
+        private struct PostData
+        {
+            public float ItalicAngle;
+            public bool IsFixedPitch;
+            public bool HasData;
         }
 
         // ═══════════════════════════════════════════

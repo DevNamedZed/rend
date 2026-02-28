@@ -15,13 +15,14 @@ namespace Rend.Pdf.Images
     internal static class PngHandler
     {
         public static PdfImage CreateImage(byte[] pngData, string resourceName,
-                                            PdfObjectTable objectTable, bool compress)
+                                            PdfObjectTable objectTable, bool compress,
+                                            CompressionLevel compressionLevel = CompressionLevel.Optimal)
         {
             ParsePng(pngData, out var info, out byte[] rawPixels);
 
             // Indexed color (colorType 3) — use /Indexed color space directly
             if (info.ColorType == 3)
-                return CreateIndexedImage(info, rawPixels, resourceName, objectTable, compress);
+                return CreateIndexedImage(info, rawPixels, resourceName, objectTable, compress, compressionLevel);
 
             // For 16-bit images, downsample to 8-bit for PDF compatibility
             int outputBitDepth = info.BitDepth;
@@ -60,25 +61,36 @@ namespace Rend.Pdf.Images
                 alphaData = null;
             }
 
-            PdfName colorSpace;
-            switch (components)
+            PdfObject colorSpaceObj;
+            if (info.IccProfile != null)
             {
-                case 1: colorSpace = PdfName.DeviceGray; break;
-                default: colorSpace = PdfName.DeviceRGB; break;
+                // Build ICCBased color space
+                var iccStream = new PdfStream(info.IccProfile, compress) { CompressionLevel = compressionLevel };
+                iccStream.Dict[PdfName.N] = new PdfInteger(info.IccComponents);
+                iccStream.Dict[PdfName.Alternate] = info.IccComponents == 1 ? PdfName.DeviceGray : PdfName.DeviceRGB;
+                var iccRef = objectTable.Allocate(iccStream);
+                var csArray = new PdfArray(2);
+                csArray.Add(PdfName.ICCBased);
+                csArray.Add(iccRef);
+                colorSpaceObj = csArray;
+            }
+            else
+            {
+                colorSpaceObj = components == 1 ? (PdfObject)PdfName.DeviceGray : PdfName.DeviceRGB;
             }
 
-            var imageStream = new PdfStream(colorData, compress);
+            var imageStream = new PdfStream(colorData, compress) { CompressionLevel = compressionLevel };
             imageStream.Dict[PdfName.Type] = PdfName.XObject;
             imageStream.Dict[PdfName.Subtype] = PdfName.Image;
             imageStream.Dict[PdfName.Width] = new PdfInteger(info.Width);
             imageStream.Dict[PdfName.Height] = new PdfInteger(info.Height);
             imageStream.Dict[PdfName.BitsPerComponent] = new PdfInteger(outputBitDepth);
-            imageStream.Dict[PdfName.ColorSpace] = colorSpace;
+            imageStream.Dict[PdfName.ColorSpace] = colorSpaceObj;
 
             PdfReference? smaskRef = null;
             if (alphaData != null)
             {
-                var smaskStream = new PdfStream(alphaData, compress);
+                var smaskStream = new PdfStream(alphaData, compress) { CompressionLevel = compressionLevel };
                 smaskStream.Dict[PdfName.Type] = PdfName.XObject;
                 smaskStream.Dict[PdfName.Subtype] = PdfName.Image;
                 smaskStream.Dict[PdfName.Width] = new PdfInteger(info.Width);
@@ -96,7 +108,8 @@ namespace Rend.Pdf.Images
         }
 
         private static PdfImage CreateIndexedImage(PngInfo info, byte[] rawPixels,
-            string resourceName, PdfObjectTable objectTable, bool compress)
+            string resourceName, PdfObjectTable objectTable, bool compress,
+            CompressionLevel compressionLevel = CompressionLevel.Optimal)
         {
             if (info.Palette == null)
                 throw new InvalidOperationException("Indexed PNG missing PLTE chunk.");
@@ -132,7 +145,7 @@ namespace Rend.Pdf.Images
                 }
             }
 
-            var imageStream = new PdfStream(rawPixels, compress);
+            var imageStream = new PdfStream(rawPixels, compress) { CompressionLevel = compressionLevel };
             imageStream.Dict[PdfName.Type] = PdfName.XObject;
             imageStream.Dict[PdfName.Subtype] = PdfName.Image;
             imageStream.Dict[PdfName.Width] = new PdfInteger(info.Width);
@@ -143,7 +156,7 @@ namespace Rend.Pdf.Images
             PdfReference? smaskRef = null;
             if (alphaData != null)
             {
-                var smaskStream = new PdfStream(alphaData, compress);
+                var smaskStream = new PdfStream(alphaData, compress) { CompressionLevel = compressionLevel };
                 smaskStream.Dict[PdfName.Type] = PdfName.XObject;
                 smaskStream.Dict[PdfName.Subtype] = PdfName.Image;
                 smaskStream.Dict[PdfName.Width] = new PdfInteger(info.Width);
@@ -168,6 +181,8 @@ namespace Rend.Pdf.Images
             public int ColorType;
             public byte[]? Palette;  // PLTE chunk: RGB triplets
             public byte[]? TrnsData; // tRNS chunk: transparency data
+            public byte[]? IccProfile; // iCCP chunk: raw ICC profile data
+            public int IccComponents; // Number of ICC color components
         }
 
         private static void ParsePng(byte[] data, out PngInfo info, out byte[] rawPixels)
@@ -193,11 +208,10 @@ namespace Rend.Pdf.Images
             int interlaceMethod = data[pos++];
             pos += 4; // CRC
 
-            if (interlaceMethod != 0)
-                throw new NotSupportedException("Interlaced PNGs are not yet supported.");
-
             info.Palette = null;
             info.TrnsData = null;
+            info.IccProfile = null;
+            info.IccComponents = 0;
 
             var compressedData = new List<byte[]>();
             int totalCompressedLength = 0;
@@ -223,6 +237,42 @@ namespace Rend.Pdf.Images
                 {
                     info.TrnsData = new byte[chunkLength];
                     Buffer.BlockCopy(data, pos, info.TrnsData, 0, (int)chunkLength);
+                }
+                else if (chunkTag == "iCCP")
+                {
+                    // Read null-terminated profile name
+                    int nameEnd = pos;
+                    while (nameEnd < pos + (int)chunkLength && data[nameEnd] != 0) nameEnd++;
+                    // Skip name + null byte + compression method byte (always 0)
+                    int profileDataStart = nameEnd + 2;
+                    int profileDataLen = (int)chunkLength - (profileDataStart - pos);
+                    if (profileDataLen > 2)
+                    {
+                        // Decompress zlib data (2-byte header + deflate)
+                        using (var ms = new MemoryStream(data, profileDataStart + 2, profileDataLen - 2))
+                        using (var deflate = new DeflateStream(ms, CompressionMode.Decompress))
+                        using (var output = new MemoryStream())
+                        {
+                            var buf = ArrayPool<byte>.Shared.Rent(4096);
+                            try
+                            {
+                                int bytesRead;
+                                while ((bytesRead = deflate.Read(buf, 0, buf.Length)) > 0)
+                                    output.Write(buf, 0, bytesRead);
+                            }
+                            finally
+                            {
+                                ArrayPool<byte>.Shared.Return(buf);
+                            }
+                            info.IccProfile = output.ToArray();
+                        }
+                        // Set component count based on color type
+                        switch (info.ColorType)
+                        {
+                            case 0: case 4: info.IccComponents = 1; break; // Grayscale
+                            default: info.IccComponents = 3; break; // RGB, Indexed, RGBA
+                        }
+                    }
                 }
                 else if (chunkTag == "IEND")
                 {
@@ -260,58 +310,170 @@ namespace Rend.Pdf.Images
                 decompressed = output.ToArray();
             }
 
-            // Undo PNG row filters
-            // For sub-byte depths, stride is computed in bytes (ceiling division)
             int bitsPerPixel = GetBitsPerPixel(info.ColorType, info.BitDepth);
-            int filterByteUnit = Math.Max(1, bitsPerPixel / 8); // bytes per complete pixel for filter
-            int stride = (info.Width * bitsPerPixel + 7) / 8;   // bytes per row (ceiling)
-            rawPixels = new byte[info.Height * stride];
 
-            int srcPos = 0;
+            if (interlaceMethod == 1)
+            {
+                // Adam7 interlaced
+                rawPixels = DeinterlaceAdam7(decompressed, info.Width, info.Height, bitsPerPixel);
+            }
+            else
+            {
+                // Non-interlaced: undo PNG row filters inline
+                int filterByteUnit = Math.Max(1, bitsPerPixel / 8);
+                int stride = (info.Width * bitsPerPixel + 7) / 8;
+                rawPixels = new byte[info.Height * stride];
+
+                int srcPos = 0;
+                UnfilterRows(decompressed, ref srcPos, rawPixels, stride, info.Height, filterByteUnit);
+            }
+        }
+
+        /// <summary>
+        /// Undo PNG row filters for a sequence of rows.
+        /// Reads (1 + stride) bytes per row from <paramref name="decompressed"/> starting at <paramref name="srcPos"/>.
+        /// Writes unfiltered bytes into <paramref name="output"/> (row 0 at offset 0, row 1 at offset <paramref name="outputStride"/>, etc.).
+        /// </summary>
+        private static void UnfilterRows(byte[] decompressed, ref int srcPos, byte[] output,
+                                          int outputStride, int rowCount, int filterByteUnit)
+        {
             byte[]? prevRow = null;
 
-            for (int row = 0; row < info.Height; row++)
+            for (int row = 0; row < rowCount; row++)
             {
                 byte filterType = decompressed[srcPos++];
-                int rowStart = row * stride;
+                int rowStart = row * outputStride;
 
-                Buffer.BlockCopy(decompressed, srcPos, rawPixels, rowStart, stride);
-                srcPos += stride;
+                Buffer.BlockCopy(decompressed, srcPos, output, rowStart, outputStride);
+                srcPos += outputStride;
 
                 switch (filterType)
                 {
                     case 0: break;
                     case 1: // Sub
-                        for (int i = filterByteUnit; i < stride; i++)
-                            rawPixels[rowStart + i] = (byte)(rawPixels[rowStart + i] + rawPixels[rowStart + i - filterByteUnit]);
+                        for (int i = filterByteUnit; i < outputStride; i++)
+                            output[rowStart + i] = (byte)(output[rowStart + i] + output[rowStart + i - filterByteUnit]);
                         break;
                     case 2: // Up
                         if (prevRow != null)
-                            for (int i = 0; i < stride; i++)
-                                rawPixels[rowStart + i] = (byte)(rawPixels[rowStart + i] + prevRow[i]);
+                            for (int i = 0; i < outputStride; i++)
+                                output[rowStart + i] = (byte)(output[rowStart + i] + prevRow[i]);
                         break;
                     case 3: // Average
-                        for (int i = 0; i < stride; i++)
+                        for (int i = 0; i < outputStride; i++)
                         {
-                            int left = i >= filterByteUnit ? rawPixels[rowStart + i - filterByteUnit] : 0;
+                            int left = i >= filterByteUnit ? output[rowStart + i - filterByteUnit] : 0;
                             int up = prevRow != null ? prevRow[i] : 0;
-                            rawPixels[rowStart + i] = (byte)(rawPixels[rowStart + i] + (left + up) / 2);
+                            output[rowStart + i] = (byte)(output[rowStart + i] + (left + up) / 2);
                         }
                         break;
                     case 4: // Paeth
-                        for (int i = 0; i < stride; i++)
+                        for (int i = 0; i < outputStride; i++)
                         {
-                            int left = i >= filterByteUnit ? rawPixels[rowStart + i - filterByteUnit] : 0;
+                            int left = i >= filterByteUnit ? output[rowStart + i - filterByteUnit] : 0;
                             int up = prevRow != null ? prevRow[i] : 0;
                             int upLeft = (i >= filterByteUnit && prevRow != null) ? prevRow[i - filterByteUnit] : 0;
-                            rawPixels[rowStart + i] = (byte)(rawPixels[rowStart + i] + PaethPredictor(left, up, upLeft));
+                            output[rowStart + i] = (byte)(output[rowStart + i] + PaethPredictor(left, up, upLeft));
                         }
                         break;
                 }
 
-                if (prevRow == null) prevRow = new byte[stride];
-                Buffer.BlockCopy(rawPixels, rowStart, prevRow, 0, stride);
+                if (prevRow == null) prevRow = new byte[outputStride];
+                Buffer.BlockCopy(output, rowStart, prevRow, 0, outputStride);
             }
+        }
+
+        // Adam7 interlace pass definitions: { startCol, colStep, startRow, rowStep }
+        private static readonly int[][] Adam7Passes = new[]
+        {
+            new[] { 0, 8, 0, 8 }, // pass 1
+            new[] { 4, 8, 0, 8 }, // pass 2
+            new[] { 0, 4, 4, 8 }, // pass 3
+            new[] { 2, 4, 0, 4 }, // pass 4
+            new[] { 0, 2, 2, 4 }, // pass 5
+            new[] { 1, 2, 0, 2 }, // pass 6
+            new[] { 0, 1, 1, 2 }, // pass 7
+        };
+
+        /// <summary>
+        /// Decode Adam7 interlaced PNG data into a full image buffer.
+        /// </summary>
+        private static byte[] DeinterlaceAdam7(byte[] decompressed, int width, int height, int bitsPerPixel)
+        {
+            int fullStride = (width * bitsPerPixel + 7) / 8;
+            var result = new byte[height * fullStride];
+            int filterByteUnit = Math.Max(1, bitsPerPixel / 8);
+            int srcPos = 0;
+
+            for (int pass = 0; pass < 7; pass++)
+            {
+                int startCol = Adam7Passes[pass][0];
+                int colStep = Adam7Passes[pass][1];
+                int startRow = Adam7Passes[pass][2];
+                int rowStep = Adam7Passes[pass][3];
+
+                int passWidth = (width - startCol + colStep - 1) / colStep;
+                int passHeight = (height - startRow + rowStep - 1) / rowStep;
+
+                if (passWidth <= 0 || passHeight <= 0)
+                    continue;
+
+                int passStride = (passWidth * bitsPerPixel + 7) / 8;
+                var passBuf = new byte[passHeight * passStride];
+
+                UnfilterRows(decompressed, ref srcPos, passBuf, passStride, passHeight, filterByteUnit);
+
+                // Scatter pass pixels into the full image
+                if (bitsPerPixel >= 8)
+                {
+                    int bytesPerPixel = bitsPerPixel / 8;
+                    for (int passRow = 0; passRow < passHeight; passRow++)
+                    {
+                        int srcRowStart = passRow * passStride;
+                        int dstRow = startRow + passRow * rowStep;
+                        int dstRowStart = dstRow * fullStride;
+
+                        for (int passCol = 0; passCol < passWidth; passCol++)
+                        {
+                            int dstCol = startCol + passCol * colStep;
+                            int srcOffset = srcRowStart + passCol * bytesPerPixel;
+                            int dstOffset = dstRowStart + dstCol * bytesPerPixel;
+                            Buffer.BlockCopy(passBuf, srcOffset, result, dstOffset, bytesPerPixel);
+                        }
+                    }
+                }
+                else
+                {
+                    // Sub-byte bit depths (1, 2, 4): scatter individual pixel bits
+                    int bitDepth = bitsPerPixel; // for sub-byte, bitsPerPixel == bitDepth
+                    int ppb = 8 / bitDepth; // pixels per byte
+                    int mask = (1 << bitDepth) - 1;
+
+                    for (int passRow = 0; passRow < passHeight; passRow++)
+                    {
+                        int srcRowStart = passRow * passStride;
+                        int dstRow = startRow + passRow * rowStep;
+                        int dstRowStart = dstRow * fullStride;
+
+                        for (int passCol = 0; passCol < passWidth; passCol++)
+                        {
+                            int dstCol = startCol + passCol * colStep;
+
+                            // Extract source pixel value
+                            int srcByteIdx = srcRowStart + passCol / ppb;
+                            int srcBitShift = 8 - bitDepth - (passCol % ppb) * bitDepth;
+                            int pixelValue = (passBuf[srcByteIdx] >> srcBitShift) & mask;
+
+                            // Place into destination
+                            int dstByteIdx = dstRowStart + dstCol / ppb;
+                            int dstBitShift = 8 - bitDepth - (dstCol % ppb) * bitDepth;
+                            result[dstByteIdx] = (byte)((result[dstByteIdx] & ~(mask << dstBitShift)) | (pixelValue << dstBitShift));
+                        }
+                    }
+                }
+            }
+
+            return result;
         }
 
         private static int GetChannelCount(int colorType)

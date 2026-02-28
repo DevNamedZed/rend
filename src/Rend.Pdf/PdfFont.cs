@@ -12,6 +12,7 @@ namespace Rend.Pdf
         private readonly string _baseFont;
         private readonly bool _isStandard14;
         private readonly FontMetrics _metrics;
+        private readonly FontEmbedMode _embedMode;
 
         // Glyph cache: char -> glyph ID (BMP direct lookup, supplementary via dictionary)
         private readonly ushort[] _charToGlyph;
@@ -19,6 +20,9 @@ namespace Rend.Pdf
 
         // Glyph advance widths indexed by glyph ID (in font units, 1/1000 of text space)
         private readonly float[] _advanceWidths;
+
+        // Kerning pairs: key = (leftGlyphId << 16) | rightGlyphId, value = adjustment in font units
+        private readonly Dictionary<uint, short>? _kerningPairs;
 
         // Track which glyphs have been used (for subsetting)
         private readonly HashSet<ushort> _usedGlyphs = new HashSet<ushort>();
@@ -28,7 +32,8 @@ namespace Rend.Pdf
 
         internal PdfFont(string baseFont, FontMetrics metrics, ushort[] charToGlyph,
                          float[] advanceWidths, Dictionary<int, ushort>? supplementaryMap,
-                         bool isStandard14)
+                         bool isStandard14, Dictionary<uint, short>? kerningPairs = null,
+                         FontEmbedMode embedMode = FontEmbedMode.Subset)
         {
             _baseFont = baseFont;
             _metrics = metrics;
@@ -36,6 +41,8 @@ namespace Rend.Pdf
             _advanceWidths = advanceWidths;
             _supplementaryMap = supplementaryMap;
             _isStandard14 = isStandard14;
+            _kerningPairs = kerningPairs;
+            _embedMode = embedMode;
         }
 
         /// <summary>PostScript base font name.</summary>
@@ -46,6 +53,9 @@ namespace Rend.Pdf
 
         /// <summary>Whether this is a Standard 14 font (not embedded).</summary>
         public bool IsStandard14 => _isStandard14;
+
+        /// <summary>Font embedding mode.</summary>
+        internal FontEmbedMode EmbedMode => _embedMode;
 
         /// <summary>Set of glyph IDs used so far (for subsetting).</summary>
         internal IReadOnlyCollection<ushort> UsedGlyphs => _usedGlyphs;
@@ -160,6 +170,80 @@ namespace Rend.Pdf
         public float GetAdvanceWidth(ushort glyphId)
         {
             return glyphId < _advanceWidths.Length ? _advanceWidths[glyphId] : 0;
+        }
+
+        /// <summary>
+        /// Get the kerning adjustment between two glyphs in font units.
+        /// Returns 0 if no kerning pair exists or the font has no kerning data.
+        /// </summary>
+        public float GetKerning(ushort leftGlyphId, ushort rightGlyphId)
+        {
+            if (_kerningPairs == null) return 0;
+
+            uint key = ((uint)leftGlyphId << 16) | rightGlyphId;
+            return _kerningPairs.TryGetValue(key, out short value) ? value : 0;
+        }
+
+        /// <summary>Whether this font has kerning data.</summary>
+        public bool HasKerning => _kerningPairs != null && _kerningPairs.Count > 0;
+
+        /// <summary>
+        /// Bulk glyph ID lookup. Converts a character span to glyph IDs and records usage.
+        /// Returns the number of glyph IDs written (may differ from text length due to surrogate pairs).
+        /// </summary>
+        public int GetGlyphIds(ReadOnlySpan<char> text, Span<ushort> glyphIds)
+        {
+            int glyphIdx = 0;
+            for (int i = 0; i < text.Length; i++)
+            {
+                int codePoint;
+                if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+                {
+                    codePoint = char.ConvertToUtf32(text[i], text[i + 1]);
+                    i++;
+                }
+                else
+                {
+                    codePoint = text[i];
+                }
+
+                ushort glyphId = GetGlyphId(codePoint);
+                if (glyphIdx < glyphIds.Length)
+                    glyphIds[glyphIdx] = glyphId;
+                glyphIdx++;
+            }
+            return glyphIdx;
+        }
+
+        /// <summary>
+        /// Bulk advance width query. Gets advance widths for an array of glyph IDs.
+        /// </summary>
+        public void GetAdvanceWidths(ReadOnlySpan<ushort> glyphIds, Span<float> advances)
+        {
+            int count = Math.Min(glyphIds.Length, advances.Length);
+            for (int i = 0; i < count; i++)
+            {
+                advances[i] = glyphIds[i] < _advanceWidths.Length ? _advanceWidths[glyphIds[i]] : 0;
+            }
+        }
+
+        /// <summary>
+        /// Record a glyph ID as used (for subsetting). Called internally when using
+        /// glyph-level APIs that bypass the normal Encode/GetGlyphId path.
+        /// </summary>
+        internal void RecordGlyphUsage(ushort glyphId)
+        {
+            if (glyphId != 0)
+                _usedGlyphs.Add(glyphId);
+        }
+
+        /// <summary>
+        /// Encode a single glyph ID to 2 bytes big-endian (for CIDFont).
+        /// </summary>
+        internal static void EncodeGlyphId(ushort glyphId, byte[] buffer, int offset)
+        {
+            buffer[offset] = (byte)(glyphId >> 8);
+            buffer[offset + 1] = (byte)(glyphId & 0xFF);
         }
 
         /// <summary>Total number of glyphs in the font.</summary>

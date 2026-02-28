@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Rend</RootNamespace>
+    <AssemblyName>Rend</AssemblyName>
+    <Description>High-fidelity HTML-to-PDF/image rendering engine. Orchestrates HTML parsing, CSS cascade, layout, and output.</Description>
+    <PackageId>Rend</PackageId>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Rend.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Rend.Core\Rend.Core.csproj" />
+    <ProjectReference Include="..\Rend.Html\Rend.Html.csproj" />
+    <ProjectReference Include="..\Rend.Css\Rend.Css.csproj" />
+    <ProjectReference Include="..\Rend.Pdf\Rend.Pdf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="HarfBuzzSharp" Version="7.3.0.2" />
+    <PackageReference Include="SkiaSharp" Version="2.88.9" />
+    <PackageReference Include="System.Memory" Version="4.5.5" />
+    <PackageReference Include="System.Buffers" Version="4.5.1" />
+    <PackageReference Include="Microsoft.Bcl.HashCode" Version="1.1.1" />
+  </ItemGroup>
+</Project>

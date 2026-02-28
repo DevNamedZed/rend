@@ -16,6 +16,9 @@ namespace Rend.Pdf
 
         /// <summary>Initial buffer size for content stream builders. Default: 64KB.</summary>
         public int ContentStreamBufferSize { get; set; } = 65536;
+
+        /// <summary>Whether to include XMP metadata in the PDF catalog. Default: false.</summary>
+        public bool IncludeXmpMetadata { get; set; }
     }
 
     /// <summary>PDF version identifiers.</summary>
@@ -36,8 +39,12 @@ namespace Rend.Pdf
     {
         /// <summary>No compression. Larger output, useful for debugging.</summary>
         None,
-        /// <summary>Flate (Deflate) compression. Good balance of size and speed.</summary>
-        Flate
+        /// <summary>Flate (Deflate) compression. Maps to CompressionLevel.Optimal for backward compatibility.</summary>
+        Flate,
+        /// <summary>Flate with fastest compression. Larger output but faster encoding.</summary>
+        FlateFast,
+        /// <summary>Flate with optimal compression. Explicit alias for best compression ratio.</summary>
+        FlateOptimal
     }
 
     /// <summary>Font embedding mode.</summary>

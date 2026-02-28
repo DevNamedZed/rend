@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO.Compression;
 using Rend.Core.Values;
 using Rend.Pdf.Internal;
 
@@ -12,6 +13,7 @@ namespace Rend.Pdf
     {
         private readonly PdfObjectTable _objectTable;
         private readonly List<PdfAnnotation> _annotations = new List<PdfAnnotation>();
+        private readonly List<PdfFormField> _formFields = new List<PdfFormField>();
 
         /// <summary>Page width in points (1/72 inch).</summary>
         public float Width { get; }
@@ -28,14 +30,18 @@ namespace Rend.Pdf
         /// <summary>Annotations on this page.</summary>
         internal IReadOnlyList<PdfAnnotation> Annotations => _annotations;
 
+        /// <summary>Form fields on this page.</summary>
+        internal IReadOnlyList<PdfFormField> FormFields => _formFields;
+
         internal PdfPage(float width, float height, int pageIndex,
-                         PdfObjectTable objectTable, bool compress, int bufferSize)
+                         PdfObjectTable objectTable, bool compress, int bufferSize,
+                         CompressionLevel compressionLevel = CompressionLevel.Optimal)
         {
             Width = width;
             Height = height;
             PageIndex = pageIndex;
             _objectTable = objectTable;
-            Content = new PdfContentStream(objectTable, compress, bufferSize);
+            Content = new PdfContentStream(objectTable, compress, bufferSize, compressionLevel);
         }
 
         /// <summary>
@@ -56,6 +62,30 @@ namespace Rend.Pdf
             var annotation = new PdfLinkAnnotation(rect, targetPage, yPosition);
             _annotations.Add(annotation);
             return annotation;
+        }
+
+        /// <summary>Add a text input field to this page.</summary>
+        public PdfTextField AddTextField(string name, RectF rect)
+        {
+            var field = new PdfTextField(name, rect);
+            _formFields.Add(field);
+            return field;
+        }
+
+        /// <summary>Add a checkbox field to this page.</summary>
+        public PdfCheckboxField AddCheckbox(string name, RectF rect)
+        {
+            var field = new PdfCheckboxField(name, rect);
+            _formFields.Add(field);
+            return field;
+        }
+
+        /// <summary>Add a dropdown (combo box) field to this page.</summary>
+        public PdfDropdownField AddDropdown(string name, RectF rect)
+        {
+            var field = new PdfDropdownField(name, rect);
+            _formFields.Add(field);
+            return field;
         }
     }
 

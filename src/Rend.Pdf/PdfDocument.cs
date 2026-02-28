@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
+using System.Text;
 using Rend.Core.Values;
 using Rend.Pdf.Internal;
 using Rend.Pdf.Fonts;
@@ -34,6 +36,7 @@ namespace Rend.Pdf
         private readonly List<PdfFont> _embeddedFonts = new List<PdfFont>();
         private readonly Dictionary<PdfFont, byte[]> _fontRawData = new Dictionary<PdfFont, byte[]>();
         private readonly List<PdfImage> _images = new List<PdfImage>();
+        private readonly List<PdfReference> _formFieldRefs = new List<PdfReference>();
         private int _fontCounter;
         private int _imageCounter;
         private int _subsetTagCounter;
@@ -74,8 +77,9 @@ namespace Rend.Pdf
         public PdfPage AddPage(float widthPt, float heightPt)
         {
             bool compress = _options.Compression != PdfCompression.None;
+            var level = MapCompressionLevel(_options.Compression);
             var page = new PdfPage(widthPt, heightPt, _pages.Count, _objectTable, compress,
-                                   _options.ContentStreamBufferSize);
+                                   _options.ContentStreamBufferSize, level);
             _pages.Add(page);
             return page;
         }
@@ -87,8 +91,9 @@ namespace Rend.Pdf
         public PdfPage InsertPage(int index, float widthPt, float heightPt)
         {
             bool compress = _options.Compression != PdfCompression.None;
+            var level = MapCompressionLevel(_options.Compression);
             var page = new PdfPage(widthPt, heightPt, index, _objectTable, compress,
-                                   _options.ContentStreamBufferSize);
+                                   _options.ContentStreamBufferSize, level);
             _pages.Insert(index, page);
             // Re-index subsequent pages
             for (int i = index + 1; i < _pages.Count; i++)
@@ -125,7 +130,7 @@ namespace Rend.Pdf
                 fontBytes = ms.ToArray();
             }
 
-            var pdfFont = TrueTypeParser.Parse(fontBytes, _fontCounter++);
+            var pdfFont = TrueTypeParser.Parse(fontBytes, _fontCounter++, mode);
             _embeddedFonts.Add(pdfFont);
             _fontRawData[pdfFont] = fontBytes;
             return pdfFont;
@@ -165,15 +170,16 @@ namespace Rend.Pdf
             _imageCounter++;
             string resourceName = "Im" + _imageCounter;
             bool compress = _options.Compression != PdfCompression.None;
+            var level = MapCompressionLevel(_options.Compression);
 
             PdfImage image;
             switch (format)
             {
                 case ImageFormat.Jpeg:
-                    image = Images.JpegHandler.CreateImage(imageData, resourceName, _objectTable);
+                    image = Images.JpegHandler.CreateImage(imageData, resourceName, _objectTable, level);
                     break;
                 case ImageFormat.Png:
-                    image = Images.PngHandler.CreateImage(imageData, resourceName, _objectTable, compress);
+                    image = Images.PngHandler.CreateImage(imageData, resourceName, _objectTable, compress, level);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(format), format, "Unsupported image format.");
@@ -261,16 +267,26 @@ namespace Rend.Pdf
             if (_outlines.Count > 0)
                 outlinesRef = BuildOutlineTree(pageRefs);
 
-            // 5. Build catalog
-            var finalCatalogRef = BuildCatalog(pagesRef, outlinesRef);
+            // 5. Build XMP metadata (if enabled)
+            PdfReference? xmpMetadataRef = null;
+            if (_options.IncludeXmpMetadata)
+                xmpMetadataRef = BuildXmpMetadata();
 
-            // 6. Write all objects
+            // 6. Build AcroForm (if any form fields exist)
+            PdfReference? acroFormRef = null;
+            if (_formFieldRefs.Count > 0)
+                acroFormRef = BuildAcroForm();
+
+            // 7. Build catalog
+            var finalCatalogRef = BuildCatalog(pagesRef, outlinesRef, xmpMetadataRef, acroFormRef);
+
+            // 8. Write all objects
             _objectTable.WriteAllObjects(writer);
 
-            // 7. Write xref table
+            // 9. Write xref table
             long xrefOffset = _objectTable.WriteXRefTable(writer);
 
-            // 8. Write trailer
+            // 10. Write trailer
             _objectTable.WriteTrailer(writer, finalCatalogRef, infoRef, xrefOffset);
         }
 
@@ -357,11 +373,16 @@ namespace Rend.Pdf
             descriptorDict[PdfName.CapHeight] = new PdfReal(font.Metrics.CapHeight);
             descriptorDict[PdfName.StemV] = new PdfReal(font.Metrics.StemV);
 
-            // Embed font data with subsetting
+            // Embed font data
             if (_fontRawData.TryGetValue(font, out var rawFontData))
             {
                 byte[] fontFileData;
-                if (font.UsedGlyphs.Count > 0)
+                if (font.EmbedMode == FontEmbedMode.Full)
+                {
+                    // Full embed: use raw font data without subsetting
+                    fontFileData = rawFontData;
+                }
+                else if (font.UsedGlyphs.Count > 0)
                 {
                     fontFileData = TrueTypeSubsetter.Subset(rawFontData, (HashSet<ushort>)font.UsedGlyphs);
                 }
@@ -371,14 +392,17 @@ namespace Rend.Pdf
                 }
 
                 bool compress = _options.Compression != PdfCompression.None;
-                var fontStream = new PdfStream(fontFileData, compress);
+                var fontStream = new PdfStream(fontFileData, compress) { CompressionLevel = MapCompressionLevel(_options.Compression) };
                 fontStream.Dict[new PdfName("Length1")] = new PdfInteger(fontFileData.Length);
                 var fontFileRef = _objectTable.Allocate(fontStream);
                 descriptorDict[PdfName.FontFile2] = fontFileRef;
 
-                // Add subset tag prefix to font name (e.g. "ABCDEF+FontName")
-                string subsetTag = GenerateSubsetTag();
-                descriptorDict[PdfName.FontName] = new PdfName(subsetTag + "+" + font.BaseFont);
+                if (font.EmbedMode != FontEmbedMode.Full)
+                {
+                    // Add subset tag prefix to font name (e.g. "ABCDEF+FontName")
+                    string subsetTag = GenerateSubsetTag();
+                    descriptorDict[PdfName.FontName] = new PdfName(subsetTag + "+" + font.BaseFont);
+                }
             }
 
             var descriptorRef = _objectTable.Allocate(descriptorDict);
@@ -411,7 +435,7 @@ namespace Rend.Pdf
             PdfReference? toUnicodeRef = null;
             if (toUnicodeData != null)
             {
-                var toUnicodeStream = new PdfStream(toUnicodeData, _options.Compression != PdfCompression.None);
+                var toUnicodeStream = new PdfStream(toUnicodeData, _options.Compression != PdfCompression.None) { CompressionLevel = MapCompressionLevel(_options.Compression) };
                 toUnicodeRef = _objectTable.Allocate(toUnicodeStream);
             }
 
@@ -436,10 +460,21 @@ namespace Rend.Pdf
         {
             // PDF /W array format: [cid [width1 width2 ...] cid [width1 ...] ...]
             // Group consecutive glyph IDs for compact representation
-            if (font.UsedGlyphs.Count == 0) return null;
 
-            var sortedGlyphs = new List<ushort>(font.UsedGlyphs);
-            sortedGlyphs.Sort();
+            List<ushort> sortedGlyphs;
+            if (font.EmbedMode == FontEmbedMode.Full)
+            {
+                // Full embed: include all glyphs
+                sortedGlyphs = new List<ushort>(font.GlyphCount);
+                for (int g = 0; g < font.GlyphCount; g++)
+                    sortedGlyphs.Add((ushort)g);
+            }
+            else
+            {
+                if (font.UsedGlyphs.Count == 0) return null;
+                sortedGlyphs = new List<ushort>(font.UsedGlyphs);
+                sortedGlyphs.Sort();
+            }
 
             var widthsArray = new PdfArray();
 
@@ -582,23 +617,42 @@ namespace Rend.Pdf
                     resources[PdfName.ExtGState] = gsDict;
                 }
 
+                // Shading resources
+                if (page.Content.Shadings.Count > 0)
+                {
+                    var shDict = new PdfDictionary(page.Content.Shadings.Count);
+                    foreach (var sh in page.Content.Shadings)
+                    {
+                        shDict[new PdfName(sh.Key)] = sh.Value;
+                    }
+                    resources[PdfName.Shading] = shDict;
+                }
+
                 if (resources.Count > 0)
                     pageDict[PdfName.Resources] = resources;
 
-                // Annotations
-                if (page.Annotations.Count > 0)
+                var pageRef = _objectTable.Allocate(pageDict);
+
+                // Annotations and form fields (combined into /Annots array)
+                var totalAnnots = page.Annotations.Count + page.FormFields.Count;
+                if (totalAnnots > 0)
                 {
-                    var annotsArray = new PdfArray(page.Annotations.Count);
+                    var annotsArray = new PdfArray(totalAnnots);
                     foreach (var annot in page.Annotations)
                     {
                         var annotDict = annot.ToPdfDictionary(_objectTable, pageRefs);
                         var annotRef = _objectTable.Allocate(annotDict);
                         annotsArray.Add(annotRef);
                     }
+                    foreach (var field in page.FormFields)
+                    {
+                        var fieldDict = field.ToPdfDictionary(pageRef);
+                        var fieldRef = _objectTable.Allocate(fieldDict);
+                        annotsArray.Add(fieldRef);
+                        _formFieldRefs.Add(fieldRef);
+                    }
                     pageDict[PdfName.Annots] = annotsArray;
                 }
-
-                var pageRef = _objectTable.Allocate(pageDict);
                 pageLeafRefs.Add(pageRef);
                 pageLeafDicts.Add(pageDict);
                 pageRefs[page] = pageRef;
@@ -662,7 +716,9 @@ namespace Rend.Pdf
             return pagesRef;
         }
 
-        private PdfReference BuildCatalog(PdfReference pagesRef, PdfReference? outlinesRef)
+        private PdfReference BuildCatalog(PdfReference pagesRef, PdfReference? outlinesRef,
+                                            PdfReference? xmpMetadataRef = null,
+                                            PdfReference? acroFormRef = null)
         {
             var catalog = new PdfDictionary(4);
             catalog[PdfName.Type] = PdfName.Catalog;
@@ -670,6 +726,12 @@ namespace Rend.Pdf
 
             if (outlinesRef != null)
                 catalog[PdfName.Outlines] = outlinesRef;
+
+            if (xmpMetadataRef != null)
+                catalog[PdfName.Metadata] = xmpMetadataRef;
+
+            if (acroFormRef != null)
+                catalog[new PdfName("AcroForm")] = acroFormRef;
 
             return _objectTable.Allocate(catalog);
         }
@@ -765,6 +827,108 @@ namespace Rend.Pdf
             }
         }
 
+        private PdfReference BuildXmpMetadata()
+        {
+            byte[] xmpBytes = Encoding.UTF8.GetBytes(GenerateXmpPacket());
+            var stream = new PdfStream(xmpBytes, compress: false);
+            stream.Dict[PdfName.Type] = PdfName.Metadata;
+            stream.Dict[PdfName.Subtype] = PdfName.XML;
+            return _objectTable.Allocate(stream);
+        }
+
+        private string GenerateXmpPacket()
+        {
+            var sb = new StringBuilder(2048);
+            sb.Append("<?xpacket begin=\"\xEF\xBB\xBF\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n");
+            sb.Append("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n");
+            sb.Append("<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n");
+            sb.Append("<rdf:Description rdf:about=\"\"\n");
+            sb.Append("  xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n");
+            sb.Append("  xmlns:pdf=\"http://ns.adobe.com/pdf/1.3/\"\n");
+            sb.Append("  xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\">\n");
+
+            // Dublin Core
+            if (Info.Title != null)
+                sb.Append($"  <dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">{EscapeXml(Info.Title)}</rdf:li></rdf:Alt></dc:title>\n");
+            if (Info.Author != null)
+                sb.Append($"  <dc:creator><rdf:Seq><rdf:li>{EscapeXml(Info.Author)}</rdf:li></rdf:Seq></dc:creator>\n");
+            if (Info.Subject != null)
+                sb.Append($"  <dc:description><rdf:Alt><rdf:li xml:lang=\"x-default\">{EscapeXml(Info.Subject)}</rdf:li></rdf:Alt></dc:description>\n");
+
+            // PDF namespace
+            if (Info.Keywords != null)
+                sb.Append($"  <pdf:Keywords>{EscapeXml(Info.Keywords)}</pdf:Keywords>\n");
+            if (Info.Producer != null)
+                sb.Append($"  <pdf:Producer>{EscapeXml(Info.Producer)}</pdf:Producer>\n");
+
+            // XMP namespace
+            if (Info.Creator != null)
+                sb.Append($"  <xmp:CreatorTool>{EscapeXml(Info.Creator)}</xmp:CreatorTool>\n");
+            if (Info.CreationDate.HasValue)
+                sb.Append($"  <xmp:CreateDate>{Info.CreationDate.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}</xmp:CreateDate>\n");
+            if (Info.ModDate.HasValue)
+                sb.Append($"  <xmp:ModifyDate>{Info.ModDate.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}</xmp:ModifyDate>\n");
+
+            sb.Append("</rdf:Description>\n");
+            sb.Append("</rdf:RDF>\n");
+            sb.Append("</x:xmpmeta>\n");
+
+            // XMP packet padding (20 lines)
+            for (int i = 0; i < 20; i++)
+                sb.Append("                                                                                \n");
+
+            sb.Append("<?xpacket end=\"w\"?>");
+            return sb.ToString();
+        }
+
+        private PdfReference BuildAcroForm()
+        {
+            var acroDict = new PdfDictionary(5);
+
+            // /Fields array — all form field references
+            var fieldsArray = new PdfArray(_formFieldRefs.Count);
+            foreach (var fieldRef in _formFieldRefs)
+                fieldsArray.Add(fieldRef);
+            acroDict[PdfName.Fields] = fieldsArray;
+
+            // Let the PDF reader generate appearances
+            acroDict[PdfName.NeedAppearances] = PdfBoolean.True;
+
+            // Default appearance string
+            acroDict[PdfName.DA] = new PdfString("/Helv 12 Tf 0 g");
+
+            // Default resources: Helvetica (/Helv) and ZapfDingbats (/ZaDb) as Type1 fonts
+            var drDict = new PdfDictionary(1);
+            var fontDict = new PdfDictionary(2);
+
+            var helvDict = new PdfDictionary(3);
+            helvDict[PdfName.Type] = PdfName.Font;
+            helvDict[PdfName.Subtype] = PdfName.Type1;
+            helvDict[PdfName.BaseFont] = new PdfName("Helvetica");
+            fontDict[new PdfName("Helv")] = _objectTable.Allocate(helvDict);
+
+            var zadbDict = new PdfDictionary(3);
+            zadbDict[PdfName.Type] = PdfName.Font;
+            zadbDict[PdfName.Subtype] = PdfName.Type1;
+            zadbDict[PdfName.BaseFont] = new PdfName("ZapfDingbats");
+            fontDict[new PdfName("ZaDb")] = _objectTable.Allocate(zadbDict);
+
+            drDict[PdfName.Font] = fontDict;
+            acroDict[PdfName.DR] = drDict;
+
+            return _objectTable.Allocate(acroDict);
+        }
+
+        private static string EscapeXml(string value)
+        {
+            return value
+                .Replace("&", "&amp;")
+                .Replace("<", "&lt;")
+                .Replace(">", "&gt;")
+                .Replace("\"", "&quot;")
+                .Replace("'", "&apos;");
+        }
+
         /// <summary>
         /// Generate a 6-character uppercase tag for font subsetting (e.g., "ABCDEF").
         /// Per PDF spec, subset fonts are named "TAG+OriginalName".
@@ -779,6 +943,19 @@ namespace Rend.Pdf
                 n /= 26;
             }
             return new string(tag);
+        }
+
+        internal static CompressionLevel MapCompressionLevel(PdfCompression compression)
+        {
+            switch (compression)
+            {
+                case PdfCompression.FlateFast:
+                    return CompressionLevel.Fastest;
+                case PdfCompression.Flate:
+                case PdfCompression.FlateOptimal:
+                default:
+                    return CompressionLevel.Optimal;
+            }
         }
 
         /// <inheritdoc />

@@ -380,6 +380,13 @@ namespace Rend.Pdf.Internal
             WriteOp("] TJ\n");
         }
 
+        /// <summary>Tz — Set text horizontal scaling (percent).</summary>
+        public void SetTextHorizontalScaling(float percent)
+        {
+            WriteFloat(percent);
+            WriteOp(" Tz\n");
+        }
+
         /// <summary>Tc — Set character spacing.</summary>
         public void SetCharacterSpacing(float spacing)
         {
@@ -428,6 +435,18 @@ namespace Rend.Pdf.Internal
             WriteByte((byte)'/');
             WriteAscii(name);
             WriteOp(" Do\n");
+        }
+
+        // ═══════════════════════════════════════════
+        // Shading Operators
+        // ═══════════════════════════════════════════
+
+        /// <summary>sh — Apply shading pattern.</summary>
+        public void ApplyShading(string name)
+        {
+            WriteByte((byte)'/');
+            WriteAscii(name);
+            WriteOp(" sh\n");
         }
 
         // ═══════════════════════════════════════════

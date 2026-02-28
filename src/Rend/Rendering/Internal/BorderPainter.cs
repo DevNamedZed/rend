@@ -1,0 +1,303 @@
+using System;
+using Rend.Core.Values;
+using Rend.Css;
+using Rend.Layout;
+
+namespace Rend.Rendering.Internal
+{
+    /// <summary>
+    /// Paints the borders of a layout box, handling each side independently
+    /// with support for different styles, colors, and border-radius.
+    /// </summary>
+    internal static class BorderPainter
+    {
+        /// <summary>
+        /// Paints all four borders of the given box onto the render target.
+        /// Each side is drawn only if it has a non-none style and a width greater than zero.
+        /// </summary>
+        /// <param name="box">The layout box whose borders to paint.</param>
+        /// <param name="target">The render target to draw on.</param>
+        public static void Paint(LayoutBox box, IRenderTarget target)
+        {
+            ComputedStyle? style = box.StyledNode?.Style;
+            if (style == null)
+            {
+                return;
+            }
+
+            float topW = box.BorderTopWidth;
+            float rightW = box.BorderRightWidth;
+            float bottomW = box.BorderBottomWidth;
+            float leftW = box.BorderLeftWidth;
+
+            CssBorderStyle topStyle = style.BorderTopStyle;
+            CssBorderStyle rightStyle = style.BorderRightStyle;
+            CssBorderStyle bottomStyle = style.BorderBottomStyle;
+            CssBorderStyle leftStyle = style.BorderLeftStyle;
+
+            // Check for border-radius.
+            float tlr = style.BorderTopLeftRadius;
+            float trr = style.BorderTopRightRadius;
+            float brr = style.BorderBottomRightRadius;
+            float blr = style.BorderBottomLeftRadius;
+            bool hasRadius = tlr > 0f || trr > 0f || brr > 0f || blr > 0f;
+
+            if (hasRadius)
+            {
+                PaintWithRadius(box, target, style, topW, rightW, bottomW, leftW,
+                                topStyle, rightStyle, bottomStyle, leftStyle,
+                                tlr, trr, brr, blr);
+                return;
+            }
+
+            RectF borderRect = box.BorderRect;
+
+            float outerLeft = borderRect.Left;
+            float outerTop = borderRect.Top;
+            float outerRight = borderRect.Right;
+            float outerBottom = borderRect.Bottom;
+
+            float innerLeft = outerLeft + leftW;
+            float innerTop = outerTop + topW;
+            float innerRight = outerRight - rightW;
+            float innerBottom = outerBottom - bottomW;
+
+            // Top border
+            if (topW > 0f && topStyle != CssBorderStyle.None && topStyle != CssBorderStyle.Hidden)
+            {
+                CssColor color = style.BorderTopColor;
+                PaintSide(target, color, topStyle, topW,
+                          outerLeft, outerTop, outerRight, outerTop,
+                          innerRight, innerTop, innerLeft, innerTop);
+            }
+
+            // Right border
+            if (rightW > 0f && rightStyle != CssBorderStyle.None && rightStyle != CssBorderStyle.Hidden)
+            {
+                CssColor color = style.BorderRightColor;
+                PaintSide(target, color, rightStyle, rightW,
+                          outerRight, outerTop, outerRight, outerBottom,
+                          innerRight, innerBottom, innerRight, innerTop);
+            }
+
+            // Bottom border
+            if (bottomW > 0f && bottomStyle != CssBorderStyle.None && bottomStyle != CssBorderStyle.Hidden)
+            {
+                CssColor color = style.BorderBottomColor;
+                PaintSide(target, color, bottomStyle, bottomW,
+                          outerRight, outerBottom, outerLeft, outerBottom,
+                          innerLeft, innerBottom, innerRight, innerBottom);
+            }
+
+            // Left border
+            if (leftW > 0f && leftStyle != CssBorderStyle.None && leftStyle != CssBorderStyle.Hidden)
+            {
+                CssColor color = style.BorderLeftColor;
+                PaintSide(target, color, leftStyle, leftW,
+                          outerLeft, outerBottom, outerLeft, outerTop,
+                          innerLeft, innerTop, innerLeft, innerBottom);
+            }
+        }
+
+        private static void PaintSide(
+            IRenderTarget target,
+            CssColor color,
+            CssBorderStyle borderStyle,
+            float width,
+            float outerX1, float outerY1,
+            float outerX2, float outerY2,
+            float innerX2, float innerY2,
+            float innerX1, float innerY1)
+        {
+            if (color.A == 0)
+            {
+                return;
+            }
+
+            switch (borderStyle)
+            {
+                case CssBorderStyle.Solid:
+                    FillTrapezoid(target, color, outerX1, outerY1, outerX2, outerY2, innerX2, innerY2, innerX1, innerY1);
+                    break;
+
+                case CssBorderStyle.Dashed:
+                    StrokeDashed(target, color, width, outerX1, outerY1, outerX2, outerY2, innerX1, innerY1, innerX2, innerY2);
+                    break;
+
+                case CssBorderStyle.Dotted:
+                    StrokeDotted(target, color, width, outerX1, outerY1, outerX2, outerY2, innerX1, innerY1, innerX2, innerY2);
+                    break;
+
+                case CssBorderStyle.Double:
+                    PaintDouble(target, color, width, outerX1, outerY1, outerX2, outerY2, innerX2, innerY2, innerX1, innerY1);
+                    break;
+
+                default:
+                    // Groove, Ridge, Inset, Outset: fall back to solid rendering.
+                    FillTrapezoid(target, color, outerX1, outerY1, outerX2, outerY2, innerX2, innerY2, innerX1, innerY1);
+                    break;
+            }
+        }
+
+        private static void FillTrapezoid(
+            IRenderTarget target, CssColor color,
+            float x1, float y1, float x2, float y2,
+            float x3, float y3, float x4, float y4)
+        {
+            var path = new PathData();
+            path.MoveTo(x1, y1);
+            path.LineTo(x2, y2);
+            path.LineTo(x3, y3);
+            path.LineTo(x4, y4);
+            path.Close();
+            target.FillPath(path, BrushInfo.Solid(color));
+        }
+
+        private static void StrokeDashed(
+            IRenderTarget target, CssColor color, float width,
+            float outerX1, float outerY1, float outerX2, float outerY2,
+            float innerX1, float innerY1, float innerX2, float innerY2)
+        {
+            // Draw as a line through the midpoint of the border side with a dash pattern.
+            float midX1 = (outerX1 + innerX1) * 0.5f;
+            float midY1 = (outerY1 + innerY1) * 0.5f;
+            float midX2 = (outerX2 + innerX2) * 0.5f;
+            float midY2 = (outerY2 + innerY2) * 0.5f;
+
+            float dashLen = Math.Max(width * 3f, 1f);
+            float[] dashPattern = new[] { dashLen, dashLen };
+            var pen = new PenInfo(color, width, dashPattern);
+
+            var path = new PathData();
+            path.MoveTo(midX1, midY1);
+            path.LineTo(midX2, midY2);
+            target.StrokePath(path, pen);
+        }
+
+        private static void StrokeDotted(
+            IRenderTarget target, CssColor color, float width,
+            float outerX1, float outerY1, float outerX2, float outerY2,
+            float innerX1, float innerY1, float innerX2, float innerY2)
+        {
+            // Draw as a line through the midpoint with dot pattern (width, width).
+            float midX1 = (outerX1 + innerX1) * 0.5f;
+            float midY1 = (outerY1 + innerY1) * 0.5f;
+            float midX2 = (outerX2 + innerX2) * 0.5f;
+            float midY2 = (outerY2 + innerY2) * 0.5f;
+
+            float dotLen = Math.Max(width, 1f);
+            float[] dashPattern = new[] { dotLen, dotLen };
+            var pen = new PenInfo(color, width, dashPattern);
+
+            var path = new PathData();
+            path.MoveTo(midX1, midY1);
+            path.LineTo(midX2, midY2);
+            target.StrokePath(path, pen);
+        }
+
+        private static void PaintDouble(
+            IRenderTarget target, CssColor color, float width,
+            float outerX1, float outerY1, float outerX2, float outerY2,
+            float innerX2, float innerY2, float innerX1, float innerY1)
+        {
+            if (width < 3f)
+            {
+                // If too thin for double, just draw solid.
+                FillTrapezoid(target, color, outerX1, outerY1, outerX2, outerY2, innerX2, innerY2, innerX1, innerY1);
+                return;
+            }
+
+            // Double border: draw the outer third and inner third, leaving the middle third empty.
+            float third = width / 3f;
+
+            // Compute direction: the inward normal, normalized by the width.
+            float dx = innerX1 - outerX1;
+            float dy = innerY1 - outerY1;
+            float dx2 = innerX2 - outerX2;
+            float dy2 = innerY2 - outerY2;
+
+            float ratioOuter = third / width;
+            float ratioInner = (width - third) / width;
+
+            // Outer stripe
+            float oMidX1 = outerX1 + dx * ratioOuter;
+            float oMidY1 = outerY1 + dy * ratioOuter;
+            float oMidX2 = outerX2 + dx2 * ratioOuter;
+            float oMidY2 = outerY2 + dy2 * ratioOuter;
+            FillTrapezoid(target, color, outerX1, outerY1, outerX2, outerY2, oMidX2, oMidY2, oMidX1, oMidY1);
+
+            // Inner stripe
+            float iMidX1 = outerX1 + dx * ratioInner;
+            float iMidY1 = outerY1 + dy * ratioInner;
+            float iMidX2 = outerX2 + dx2 * ratioInner;
+            float iMidY2 = outerY2 + dy2 * ratioInner;
+            FillTrapezoid(target, color, iMidX1, iMidY1, iMidX2, iMidY2, innerX2, innerY2, innerX1, innerY1);
+        }
+
+        private static void PaintWithRadius(
+            LayoutBox box, IRenderTarget target, ComputedStyle style,
+            float topW, float rightW, float bottomW, float leftW,
+            CssBorderStyle topStyle, CssBorderStyle rightStyle,
+            CssBorderStyle bottomStyle, CssBorderStyle leftStyle,
+            float tlr, float trr, float brr, float blr)
+        {
+            RectF borderRect = box.BorderRect;
+
+            // For rounded borders, create the outer rounded rect path,
+            // clip to it, and then fill each side within the clip.
+            var outerPath = new PathData();
+            outerPath.AddRoundedRectangle(borderRect, tlr, trr, brr, blr);
+
+            target.Save();
+            target.PushClipPath(outerPath);
+
+            // Paint each side as a rectangle covering that side, clipped by the outer rounded rect.
+            // Top
+            if (topW > 0f && topStyle != CssBorderStyle.None && topStyle != CssBorderStyle.Hidden)
+            {
+                CssColor color = style.BorderTopColor;
+                if (color.A > 0)
+                {
+                    var rect = new RectF(borderRect.Left, borderRect.Top, borderRect.Width, topW);
+                    target.FillRect(rect, BrushInfo.Solid(color));
+                }
+            }
+
+            // Right
+            if (rightW > 0f && rightStyle != CssBorderStyle.None && rightStyle != CssBorderStyle.Hidden)
+            {
+                CssColor color = style.BorderRightColor;
+                if (color.A > 0)
+                {
+                    var rect = new RectF(borderRect.Right - rightW, borderRect.Top, rightW, borderRect.Height);
+                    target.FillRect(rect, BrushInfo.Solid(color));
+                }
+            }
+
+            // Bottom
+            if (bottomW > 0f && bottomStyle != CssBorderStyle.None && bottomStyle != CssBorderStyle.Hidden)
+            {
+                CssColor color = style.BorderBottomColor;
+                if (color.A > 0)
+                {
+                    var rect = new RectF(borderRect.Left, borderRect.Bottom - bottomW, borderRect.Width, bottomW);
+                    target.FillRect(rect, BrushInfo.Solid(color));
+                }
+            }
+
+            // Left
+            if (leftW > 0f && leftStyle != CssBorderStyle.None && leftStyle != CssBorderStyle.Hidden)
+            {
+                CssColor color = style.BorderLeftColor;
+                if (color.A > 0)
+                {
+                    var rect = new RectF(borderRect.Left, borderRect.Top, leftW, borderRect.Height);
+                    target.FillRect(rect, BrushInfo.Solid(color));
+                }
+            }
+
+            target.PopClip();
+            target.Restore();
+        }
+    }
+}

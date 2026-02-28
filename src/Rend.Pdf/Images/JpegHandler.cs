@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO.Compression;
 using Rend.Pdf.Internal;
 
 namespace Rend.Pdf.Images
@@ -9,39 +11,51 @@ namespace Rend.Pdf.Images
     /// </summary>
     internal static class JpegHandler
     {
-        public static PdfImage CreateImage(byte[] jpegData, string resourceName, PdfObjectTable objectTable)
+        public static PdfImage CreateImage(byte[] jpegData, string resourceName, PdfObjectTable objectTable,
+                                            CompressionLevel compressionLevel = CompressionLevel.Optimal)
         {
-            // Parse JPEG header for dimensions and color space
-            ParseJpegHeader(jpegData, out int width, out int height, out int components);
+            // Parse JPEG header for dimensions, color space, and ICC profile
+            ParseJpegHeader(jpegData, out int width, out int height, out int components, out byte[]? iccProfile);
 
-            PdfName colorSpace;
-            switch (components)
+            PdfObject colorSpaceObj;
+            if (iccProfile != null)
             {
-                case 1: colorSpace = PdfName.DeviceGray; break;
-                case 4: colorSpace = PdfName.DeviceCMYK; break;
-                default: colorSpace = PdfName.DeviceRGB; break;
+                // Build ICCBased color space
+                int iccComponents = components;
+                var iccStream = new PdfStream(iccProfile, compress: true) { CompressionLevel = compressionLevel };
+                iccStream.Dict[PdfName.N] = new PdfInteger(iccComponents);
+                PdfName alternate;
+                switch (iccComponents)
+                {
+                    case 1: alternate = PdfName.DeviceGray; break;
+                    case 4: alternate = PdfName.DeviceCMYK; break;
+                    default: alternate = PdfName.DeviceRGB; break;
+                }
+                iccStream.Dict[PdfName.Alternate] = alternate;
+                var iccRef = objectTable.Allocate(iccStream);
+                var csArray = new PdfArray(2);
+                csArray.Add(PdfName.ICCBased);
+                csArray.Add(iccRef);
+                colorSpaceObj = csArray;
+            }
+            else
+            {
+                switch (components)
+                {
+                    case 1: colorSpaceObj = PdfName.DeviceGray; break;
+                    case 4: colorSpaceObj = PdfName.DeviceCMYK; break;
+                    default: colorSpaceObj = PdfName.DeviceRGB; break;
+                }
             }
 
-            // Create image XObject stream — JPEG data is passthrough (no re-encoding!)
-            var streamDict = new PdfDictionary(8);
-            streamDict[PdfName.Type] = PdfName.XObject;
-            streamDict[PdfName.Subtype] = PdfName.Image;
-            streamDict[PdfName.Width] = new PdfInteger(width);
-            streamDict[PdfName.Height] = new PdfInteger(height);
-            streamDict[PdfName.BitsPerComponent] = new PdfInteger(8);
-            streamDict[PdfName.ColorSpace] = colorSpace;
-            streamDict[PdfName.Filter] = PdfName.DCTDecode;
-            streamDict[PdfName.Length] = new PdfInteger(jpegData.Length);
-
             // Create a non-compressed stream (JPEG data IS the stream data, already compressed)
-            var stream = new PdfStream(jpegData, compress: false);
-            // Copy dict entries to the stream's dict
+            var stream = new PdfStream(jpegData, compress: false) { CompressionLevel = compressionLevel };
             stream.Dict[PdfName.Type] = PdfName.XObject;
             stream.Dict[PdfName.Subtype] = PdfName.Image;
             stream.Dict[PdfName.Width] = new PdfInteger(width);
             stream.Dict[PdfName.Height] = new PdfInteger(height);
             stream.Dict[PdfName.BitsPerComponent] = new PdfInteger(8);
-            stream.Dict[PdfName.ColorSpace] = colorSpace;
+            stream.Dict[PdfName.ColorSpace] = colorSpaceObj;
             stream.Dict[PdfName.Filter] = PdfName.DCTDecode;
 
             var imageRef = objectTable.Allocate(stream);
@@ -50,18 +64,22 @@ namespace Rend.Pdf.Images
                                 resourceName, imageRef, null);
         }
 
-        private static void ParseJpegHeader(byte[] data, out int width, out int height, out int components)
+        private static void ParseJpegHeader(byte[] data, out int width, out int height,
+                                             out int components, out byte[]? iccProfile)
         {
             width = 0;
             height = 0;
             components = 3; // default RGB
+            iccProfile = null;
 
-            // Scan for SOF0 (0xFFC0) or SOF2 (0xFFC2) marker
-            int pos = 0;
             if (data.Length < 2 || data[0] != 0xFF || data[1] != 0xD8)
                 throw new InvalidOperationException("Not a valid JPEG file.");
 
-            pos = 2;
+            // ICC profile chunks (APP2 markers may be split across multiple segments)
+            List<(int seqNo, byte[] data)>? iccChunks = null;
+            int iccTotalChunks = 0;
+
+            int pos = 2;
             while (pos < data.Length - 1)
             {
                 if (data[pos] != 0xFF)
@@ -73,21 +91,59 @@ namespace Rend.Pdf.Images
                 byte marker = data[pos + 1];
                 pos += 2;
 
-                // SOF markers: SOF0 through SOF3, SOF5 through SOF7, SOF9 through SOF11, SOF13 through SOF15
+                // SOF markers
                 if ((marker >= 0xC0 && marker <= 0xC3) || (marker >= 0xC5 && marker <= 0xC7) ||
                     (marker >= 0xC9 && marker <= 0xCB) || (marker >= 0xCD && marker <= 0xCF))
                 {
                     if (pos + 7 < data.Length)
                     {
-                        // Skip length (2 bytes) and precision (1 byte)
                         height = (data[pos + 3] << 8) | data[pos + 4];
                         width = (data[pos + 5] << 8) | data[pos + 6];
                         components = data[pos + 7];
                     }
-                    return;
+                    // Don't return yet — continue scanning for ICC chunks
+                    if (pos + 1 < data.Length)
+                    {
+                        int segLen = (data[pos] << 8) | data[pos + 1];
+                        pos += segLen;
+                    }
+                    else break;
+                    continue;
                 }
 
-                // Skip this marker's data
+                // APP2 marker (0xE2) — may contain ICC_PROFILE
+                if (marker == 0xE2 && pos + 1 < data.Length)
+                {
+                    int segmentLength = (data[pos] << 8) | data[pos + 1];
+                    // Check for "ICC_PROFILE\0" identifier (12 bytes) after segment length
+                    if (segmentLength >= 16 && pos + 15 < data.Length &&
+                        data[pos + 2] == 'I' && data[pos + 3] == 'C' && data[pos + 4] == 'C' &&
+                        data[pos + 5] == '_' && data[pos + 6] == 'P' && data[pos + 7] == 'R' &&
+                        data[pos + 8] == 'O' && data[pos + 9] == 'F' && data[pos + 10] == 'I' &&
+                        data[pos + 11] == 'L' && data[pos + 12] == 'E' && data[pos + 13] == 0)
+                    {
+                        int seqNo = data[pos + 14]; // 1-based
+                        int totalChunks = data[pos + 15];
+                        iccTotalChunks = totalChunks;
+                        int iccDataStart = pos + 16;
+                        int iccDataLen = segmentLength - 16;
+                        if (iccDataLen > 0 && iccDataStart + iccDataLen <= data.Length)
+                        {
+                            if (iccChunks == null) iccChunks = new List<(int, byte[])>();
+                            var chunk = new byte[iccDataLen];
+                            Buffer.BlockCopy(data, iccDataStart, chunk, 0, iccDataLen);
+                            iccChunks.Add((seqNo, chunk));
+                        }
+                    }
+                    pos += segmentLength;
+                    continue;
+                }
+
+                // SOS marker — start of scan, stop parsing
+                if (marker == 0xDA)
+                    break;
+
+                // Skip other markers
                 if (pos + 1 < data.Length)
                 {
                     int segmentLength = (data[pos] << 8) | data[pos + 1];
@@ -96,6 +152,21 @@ namespace Rend.Pdf.Images
                 else
                 {
                     break;
+                }
+            }
+
+            // Assemble ICC profile from collected chunks
+            if (iccChunks != null && iccChunks.Count == iccTotalChunks)
+            {
+                iccChunks.Sort((a, b) => a.seqNo.CompareTo(b.seqNo));
+                int totalLen = 0;
+                foreach (var c in iccChunks) totalLen += c.data.Length;
+                iccProfile = new byte[totalLen];
+                int offset = 0;
+                foreach (var c in iccChunks)
+                {
+                    Buffer.BlockCopy(c.data, 0, iccProfile, offset, c.data.Length);
+                    offset += c.data.Length;
                 }
             }
         }
