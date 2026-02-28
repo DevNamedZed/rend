@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Rend.Pdf</RootNamespace>
+    <AssemblyName>Rend.Pdf</AssemblyName>
+    <Description>Standalone high-performance PDF 1.7 writer. Generate PDFs with text, images, vector graphics, fonts, annotations, and bookmarks.</Description>
+    <PackageId>Rend.Pdf</PackageId>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Rend.Core\Rend.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Memory" Version="4.5.5" />
+    <PackageReference Include="System.Buffers" Version="4.5.1" />
+  </ItemGroup>
+</Project>
