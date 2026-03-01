@@ -81,7 +81,8 @@ namespace Rend.Css
                 parentFontSize,
                 _options.DefaultFontSize,
                 _options.ViewportWidth,
-                _options.ViewportHeight);
+                _options.ViewportHeight,
+                _options.ViewportWidth); // PercentBase: viewport width for percentage resolution
 
             var builder = new ComputedStyleBuilder(ctx);
             return builder.Build(winners, parentStyle);
@@ -131,7 +132,8 @@ namespace Rend.Css
                 parentFontSize,
                 _options.DefaultFontSize,
                 _options.ViewportWidth,
-                _options.ViewportHeight);
+                _options.ViewportHeight,
+                _options.ViewportWidth); // PercentBase: viewport width for percentage resolution
 
             var builder = new ComputedStyleBuilder(ctx);
             return builder.Build(winners, elementStyle);

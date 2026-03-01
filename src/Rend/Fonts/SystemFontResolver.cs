@@ -10,7 +10,7 @@ namespace Rend.Fonts
     /// </summary>
     public sealed class SystemFontResolver
     {
-        private static readonly string[] FontExtensions = { ".ttf", ".otf", ".woff", ".woff2" };
+        private static readonly string[] FontExtensions = { ".ttf", ".otf", ".ttc", ".woff", ".woff2" };
 
         /// <summary>
         /// Returns all font file paths found in platform-specific system font directories.

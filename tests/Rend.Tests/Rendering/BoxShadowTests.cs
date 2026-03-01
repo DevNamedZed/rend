@@ -96,7 +96,7 @@ namespace Rend.Tests.Rendering
         }
 
         [Fact]
-        public void Paint_ShadowWithBlur_MultipleLayersRendered()
+        public void Paint_ShadowWithBlur_SingleRectWithMaskBlur()
         {
             // box-shadow: 0 0 10px black — blur only
             var shadowValue = new CssListValue(new List<CssValue>
@@ -112,8 +112,9 @@ namespace Rend.Tests.Rendering
 
             BoxShadowPainter.Paint(box, target);
 
-            // 4 blur layers
-            Assert.Equal(4, target.FilledRects.Count);
+            // Single rect with mask blur (SetMaskBlur called)
+            Assert.Equal(1, target.FilledRects.Count);
+            Assert.True(target.MaskBlurSet, "SetMaskBlur should have been called");
         }
 
         [Fact]
@@ -331,6 +332,7 @@ namespace Rend.Tests.Rendering
         {
             public List<(RectF Rect, BrushInfo Brush)> FilledRects { get; } = new List<(RectF, BrushInfo)>();
             public List<(PathData Path, BrushInfo Brush)> FilledPaths { get; } = new List<(PathData, BrushInfo)>();
+            public bool MaskBlurSet { get; private set; }
 
             public void BeginPage(float width, float height) { }
             public void EndPage() { }
@@ -340,6 +342,7 @@ namespace Rend.Tests.Rendering
             public void SetOpacity(float opacity) { }
             public void SetBlendMode(Rend.Css.CssMixBlendMode blendMode) { }
             public void SetImageRendering(Rend.Css.CssImageRendering rendering) { }
+            public void SetMaskBlur(float sigma) { if (sigma > 0) MaskBlurSet = true; }
             public void PushClipRect(RectF rect) { }
             public void PushClipPath(PathData path) { }
             public void PopClip() { }

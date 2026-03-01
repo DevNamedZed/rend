@@ -30,17 +30,18 @@ namespace Rend.Tests.Text
         }
 
         [Fact]
-        public void Collapse_Normal_TrimsLeadingWhitespace()
+        public void Collapse_Normal_PreservesLeadingSpace()
         {
+            // Edge trimming is now handled by InlineFormattingContext, not the collapser.
             var result = WhitespaceCollapser.Collapse("  hello", CssWhiteSpace.Normal);
-            Assert.Equal("hello", result);
+            Assert.Equal(" hello", result);
         }
 
         [Fact]
-        public void Collapse_Normal_TrimsTrailingWhitespace()
+        public void Collapse_Normal_PreservesTrailingSpace()
         {
             var result = WhitespaceCollapser.Collapse("hello  ", CssWhiteSpace.Normal);
-            Assert.Equal("hello", result);
+            Assert.Equal("hello ", result);
         }
 
         [Fact]
@@ -51,17 +52,18 @@ namespace Rend.Tests.Text
         }
 
         [Fact]
-        public void Collapse_Normal_OnlyWhitespace_ReturnsEmpty()
+        public void Collapse_Normal_OnlyWhitespace_ReturnsSingleSpace()
         {
+            // Whitespace-only text collapses to a single space; edge trimming is contextual.
             var result = WhitespaceCollapser.Collapse("   \t\n  ", CssWhiteSpace.Normal);
-            Assert.Equal("", result);
+            Assert.Equal(" ", result);
         }
 
         [Fact]
         public void Collapse_Normal_MixedWhitespace()
         {
             var result = WhitespaceCollapser.Collapse("  hello \n\t world  \r\n end  ", CssWhiteSpace.Normal);
-            Assert.Equal("hello world end", result);
+            Assert.Equal(" hello world end ", result);
         }
 
         [Fact]

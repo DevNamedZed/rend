@@ -13,17 +13,35 @@ namespace Rend.Fonts
         /// Finds the best matching font entry for the requested descriptor from the candidate list.
         /// Returns null if no candidates match the requested family name.
         /// </summary>
+        // Generic CSS family name → concrete font family fallback lists.
+        private static readonly Dictionary<string, string[]> GenericFamilyMap = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["sans-serif"] = new[] { "Helvetica", "Helvetica Neue", "Arial", "Segoe UI", "DejaVu Sans", "Liberation Sans", "FreeSans", "Noto Sans" },
+            ["serif"] = new[] { "Times New Roman", "Times", "Georgia", "DejaVu Serif", "Liberation Serif", "FreeSerif", "Noto Serif" },
+            ["monospace"] = new[] { "Courier New", "Courier", "Menlo", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "FreeMono", "Noto Sans Mono" },
+            ["cursive"] = new[] { "Comic Sans MS", "Apple Chancery", "Snell Roundhand" },
+            ["fantasy"] = new[] { "Impact", "Papyrus" },
+            ["system-ui"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },
+            ["ui-sans-serif"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },
+            ["ui-serif"] = new[] { "New York", "Georgia", "Times New Roman" },
+            ["ui-monospace"] = new[] { "SF Mono", "Menlo", "Consolas", "Courier New" },
+        };
+
         public static FontEntry? FindBestMatch(FontDescriptor requested, IReadOnlyList<FontEntry> candidates)
         {
             if (candidates == null || candidates.Count == 0)
                 return null;
 
             // Step 1: Filter by family name (case-insensitive).
-            var familyCandidates = new List<FontEntry>();
-            for (int i = 0; i < candidates.Count; i++)
+            var familyCandidates = FilterByFamily(requested.Family, candidates);
+
+            // Step 1b: If no match, try generic CSS family name fallbacks.
+            if (familyCandidates.Count == 0 && GenericFamilyMap.TryGetValue(requested.Family, out var fallbacks))
             {
-                if (string.Equals(candidates[i].FamilyName, requested.Family, StringComparison.OrdinalIgnoreCase))
-                    familyCandidates.Add(candidates[i]);
+                for (int f = 0; f < fallbacks.Length && familyCandidates.Count == 0; f++)
+                {
+                    familyCandidates = FilterByFamily(fallbacks[f], candidates);
+                }
             }
 
             if (familyCandidates.Count == 0)
@@ -41,6 +59,17 @@ namespace Rend.Fonts
 
             // Step 4: Match stretch (prefer closest).
             return MatchStretch(requested.Stretch, weightCandidates);
+        }
+
+        private static List<FontEntry> FilterByFamily(string familyName, IReadOnlyList<FontEntry> candidates)
+        {
+            var result = new List<FontEntry>();
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (string.Equals(candidates[i].FamilyName, familyName, StringComparison.OrdinalIgnoreCase))
+                    result.Add(candidates[i]);
+            }
+            return result;
         }
 
         private static List<FontEntry> MatchStyle(CssFontStyle requestedStyle, List<FontEntry> candidates)

@@ -40,7 +40,9 @@ namespace Rend.Layout.Internal
                     var pseudoBox = new LayoutText(pseudoText);
                     float fontSize = pseudo.Style.FontSize;
                     float lineHeight = pseudo.Style.LineHeight;
-                    if (float.IsNaN(lineHeight) || lineHeight <= 0)
+                    if (lineHeight < 0)
+                        lineHeight = -lineHeight * fontSize;
+                    else if (float.IsNaN(lineHeight) || lineHeight == 0)
                         lineHeight = fontSize * 1.2f;
                     float estimatedWidth = pseudo.Content.Length * fontSize * 0.6f;
                     pseudoBox.ContentRect = new RectF(0, 0, estimatedWidth, lineHeight);
@@ -121,10 +123,10 @@ namespace Rend.Layout.Internal
             // Resolve explicit tracks (use subgrid tracks if the axis is subgridded)
             var explicitColTracks = isSubgridCols && subgridColTracks != null
                 ? subgridColTracks
-                : ResolveTrackList(colRaw, containerWidth);
+                : ResolveTrackList(colRaw, containerWidth, colGap);
             var explicitRowTracks = isSubgridRows && subgridRowTracks != null
                 ? subgridRowTracks
-                : ResolveTrackList(rowRaw, containerHeight);
+                : ResolveTrackList(rowRaw, containerHeight, rowGap);
 
             int explicitCols = explicitColTracks?.Length ?? 0;
             int explicitRows = explicitRowTracks?.Length ?? 0;
@@ -290,10 +292,11 @@ namespace Rend.Layout.Internal
                 if (flowColumn)
                 {
                     // Column-major auto-placement
+                    // Wrap at gridRows boundary (explicit or inferred row count)
                     for (int c = autoCol; !found; c++)
                     {
                         int startRow = (c == autoCol) ? autoRow : 0;
-                        for (int r = startRow; r <= maxRow; r++)
+                        for (int r = startRow; r < gridRows; r++)
                         {
                             EnsureGridSize(ref occupied, ref maxRow, ref maxCol,
                                 r + item.RowSpan, c + item.ColSpan);
@@ -315,10 +318,11 @@ namespace Rend.Layout.Internal
                 else
                 {
                     // Row-major auto-placement (default)
+                    // Wrap at gridCols boundary (explicit or inferred column count)
                     for (int r = autoRow; !found; r++)
                     {
                         int startCol = (r == autoRow) ? autoCol : 0;
-                        for (int c = startCol; c <= maxCol; c++)
+                        for (int c = startCol; c < gridCols; c++)
                         {
                             EnsureGridSize(ref occupied, ref maxRow, ref maxCol,
                                 r + item.RowSpan, c + item.ColSpan);
@@ -423,7 +427,7 @@ namespace Rend.Layout.Internal
                         ItemRowStart = item.RowStart,
                         ItemRowSpan = item.RowSpan
                     };
-                    BlockFormattingContext.Layout(item.Box, context);
+                    BlockFormattingContext.LayoutChildren(item.Box, context);
                     context.ParentGridContext = savedParentGridCtx;
 
                     float contentHeight = DimensionResolver.ResolveHeight(item.StyledElement.Style, float.NaN, item.Box);
@@ -550,8 +554,11 @@ namespace Rend.Layout.Internal
                     var itemStyle = item.StyledElement.Style;
                     CssAlignItems selfBlock = itemStyle.AlignSelf;
                     CssAlignItems selfInline = itemStyle.JustifySelf;
-                    if (selfBlock != CssAlignItems.Normal) alignBlock = selfBlock;
-                    if (selfInline != CssAlignItems.Normal) alignInline = selfInline;
+                    // Only override if explicitly set (valid enum range and not Normal/auto)
+                    if (selfBlock != CssAlignItems.Normal && (int)selfBlock <= (int)CssAlignItems.Normal)
+                        alignBlock = selfBlock;
+                    if (selfInline != CssAlignItems.Normal && (int)selfInline <= (int)CssAlignItems.Normal)
+                        alignInline = selfInline;
                 }
 
                 // Apply inline (horizontal) alignment offset
@@ -566,10 +573,28 @@ namespace Rend.Layout.Internal
                 if (IsStretch(alignBlock) && outerHeight < spanHeight)
                     finalHeight = spanHeight - (outerHeight - finalHeight);
 
-                item.Box.ContentRect = new RectF(
-                    x + xOffset + item.Box.MarginLeft + item.Box.BorderLeftWidth + item.Box.PaddingLeft,
-                    y + yOffset + item.Box.MarginTop + item.Box.BorderTopWidth + item.Box.PaddingTop,
-                    finalWidth, finalHeight);
+                float newX = x + xOffset + item.Box.MarginLeft + item.Box.BorderLeftWidth + item.Box.PaddingLeft;
+                float newY = y + yOffset + item.Box.MarginTop + item.Box.BorderTopWidth + item.Box.PaddingTop;
+
+                // Offset all descendants (children + line boxes) from first-pass (0,0)
+                // to the actual grid cell position.
+                float dx = newX - item.Box.ContentRect.X;
+                float dy = newY - item.Box.ContentRect.Y;
+                if (dx != 0 || dy != 0)
+                {
+                    for (int ci = 0; ci < item.Box.Children.Count; ci++)
+                        OffsetBoxInPlace(item.Box.Children[ci], dx, dy);
+                    if (item.Box.LineBoxes != null)
+                    {
+                        for (int li = 0; li < item.Box.LineBoxes.Count; li++)
+                        {
+                            item.Box.LineBoxes[li].X += dx;
+                            item.Box.LineBoxes[li].Y += dy;
+                        }
+                    }
+                }
+
+                item.Box.ContentRect = new RectF(newX, newY, finalWidth, finalHeight);
 
                 parent.AddChild(item.Box);
             }
@@ -822,7 +847,7 @@ namespace Rend.Layout.Internal
 
         private static int FindFreeColumn(bool[] occupied, int cols, int row, int colSpan, int startCol)
         {
-            for (int c = startCol; c + colSpan <= cols; c++)
+            for (int c = startCol; c + colSpan - 1 < cols; c++)
             {
                 if (IsFree(occupied, cols, row, c, 1, colSpan))
                     return c;
@@ -832,7 +857,7 @@ namespace Rend.Layout.Internal
 
         private static int FindFreeRow(bool[] occupied, int cols, int rows, int col, int rowSpan, int startRow)
         {
-            for (int r = startRow; r + rowSpan <= rows; r++)
+            for (int r = startRow; r + rowSpan - 1 < rows; r++)
             {
                 if (IsFree(occupied, cols, r, col, rowSpan, 1))
                     return r;
@@ -867,7 +892,7 @@ namespace Rend.Layout.Internal
         /// Supports: px values, percentages, fr units, repeat(count, size).
         /// Returns null for "none" or missing values.
         /// </summary>
-        internal static float[]? ResolveTrackList(object? raw, float containerSize)
+        internal static float[]? ResolveTrackList(object? raw, float containerSize, float gap = 0)
         {
             if (raw == null) return null;
             if (raw is CssKeywordValue kw && (kw.Keyword == "none" || kw.Keyword == "auto" || kw.Keyword == "subgrid"))
@@ -904,7 +929,9 @@ namespace Rend.Layout.Internal
                     totalFixed += parsed.value;
             }
 
-            float remaining = Math.Max(0, containerSize - totalFixed);
+            // Subtract gap space: N tracks have (N-1) gaps
+            float totalGapSpace = flatValues.Count > 1 ? (flatValues.Count - 1) * gap : 0;
+            float remaining = Math.Max(0, containerSize - totalFixed - totalGapSpace);
             float frSize = totalFr > 0 ? remaining / totalFr : 0;
 
             var tracks = new float[sizes.Count];
@@ -1062,6 +1089,22 @@ namespace Rend.Layout.Internal
                 case CssAlignItems.FlexStart:
                 case CssAlignItems.Baseline: return 0;
                 default: return 0; // Stretch, Normal → 0 offset (stretch handled separately)
+            }
+        }
+
+        private static void OffsetBoxInPlace(LayoutBox box, float dx, float dy)
+        {
+            box.ContentRect = new RectF(box.ContentRect.X + dx, box.ContentRect.Y + dy,
+                                        box.ContentRect.Width, box.ContentRect.Height);
+            for (int i = 0; i < box.Children.Count; i++)
+                OffsetBoxInPlace(box.Children[i], dx, dy);
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    box.LineBoxes[i].X += dx;
+                    box.LineBoxes[i].Y += dy;
+                }
             }
         }
 

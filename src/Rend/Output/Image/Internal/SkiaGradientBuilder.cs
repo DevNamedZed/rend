@@ -49,16 +49,22 @@ namespace Rend.Output.Image.Internal
         private static SKShader CreateLinearShader(GradientInfo gradient, RectF bounds,
             SKColor[] colors, float[] positions)
         {
+            // CSS gradient angles: 0deg = "to top" (upward), clockwise rotation.
+            // In screen coordinates (Y-down): direction = (sin(angle), -cos(angle)).
             float angleRad = gradient.Angle * (float)(Math.PI / 180.0);
-            float cos = (float)Math.Cos(angleRad);
-            float sin = (float)Math.Sin(angleRad);
+            float dx = (float)Math.Sin(angleRad);
+            float dy = -(float)Math.Cos(angleRad);
 
             float cx = bounds.X + bounds.Width / 2f;
             float cy = bounds.Y + bounds.Height / 2f;
-            float halfDiag = (float)Math.Sqrt(bounds.Width * bounds.Width + bounds.Height * bounds.Height) / 2f;
 
-            var start = new SKPoint(cx - cos * halfDiag, cy - sin * halfDiag);
-            var end = new SKPoint(cx + cos * halfDiag, cy + sin * halfDiag);
+            // CSS spec: gradient line extends to perpendicular intersections with closest corners.
+            // Half-length = (|W * sin(angle)| + |H * cos(angle)|) / 2
+            float halfLen = (Math.Abs(bounds.Width * (float)Math.Sin(angleRad))
+                           + Math.Abs(bounds.Height * (float)Math.Cos(angleRad))) / 2f;
+
+            var start = new SKPoint(cx - dx * halfLen, cy - dy * halfLen);
+            var end = new SKPoint(cx + dx * halfLen, cy + dy * halfLen);
 
             return SKShader.CreateLinearGradient(start, end, colors, positions, SKShaderTileMode.Clamp);
         }

@@ -73,7 +73,7 @@ namespace Rend.Css.Properties.Internal
             // Color + Background
             Register("color", PropertyId.Color, true, PropertyValueType.Color);
             Register("background-color", PropertyId.BackgroundColor, false, PropertyValueType.Color);
-            Register("background-image", PropertyId.BackgroundImage, false, PropertyValueType.String);
+            Register("background-image", PropertyId.BackgroundImage, false, PropertyValueType.Raw);
             Register("background-repeat", PropertyId.BackgroundRepeat, false, PropertyValueType.Keyword);
             Register("background-position", PropertyId.BackgroundPosition, false, PropertyValueType.Raw);
             Register("background-size", PropertyId.BackgroundSize, false, PropertyValueType.Raw);

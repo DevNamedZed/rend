@@ -139,6 +139,12 @@ namespace Rend.Output.Pdf
         }
 
         /// <inheritdoc />
+        public void SetMaskBlur(float sigma)
+        {
+            // PDF does not support mask blur directly; box shadows degrade gracefully
+        }
+
+        /// <inheritdoc />
         public void PushClipRect(RectF rect)
         {
             EnsurePage();

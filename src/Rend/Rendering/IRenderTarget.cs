@@ -41,6 +41,10 @@ namespace Rend.Rendering
         /// <param name="rendering">The CSS image-rendering value.</param>
         void SetImageRendering(Css.CssImageRendering rendering);
 
+        /// <summary>Sets a Gaussian blur mask for subsequent fill operations (used for box-shadow).</summary>
+        /// <param name="sigma">The blur sigma in pixels. 0 clears the blur.</param>
+        void SetMaskBlur(float sigma);
+
         /// <summary>Pushes a rectangular clipping region onto the clip stack.</summary>
         /// <param name="rect">The clipping rectangle.</param>
         void PushClipRect(RectF rect);

@@ -69,33 +69,24 @@ namespace Rend.Rendering.Internal
 
                 if (shadow.Blur > 0)
                 {
-                    // Approximate blur by drawing multiple translucent layers
-                    // at expanding offsets. Uses 4 layers for a reasonable approximation.
-                    int layers = 4;
-                    float step = shadow.Blur / layers;
-                    float baseAlpha = shadow.Color.A / 255f;
+                    // Use the render target's Gaussian blur mask for proper shadow rendering.
+                    // CSS blur-radius maps to approximately sigma = blur / 2.
+                    float sigma = shadow.Blur / 2f;
+                    target.SetMaskBlur(sigma);
 
-                    for (int j = layers; j >= 1; j--)
+                    var brush = BrushInfo.Solid(shadow.Color);
+                    if (hasRadius)
                     {
-                        float expand = step * j;
-                        float layerAlpha = baseAlpha / (j + 1);
-                        var layerColor = new CssColor(shadow.Color.R, shadow.Color.G, shadow.Color.B,
-                                                       (byte)(layerAlpha * 255));
-                        var layerRect = new RectF(x - expand, y - expand, w + expand * 2, h + expand * 2);
-                        var brush = BrushInfo.Solid(layerColor);
-
-                        if (hasRadius)
-                        {
-                            var path = new PathData();
-                            path.AddRoundedRectangle(layerRect, tlr + expand, trr + expand,
-                                                      brr + expand, blr + expand);
-                            target.FillPath(path, brush);
-                        }
-                        else
-                        {
-                            target.FillRect(layerRect, brush);
-                        }
+                        var path = new PathData();
+                        path.AddRoundedRectangle(new RectF(x, y, w, h), tlr, trr, brr, blr);
+                        target.FillPath(path, brush);
                     }
+                    else
+                    {
+                        target.FillRect(new RectF(x, y, w, h), brush);
+                    }
+
+                    target.SetMaskBlur(0);
                 }
                 else
                 {
@@ -165,26 +156,11 @@ namespace Rend.Rendering.Internal
 
             if (shadow.Blur > 0)
             {
-                // Approximate inset blur with multiple translucent layers
-                int layers = 4;
-                float step = shadow.Blur / layers;
-                float baseAlpha = shadow.Color.A / 255f;
-
-                for (int j = layers; j >= 1; j--)
-                {
-                    float shrink = step * j;
-                    float layerAlpha = baseAlpha / (j + 1);
-                    var layerColor = new CssColor(shadow.Color.R, shadow.Color.G, shadow.Color.B,
-                                                   (byte)(layerAlpha * 255));
-
-                    // Draw the 4 edge strips of the inset shadow
-                    var shrunkInner = new RectF(
-                        innerRect.X + shrink,
-                        innerRect.Y + shrink,
-                        innerRect.Width - shrink * 2,
-                        innerRect.Height - shrink * 2);
-                    PaintInsetStrips(target, borderRect, shrunkInner, layerColor);
-                }
+                // Use mask blur for inset shadows: draw edge strips with blur applied
+                float sigma = shadow.Blur / 2f;
+                target.SetMaskBlur(sigma);
+                PaintInsetStrips(target, borderRect, innerRect, shadow.Color);
+                target.SetMaskBlur(0);
             }
             else
             {

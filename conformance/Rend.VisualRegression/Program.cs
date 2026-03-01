@@ -98,7 +98,7 @@ class Program
                 result.RendImagePath = rendPath;
 
                 // --- Compare ---
-                var (diffFraction, diffPixels, totalPixels) = ImageComparer.Compare(chromePng, rendPng);
+                var (diffFraction, diffPixels, totalPixels) = ImageComparer.Compare(chromePng, rendPng, perChannelThreshold: 0);
                 double diffPercent = diffFraction * 100.0;
 
                 result.DiffPercentage = diffPercent;
@@ -107,7 +107,7 @@ class Program
 
                 if (diffPixels > 0)
                 {
-                    var diffPng = ImageDiffer.GenerateDiff(chromePng, rendPng);
+                    var diffPng = ImageDiffer.GenerateDiff(chromePng, rendPng, perChannelThreshold: 0);
                     var diffPath = Path.Combine(outputDir, $"{testCase.Id}-diff.png");
                     File.WriteAllBytes(diffPath, diffPng);
                     result.DiffImagePath = diffPath;

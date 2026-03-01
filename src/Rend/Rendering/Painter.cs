@@ -88,6 +88,10 @@ namespace Rend.Rendering
                 LayoutPage page = pages[i];
                 target.BeginPage(page.Width, page.Height);
 
+                // CSS 2.1 §14.2: If the root element has a transparent background,
+                // propagate the body's background to the canvas.
+                PaintCanvasBackground(page, target);
+
                 // Render header in top margin
                 if (headerFooterRenderer != null)
                     headerFooterRenderer.RenderHeader(target, i + 1, totalPages, page.Width, page.Height);
@@ -99,6 +103,38 @@ namespace Rend.Rendering
                     headerFooterRenderer.RenderFooter(target, i + 1, totalPages, page.Width, page.Height);
 
                 target.EndPage();
+            }
+        }
+
+        /// <summary>
+        /// CSS 2.1 §14.2: If the root element has a transparent/unset background,
+        /// propagate the first body child's background color to fill the entire canvas.
+        /// </summary>
+        private static void PaintCanvasBackground(LayoutPage page, IRenderTarget target)
+        {
+            var rootBox = page.RootBox;
+            if (rootBox?.StyledNode == null) return;
+
+            var rootStyle = rootBox.StyledNode.Style;
+            // If root has its own background, no propagation needed.
+            if (rootStyle.BackgroundColor.A > 0) return;
+
+            // Find the body element among root's children.
+            var rootElement = rootBox.StyledNode as StyledElement;
+            if (rootElement == null) return;
+
+            for (int c = 0; c < rootElement.Children.Count; c++)
+            {
+                var child = rootElement.Children[c];
+                if (child is StyledElement childElem && childElem.TagName == "body")
+                {
+                    var bodyBg = childElem.Style.BackgroundColor;
+                    if (bodyBg.A > 0)
+                    {
+                        target.FillRect(new RectF(0, 0, page.Width, page.Height), BrushInfo.Solid(bodyBg));
+                    }
+                    break;
+                }
             }
         }
 

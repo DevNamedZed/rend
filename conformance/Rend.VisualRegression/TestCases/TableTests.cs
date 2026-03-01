@@ -11,7 +11,8 @@ namespace Rend.VisualRegression.TestCases
                 Id = "table-basic",
                 Name = "Basic Table with Borders",
                 Category = "Tables",
-                Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px;"">
+                Tolerance = 0.0,
+                Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;"">
                     <table style=""border-collapse:collapse; width:100%;"">
                         <thead>
                             <tr>
@@ -46,7 +47,8 @@ namespace Rend.VisualRegression.TestCases
                 Id = "table-striped",
                 Name = "Table with Alternating Row Colors",
                 Category = "Tables",
-                Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px;"">
+                Tolerance = 0.0,
+                Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;"">
                     <table style=""border-collapse:collapse; width:100%;"">
                         <thead>
                             <tr style=""background:#2c3e50; color:#fff;"">
@@ -86,7 +88,8 @@ namespace Rend.VisualRegression.TestCases
                 Id = "table-colored-borders",
                 Name = "Table with Colored Borders",
                 Category = "Tables",
-                Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px;"">
+                Tolerance = 0.0,
+                Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;"">
                     <table style=""border-collapse:collapse; width:100%;"">
                         <tr>
                             <td style=""border:2px solid #3498db; padding:10px; text-align:center;"">Blue</td>

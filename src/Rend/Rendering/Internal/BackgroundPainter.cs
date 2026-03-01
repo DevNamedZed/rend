@@ -82,7 +82,15 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
-            string? bgImageUrl = bgImageRef as string;
+            // Extract URL from CssUrlValue or string ref
+            string? bgImageUrl = null;
+            if (bgImageRef is CssUrlValue urlVal)
+                bgImageUrl = urlVal.Url;
+            else if (bgImageRef is CssKeywordValue kwRef && kwRef.Keyword != "none")
+                bgImageUrl = kwRef.Keyword;
+            else if (bgImageRef is string strRef)
+                bgImageUrl = strRef;
+
             if (string.IsNullOrEmpty(bgImageUrl) || bgImageUrl == "none")
             {
                 return;

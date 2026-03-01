@@ -159,8 +159,15 @@ namespace Rend.Text
             var entry = _fontProvider.ResolveFont(font);
             if (entry == null)
             {
-                // If no font is resolved, return an empty run.
-                return new ShapedTextRun(Array.Empty<ShapedGlyph>(), text, fontSize);
+                // No font resolved — return a fallback run with estimated glyph widths
+                // (average character width ≈ 0.5em) so layout can still wrap text.
+                float avgAdvance = fontSize * 0.5f;
+                var fallbackGlyphs = new ShapedGlyph[text.Length];
+                for (int i = 0; i < text.Length; i++)
+                {
+                    fallbackGlyphs[i] = new ShapedGlyph(0, (uint)i, avgAdvance, 0, 0, 0);
+                }
+                return new ShapedTextRun(fallbackGlyphs, text, fontSize);
             }
 
             return _textShaper.Shape(text, entry.FontData, fontSize);

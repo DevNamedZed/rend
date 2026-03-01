@@ -19,6 +19,7 @@ namespace Rend.Fonts.Internal
         private const uint TagMaxp = 0x6D617870; // "maxp"
 
         private readonly byte[] _data;
+        private readonly int _sfntOffset;
         private readonly Dictionary<uint, TableRecord> _tables;
 
         // Parsed metrics.
@@ -75,12 +76,21 @@ namespace Rend.Fonts.Internal
         /// <summary>
         /// Parses the given font data. The data must be a valid TrueType or OpenType sfnt.
         /// </summary>
-        public OpenTypeFontData(byte[] fontData)
+        public OpenTypeFontData(byte[] fontData) : this(fontData, 0)
+        {
+        }
+
+        /// <summary>
+        /// Parses a font within a TrueType Collection (TTC). The sfnt header starts at the
+        /// given byte offset within the data array.
+        /// </summary>
+        public OpenTypeFontData(byte[] fontData, int sfntOffset)
         {
             _data = fontData ?? throw new ArgumentNullException(nameof(fontData));
+            _sfntOffset = sfntOffset;
             _tables = new Dictionary<uint, TableRecord>();
 
-            if (_data.Length < 12)
+            if (_data.Length < sfntOffset + 12)
                 throw new InvalidOperationException("Font data is too small.");
 
             ParseOffsetTable();
@@ -145,10 +155,10 @@ namespace Rend.Fonts.Internal
 
         private void ParseOffsetTable()
         {
-            // uint sfntVersion = ReadUInt32(0);
-            ushort numTables = ReadUInt16(4);
+            // uint sfntVersion = ReadUInt32(_sfntOffset);
+            ushort numTables = ReadUInt16(_sfntOffset + 4);
 
-            int offset = 12;
+            int offset = _sfntOffset + 12;
             for (int i = 0; i < numTables; i++)
             {
                 if (offset + 16 > _data.Length) break;

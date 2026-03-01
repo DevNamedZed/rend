@@ -23,12 +23,23 @@ namespace Rend.Css.Resolution.Internal
             switch (prop.ValueType)
             {
                 case PropertyValueType.Length:
+                    // For height-axis percentage properties, defer resolution to layout
+                    // by encoding the percentage as a negative fraction (e.g., 50% → -0.5).
+                    // This is needed because percentage heights resolve against the containing
+                    // block height, which isn't known at CSS resolution time.
+                    if (value is CssPercentageValue hPct && IsHeightAxisProperty(prop.Id))
+                    {
+                        result = PropertyValue.FromLength(-hPct.Value / 100f);
+                        return true;
+                    }
                     return TryResolveLength(value, ctx, out result);
 
                 case PropertyValueType.Color:
                     return TryResolveColor(value, out result);
 
                 case PropertyValueType.Number:
+                    if (prop.Id == PropertyId.LineHeight)
+                        return TryResolveLineHeight(value, ctx, out result);
                     return TryResolveNumber(value, out result);
 
                 case PropertyValueType.Keyword:
@@ -44,6 +55,11 @@ namespace Rend.Css.Resolution.Internal
                 default:
                     return false;
             }
+        }
+
+        private static bool IsHeightAxisProperty(int id)
+        {
+            return id == PropertyId.Height || id == PropertyId.MinHeight || id == PropertyId.MaxHeight;
         }
 
         private static bool TryResolveLength(CssValue value, CssResolutionContext ctx, out PropertyValue result)
@@ -192,6 +208,56 @@ namespace Rend.Css.Resolution.Internal
                     result = PropertyValue.FromColor(new CssColor(0, 0, 1, 0)); // sentinel
                     return true;
                 }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Resolves line-height values. Convention: negative = unitless multiplier, positive = pixels, NaN = normal.
+        /// CSS line-height can be: normal | &lt;number&gt; | &lt;length&gt; | &lt;percentage&gt;
+        /// Unitless numbers are stored negative so consumers can multiply by their own font-size.
+        /// </summary>
+        private static bool TryResolveLineHeight(CssValue value, CssResolutionContext ctx, out PropertyValue result)
+        {
+            result = default;
+
+            if (value is CssKeywordValue kw)
+            {
+                if (kw.Keyword == "normal" || kw.Keyword == "auto")
+                {
+                    result = PropertyValue.FromNumber(-1.2f); // normal ≈ 1.2 multiplier
+                    return true;
+                }
+            }
+
+            if (value is CssNumberValue num)
+            {
+                // Unitless number (e.g., line-height: 1.5) → store as negative multiplier
+                result = PropertyValue.FromNumber(-num.Value);
+                return true;
+            }
+
+            if (value is CssDimensionValue dim)
+            {
+                // Length value (e.g., line-height: 24px, 1.5em) → resolve to positive pixels
+                var unit = MapUnit(dim.Unit);
+                if (unit != CssLengthUnit.None)
+                {
+                    var length = new CssLength(dim.Value, unit);
+                    result = PropertyValue.FromNumber(length.ToPx(ctx));
+                    return true;
+                }
+                // Unknown unit — treat as pixels
+                result = PropertyValue.FromNumber(dim.Value);
+                return true;
+            }
+
+            if (value is CssPercentageValue pct)
+            {
+                // Percentage (e.g., line-height: 150%) → resolve to pixels using font-size
+                result = PropertyValue.FromNumber(pct.Value / 100f * ctx.FontSize);
+                return true;
             }
 
             return false;

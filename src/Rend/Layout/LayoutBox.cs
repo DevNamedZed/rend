@@ -76,6 +76,12 @@ namespace Rend.Layout
             _children.Add(child);
         }
 
+        /// <summary>Remove all child layout boxes.</summary>
+        public void ClearChildren()
+        {
+            _children.Clear();
+        }
+
         /// <summary>Parent layout box.</summary>
         public LayoutBox? Parent { get; set; }
 

@@ -43,8 +43,10 @@ namespace Rend.Text.Internal
         }
 
         /// <summary>
-        /// Collapses consecutive whitespace characters to a single space and trims
-        /// leading and trailing whitespace. Newlines are treated as spaces.
+        /// Collapses consecutive whitespace characters to a single space.
+        /// Newlines are treated as spaces. Leading/trailing spaces are preserved
+        /// so that inline element boundaries retain inter-word spacing.
+        /// Edge trimming is handled by the inline formatting context at line boundaries.
         /// Used for white-space: normal and nowrap.
         /// </summary>
         private static string CollapseAll(string text)
@@ -70,18 +72,6 @@ namespace Rend.Text.Internal
                     sb.Append(ch);
                     lastWasSpace = false;
                 }
-            }
-
-            // Trim leading space.
-            if (sb.Length > 0 && sb[0] == ' ')
-            {
-                sb.Remove(0, 1);
-            }
-
-            // Trim trailing space.
-            if (sb.Length > 0 && sb[sb.Length - 1] == ' ')
-            {
-                sb.Remove(sb.Length - 1, 1);
             }
 
             return sb.ToString();

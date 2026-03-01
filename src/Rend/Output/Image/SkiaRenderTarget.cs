@@ -20,6 +20,7 @@ namespace Rend.Output.Image
         private readonly SkiaFontMapper _fontMapper = new SkiaFontMapper();
         private readonly SkiaPaintPool _paintPool = new SkiaPaintPool();
         private readonly List<byte[]> _renderedPages = new List<byte[]>();
+        private readonly Stack<float> _opacityStack = new Stack<float>();
 
         private SKBitmap? _currentBitmap;
         private SKCanvas? _currentCanvas;
@@ -75,6 +76,7 @@ namespace Rend.Output.Image
         public void Save()
         {
             EnsureCanvas();
+            _opacityStack.Push(_currentOpacity);
             _currentCanvas!.Save();
         }
 
@@ -83,6 +85,8 @@ namespace Rend.Output.Image
         {
             EnsureCanvas();
             _currentCanvas!.Restore();
+            if (_opacityStack.Count > 0)
+                _currentOpacity = _opacityStack.Pop();
         }
 
         /// <inheritdoc />
@@ -120,7 +124,32 @@ namespace Rend.Output.Image
         /// <inheritdoc />
         public void SetOpacity(float opacity)
         {
-            _currentOpacity = Math.Max(0f, Math.Min(1f, opacity));
+            opacity = Math.Max(0f, Math.Min(1f, opacity));
+            _currentOpacity = opacity;
+            if (opacity < 1f)
+            {
+                EnsureCanvas();
+                // Use SaveLayer to create a compositing group. All subsequent draw
+                // operations render to an offscreen buffer. When Restore() is called
+                // the buffer is composited at this alpha.
+                //
+                // OpacityCompositor called Save() before us. Undo that Save and replace
+                // it with a SaveLayer so the save/restore bookkeeping stays balanced.
+                _currentCanvas!.Restore();
+                if (_opacityStack.Count > 0)
+                    _opacityStack.Pop();
+                _opacityStack.Push(1f);
+
+                using (var paint = new SKPaint())
+                {
+                    // Transparent white with the requested alpha — colour channels are
+                    // irrelevant because SaveLayer uses only the alpha for compositing.
+                    paint.Color = new SKColor(255, 255, 255, (byte)(opacity * 255));
+                    _currentCanvas.SaveLayer(paint);
+                }
+                // Individual draw calls should not double-apply opacity.
+                _currentOpacity = 1f;
+            }
         }
 
         /// <inheritdoc />
@@ -167,6 +196,14 @@ namespace Rend.Output.Image
             }
         }
 
+        private float _maskBlurSigma;
+
+        /// <inheritdoc />
+        public void SetMaskBlur(float sigma)
+        {
+            _maskBlurSigma = sigma;
+        }
+
         /// <inheritdoc />
         public void PushClipRect(RectF rect)
         {
@@ -203,11 +240,14 @@ namespace Rend.Output.Image
                 paint.IsAntialias = true;
                 paint.Style = SKPaintStyle.Fill;
                 ApplyBrush(paint, brush, rect);
+                if (_maskBlurSigma > 0)
+                    paint.MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, _maskBlurSigma);
 
                 _currentCanvas!.DrawRect(ToSKRect(rect), paint);
             }
             finally
             {
+                if (paint.MaskFilter != null) { paint.MaskFilter.Dispose(); paint.MaskFilter = null; }
                 ClearShader(paint);
                 _paintPool.Return(paint);
             }
@@ -245,11 +285,14 @@ namespace Rend.Output.Image
                     paint.IsAntialias = true;
                     paint.Style = SKPaintStyle.Fill;
                     ApplyBrush(paint, brush, GetPathBounds(skPath));
+                    if (_maskBlurSigma > 0)
+                        paint.MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, _maskBlurSigma);
 
                     _currentCanvas!.DrawPath(skPath, paint);
                 }
                 finally
                 {
+                    if (paint.MaskFilter != null) { paint.MaskFilter.Dispose(); paint.MaskFilter = null; }
                     ClearShader(paint);
                     _paintPool.Return(paint);
                 }
@@ -316,7 +359,8 @@ namespace Rend.Output.Image
             {
                 paint.IsAntialias = true;
                 paint.Style = SKPaintStyle.Fill;
-                paint.Color = ToSKColor(style.Color);
+                var tc = style.Color;
+                paint.Color = new SKColor(tc.R, tc.G, tc.B, (byte)(tc.A * _currentOpacity));
                 paint.TextSize = style.FontSize;
 
                 SKTypeface typeface = _fontMapper.GetOrCreate(style.Font, null);
@@ -351,7 +395,7 @@ namespace Rend.Output.Image
             {
                 paint.IsAntialias = true;
                 paint.Style = SKPaintStyle.Fill;
-                paint.Color = ToSKColor(color);
+                paint.Color = new SKColor(color.R, color.G, color.B, (byte)(color.A * _currentOpacity));
                 paint.TextSize = run.FontSize;
 
                 SKTypeface typeface = _fontMapper.GetOrCreate(font, null);

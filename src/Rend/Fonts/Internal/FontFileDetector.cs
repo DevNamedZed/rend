@@ -16,6 +16,9 @@ namespace Rend.Fonts.Internal
         /// <summary>OpenType font with CFF outlines (.otf).</summary>
         OpenType,
 
+        /// <summary>TrueType Collection (.ttc).</summary>
+        TrueTypeCollection,
+
         /// <summary>Web Open Font Format 1.0 (.woff).</summary>
         Woff,
 
@@ -47,6 +50,10 @@ namespace Rend.Fonts.Internal
             // OpenType: "OTTO" (0x4F54544F)
             if (data[0] == 0x4F && data[1] == 0x54 && data[2] == 0x54 && data[3] == 0x4F)
                 return FontFileFormat.OpenType;
+
+            // TrueType Collection: "ttcf" (0x74746366)
+            if (data[0] == 0x74 && data[1] == 0x74 && data[2] == 0x63 && data[3] == 0x66)
+                return FontFileFormat.TrueTypeCollection;
 
             // WOFF: "wOFF" (0x774F4646)
             if (data[0] == 0x77 && data[1] == 0x4F && data[2] == 0x46 && data[3] == 0x46)

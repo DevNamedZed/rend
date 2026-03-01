@@ -96,7 +96,7 @@ namespace Rend.Layout.Internal
 
                     // Temporary Y — will be repositioned in second pass
                     cellBox.ContentRect = new RectF(0, 0, contentWidth, 0);
-                    BlockFormattingContext.Layout(cellBox, context);
+                    BlockFormattingContext.LayoutChildren(cellBox, context);
                     float cellContentHeight = CalculateAutoHeight(cellBox);
                     cellBox.ContentRect = new RectF(0, 0, contentWidth, cellContentHeight);
 
@@ -437,7 +437,7 @@ namespace Rend.Layout.Internal
             float y = cursorY + captionBox.MarginTop + captionBox.BorderTopWidth + captionBox.PaddingTop;
 
             captionBox.ContentRect = new RectF(x, y, contentWidth, 0);
-            BlockFormattingContext.Layout(captionBox, context);
+            BlockFormattingContext.LayoutChildren(captionBox, context);
 
             float contentHeight = CalculateAutoHeight(captionBox);
             captionBox.ContentRect = new RectF(x, y, contentWidth, contentHeight);

@@ -56,6 +56,16 @@ namespace Rend.Layout.Internal
         {
             float specifiedHeight = style.Height;
 
+            // Negative values encode deferred percentage heights (e.g., -0.5 = 50%).
+            // Resolve against the containing block height, or treat as auto if unknown.
+            if (specifiedHeight < 0 && specifiedHeight > -1.01f)
+            {
+                if (float.IsNaN(containingBlockHeight) || containingBlockHeight <= 0)
+                    specifiedHeight = float.NaN; // treat as auto
+                else
+                    specifiedHeight = -specifiedHeight * containingBlockHeight;
+            }
+
             if (float.IsNaN(specifiedHeight))
             {
                 // Check for aspect-ratio: if set and width is known, compute height from ratio.
@@ -63,7 +73,9 @@ namespace Rend.Layout.Internal
                 if (ratio > 0 && box.ContentRect.Width > 0)
                 {
                     float arHeight = box.ContentRect.Width / ratio;
-                    arHeight = ApplyMinMax(arHeight, style.MinHeight, style.MaxHeight);
+                    arHeight = ApplyMinMax(arHeight,
+                        ResolveMinMaxH(style.MinHeight, containingBlockHeight),
+                        ResolveMinMaxH(style.MaxHeight, containingBlockHeight));
                     return Math.Max(0, arHeight);
                 }
                 return float.NaN; // auto: determined by content
@@ -76,9 +88,33 @@ namespace Rend.Layout.Internal
                 height -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
             }
 
-            height = ApplyMinMax(height, style.MinHeight, style.MaxHeight);
+            height = ApplyMinMax(height,
+                ResolveMinMaxH(style.MinHeight, containingBlockHeight),
+                ResolveMinMaxH(style.MaxHeight, containingBlockHeight));
 
             return Math.Max(0, height);
+        }
+
+        /// <summary>
+        /// Resolve a min/max height value, handling deferred percentage encoding.
+        /// </summary>
+        /// <summary>
+        /// Resolve a height value that may be a deferred percentage (negative fraction).
+        /// </summary>
+        public static float ResolvePercentHeight(float value, float containingBlockHeight)
+        {
+            return ResolveMinMaxH(value, containingBlockHeight);
+        }
+
+        private static float ResolveMinMaxH(float value, float containingBlockHeight)
+        {
+            if (value < 0 && value > -1.01f)
+            {
+                if (float.IsNaN(containingBlockHeight) || containingBlockHeight <= 0)
+                    return float.NaN;
+                return -value * containingBlockHeight;
+            }
+            return value;
         }
 
         /// <summary>

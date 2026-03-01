@@ -25,18 +25,10 @@ namespace Rend.VisualRegression.Infrastructure
                 return (1.0, 1, 1);
             }
 
-            // If dimensions differ, return 100% diff
-            if (expectedBitmap.Width != actualBitmap.Width ||
-                expectedBitmap.Height != actualBitmap.Height)
-            {
-                int totalPixels = System.Math.Max(
-                    expectedBitmap.Width * expectedBitmap.Height,
-                    actualBitmap.Width * actualBitmap.Height);
-                return (1.0, totalPixels, totalPixels);
-            }
-
-            int width = expectedBitmap.Width;
-            int height = expectedBitmap.Height;
+            // Use the larger dimensions as the comparison area.
+            // Pixels outside the smaller image count as different.
+            int width = System.Math.Max(expectedBitmap.Width, actualBitmap.Width);
+            int height = System.Math.Max(expectedBitmap.Height, actualBitmap.Height);
             int total = width * height;
             int diffCount = 0;
 
@@ -44,6 +36,16 @@ namespace Rend.VisualRegression.Infrastructure
             {
                 for (int x = 0; x < width; x++)
                 {
+                    bool inExpected = x < expectedBitmap.Width && y < expectedBitmap.Height;
+                    bool inActual = x < actualBitmap.Width && y < actualBitmap.Height;
+
+                    if (!inExpected || !inActual)
+                    {
+                        // Out-of-bounds pixel counts as different
+                        diffCount++;
+                        continue;
+                    }
+
                     var expectedPixel = expectedBitmap.GetPixel(x, y);
                     var actualPixel = actualBitmap.GetPixel(x, y);
 

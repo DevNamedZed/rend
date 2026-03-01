@@ -47,6 +47,19 @@ namespace Rend.Layout.Internal
 
             context.ContainingBlockWidth = vertical ? parent.ContentRect.Width : containingWidth;
 
+            // Determine the parent's definite content height for percentage height resolution.
+            // If the parent has an explicit CSS height, use it; otherwise NaN (auto).
+            float parentContentHeight = parent.ContentRect.Height;
+            if (float.IsNaN(parentContentHeight) || parentContentHeight <= 0)
+            {
+                var parentStyled = parent.StyledNode as StyledElement;
+                if (parentStyled != null)
+                {
+                    float h = parentStyled.Style.Height;
+                    if (!float.IsNaN(h) && h > 0) parentContentHeight = h;
+                }
+            }
+
             var styledElement = parent.StyledNode as StyledElement;
             if (styledElement == null) return;
 
@@ -147,7 +160,7 @@ namespace Rend.Layout.Internal
                     float posWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, posBox);
                     posBox.ContentRect = new RectF(parent.ContentRect.X, cursorY, posWidth, 0);
                     LayoutChildren(posBox, context);
-                    float posHeight = DimensionResolver.ResolveHeight(childStyle, float.NaN, posBox);
+                    float posHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, posBox);
                     if (float.IsNaN(posHeight)) posHeight = CalculateAutoHeight(posBox);
                     posBox.ContentRect = new RectF(posBox.ContentRect.X, posBox.ContentRect.Y, posWidth, posHeight);
                     parent.AddChild(posBox);
@@ -253,7 +266,7 @@ namespace Rend.Layout.Internal
                     else
                     {
                         LayoutChildren(childBox, context);
-                        contentHeight = DimensionResolver.ResolveHeight(childStyle, float.NaN, childBox);
+                        contentHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox);
                         if (float.IsNaN(contentHeight))
                         {
                             var contain = childStyle.Contain;
@@ -261,6 +274,14 @@ namespace Rend.Layout.Internal
                                 contentHeight = 0;
                             else
                                 contentHeight = CalculateAutoHeight(childBox);
+
+                            // Apply min-height / max-height to auto height
+                            float minH = DimensionResolver.ResolvePercentHeight(childStyle.MinHeight, parentContentHeight);
+                            float maxH = DimensionResolver.ResolvePercentHeight(childStyle.MaxHeight, parentContentHeight);
+                            if (!float.IsNaN(maxH) && maxH >= 0 && contentHeight > maxH)
+                                contentHeight = maxH;
+                            if (!float.IsNaN(minH) && minH >= 0 && contentHeight < minH)
+                                contentHeight = minH;
                         }
                     }
 
@@ -305,7 +326,7 @@ namespace Rend.Layout.Internal
                         LayoutChildren(childBox, context);
 
                         // Resolve content height
-                        contentHeight = DimensionResolver.ResolveHeight(childStyle, float.NaN, childBox);
+                        contentHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox);
                         if (float.IsNaN(contentHeight))
                         {
                             // contain: size or contain: strict → treat auto height as 0
@@ -314,6 +335,14 @@ namespace Rend.Layout.Internal
                                 contentHeight = 0;
                             else
                                 contentHeight = CalculateAutoHeight(childBox);
+
+                            // Apply min-height / max-height to auto height
+                            float minH = DimensionResolver.ResolvePercentHeight(childStyle.MinHeight, parentContentHeight);
+                            float maxH = DimensionResolver.ResolvePercentHeight(childStyle.MaxHeight, parentContentHeight);
+                            if (!float.IsNaN(maxH) && maxH >= 0 && contentHeight > maxH)
+                                contentHeight = maxH;
+                            if (!float.IsNaN(minH) && minH >= 0 && contentHeight < minH)
+                                contentHeight = minH;
                         }
                     }
 
@@ -456,18 +485,17 @@ namespace Rend.Layout.Internal
 
         private static float CalculateAutoHeight(LayoutBox box)
         {
-            if (box.Children.Count == 0)
+            float bottom = box.ContentRect.Y;
+
+            // Check line boxes (from InlineFormattingContext)
+            if (box.LineBoxes != null && box.LineBoxes.Count > 0)
             {
-                // Check for line boxes
-                if (box.LineBoxes != null && box.LineBoxes.Count > 0)
-                {
-                    var lastLine = box.LineBoxes[box.LineBoxes.Count - 1];
-                    return (lastLine.Y + lastLine.Height) - box.ContentRect.Y;
-                }
-                return 0;
+                var lastLine = box.LineBoxes[box.LineBoxes.Count - 1];
+                float lineBottom = lastLine.Y + lastLine.Height;
+                if (lineBottom > bottom) bottom = lineBottom;
             }
 
-            float bottom = box.ContentRect.Y;
+            // Check children (from BlockFormattingContext)
             for (int i = 0; i < box.Children.Count; i++)
             {
                 var child = box.Children[i];
@@ -488,7 +516,10 @@ namespace Rend.Layout.Internal
             // Measure text
             float fontSize = textNode.Style.FontSize;
             float lineHeight = textNode.Style.LineHeight;
-            if (float.IsNaN(lineHeight) || lineHeight <= 0)
+            // Negative = unitless multiplier, positive = pixels, NaN = normal
+            if (lineHeight < 0)
+                lineHeight = -lineHeight * fontSize;
+            else if (float.IsNaN(lineHeight) || lineHeight == 0)
                 lineHeight = fontSize * 1.2f;
 
             if (context.TextMeasurer != null)

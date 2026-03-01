@@ -20,6 +20,16 @@ namespace Rend.Layout.Internal
             var style = styledElement.Style;
             float containerWidth = parent.ContentRect.Width;
             float containerHeight = parent.ContentRect.Height;
+
+            // Container height may not be resolved yet (BFC sets it to 0 before LayoutChildren).
+            // Resolve from explicit CSS height so column main-size and cross-axis alignment work.
+            if (float.IsNaN(containerHeight) || containerHeight <= 0)
+            {
+                float explicitH = DimensionResolver.ResolveHeight(style, float.NaN, parent);
+                if (!float.IsNaN(explicitH) && explicitH > 0)
+                    containerHeight = explicitH;
+            }
+
             bool isColumn = style.FlexDirection == CssFlexDirection.Column ||
                             style.FlexDirection == CssFlexDirection.ColumnReverse;
             bool isReverse = style.FlexDirection == CssFlexDirection.RowReverse ||
@@ -27,11 +37,17 @@ namespace Rend.Layout.Internal
             bool isWrap = style.FlexWrap != CssFlexWrap.Nowrap;
 
             float mainSize = isColumn ? containerHeight : containerWidth;
+            bool isAutoMainSize = false;
             if (float.IsNaN(mainSize) || mainSize <= 0)
+            {
                 mainSize = isColumn ? 10000f : containerWidth;
+                if (isColumn) isAutoMainSize = true;
+            }
 
             float gap = isColumn ? style.RowGap : style.ColumnGap;
             if (float.IsNaN(gap)) gap = 0;
+            float crossGap = isColumn ? style.ColumnGap : style.RowGap;
+            if (float.IsNaN(crossGap)) crossGap = 0;
 
             // Collect flex items
             var items = new List<FlexItem>();
@@ -48,7 +64,9 @@ namespace Rend.Layout.Internal
                     var pseudoBox = new LayoutText(pseudoText);
                     float fontSize = pseudo.Style.FontSize;
                     float lineHeight = pseudo.Style.LineHeight;
-                    if (float.IsNaN(lineHeight) || lineHeight <= 0)
+                    if (lineHeight < 0)
+                        lineHeight = -lineHeight * fontSize;
+                    else if (float.IsNaN(lineHeight) || lineHeight == 0)
                         lineHeight = fontSize * 1.2f;
                     float estimatedWidth = pseudo.Content.Length * fontSize * 0.6f;
                     pseudoBox.ContentRect = new RectF(0, 0, estimatedWidth, lineHeight);
@@ -223,9 +241,25 @@ namespace Rend.Layout.Internal
 
                 // Position items on main axis
                 float mainCursor = isColumn ? parent.ContentRect.Y : parent.ContentRect.X;
+
+                // For auto-sized column containers (no definite height), justify-content
+                // has no effect since there's no definite free space.
+                var effectiveJustify = style.JustifyContent;
+                if (isAutoMainSize)
+                    effectiveJustify = CssJustifyContent.FlexStart;
+                // For reverse directions, flex-start means the physical end (bottom/right),
+                // so swap flex-start ↔ flex-end for justify-content.
+                else if (isReverse)
+                {
+                    if (effectiveJustify == CssJustifyContent.FlexStart)
+                        effectiveJustify = CssJustifyContent.FlexEnd;
+                    else if (effectiveJustify == CssJustifyContent.FlexEnd)
+                        effectiveJustify = CssJustifyContent.FlexStart;
+                }
+
                 var (startOffset, justifyGap) = hasAutoMargins
                     ? (0f, gap)
-                    : ApplyJustifyContent(style.JustifyContent, freeSpace, line.Items.Count, totalGrow > 0, gap);
+                    : ApplyJustifyContent(effectiveJustify, freeSpace, line.Items.Count, totalGrow > 0, gap);
                 mainCursor += startOffset;
 
                 float maxCross = 0;
@@ -257,7 +291,7 @@ namespace Rend.Layout.Internal
                     }
 
                     // Layout item contents
-                    BlockFormattingContext.Layout(box, context);
+                    BlockFormattingContext.LayoutChildren(box, context);
 
                     // Resolve auto cross size
                     if (isColumn)
@@ -285,6 +319,15 @@ namespace Rend.Layout.Internal
                 }
 
                 line.CrossSize = maxCross;
+
+                // For single-line flex containers with definite cross size,
+                // the line's cross size equals the container's inner cross size.
+                if (!isWrap || lines.Count == 1)
+                {
+                    float containerCross = isColumn ? containerWidth : containerHeight;
+                    if (!float.IsNaN(containerCross) && containerCross > 0 && containerCross > maxCross)
+                        maxCross = containerCross;
+                }
 
                 // Apply cross-axis alignment (align-items / align-self)
                 for (int i = 0; i < line.Items.Count; i++)
@@ -358,8 +401,22 @@ namespace Rend.Layout.Internal
                                     float maxH = item.Style.MaxHeight;
                                     if (!float.IsNaN(minH) && minH >= 0) newHeight = Math.Max(newHeight, minH);
                                     if (!float.IsNaN(maxH) && maxH >= 0) newHeight = Math.Min(newHeight, maxH);
+                                    float oldHeight = box.ContentRect.Height;
                                     box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y,
                                                                 box.ContentRect.Width, newHeight);
+
+                                    // If the item is a column flex container and height changed,
+                                    // re-layout to apply justify-content with the correct height.
+                                    if (newHeight > oldHeight + 0.01f && item.Style.Display == CssDisplay.Flex)
+                                    {
+                                        var itemDir = item.Style.FlexDirection;
+                                        if (itemDir == CssFlexDirection.Column || itemDir == CssFlexDirection.ColumnReverse)
+                                        {
+                                            box.ClearChildren();
+                                            box.LineBoxes?.Clear();
+                                            BlockFormattingContext.LayoutChildren(box, context);
+                                        }
+                                    }
                                 }
                             }
                             crossOffset = 0;
@@ -376,6 +433,8 @@ namespace Rend.Layout.Internal
                 }
 
                 crossCursor += maxCross;
+                if (li < lines.Count - 1)
+                    crossCursor += crossGap;
             }
 
             // Apply align-content for multi-line flex containers
@@ -384,6 +443,7 @@ namespace Rend.Layout.Internal
                 float totalLineCross = 0;
                 for (int li = 0; li < lines.Count; li++)
                     totalLineCross += lines[li].CrossSize;
+                totalLineCross += crossGap * (lines.Count - 1);
 
                 float crossSpace = (isColumn ? containerWidth : containerHeight);
                 if (!float.IsNaN(crossSpace) && crossSpace > totalLineCross)
@@ -477,7 +537,7 @@ namespace Rend.Layout.Internal
                 // Column: main axis is height, measure content height
                 float w = DimensionResolver.ResolveWidth(style, containerWidth, measureBox);
                 measureBox.ContentRect = new RectF(0, 0, w, 0);
-                BlockFormattingContext.Layout(measureBox, context);
+                BlockFormattingContext.LayoutChildren(measureBox, context);
                 return CalculateAutoHeight(measureBox);
             }
             else
@@ -486,7 +546,7 @@ namespace Rend.Layout.Internal
                 // Lay out with full available width, then measure actual content extent
                 float availWidth = containerWidth - BoxModelCalculator.GetHorizontalSpacing(measureBox);
                 measureBox.ContentRect = new RectF(0, 0, availWidth, 0);
-                BlockFormattingContext.Layout(measureBox, context);
+                BlockFormattingContext.LayoutChildren(measureBox, context);
                 float contentWidth = MeasureContentWidth(measureBox);
                 return Math.Min(contentWidth, availWidth);
             }
@@ -507,8 +567,16 @@ namespace Rend.Layout.Internal
             {
                 for (int i = 0; i < box.LineBoxes.Count; i++)
                 {
-                    float right = box.LineBoxes[i].X + box.LineBoxes[i].Width - box.ContentRect.X;
-                    if (right > maxRight) maxRight = right;
+                    var lb = box.LineBoxes[i];
+                    // Measure actual content extent from fragments, not LineBox.Width
+                    // (which holds the available/containing width, not content width)
+                    float contentRight = 0;
+                    for (int f = 0; f < lb.Fragments.Count; f++)
+                    {
+                        float fragRight = lb.Fragments[f].X + lb.Fragments[f].Width;
+                        if (fragRight > contentRight) contentRight = fragRight;
+                    }
+                    if (contentRight > maxRight) maxRight = contentRight;
                 }
             }
             return maxRight;

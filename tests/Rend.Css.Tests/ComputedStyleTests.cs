@@ -621,7 +621,8 @@ namespace Rend.Css.Tests
         public void LineHeight_ResolvesNumberValue()
         {
             var style = ResolveElement("div { line-height: 1.5; }");
-            Assert.Equal(1.5f, style.LineHeight, 0.01f);
+            // Unitless multipliers stored as negative
+            Assert.Equal(-1.5f, style.LineHeight, 0.01f);
         }
 
         [Fact]

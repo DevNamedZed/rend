@@ -82,7 +82,7 @@ namespace Rend.Css.Properties.Internal
             _values[PropertyId.FontStyle] = PropertyValue.FromKeyword((int)CssFontStyle.Normal);
             _values[PropertyId.FontWeight] = PropertyValue.FromNumber(400); // normal
             _values[PropertyId.FontVariant] = PropertyValue.FromKeyword(0); // normal
-            _values[PropertyId.LineHeight] = PropertyValue.FromNumber(1.2f); // normal ≈ 1.2
+            _values[PropertyId.LineHeight] = PropertyValue.FromNumber(-1.2f); // normal ≈ 1.2 (negative = unitless multiplier)
             _values[PropertyId.LetterSpacing] = PropertyValue.FromLength(0); // normal
             _values[PropertyId.WordSpacing] = PropertyValue.FromLength(0); // normal
             _values[PropertyId.TextAlign] = PropertyValue.FromKeyword((int)CssTextAlign.Start);

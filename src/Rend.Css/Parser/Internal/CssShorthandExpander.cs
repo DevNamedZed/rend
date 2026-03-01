@@ -594,7 +594,10 @@ namespace Rend.Css.Parser.Internal
                     continue;
                 }
 
-                if (p is CssUrlValue)
+                if (p is CssUrlValue || p is CssFunctionValue fn &&
+                    (fn.Name == "linear-gradient" || fn.Name == "radial-gradient" ||
+                     fn.Name == "conic-gradient" || fn.Name == "-webkit-linear-gradient" ||
+                     fn.Name == "-webkit-radial-gradient"))
                 {
                     bgImage = p;
                 }
