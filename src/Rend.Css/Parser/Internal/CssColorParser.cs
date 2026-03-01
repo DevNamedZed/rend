@@ -128,6 +128,198 @@ namespace Rend.Css.Parser.Internal
         }
 
         /// <summary>
+        /// Try to parse hwb() from function arguments.
+        /// </summary>
+        public static bool TryParseHwb(List<CssValue> args, out CssColor color)
+        {
+            color = default;
+            if (args.Count < 3) return false;
+
+            float h;
+            if (args[0] is CssNumberValue hn)
+                h = hn.Value;
+            else if (args[0] is CssDimensionValue hd)
+                h = ConvertAngle(hd.Value, hd.Unit);
+            else return false;
+
+            if (!(args[1] is CssPercentageValue wp)) return false;
+            if (!(args[2] is CssPercentageValue bp)) return false;
+
+            float w = wp.Value / 100f;
+            float b = bp.Value / 100f;
+
+            float a = 1f;
+            if (args.Count >= 4)
+            {
+                if (!TryGetAlpha(args[3], out a)) return false;
+            }
+
+            color = CssColor.FromHwb(h, w, b, a);
+            return true;
+        }
+
+        /// <summary>
+        /// Try to parse lab() from function arguments.
+        /// </summary>
+        public static bool TryParseLab(List<CssValue> args, out CssColor color)
+        {
+            color = default;
+            if (args.Count < 3) return false;
+
+            if (!TryGetLabComponent(args[0], 100f, out float l)) return false;
+            if (!TryGetLabComponent(args[1], 125f, out float a)) return false;
+            if (!TryGetLabComponent(args[2], 125f, out float b)) return false;
+
+            float alpha = 1f;
+            if (args.Count >= 4)
+            {
+                if (!TryGetAlpha(args[3], out alpha)) return false;
+            }
+
+            color = CssColor.FromLab(l, a, b, alpha);
+            return true;
+        }
+
+        /// <summary>
+        /// Try to parse lch() from function arguments.
+        /// </summary>
+        public static bool TryParseLch(List<CssValue> args, out CssColor color)
+        {
+            color = default;
+            if (args.Count < 3) return false;
+
+            if (!TryGetLabComponent(args[0], 100f, out float l)) return false;
+            if (!TryGetLabComponent(args[1], 150f, out float c)) return false;
+
+            float h;
+            if (args[2] is CssNumberValue hn)
+                h = hn.Value;
+            else if (args[2] is CssDimensionValue hd)
+                h = ConvertAngle(hd.Value, hd.Unit);
+            else return false;
+
+            float alpha = 1f;
+            if (args.Count >= 4)
+            {
+                if (!TryGetAlpha(args[3], out alpha)) return false;
+            }
+
+            color = CssColor.FromLch(l, c, h, alpha);
+            return true;
+        }
+
+        /// <summary>
+        /// Try to parse oklab() from function arguments.
+        /// </summary>
+        public static bool TryParseOklab(List<CssValue> args, out CssColor color)
+        {
+            color = default;
+            if (args.Count < 3) return false;
+
+            if (!TryGetLabComponent(args[0], 1f, out float l)) return false;
+            if (!TryGetLabComponent(args[1], 0.4f, out float a)) return false;
+            if (!TryGetLabComponent(args[2], 0.4f, out float b)) return false;
+
+            float alpha = 1f;
+            if (args.Count >= 4)
+            {
+                if (!TryGetAlpha(args[3], out alpha)) return false;
+            }
+
+            color = CssColor.FromOklab(l, a, b, alpha);
+            return true;
+        }
+
+        /// <summary>
+        /// Try to parse oklch() from function arguments.
+        /// </summary>
+        public static bool TryParseOklch(List<CssValue> args, out CssColor color)
+        {
+            color = default;
+            if (args.Count < 3) return false;
+
+            if (!TryGetLabComponent(args[0], 1f, out float l)) return false;
+            if (!TryGetLabComponent(args[1], 0.4f, out float c)) return false;
+
+            float h;
+            if (args[2] is CssNumberValue hn)
+                h = hn.Value;
+            else if (args[2] is CssDimensionValue hd)
+                h = ConvertAngle(hd.Value, hd.Unit);
+            else return false;
+
+            float alpha = 1f;
+            if (args.Count >= 4)
+            {
+                if (!TryGetAlpha(args[3], out alpha)) return false;
+            }
+
+            color = CssColor.FromOklch(l, c, h, alpha);
+            return true;
+        }
+
+        /// <summary>
+        /// Try to parse color-mix() from function arguments.
+        /// color-mix(in srgb, color1 p1%, color2 p2%)
+        /// </summary>
+        public static bool TryParseColorMix(List<CssValue> args, out CssColor color)
+        {
+            color = default;
+            // Minimum: "in", "srgb", color1, color2
+            if (args.Count < 4) return false;
+
+            // First two args should be "in" and a color space name
+            if (!(args[0] is CssKeywordValue inKw) || !string.Equals(inKw.Keyword, "in", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (!(args[1] is CssKeywordValue csKw))
+                return false;
+            // We support srgb mixing; other spaces just fall through to srgb
+            // Parse color1 [percentage1], color2 [percentage2]
+            int idx = 2;
+            if (!TryExtractMixColor(args, ref idx, out var c1, out float p1)) return false;
+            if (!TryExtractMixColor(args, ref idx, out var c2, out float p2)) return false;
+
+            // Normalize percentages per spec
+            if (float.IsNaN(p1) && float.IsNaN(p2)) { p1 = 0.5f; p2 = 0.5f; }
+            else if (float.IsNaN(p1)) { p1 = 1f - p2; }
+            else if (float.IsNaN(p2)) { p2 = 1f - p1; }
+
+            color = CssColor.Mix(c1, p1, c2, p2);
+            return true;
+        }
+
+        /// <summary>
+        /// Try to parse color() function.
+        /// color(srgb r g b / a) or color(display-p3 r g b / a)
+        /// </summary>
+        public static bool TryParseColorFunction(List<CssValue> args, out CssColor color)
+        {
+            color = default;
+            if (args.Count < 4) return false;
+
+            // First arg is color space name
+            if (!(args[0] is CssKeywordValue csKw)) return false;
+            // We treat all spaces as sRGB (clamp to gamut)
+
+            if (!TryGetFloatValue(args[1], out float r)) return false;
+            if (!TryGetFloatValue(args[2], out float g)) return false;
+            if (!TryGetFloatValue(args[3], out float b)) return false;
+
+            float a = 1f;
+            if (args.Count >= 5)
+            {
+                if (!TryGetAlpha(args[4], out a)) return false;
+            }
+
+            color = new CssColor(
+                (byte)Math.Round(Math.Max(0f, Math.Min(1f, r)) * 255f),
+                (byte)Math.Round(Math.Max(0f, Math.Min(1f, g)) * 255f),
+                (byte)Math.Round(Math.Max(0f, Math.Min(1f, b)) * 255f),
+                (byte)Math.Round(Math.Max(0f, Math.Min(1f, a)) * 255f));
+            return true;
+        }
+
+        /// <summary>
         /// Try to parse a named color (e.g. "red", "transparent").
         /// </summary>
         public static bool TryParseNamed(string name, out CssColor color)
@@ -219,6 +411,57 @@ namespace Rend.Css.Parser.Internal
             }
             value = 0;
             return false;
+        }
+
+        private static bool TryGetLabComponent(CssValue val, float maxVal, out float result)
+        {
+            result = 0;
+            if (val is CssNumberValue n)
+            {
+                result = n.Value;
+                return true;
+            }
+            if (val is CssPercentageValue p)
+            {
+                result = p.Value / 100f * maxVal;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool TryGetFloatValue(CssValue val, out float result)
+        {
+            result = 0;
+            if (val is CssNumberValue n) { result = n.Value; return true; }
+            if (val is CssPercentageValue p) { result = p.Value / 100f; return true; }
+            return false;
+        }
+
+        private static bool TryExtractMixColor(List<CssValue> args, ref int idx, out CssColor color, out float pct)
+        {
+            color = default;
+            pct = float.NaN;
+            if (idx >= args.Count) return false;
+
+            if (args[idx] is CssColorValue cv)
+            {
+                color = cv.Color;
+                idx++;
+            }
+            else if (args[idx] is CssKeywordValue kw && TryParseNamed(kw.Keyword, out color))
+            {
+                idx++;
+            }
+            else return false;
+
+            // Optional percentage after color
+            if (idx < args.Count && args[idx] is CssPercentageValue pp)
+            {
+                pct = pp.Value / 100f;
+                idx++;
+            }
+
+            return true;
         }
     }
 }

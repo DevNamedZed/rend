@@ -271,5 +271,153 @@ namespace Rend.Core.Tests
             var str = c.ToString();
             Assert.StartsWith("rgba(10, 20, 30,", str);
         }
+
+        // --- CSS Color Level 4 ---
+
+        [Fact]
+        public void FromHwb_Red()
+        {
+            // hwb(0 0% 0%) = red
+            var c = CssColor.FromHwb(0f, 0f, 0f);
+            Assert.Equal(255, c.R);
+            Assert.Equal(0, c.G);
+            Assert.Equal(0, c.B);
+        }
+
+        [Fact]
+        public void FromHwb_White()
+        {
+            // hwb(0 100% 0%) = white
+            var c = CssColor.FromHwb(0f, 1f, 0f);
+            Assert.Equal(255, c.R);
+            Assert.Equal(255, c.G);
+            Assert.Equal(255, c.B);
+        }
+
+        [Fact]
+        public void FromHwb_Black()
+        {
+            // hwb(0 0% 100%) = black
+            var c = CssColor.FromHwb(0f, 0f, 1f);
+            Assert.Equal(0, c.R);
+            Assert.Equal(0, c.G);
+            Assert.Equal(0, c.B);
+        }
+
+        [Fact]
+        public void FromHwb_Gray_WhenWhitenessAndBlacknessExceed1()
+        {
+            // hwb(0 80% 80%) = gray (normalized 50%)
+            var c = CssColor.FromHwb(0f, 0.8f, 0.8f);
+            Assert.Equal(128, c.R);
+            Assert.Equal(128, c.G);
+            Assert.Equal(128, c.B);
+        }
+
+        [Fact]
+        public void FromHwb_WithAlpha()
+        {
+            var c = CssColor.FromHwb(0f, 0f, 0f, 0.5f);
+            Assert.Equal(255, c.R);
+            Assert.Equal(128, c.A);
+        }
+
+        [Fact]
+        public void FromLab_White()
+        {
+            // lab(100 0 0) = white
+            var c = CssColor.FromLab(100f, 0f, 0f);
+            Assert.InRange(c.R, 250, 255);
+            Assert.InRange(c.G, 250, 255);
+            Assert.InRange(c.B, 250, 255);
+        }
+
+        [Fact]
+        public void FromLab_Black()
+        {
+            // lab(0 0 0) = black
+            var c = CssColor.FromLab(0f, 0f, 0f);
+            Assert.InRange(c.R, 0, 5);
+            Assert.InRange(c.G, 0, 5);
+            Assert.InRange(c.B, 0, 5);
+        }
+
+        [Fact]
+        public void FromLab_Red_Approximate()
+        {
+            // lab(53.23 80.11 67.22) ≈ red
+            var c = CssColor.FromLab(53.23f, 80.11f, 67.22f);
+            Assert.InRange(c.R, 240, 255);
+            Assert.InRange(c.G, 0, 15);
+            Assert.InRange(c.B, 0, 15);
+        }
+
+        [Fact]
+        public void FromLch_Red_Approximate()
+        {
+            // lch(53.23 104.55 40) ≈ red
+            var c = CssColor.FromLch(53.23f, 104.55f, 40f);
+            Assert.InRange(c.R, 240, 255);
+            Assert.InRange(c.G, 0, 20);
+        }
+
+        [Fact]
+        public void FromOklab_White()
+        {
+            // oklab(1 0 0) = white
+            var c = CssColor.FromOklab(1f, 0f, 0f);
+            Assert.InRange(c.R, 250, 255);
+            Assert.InRange(c.G, 250, 255);
+            Assert.InRange(c.B, 250, 255);
+        }
+
+        [Fact]
+        public void FromOklab_Black()
+        {
+            // oklab(0 0 0) = black
+            var c = CssColor.FromOklab(0f, 0f, 0f);
+            Assert.Equal(0, c.R);
+            Assert.Equal(0, c.G);
+            Assert.Equal(0, c.B);
+        }
+
+        [Fact]
+        public void FromOklch_Red_Approximate()
+        {
+            // oklch(0.6278 0.2577 29.23) ≈ red
+            var c = CssColor.FromOklch(0.6278f, 0.2577f, 29.23f);
+            Assert.InRange(c.R, 240, 255);
+            Assert.InRange(c.G, 0, 20);
+        }
+
+        [Fact]
+        public void FromOklch_WithAlpha()
+        {
+            var c = CssColor.FromOklch(1f, 0f, 0f, 0.5f);
+            Assert.InRange(c.R, 250, 255);
+            Assert.Equal(128, c.A);
+        }
+
+        [Fact]
+        public void Mix_Equal_Weights()
+        {
+            var red = CssColor.FromRgba(255, 0, 0);
+            var blue = CssColor.FromRgba(0, 0, 255);
+            var mixed = CssColor.Mix(red, 0.5f, blue, 0.5f);
+            Assert.Equal(128, mixed.R);
+            Assert.Equal(0, mixed.G);
+            Assert.Equal(128, mixed.B);
+        }
+
+        [Fact]
+        public void Mix_Weighted()
+        {
+            var red = CssColor.FromRgba(255, 0, 0);
+            var blue = CssColor.FromRgba(0, 0, 255);
+            var mixed = CssColor.Mix(red, 0.75f, blue, 0.25f);
+            Assert.Equal(191, mixed.R);
+            Assert.Equal(0, mixed.G);
+            Assert.Equal(64, mixed.B);
+        }
     }
 }

@@ -50,6 +50,15 @@ namespace Rend.Pdf.Internal
         /// </summary>
         public long Position => _totalBytesWritten + _bufferPos;
 
+        /// <summary>Encryption engine, set when the document uses encryption.</summary>
+        internal PdfEncryptor? Encryptor { get; set; }
+
+        /// <summary>Object number of the object currently being written. Used for per-object encryption.</summary>
+        internal int CurrentObjectNumber { get; set; }
+
+        /// <summary>Generation number of the object currently being written.</summary>
+        internal int CurrentGeneration { get; set; }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteByte(byte b)
         {

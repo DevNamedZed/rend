@@ -19,6 +19,21 @@ namespace Rend.Pdf
 
         /// <summary>Whether to include XMP metadata in the PDF catalog. Default: false.</summary>
         public bool IncludeXmpMetadata { get; set; }
+
+        /// <summary>Whether to produce tagged PDF with structure tree for accessibility. Default: false.</summary>
+        public bool EnableTaggedPdf { get; set; }
+
+        /// <summary>User password for PDF encryption. Set to enable encryption (empty string = open without password but content is encrypted).</summary>
+        public string? UserPassword { get; set; }
+
+        /// <summary>Owner password for PDF encryption. Defaults to user password if not set.</summary>
+        public string? OwnerPassword { get; set; }
+
+        /// <summary>Permissions when document is opened with user password. Default: All.</summary>
+        public PdfPermissions Permissions { get; set; } = PdfPermissions.All;
+
+        /// <summary>Encryption algorithm. Default: AES-128.</summary>
+        public PdfEncryptionMethod EncryptionMethod { get; set; } = PdfEncryptionMethod.Aes128;
     }
 
     /// <summary>PDF version identifiers.</summary>
@@ -123,5 +138,40 @@ namespace Rend.Pdf
         Round = 1,
         /// <summary>Bevel join — triangle at corner.</summary>
         Bevel = 2
+    }
+
+    /// <summary>PDF encryption algorithm.</summary>
+    public enum PdfEncryptionMethod
+    {
+        /// <summary>RC4 128-bit encryption (V=2, R=3). Widely supported.</summary>
+        Rc4_128,
+        /// <summary>AES 128-bit encryption (V=4, R=4). Recommended.</summary>
+        Aes128
+    }
+
+    /// <summary>PDF document permissions (ISO 32000-1 Table 22).</summary>
+    [System.Flags]
+    public enum PdfPermissions
+    {
+        /// <summary>No permissions.</summary>
+        None = 0,
+        /// <summary>Print the document (bit 3).</summary>
+        Print = 1 << 2,
+        /// <summary>Modify contents (bit 4).</summary>
+        Modify = 1 << 3,
+        /// <summary>Copy or extract text and graphics (bit 5).</summary>
+        Extract = 1 << 4,
+        /// <summary>Add or modify annotations, fill forms (bit 6).</summary>
+        Annotate = 1 << 5,
+        /// <summary>Fill form fields (bit 9).</summary>
+        FillForms = 1 << 8,
+        /// <summary>Extract for accessibility (bit 10).</summary>
+        ExtractAccessibility = 1 << 9,
+        /// <summary>Assemble document (bit 11).</summary>
+        Assemble = 1 << 10,
+        /// <summary>Print high quality (bit 12).</summary>
+        PrintHighQuality = 1 << 11,
+        /// <summary>All permissions granted.</summary>
+        All = Print | Modify | Extract | Annotate | FillForms | ExtractAccessibility | Assemble | PrintHighQuality
     }
 }

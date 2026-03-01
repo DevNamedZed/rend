@@ -31,6 +31,14 @@ namespace Rend.Rendering.Internal
             }
 
             string tagName = element.TagName;
+
+            // SVG elements: render inline
+            if (tagName == "svg")
+            {
+                SvgRenderer.Render(element.Element, target, box.ContentRect);
+                return;
+            }
+
             if (tagName != "img")
             {
                 return;

@@ -277,8 +277,22 @@ namespace Rend.Pdf
             if (_formFieldRefs.Count > 0)
                 acroFormRef = BuildAcroForm();
 
+            // 6b. Build Structure Tree (if tagged PDF enabled)
+            PdfReference? structTreeRef = null;
+            if (_options.EnableTaggedPdf)
+                structTreeRef = BuildStructureTree(pageRefs);
+
+            // 6c. Build encryption (if password set)
+            PdfReference? encryptRef = null;
+            PdfEncryptor? encryptor = null;
+            if (_options.UserPassword != null || _options.OwnerPassword != null)
+            {
+                encryptor = BuildEncryption(out encryptRef);
+                writer.Encryptor = encryptor;
+            }
+
             // 7. Build catalog
-            var finalCatalogRef = BuildCatalog(pagesRef, outlinesRef, xmpMetadataRef, acroFormRef);
+            var finalCatalogRef = BuildCatalog(pagesRef, outlinesRef, xmpMetadataRef, acroFormRef, structTreeRef);
 
             // 8. Write all objects
             _objectTable.WriteAllObjects(writer);
@@ -287,7 +301,8 @@ namespace Rend.Pdf
             long xrefOffset = _objectTable.WriteXRefTable(writer);
 
             // 10. Write trailer
-            _objectTable.WriteTrailer(writer, finalCatalogRef, infoRef, xrefOffset);
+            _objectTable.WriteTrailer(writer, finalCatalogRef, infoRef, encryptRef,
+                                       encryptor?.FileId, xrefOffset);
         }
 
         private PdfReference? BuildInfoDictionary()
@@ -374,7 +389,17 @@ namespace Rend.Pdf
             descriptorDict[PdfName.StemV] = new PdfReal(font.Metrics.StemV);
 
             // Embed font data
-            if (_fontRawData.TryGetValue(font, out var rawFontData))
+            if (font.IsCff && font.CffTableData != null)
+            {
+                // CFF font: embed CFF table data as FontFile3
+                byte[] cffData = font.CffTableData;
+                bool compress = _options.Compression != PdfCompression.None;
+                var fontStream = new PdfStream(cffData, compress) { CompressionLevel = MapCompressionLevel(_options.Compression) };
+                fontStream.Dict[PdfName.Subtype] = PdfName.CIDFontType0C;
+                var fontFileRef = _objectTable.Allocate(fontStream);
+                descriptorDict[PdfName.FontFile3] = fontFileRef;
+            }
+            else if (_fontRawData.TryGetValue(font, out var rawFontData))
             {
                 byte[] fontFileData;
                 if (font.EmbedMode == FontEmbedMode.Full)
@@ -410,7 +435,7 @@ namespace Rend.Pdf
             // 2. CIDFont dictionary
             var cidFontDict = new PdfDictionary(8);
             cidFontDict[PdfName.Type] = PdfName.Font;
-            cidFontDict[PdfName.Subtype] = PdfName.CIDFontType2;
+            cidFontDict[PdfName.Subtype] = font.IsCff ? PdfName.CIDFontType0 : PdfName.CIDFontType2;
             cidFontDict[PdfName.BaseFont] = new PdfName(font.BaseFont);
 
             var cidSystemInfo = new PdfDictionary(3);
@@ -421,7 +446,8 @@ namespace Rend.Pdf
 
             cidFontDict[PdfName.FontDescriptor] = descriptorRef;
             cidFontDict[PdfName.DW] = new PdfInteger(1000);
-            cidFontDict[PdfName.CIDToGIDMap] = PdfName.Identity;
+            if (!font.IsCff)
+                cidFontDict[PdfName.CIDToGIDMap] = PdfName.Identity;
 
             // Build /W array (widths) for used glyphs
             var widthsArray = BuildWidthsArray(font);
@@ -631,6 +657,13 @@ namespace Rend.Pdf
                 if (resources.Count > 0)
                     pageDict[PdfName.Resources] = resources;
 
+                // Tagged PDF: add structure parent index and tab order
+                if (_options.EnableTaggedPdf)
+                {
+                    pageDict[PdfName.StructParents] = new PdfInteger(pageLeafRefs.Count);
+                    pageDict[PdfName.Tabs] = PdfName.S;
+                }
+
                 var pageRef = _objectTable.Allocate(pageDict);
 
                 // Annotations and form fields (combined into /Annots array)
@@ -718,9 +751,10 @@ namespace Rend.Pdf
 
         private PdfReference BuildCatalog(PdfReference pagesRef, PdfReference? outlinesRef,
                                             PdfReference? xmpMetadataRef = null,
-                                            PdfReference? acroFormRef = null)
+                                            PdfReference? acroFormRef = null,
+                                            PdfReference? structTreeRef = null)
         {
-            var catalog = new PdfDictionary(4);
+            var catalog = new PdfDictionary(6);
             catalog[PdfName.Type] = PdfName.Catalog;
             catalog[PdfName.Pages] = pagesRef;
 
@@ -733,7 +767,72 @@ namespace Rend.Pdf
             if (acroFormRef != null)
                 catalog[new PdfName("AcroForm")] = acroFormRef;
 
+            if (structTreeRef != null)
+            {
+                catalog[PdfName.StructTreeRoot] = structTreeRef;
+                // MarkInfo dictionary indicates this is a tagged PDF
+                var markInfo = new PdfDictionary(1);
+                markInfo[PdfName.Marked] = PdfBoolean.True;
+                catalog[PdfName.MarkInfo] = markInfo;
+            }
+
             return _objectTable.Allocate(catalog);
+        }
+
+        private PdfReference BuildStructureTree(Dictionary<PdfPage, PdfReference> pageRefs)
+        {
+            // Build structure tree: StructTreeRoot -> Sect per page
+            // PdfDictionary is a reference type, so we can modify dicts after Allocate().
+
+            // Role map
+            var roleMap = new PdfDictionary(2);
+            roleMap[PdfName.Div] = PdfName.Div;
+            roleMap[PdfName.Span] = PdfName.Span;
+
+            // Collect page element dicts (mutable — we'll set /P after root is allocated)
+            var pageElemDicts = new List<PdfDictionary>();
+            var pageElements = new PdfArray();
+            var parentTreeEntries = new PdfArray();
+            int structParentIdx = 0;
+
+            foreach (var page in _pages)
+            {
+                if (!pageRefs.TryGetValue(page, out var pageRef))
+                    continue;
+
+                var pageElemDict = new PdfDictionary(5);
+                pageElemDict[PdfName.Type] = PdfName.StructElem;
+                pageElemDict[PdfName.S] = PdfName.Sect;
+                pageElemDict[PdfName.Pg] = pageRef;
+                pageElemDict[PdfName.K] = new PdfInteger(0);
+
+                pageElemDicts.Add(pageElemDict);
+                var pageElemRef = _objectTable.Allocate(pageElemDict);
+                pageElements.Add(pageElemRef);
+
+                parentTreeEntries.Add(new PdfInteger(structParentIdx));
+                parentTreeEntries.Add(pageElemRef);
+                structParentIdx++;
+            }
+
+            // Parent tree
+            var parentTree = new PdfDictionary(1);
+            parentTree[PdfName.Nums] = parentTreeEntries;
+            var parentTreeRef = _objectTable.Allocate(parentTree);
+
+            // Structure tree root
+            var root = new PdfDictionary(5);
+            root[PdfName.Type] = PdfName.StructTreeRoot;
+            root[PdfName.K] = pageElements;
+            root[PdfName.ParentTree] = parentTreeRef;
+            root[PdfName.RoleMap] = roleMap;
+            var structTreeRootRef = _objectTable.Allocate(root);
+
+            // Patch /P on page elements (dict is reference type, already in object table)
+            foreach (var dict in pageElemDicts)
+                dict[PdfName.P] = structTreeRootRef;
+
+            return structTreeRootRef;
         }
 
         private PdfReference BuildOutlineTree(Dictionary<PdfPage, PdfReference> pageRefs)
@@ -917,6 +1016,54 @@ namespace Rend.Pdf
             acroDict[PdfName.DR] = drDict;
 
             return _objectTable.Allocate(acroDict);
+        }
+
+        private PdfEncryptor BuildEncryption(out PdfReference encryptRef)
+        {
+            string userPwd = _options.UserPassword ?? "";
+            string ownerPwd = _options.OwnerPassword ?? userPwd;
+            bool useAes = _options.EncryptionMethod == PdfEncryptionMethod.Aes128;
+
+            var encryptor = new PdfEncryptor(userPwd, ownerPwd, _options.Permissions, useAes);
+
+            var encryptDict = new PdfDictionary(12);
+            encryptDict[PdfName.Filter] = PdfName.Standard;
+
+            if (useAes)
+            {
+                encryptDict[PdfName.V] = new PdfInteger(4);
+                encryptDict[PdfName.R] = new PdfInteger(4);
+                encryptDict[PdfName.Length] = new PdfInteger(128);
+
+                // Crypt filter dictionary
+                var stdCfDict = new PdfDictionary(4);
+                stdCfDict[PdfName.Type] = PdfName.CryptFilter;
+                stdCfDict[PdfName.CFM] = PdfName.AESV2;
+                stdCfDict[PdfName.AuthEvent] = PdfName.DocOpen;
+                stdCfDict[PdfName.Length] = new PdfInteger(16);
+
+                var cfDict = new PdfDictionary(1);
+                cfDict[PdfName.StdCF] = stdCfDict;
+                encryptDict[PdfName.CF] = cfDict;
+
+                encryptDict[PdfName.StmF] = PdfName.StdCF;
+                encryptDict[PdfName.StrF] = PdfName.StdCF;
+            }
+            else
+            {
+                encryptDict[PdfName.V] = new PdfInteger(2);
+                encryptDict[PdfName.R] = new PdfInteger(3);
+                encryptDict[PdfName.Length] = new PdfInteger(128);
+            }
+
+            encryptDict[PdfName.O] = new PdfHexString(encryptor.OValue);
+            encryptDict[PdfName.U] = new PdfHexString(encryptor.UValue);
+            encryptDict[PdfName.P] = new PdfInteger(encryptor.PValue);
+
+            encryptRef = _objectTable.Allocate(encryptDict);
+            encryptor.EncryptDictObjectNumber = encryptRef.ObjectNumber;
+
+            return encryptor;
         }
 
         private static string EscapeXml(string value)

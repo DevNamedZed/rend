@@ -256,9 +256,21 @@ namespace Rend.Css.Properties.Internal
             Register("grid-row-end", PropertyId.GridRowEnd, false, PropertyValueType.Raw);
             Register("grid-column-start", PropertyId.GridColumnStart, false, PropertyValueType.Raw);
             Register("grid-column-end", PropertyId.GridColumnEnd, false, PropertyValueType.Raw);
+            Register("grid-template-areas", PropertyId.GridTemplateAreas, false, PropertyValueType.Raw);
 
             // Box Decoration Break
             Register("box-decoration-break", PropertyId.BoxDecorationBreak, false, PropertyValueType.Keyword);
+
+            // Filter and Clip-Path
+            Register("filter", PropertyId.Filter, false, PropertyValueType.Raw);
+            Register("clip-path", PropertyId.ClipPath, false, PropertyValueType.Raw);
+
+            // Border Image
+            Register("border-image-source", PropertyId.BorderImageSource, false, PropertyValueType.String);
+            Register("border-image-slice", PropertyId.BorderImageSlice, false, PropertyValueType.Raw);
+            Register("border-image-width", PropertyId.BorderImageWidth, false, PropertyValueType.Raw);
+            Register("border-image-outset", PropertyId.BorderImageOutset, false, PropertyValueType.Raw);
+            Register("border-image-repeat", PropertyId.BorderImageRepeat, false, PropertyValueType.Keyword);
         }
 
         private static void Register(string name, int id, bool inherited, PropertyValueType valueType)

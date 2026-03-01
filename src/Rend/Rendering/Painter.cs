@@ -164,8 +164,14 @@ namespace Rend.Rendering
             // 2b. Apply blend mode if not normal.
             bool hasBlendMode = BlendModeHandler.Apply(box, target);
 
+            // 2c. Apply CSS filter (opacity filter maps to render target opacity).
+            bool hasFilter = FilterHandler.Apply(box, target);
+
             // 3. Apply overflow clipping.
             bool hasClip = ClipHandler.Apply(box, target);
+
+            // 3b. Apply CSS clip-path.
+            bool hasClipPath = ClipPathHandler.Apply(box, target);
 
             if (!skipBoxPainting)
             {
@@ -176,7 +182,11 @@ namespace Rend.Rendering
                 BackgroundPainter.Paint(box, target, _imageResolver);
 
                 // 6. Paint borders (CSS 2.1 step 2: borders).
-                BorderPainter.Paint(box, target);
+                // border-image replaces normal borders when set.
+                if (BorderImagePainter.HasBorderImage(box))
+                    BorderImagePainter.Paint(box, target, _imageResolver);
+                else
+                    BorderPainter.Paint(box, target);
 
                 // 6b. Paint outline (drawn outside the border edge, does not affect layout).
                 OutlinePainter.Paint(box, target);
@@ -208,10 +218,22 @@ namespace Rend.Rendering
                 }
             }
 
-            // 10. Restore clipping.
+            // 10. Restore clip-path.
+            if (hasClipPath)
+            {
+                ClipPathHandler.Restore(target);
+            }
+
+            // 10b. Restore overflow clipping.
             if (hasClip)
             {
                 ClipHandler.Restore(target);
+            }
+
+            // 10c. Restore filter.
+            if (hasFilter)
+            {
+                FilterHandler.Restore(target);
             }
 
             // 11. Restore blend mode.

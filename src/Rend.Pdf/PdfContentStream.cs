@@ -97,6 +97,38 @@ namespace Rend.Pdf
             _builder.SetTransform(cos, sin, -sin, cos, 0, 0);
         }
 
+        // ═══════════════════════════════════════════
+        // Marked Content
+        // ═══════════════════════════════════════════
+
+        private int _markedContentDepth;
+        private int _nextMcid;
+
+        /// <summary>Begin a marked content sequence (BMC operator).</summary>
+        public void BeginMarkedContent(string tag)
+        {
+            _markedContentDepth++;
+            _builder.BeginMarkedContent(tag);
+        }
+
+        /// <summary>Begin a marked content sequence with MCID (BDC operator). Returns the MCID assigned.</summary>
+        public int BeginMarkedContentDict(string tag)
+        {
+            int mcid = _nextMcid++;
+            _markedContentDepth++;
+            _builder.BeginMarkedContentDict(tag, mcid);
+            return mcid;
+        }
+
+        /// <summary>End a marked content sequence (EMC operator).</summary>
+        public void EndMarkedContent()
+        {
+            if (_markedContentDepth <= 0)
+                throw new InvalidOperationException("EndMarkedContent() without matching BeginMarkedContent().");
+            _markedContentDepth--;
+            _builder.EndMarkedContent();
+        }
+
         /// <summary>Set line width (PDF operator: w).</summary>
         public void SetLineWidth(float width) => _builder.SetLineWidth(width);
 

@@ -151,6 +151,8 @@ namespace Rend.Pdf.Internal
         public static readonly PdfName FontFile3 = new PdfName("FontFile3");
         public static readonly PdfName DescendantFonts = new PdfName("DescendantFonts");
         public static readonly PdfName CIDFontType2 = new PdfName("CIDFontType2");
+        public static readonly PdfName CIDFontType0 = new PdfName("CIDFontType0");
+        public static readonly PdfName CIDFontType0C = new PdfName("CIDFontType0C");
         public static readonly PdfName CIDSystemInfo = new PdfName("CIDSystemInfo");
         public static readonly PdfName Registry = new PdfName("Registry");
         public static readonly PdfName Ordering = new PdfName("Ordering");
@@ -202,6 +204,60 @@ namespace Rend.Pdf.Internal
         public static readonly PdfName MaxLen = new PdfName("MaxLen");
         public static readonly PdfName Q = new PdfName("Q");
         public static readonly PdfName P = new PdfName("P");
+
+        // Tagged PDF / Structure Tree
+        public static readonly PdfName MarkInfo = new PdfName("MarkInfo");
+        public static readonly PdfName Marked = new PdfName("Marked");
+        public static readonly PdfName StructTreeRoot = new PdfName("StructTreeRoot");
+        public static readonly PdfName StructElem = new PdfName("StructElem");
+        public static readonly PdfName ParentTree = new PdfName("ParentTree");
+        public static readonly PdfName RoleMap = new PdfName("RoleMap");
+        public static readonly PdfName K = new PdfName("K");
+        public static readonly PdfName Pg = new PdfName("Pg");
+        public static readonly PdfName Document = new PdfName("Document");
+        public static readonly PdfName Sect = new PdfName("Sect");
+        public static readonly PdfName Div = new PdfName("Div");
+        public static readonly PdfName Span = new PdfName("Span");
+        public static readonly PdfName Figure = new PdfName("Figure");
+        public static readonly PdfName Caption = new PdfName("Caption");
+        public static readonly PdfName Table = new PdfName("Table");
+        public static readonly PdfName TR = new PdfName("TR");
+        public static readonly PdfName TH = new PdfName("TH");
+        public static readonly PdfName TD = new PdfName("TD");
+        public static readonly PdfName THead = new PdfName("THead");
+        public static readonly PdfName TBody = new PdfName("TBody");
+        public static readonly PdfName TFoot = new PdfName("TFoot");
+        public static readonly PdfName L = new PdfName("L");
+        public static readonly PdfName LI = new PdfName("LI");
+        public static readonly PdfName LBody = new PdfName("LBody");
+        public static readonly PdfName H1 = new PdfName("H1");
+        public static readonly PdfName H2 = new PdfName("H2");
+        public static readonly PdfName H3 = new PdfName("H3");
+        public static readonly PdfName H4 = new PdfName("H4");
+        public static readonly PdfName H5 = new PdfName("H5");
+        public static readonly PdfName H6 = new PdfName("H6");
+        public static readonly PdfName Nums = new PdfName("Nums");
+        public static readonly PdfName StructParents = new PdfName("StructParents");
+        public static readonly PdfName Tabs = new PdfName("Tabs");
+        public static readonly PdfName MCID = new PdfName("MCID");
+        public static readonly PdfName Lang = new PdfName("Lang");
+
+        // Encryption
+        public static readonly PdfName Encrypt = new PdfName("Encrypt");
+        public static readonly PdfName Standard = new PdfName("Standard");
+        public static readonly PdfName O = new PdfName("O");
+        public static readonly PdfName U = new PdfName("U");
+        public static readonly PdfName R = new PdfName("R");
+        public static readonly PdfName StmF = new PdfName("StmF");
+        public static readonly PdfName StrF = new PdfName("StrF");
+        public static readonly PdfName CF = new PdfName("CF");
+        public static readonly PdfName StdCF = new PdfName("StdCF");
+        public static readonly PdfName CFM = new PdfName("CFM");
+        public static readonly PdfName AESV2 = new PdfName("AESV2");
+        public static readonly PdfName AuthEvent = new PdfName("AuthEvent");
+        public static readonly PdfName DocOpen = new PdfName("DocOpen");
+        public static readonly PdfName CryptFilter = new PdfName("CryptFilter");
+        public static readonly PdfName ID = new PdfName("ID");
 
         // Gradients / Shadings
         public static readonly PdfName Shading = new PdfName("Shading");
@@ -267,10 +323,14 @@ namespace Rend.Pdf.Internal
 
         public override void WriteTo(PdfWriter writer)
         {
+            byte[] data = Value;
+            if (writer.Encryptor != null)
+                data = writer.Encryptor.EncryptData(data, writer.CurrentObjectNumber, writer.CurrentGeneration);
+
             writer.WriteByte((byte)'(');
-            for (int i = 0; i < Value.Length; i++)
+            for (int i = 0; i < data.Length; i++)
             {
-                byte b = Value[i];
+                byte b = data[i];
                 switch (b)
                 {
                     case (byte)'(':
@@ -297,10 +357,14 @@ namespace Rend.Pdf.Internal
 
         public override void WriteTo(PdfWriter writer)
         {
+            byte[] data = Value;
+            if (writer.Encryptor != null)
+                data = writer.Encryptor.EncryptData(data, writer.CurrentObjectNumber, writer.CurrentGeneration);
+
             writer.WriteByte((byte)'<');
-            for (int i = 0; i < Value.Length; i++)
+            for (int i = 0; i < data.Length; i++)
             {
-                writer.WriteHexByte(Value[i]);
+                writer.WriteHexByte(data[i]);
             }
             writer.WriteByte((byte)'>');
         }
@@ -405,6 +469,10 @@ namespace Rend.Pdf.Internal
             {
                 writeData = Data;
             }
+
+            // Encrypt after compression
+            if (writer.Encryptor != null)
+                writeData = writer.Encryptor.EncryptData(writeData, writer.CurrentObjectNumber, writer.CurrentGeneration);
 
             Dict[PdfName.Length] = new PdfInteger(writeData.Length);
             Dict.WriteTo(writer);

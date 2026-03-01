@@ -155,6 +155,62 @@ namespace Rend.Css.Parser.Internal
                 return new CssFunctionValue(lowerName, args);
             }
 
+            if (lowerName == "hwb")
+            {
+                ParseFunctionArgs(args);
+                if (CssColorParser.TryParseHwb(args, out var color))
+                    return new CssColorValue(color);
+                return new CssFunctionValue(lowerName, args);
+            }
+
+            if (lowerName == "lab")
+            {
+                ParseFunctionArgs(args);
+                if (CssColorParser.TryParseLab(args, out var color))
+                    return new CssColorValue(color);
+                return new CssFunctionValue(lowerName, args);
+            }
+
+            if (lowerName == "lch")
+            {
+                ParseFunctionArgs(args);
+                if (CssColorParser.TryParseLch(args, out var color))
+                    return new CssColorValue(color);
+                return new CssFunctionValue(lowerName, args);
+            }
+
+            if (lowerName == "oklab")
+            {
+                ParseFunctionArgs(args);
+                if (CssColorParser.TryParseOklab(args, out var color))
+                    return new CssColorValue(color);
+                return new CssFunctionValue(lowerName, args);
+            }
+
+            if (lowerName == "oklch")
+            {
+                ParseFunctionArgs(args);
+                if (CssColorParser.TryParseOklch(args, out var color))
+                    return new CssColorValue(color);
+                return new CssFunctionValue(lowerName, args);
+            }
+
+            if (lowerName == "color-mix")
+            {
+                ParseFunctionArgs(args);
+                if (CssColorParser.TryParseColorMix(args, out var color))
+                    return new CssColorValue(color);
+                return new CssFunctionValue(lowerName, args);
+            }
+
+            if (lowerName == "color")
+            {
+                ParseFunctionArgs(args);
+                if (CssColorParser.TryParseColorFunction(args, out var color))
+                    return new CssColorValue(color);
+                return new CssFunctionValue(lowerName, args);
+            }
+
             // For calc() — preserve arithmetic operators as CssKeywordValue
             if (lowerName == "calc")
             {

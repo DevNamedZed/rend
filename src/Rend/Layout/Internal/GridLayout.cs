@@ -102,9 +102,43 @@ namespace Rend.Layout.Internal
             bool flowColumn = autoFlow == CssGridAutoFlow.Column || autoFlow == CssGridAutoFlow.ColumnDense;
             bool dense = autoFlow == CssGridAutoFlow.RowDense || autoFlow == CssGridAutoFlow.ColumnDense;
 
+            // Parse grid-template-areas if present
+            Dictionary<string, (int rowStart, int colStart, int rowSpan, int colSpan)>? namedAreas = null;
+            var areasRaw = style.GetRefValue(PropertyId.GridTemplateAreas);
+            if (areasRaw != null)
+                namedAreas = ParseGridTemplateAreas(areasRaw);
+
+            // Resolve named-area placement for items using grid-area with a name
+            if (namedAreas != null)
+            {
+                for (int i = 0; i < items.Count; i++)
+                {
+                    var item = items[i];
+                    if (item.AreaName != null && namedAreas.TryGetValue(item.AreaName, out var area))
+                    {
+                        item.RowStart = area.rowStart;
+                        item.ColStart = area.colStart;
+                        item.RowSpan = area.rowSpan;
+                        item.ColSpan = area.colSpan;
+                    }
+                }
+            }
+
             // Determine grid dimensions by scanning explicit placements
             int gridCols = Math.Max(1, explicitCols);
             int gridRows = Math.Max(1, explicitRows);
+
+            // Expand grid from named areas
+            if (namedAreas != null)
+            {
+                foreach (var area in namedAreas.Values)
+                {
+                    if (area.rowStart + area.rowSpan > gridRows)
+                        gridRows = area.rowStart + area.rowSpan;
+                    if (area.colStart + area.colSpan > gridCols)
+                        gridCols = area.colStart + area.colSpan;
+                }
+            }
 
             // First pass: determine minimum grid size from explicit placements
             for (int i = 0; i < items.Count; i++)
@@ -114,6 +148,20 @@ namespace Rend.Layout.Internal
                 int rowEnd = item.RowStart >= 0 ? item.RowStart + item.RowSpan : 0;
                 if (colEnd > gridCols) gridCols = colEnd;
                 if (rowEnd > gridRows) gridRows = rowEnd;
+            }
+
+            // Resolve negative line numbers now that we know grid dimensions
+            for (int i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item.RowStart < -1)
+                {
+                    item.RowStart = Math.Max(0, ResolveNegativeLine(item.RowStart, gridRows));
+                }
+                if (item.ColStart < -1)
+                {
+                    item.ColStart = Math.Max(0, ResolveNegativeLine(item.ColStart, gridCols));
+                }
             }
 
             // If no explicit columns, determine from item count
@@ -512,7 +560,16 @@ namespace Rend.Layout.Internal
 
         private static void ParsePlacement(ComputedStyle style, GridItem item)
         {
-            item.RowStart = ParseLineValue(style.GetRefValue(PropertyId.GridRowStart), out int rowSpan);
+            // Check if grid-row-start is a plain identifier (named area from grid-area shorthand)
+            var rowStartRaw = style.GetRefValue(PropertyId.GridRowStart);
+            if (rowStartRaw is CssKeywordValue areaKw && areaKw.Keyword != "auto" && areaKw.Keyword != "span")
+            {
+                // This is a named area reference (e.g., grid-area: header)
+                item.AreaName = areaKw.Keyword;
+                return;
+            }
+
+            item.RowStart = ParseLineValue(rowStartRaw, out int rowSpan);
             item.RowSpan = rowSpan;
 
             int endRowSpan;
@@ -534,8 +591,9 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
-        /// Parse a grid line value (e.g., "2", "span 2", "auto").
+        /// Parse a grid line value (e.g., "2", "-1", "span 2", "auto").
         /// Returns -1 for auto, 0-based line number otherwise.
+        /// Negative line numbers are stored as negative values (resolved later with grid size).
         /// Sets span to > 1 when "span N" is used.
         /// </summary>
         private static int ParseLineValue(object? raw, out int span)
@@ -546,30 +604,30 @@ namespace Rend.Layout.Internal
             if (raw is CssKeywordValue kw)
             {
                 if (kw.Keyword == "auto") return -1;
-                // "span" alone means span 1
                 if (kw.Keyword == "span") return -1;
             }
 
             if (raw is CssNumberValue num)
             {
                 int val = (int)num.Value;
-                if (val > 0) return val - 1; // CSS uses 1-based line numbers
+                if (val > 0) return val - 1;
+                if (val < 0) return val; // negative: resolve later
                 return -1;
             }
 
             if (raw is CssDimensionValue dim)
             {
-                // Sometimes parsed as dimension without unit
                 int val = (int)dim.Value;
                 if (val > 0) return val - 1;
+                if (val < 0) return val;
                 return -1;
             }
 
             if (raw is CssListValue list)
             {
-                // Handle "span N" syntax
                 bool isSpan = false;
                 int lineNum = -1;
+                bool hasLineNum = false;
 
                 for (int i = 0; i < list.Values.Count; i++)
                 {
@@ -581,25 +639,42 @@ namespace Rend.Layout.Internal
                     else if (v is CssNumberValue n)
                     {
                         lineNum = (int)n.Value;
+                        hasLineNum = true;
                     }
                     else if (v is CssDimensionValue d)
                     {
                         lineNum = (int)d.Value;
+                        hasLineNum = true;
                     }
                 }
 
-                if (isSpan && lineNum > 0)
+                if (isSpan && hasLineNum && lineNum > 0)
                 {
                     span = lineNum;
-                    return -1; // span doesn't set a definite position
+                    return -1;
                 }
-                else if (lineNum > 0)
+                else if (hasLineNum && lineNum > 0)
                 {
-                    return lineNum - 1; // 1-based to 0-based
+                    return lineNum - 1;
+                }
+                else if (hasLineNum && lineNum < 0)
+                {
+                    return lineNum;
                 }
             }
 
             return -1;
+        }
+
+        /// <summary>
+        /// Resolve negative line numbers to 0-based indices using the grid dimension.
+        /// CSS: line -1 = last line = gridSize, line -2 = gridSize-1, etc.
+        /// </summary>
+        private static int ResolveNegativeLine(int line, int gridSize)
+        {
+            if (line >= 0) return line;
+            // CSS: -1 = gridSize (after last track), -2 = gridSize-1, etc.
+            return gridSize + line + 1;
         }
 
         private static bool HasAnyExplicitPlacement(List<GridItem> items)
@@ -749,6 +824,7 @@ namespace Rend.Layout.Internal
 
             // Two-pass: collect sizes, resolve fr units
             var sizes = new List<(float value, bool isFr)>();
+            var minFloors = new float[flatValues.Count];
             float totalFixed = 0;
             float totalFr = 0;
 
@@ -756,6 +832,7 @@ namespace Rend.Layout.Internal
             {
                 var parsed = ParseTrackValue(flatValues[i], containerSize);
                 sizes.Add(parsed);
+                minFloors[i] = GetMinmaxFloor(flatValues[i], containerSize);
                 if (parsed.isFr)
                     totalFr += parsed.value;
                 else
@@ -767,7 +844,13 @@ namespace Rend.Layout.Internal
 
             var tracks = new float[sizes.Count];
             for (int i = 0; i < sizes.Count; i++)
-                tracks[i] = sizes[i].isFr ? sizes[i].value * frSize : sizes[i].value;
+            {
+                float resolved = sizes[i].isFr ? sizes[i].value * frSize : sizes[i].value;
+                // Enforce minmax() minimum constraint
+                if (minFloors[i] > 0 && resolved < minFloors[i])
+                    resolved = minFloors[i];
+                tracks[i] = resolved;
+            }
 
             return tracks;
         }
@@ -776,13 +859,46 @@ namespace Rend.Layout.Internal
         {
             if (val is CssFunctionValue fn && fn.Name == "repeat" && fn.Arguments.Count >= 2)
             {
-                // First argument is repeat count
-                int count = 1;
                 var first = fn.Arguments[0];
-                if (first is CssNumberValue num)
-                    count = Math.Max(1, Math.Min((int)num.Value, 100)); // cap at 100
+                bool isAutoFill = first is CssKeywordValue kw1 &&
+                    (kw1.Keyword == "auto-fill" || kw1.Keyword == "auto-fit");
+
+                int count;
+                if (isAutoFill)
+                {
+                    // auto-fill/auto-fit: calculate count from container size and track min size
+                    float trackMinSize = 0;
+                    for (int j = 1; j < fn.Arguments.Count; j++)
+                    {
+                        var arg = fn.Arguments[j];
+                        if (arg is CssFunctionValue minmaxFn && minmaxFn.Name == "minmax" && minmaxFn.Arguments.Count >= 2)
+                        {
+                            var minParsed = ParseTrackValue(minmaxFn.Arguments[0], containerSize);
+                            trackMinSize += minParsed.isFr ? 0 : minParsed.value;
+                        }
+                        else
+                        {
+                            var parsed = ParseTrackValue(arg, containerSize);
+                            trackMinSize += parsed.isFr ? 0 : parsed.value;
+                        }
+                    }
+                    count = trackMinSize > 0
+                        ? Math.Max(1, (int)Math.Floor(containerSize / trackMinSize))
+                        : 1;
+                    count = Math.Min(count, 100); // safety cap
+                }
+                else if (first is CssNumberValue num)
+                {
+                    count = Math.Max(1, Math.Min((int)num.Value, 100));
+                }
                 else if (first is CssDimensionValue dim)
+                {
                     count = Math.Max(1, Math.Min((int)dim.Value, 100));
+                }
+                else
+                {
+                    count = 1;
+                }
 
                 // Remaining arguments are track values to repeat
                 for (int rep = 0; rep < count; rep++)
@@ -820,9 +936,52 @@ namespace Rend.Layout.Internal
                 return (num.Value, false);
             if (val is CssPercentageValue pct)
                 return (pct.Value / 100f * containerSize, false);
-            if (val is CssKeywordValue kwVal && kwVal.Keyword == "auto")
-                return (0, true); // auto acts like 1fr
+            if (val is CssKeywordValue kwVal)
+            {
+                if (kwVal.Keyword == "auto")
+                    return (0, true); // auto acts like 1fr
+                if (kwVal.Keyword == "min-content")
+                    return (0, false);
+                if (kwVal.Keyword == "max-content")
+                    return (0, true);
+            }
+            if (val is CssFunctionValue fn)
+            {
+                if (fn.Name == "minmax" && fn.Arguments.Count >= 2)
+                {
+                    // minmax(min, max): use max if it's fr, otherwise use min as a floor
+                    var maxVal = ParseTrackValue(fn.Arguments[fn.Arguments.Count - 1], containerSize);
+                    if (maxVal.isFr)
+                    {
+                        // fr-based max: report as fr so it gets flexible space,
+                        // minimum will be enforced in ResolveTrackList via minmax tracking
+                        return maxVal;
+                    }
+                    var minVal = ParseTrackValue(fn.Arguments[0], containerSize);
+                    // Both fixed: use maximum of the two
+                    return (Math.Max(minVal.value, maxVal.value), false);
+                }
+                if (fn.Name == "fit-content" && fn.Arguments.Count >= 1)
+                {
+                    // fit-content(limit): starts at min-content, grows up to limit
+                    var limit = ParseTrackValue(fn.Arguments[0], containerSize);
+                    return (limit.value, false);
+                }
+            }
             return (0, false);
+        }
+
+        /// <summary>
+        /// Extract minmax minimum constraint for a track value, or 0 if none.
+        /// </summary>
+        private static float GetMinmaxFloor(object val, float containerSize)
+        {
+            if (val is CssFunctionValue fn && fn.Name == "minmax" && fn.Arguments.Count >= 2)
+            {
+                var minVal = ParseTrackValue(fn.Arguments[0], containerSize);
+                return minVal.value;
+            }
+            return 0;
         }
 
         private static float AlignOffset(CssAlignItems align, float cellSize, float itemSize)
@@ -846,6 +1005,71 @@ namespace Rend.Layout.Internal
             return align == CssAlignItems.Stretch || align == CssAlignItems.Normal;
         }
 
+        /// <summary>
+        /// Parse grid-template-areas value into named area regions.
+        /// Input: list of CssStringValue like "header header" "sidebar main" "footer footer"
+        /// Output: dictionary mapping area name to (rowStart, colStart, rowSpan, colSpan).
+        /// </summary>
+        private static Dictionary<string, (int rowStart, int colStart, int rowSpan, int colSpan)>? ParseGridTemplateAreas(object? raw)
+        {
+            if (raw == null) return null;
+            if (raw is CssKeywordValue kw && kw.Keyword == "none") return null;
+
+            var rows = new List<string[]>();
+
+            void AddRow(string rowStr)
+            {
+                var cells = rowStr.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                if (cells.Length > 0) rows.Add(cells);
+            }
+
+            if (raw is CssStringValue sv)
+            {
+                AddRow(sv.Value);
+            }
+            else if (raw is CssListValue list)
+            {
+                for (int i = 0; i < list.Values.Count; i++)
+                {
+                    if (list.Values[i] is CssStringValue s)
+                        AddRow(s.Value);
+                }
+            }
+            else
+            {
+                return null;
+            }
+
+            if (rows.Count == 0) return null;
+
+            var areas = new Dictionary<string, (int rowStart, int colStart, int rowSpan, int colSpan)>();
+            for (int r = 0; r < rows.Count; r++)
+            {
+                for (int c = 0; c < rows[r].Length; c++)
+                {
+                    string name = rows[r][c];
+                    if (name == ".") continue; // unnamed cell
+
+                    if (areas.ContainsKey(name))
+                    {
+                        // Expand existing area
+                        var a = areas[name];
+                        int newRowEnd = Math.Max(a.rowStart + a.rowSpan, r + 1);
+                        int newColEnd = Math.Max(a.colStart + a.colSpan, c + 1);
+                        int newRowStart = Math.Min(a.rowStart, r);
+                        int newColStart = Math.Min(a.colStart, c);
+                        areas[name] = (newRowStart, newColStart, newRowEnd - newRowStart, newColEnd - newColStart);
+                    }
+                    else
+                    {
+                        areas[name] = (r, c, 1, 1);
+                    }
+                }
+            }
+
+            return areas.Count > 0 ? areas : null;
+        }
+
         private sealed class GridItem
         {
             public StyledElement? StyledElement { get; set; }
@@ -859,6 +1083,7 @@ namespace Rend.Layout.Internal
             public bool Placed { get; set; }
             public int Order { get; set; }
             public int OriginalIndex { get; set; }
+            public string? AreaName { get; set; }
         }
     }
 }

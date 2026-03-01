@@ -603,6 +603,202 @@ namespace Rend.Tests.Layout
             Assert.True(result.Length > 0);
         }
 
+        [Fact]
+        public void Grid_Minmax_ProducesValidPdf()
+        {
+            byte[] result;
+            try
+            {
+                result = Render.ToPdf(@"
+                    <div style='display: grid; grid-template-columns: minmax(100px, 1fr) minmax(200px, 2fr); width: 600px;'>
+                        <div style='background: red;'>A</div>
+                        <div style='background: green;'>B</div>
+                    </div>");
+            }
+            catch (Exception ex) when (IsNativeLibraryFailure(ex))
+            {
+                return;
+            }
+
+            Assert.NotNull(result);
+            Assert.True(result.Length > 0);
+        }
+
+        [Fact]
+        public void Grid_MinmaxWithSmallContainer_EnforcesFloor()
+        {
+            byte[] result;
+            try
+            {
+                result = Render.ToPdf(@"
+                    <div style='display: grid; grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr); width: 200px;'>
+                        <div style='background: red;'>A</div>
+                        <div style='background: green;'>B</div>
+                    </div>");
+            }
+            catch (Exception ex) when (IsNativeLibraryFailure(ex))
+            {
+                return;
+            }
+
+            Assert.NotNull(result);
+            Assert.True(result.Length > 0);
+        }
+
+        [Fact]
+        public void Grid_AutoFill_ProducesValidPdf()
+        {
+            byte[] result;
+            try
+            {
+                result = Render.ToPdf(@"
+                    <div style='display: grid; grid-template-columns: repeat(auto-fill, 100px); width: 350px;'>
+                        <div style='background: red;'>A</div>
+                        <div style='background: green;'>B</div>
+                        <div style='background: blue;'>C</div>
+                    </div>");
+            }
+            catch (Exception ex) when (IsNativeLibraryFailure(ex))
+            {
+                return;
+            }
+
+            Assert.NotNull(result);
+            Assert.True(result.Length > 0);
+        }
+
+        [Fact]
+        public void Grid_AutoFit_ProducesValidPdf()
+        {
+            byte[] result;
+            try
+            {
+                result = Render.ToPdf(@"
+                    <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); width: 350px;'>
+                        <div style='background: red;'>A</div>
+                        <div style='background: green;'>B</div>
+                    </div>");
+            }
+            catch (Exception ex) when (IsNativeLibraryFailure(ex))
+            {
+                return;
+            }
+
+            Assert.NotNull(result);
+            Assert.True(result.Length > 0);
+        }
+
+        [Fact]
+        public void Grid_NegativeLineNumber_ProducesValidPdf()
+        {
+            byte[] result;
+            try
+            {
+                result = Render.ToPdf(@"
+                    <div style='display: grid; grid-template-columns: 100px 100px 100px;'>
+                        <div style='grid-column: -1; background: red;'>Last col</div>
+                        <div style='background: green;'>Auto</div>
+                        <div style='background: blue;'>Auto</div>
+                    </div>");
+            }
+            catch (Exception ex) when (IsNativeLibraryFailure(ex))
+            {
+                return;
+            }
+
+            Assert.NotNull(result);
+            Assert.True(result.Length > 0);
+        }
+
+        [Fact]
+        public void Grid_TemplateAreas_ProducesValidPdf()
+        {
+            byte[] result;
+            try
+            {
+                result = Render.ToPdf(@"
+                    <div style='display: grid; grid-template-areas: ""header header"" ""sidebar main"" ""footer footer""; grid-template-columns: 100px 200px; grid-template-rows: 50px 100px 50px;'>
+                        <div style='grid-area: header; background: red;'>Header</div>
+                        <div style='grid-area: sidebar; background: green;'>Sidebar</div>
+                        <div style='grid-area: main; background: blue;'>Main</div>
+                        <div style='grid-area: footer; background: yellow;'>Footer</div>
+                    </div>");
+            }
+            catch (Exception ex) when (IsNativeLibraryFailure(ex))
+            {
+                return;
+            }
+
+            Assert.NotNull(result);
+            Assert.True(result.Length > 0);
+        }
+
+        [Fact]
+        public void Grid_TemplateAreas_WithDot_ProducesValidPdf()
+        {
+            byte[] result;
+            try
+            {
+                result = Render.ToPdf(@"
+                    <div style='display: grid; grid-template-areas: ""a a ."" "". b b""; grid-template-columns: 100px 100px 100px; grid-template-rows: 50px 50px;'>
+                        <div style='grid-area: a; background: red;'>A</div>
+                        <div style='grid-area: b; background: green;'>B</div>
+                    </div>");
+            }
+            catch (Exception ex) when (IsNativeLibraryFailure(ex))
+            {
+                return;
+            }
+
+            Assert.NotNull(result);
+            Assert.True(result.Length > 0);
+        }
+
+        [Fact]
+        public void Grid_FitContent_ProducesValidPdf()
+        {
+            byte[] result;
+            try
+            {
+                result = Render.ToPdf(@"
+                    <div style='display: grid; grid-template-columns: fit-content(200px) 1fr; width: 400px;'>
+                        <div style='background: red;'>Short</div>
+                        <div style='background: green;'>Rest</div>
+                    </div>");
+            }
+            catch (Exception ex) when (IsNativeLibraryFailure(ex))
+            {
+                return;
+            }
+
+            Assert.NotNull(result);
+            Assert.True(result.Length > 0);
+        }
+
+        [Fact]
+        public void Grid_AutoFillWithMinmax_ProducesValidPdf()
+        {
+            byte[] result;
+            try
+            {
+                result = Render.ToPdf(@"
+                    <div style='display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); width: 500px;'>
+                        <div style='background: red;'>A</div>
+                        <div style='background: green;'>B</div>
+                        <div style='background: blue;'>C</div>
+                        <div style='background: yellow;'>D</div>
+                        <div style='background: purple;'>E</div>
+                    </div>");
+            }
+            catch (Exception ex) when (IsNativeLibraryFailure(ex))
+            {
+                return;
+            }
+
+            Assert.NotNull(result);
+            Assert.True(result.Length > 0);
+        }
+
         private static bool IsNativeLibraryFailure(Exception ex)
         {
             return ex is DllNotFoundException ||

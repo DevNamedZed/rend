@@ -246,19 +246,32 @@ namespace Rend.Css.Properties.Internal
         public const int GridColumnStart = 148;
         public const int GridColumnEnd = 149;
 
+        public const int GridTemplateAreas = 150;
+
         // Bidi
-        public const int UnicodeBidi = 150;
+        public const int UnicodeBidi = 151;
 
         // Counter set
-        public const int CounterSet = 151;
+        public const int CounterSet = 152;
 
         // Box Decoration Break
-        public const int BoxDecorationBreak = 152;
+        public const int BoxDecorationBreak = 153;
 
         // Text Align Last
-        public const int TextAlignLast = 153;
+        public const int TextAlignLast = 154;
+
+        // Filter and Clip-Path
+        public const int Filter = 155;
+        public const int ClipPath = 156;
+
+        // Border Image
+        public const int BorderImageSource = 157;
+        public const int BorderImageSlice = 158;
+        public const int BorderImageWidth = 159;
+        public const int BorderImageOutset = 160;
+        public const int BorderImageRepeat = 161;
 
         // Total count
-        public const int Count = 154;
+        public const int Count = 162;
     }
 }

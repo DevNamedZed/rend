@@ -22,9 +22,7 @@ namespace Rend.Pdf.Fonts
             // Read offset table
             uint sfVersion = reader.ReadUInt32();
             // 0x00010000 = TrueType, 'OTTO' (0x4F54544F) = OpenType CFF
-            if (sfVersion == 0x4F54544F)
-                throw new NotSupportedException(
-                    "OpenType CFF fonts (.otf) are not supported. Only TrueType fonts (.ttf) can be embedded.");
+            bool isCff = sfVersion == 0x4F54544F;
             ushort numTables = reader.ReadUInt16();
             reader.Skip(6); // searchRange, entrySelector, rangeShift
 
@@ -48,6 +46,15 @@ namespace Rend.Pdf.Fonts
             var os2 = tables.ContainsKey("OS/2") ? ParseOs2(fontData, tables["OS/2"]) : default;
             var cmap = ParseCmap(fontData, tables["cmap"]);
             var post = tables.ContainsKey("post") ? ParsePost(fontData, tables["post"]) : default;
+
+            // Extract CFF table data if this is a CFF-based font
+            byte[]? cffTableData = null;
+            if (isCff && tables.ContainsKey("CFF "))
+            {
+                var cffEntry = tables["CFF "];
+                cffTableData = new byte[cffEntry.Length];
+                Buffer.BlockCopy(fontData, (int)cffEntry.Offset, cffTableData, 0, (int)cffEntry.Length);
+            }
 
             // Parse kerning tables (GPOS takes priority over kern per OpenType spec)
             Dictionary<uint, short>? kerningPairs = null;
@@ -98,7 +105,8 @@ namespace Rend.Pdf.Fonts
 
             return new PdfFont(baseFontName, metrics, charToGlyph, hmtx, supplementaryMap,
                                isStandard14: false, kerningPairs: kerningPairs,
-                               embedMode: embedMode);
+                               embedMode: isCff ? FontEmbedMode.Full : embedMode,
+                               isCff: isCff, cffTableData: cffTableData);
         }
 
         private static string SanitizeFontName(string name)

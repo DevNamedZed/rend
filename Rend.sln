@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -26,6 +26,14 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rend.Pdf.Tests", "tests\Rend.Pdf.Tests\Rend.Pdf.Tests.csproj", "{A1B2C3D4-1003-0000-0000-000000000000}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rend.Tests", "tests\Rend.Tests\Rend.Tests.csproj", "{A1B2C3D4-1006-0000-0000-000000000000}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "conformance", "conformance", "{90AAFA52-294B-4C23-BB2E-CADD70BF08DA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rend.Html.Conformance", "conformance\Rend.Html.Conformance\Rend.Html.Conformance.csproj", "{BF8D7B84-4751-440B-B455-41AE8D4AF04A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rend.Css.Conformance", "conformance\Rend.Css.Conformance\Rend.Css.Conformance.csproj", "{4491221F-2D45-4470-A6C5-3A832BE7D753}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rend.VisualRegression", "conformance\Rend.VisualRegression\Rend.VisualRegression.csproj", "{25428EC1-7330-467A-B304-458C48D6F22F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -73,6 +81,18 @@ Global
 		{A1B2C3D4-1006-0000-0000-000000000000}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3D4-1006-0000-0000-000000000000}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1B2C3D4-1006-0000-0000-000000000000}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BF8D7B84-4751-440B-B455-41AE8D4AF04A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BF8D7B84-4751-440B-B455-41AE8D4AF04A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BF8D7B84-4751-440B-B455-41AE8D4AF04A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BF8D7B84-4751-440B-B455-41AE8D4AF04A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4491221F-2D45-4470-A6C5-3A832BE7D753}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4491221F-2D45-4470-A6C5-3A832BE7D753}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4491221F-2D45-4470-A6C5-3A832BE7D753}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4491221F-2D45-4470-A6C5-3A832BE7D753}.Release|Any CPU.Build.0 = Release|Any CPU
+		{25428EC1-7330-467A-B304-458C48D6F22F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{25428EC1-7330-467A-B304-458C48D6F22F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{25428EC1-7330-467A-B304-458C48D6F22F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{25428EC1-7330-467A-B304-458C48D6F22F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{A1B2C3D4-0002-0000-0000-000000000000} = {A1B2C3D4-0001-0000-0000-000000000000}
@@ -85,5 +105,8 @@ Global
 		{A1B2C3D4-1004-0000-0000-000000000000} = {A1B2C3D4-0007-0000-0000-000000000000}
 		{A1B2C3D4-1005-0000-0000-000000000000} = {A1B2C3D4-0007-0000-0000-000000000000}
 		{A1B2C3D4-1006-0000-0000-000000000000} = {A1B2C3D4-0007-0000-0000-000000000000}
+		{BF8D7B84-4751-440B-B455-41AE8D4AF04A} = {90AAFA52-294B-4C23-BB2E-CADD70BF08DA}
+		{4491221F-2D45-4470-A6C5-3A832BE7D753} = {90AAFA52-294B-4C23-BB2E-CADD70BF08DA}
+		{25428EC1-7330-467A-B304-458C48D6F22F} = {90AAFA52-294B-4C23-BB2E-CADD70BF08DA}
 	EndGlobalSection
 EndGlobal

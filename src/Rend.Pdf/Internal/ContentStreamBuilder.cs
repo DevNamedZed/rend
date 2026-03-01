@@ -281,6 +281,31 @@ namespace Rend.Pdf.Internal
         public void ClipEvenOdd() => WriteOp("W* n\n");
 
         // ═══════════════════════════════════════════
+        // Marked Content Operators
+        // ═══════════════════════════════════════════
+
+        /// <summary>/tag BMC — Begin marked content sequence.</summary>
+        public void BeginMarkedContent(string tag)
+        {
+            WriteByte((byte)'/');
+            WriteAscii(tag);
+            WriteOp(" BMC\n");
+        }
+
+        /// <summary>/tag &lt;&lt;/MCID n&gt;&gt; BDC — Begin marked content with MCID property.</summary>
+        public void BeginMarkedContentDict(string tag, int mcid)
+        {
+            WriteByte((byte)'/');
+            WriteAscii(tag);
+            WriteOp(" <</MCID ");
+            WriteInt(mcid);
+            WriteOp(">> BDC\n");
+        }
+
+        /// <summary>EMC — End marked content sequence.</summary>
+        public void EndMarkedContent() => WriteOp("EMC\n");
+
+        // ═══════════════════════════════════════════
         // Text Operators
         // ═══════════════════════════════════════════
 

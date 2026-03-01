@@ -11,6 +11,8 @@ namespace Rend.Pdf
     {
         private readonly string _baseFont;
         private readonly bool _isStandard14;
+        private readonly bool _isCff;
+        private readonly byte[]? _cffTableData;
         private readonly FontMetrics _metrics;
         private readonly FontEmbedMode _embedMode;
 
@@ -33,7 +35,8 @@ namespace Rend.Pdf
         internal PdfFont(string baseFont, FontMetrics metrics, ushort[] charToGlyph,
                          float[] advanceWidths, Dictionary<int, ushort>? supplementaryMap,
                          bool isStandard14, Dictionary<uint, short>? kerningPairs = null,
-                         FontEmbedMode embedMode = FontEmbedMode.Subset)
+                         FontEmbedMode embedMode = FontEmbedMode.Subset,
+                         bool isCff = false, byte[]? cffTableData = null)
         {
             _baseFont = baseFont;
             _metrics = metrics;
@@ -43,6 +46,8 @@ namespace Rend.Pdf
             _isStandard14 = isStandard14;
             _kerningPairs = kerningPairs;
             _embedMode = embedMode;
+            _isCff = isCff;
+            _cffTableData = cffTableData;
         }
 
         /// <summary>PostScript base font name.</summary>
@@ -53,6 +58,12 @@ namespace Rend.Pdf
 
         /// <summary>Whether this is a Standard 14 font (not embedded).</summary>
         public bool IsStandard14 => _isStandard14;
+
+        /// <summary>Whether this font uses CFF outlines (OpenType CFF / .otf).</summary>
+        internal bool IsCff => _isCff;
+
+        /// <summary>Raw CFF table data for embedding as FontFile3.</summary>
+        internal byte[]? CffTableData => _cffTableData;
 
         /// <summary>Font embedding mode.</summary>
         internal FontEmbedMode EmbedMode => _embedMode;

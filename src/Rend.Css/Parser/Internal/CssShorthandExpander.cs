@@ -62,6 +62,8 @@ namespace Rend.Css.Parser.Internal
                 case "grid-column": return ExpandGridLine(value, important, output, "grid-column-start", "grid-column-end");
                 case "grid-area": return ExpandGridArea(value, important, output);
 
+                case "border-image": return ExpandBorderImage(value, important, output);
+
                 // Logical properties (block = top/bottom, inline = left/right in LTR horizontal)
                 case "margin-block": return ExpandTwoValue(value, important, output, "margin-top", "margin-bottom");
                 case "margin-inline": return ExpandTwoValue(value, important, output, "margin-left", "margin-right");
@@ -931,6 +933,53 @@ namespace Rend.Css.Parser.Internal
                     : (CssValue)autoVal;
                 output.Add(new CssDeclaration(props[i], val, important));
             }
+            return true;
+        }
+
+        #endregion
+
+        #region Border Image
+
+        /// <summary>
+        /// Expands border-image shorthand.
+        /// Format: source || slice [/ width [/ outset]] || repeat
+        /// Simplified: we parse source (url/gradient), slice numbers, repeat keywords.
+        /// </summary>
+        private static bool ExpandBorderImage(CssValue value, bool important, List<CssDeclaration> output)
+        {
+            var parts = GetListValues(value);
+            CssValue source = new CssKeywordValue("none");
+            CssValue slice = new CssNumberValue(100); // default: 100%
+            CssValue repeat = new CssKeywordValue("stretch");
+
+            for (int i = 0; i < parts.Count; i++)
+            {
+                var p = parts[i];
+                if (p is CssUrlValue || (p is CssFunctionValue fn && (fn.Name == "linear-gradient" || fn.Name == "radial-gradient")))
+                {
+                    source = p;
+                }
+                else if (p is CssKeywordValue kw)
+                {
+                    if (kw.Keyword == "stretch" || kw.Keyword == "repeat" || kw.Keyword == "round" || kw.Keyword == "space")
+                        repeat = p;
+                    else if (kw.Keyword == "fill")
+                        continue; // skip fill keyword for now
+                    else if (kw.Keyword == "none")
+                        source = p;
+                }
+                else if (p is CssNumberValue || p is CssPercentageValue || p is CssDimensionValue)
+                {
+                    slice = p;
+                }
+            }
+
+            output.Add(new CssDeclaration("border-image-source", source, important));
+            output.Add(new CssDeclaration("border-image-slice", slice, important));
+            output.Add(new CssDeclaration("border-image-width", new CssNumberValue(1), important));
+            output.Add(new CssDeclaration("border-image-outset", new CssNumberValue(0), important));
+            output.Add(new CssDeclaration("border-image-repeat", repeat, important));
+
             return true;
         }
 

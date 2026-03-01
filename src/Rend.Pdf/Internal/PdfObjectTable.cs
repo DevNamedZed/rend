@@ -34,11 +34,19 @@ namespace Rend.Pdf.Internal
                 entry.ByteOffset = writer.Position;
                 _objects[i] = entry;
 
+                // Set current object context for per-object encryption
+                writer.CurrentObjectNumber = entry.ObjectNumber;
+                writer.CurrentGeneration = 0;
+
                 writer.WriteLong(entry.ObjectNumber);
                 writer.WriteRaw(PdfWriter.Bytes_ObjStart);
                 entry.Object.WriteTo(writer);
                 writer.WriteRaw(PdfWriter.Bytes_ObjEnd);
             }
+
+            // Clear object context so trailer content is not encrypted
+            writer.CurrentObjectNumber = 0;
+            writer.CurrentGeneration = 0;
         }
 
         /// <summary>
@@ -71,15 +79,25 @@ namespace Rend.Pdf.Internal
         /// <summary>
         /// Write the trailer dictionary.
         /// </summary>
-        public void WriteTrailer(PdfWriter writer, PdfReference catalogRef, PdfReference? infoRef, long xrefOffset)
+        public void WriteTrailer(PdfWriter writer, PdfReference catalogRef, PdfReference? infoRef,
+                                  PdfReference? encryptRef, byte[]? fileId, long xrefOffset)
         {
             writer.WriteAscii("trailer\n");
 
-            var trailer = new PdfDictionary(4);
+            var trailer = new PdfDictionary(6);
             trailer[PdfName.Size] = new PdfInteger(_objects.Count + 1);
             trailer[PdfName.Root] = catalogRef;
             if (infoRef != null)
                 trailer[PdfName.Info] = infoRef;
+            if (encryptRef != null)
+                trailer[PdfName.Encrypt] = encryptRef;
+            if (fileId != null)
+            {
+                var idArray = new PdfArray(2);
+                idArray.Add(new PdfHexString(fileId));
+                idArray.Add(new PdfHexString(fileId));
+                trailer[PdfName.ID] = idArray;
+            }
 
             trailer.WriteTo(writer);
             writer.WriteNewLine();
