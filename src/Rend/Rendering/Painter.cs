@@ -167,6 +167,12 @@ namespace Rend.Rendering
             // 2c. Apply CSS filter (opacity filter maps to render target opacity).
             bool hasFilter = FilterHandler.Apply(box, target);
 
+            // 2d. Apply CSS backdrop-filter (opacity only; other functions degrade gracefully).
+            bool hasBackdropFilter = BackdropFilterHandler.Apply(box, target);
+
+            // 2e. Apply CSS mask (graceful degradation for complex masks).
+            bool hasMask = MaskHandler.Apply(box, target);
+
             // 3. Apply overflow clipping.
             bool hasClip = ClipHandler.Apply(box, target);
 
@@ -230,7 +236,19 @@ namespace Rend.Rendering
                 ClipHandler.Restore(target);
             }
 
-            // 10c. Restore filter.
+            // 10c. Restore mask.
+            if (hasMask)
+            {
+                MaskHandler.Restore(target);
+            }
+
+            // 10d. Restore backdrop-filter.
+            if (hasBackdropFilter)
+            {
+                BackdropFilterHandler.Restore(target);
+            }
+
+            // 10e. Restore filter.
             if (hasFilter)
             {
                 FilterHandler.Restore(target);
@@ -314,7 +332,7 @@ namespace Rend.Rendering
                     continue;
                 }
 
-                TextPainter.Paint(fragment, lineBox.X, lineBox.Y, lineBox.Baseline, target, style);
+                TextPainter.Paint(fragment, lineBox.X, lineBox.Y, lineBox.Baseline, target, style, lineBox.IsVertical);
 
                 // Detect inline link annotations from fragment's inline element.
                 if (_generateLinks && fragment.InlineElement != null)

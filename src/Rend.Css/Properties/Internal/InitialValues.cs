@@ -237,6 +237,18 @@ namespace Rend.Css.Properties.Internal
 
             // Grid (Raw properties default to none/auto via keyword 0)
             _values[PropertyId.GridAutoFlow] = PropertyValue.FromKeyword(0); // row
+
+            // Column Fill
+            _values[PropertyId.ColumnFill] = PropertyValue.FromKeyword((int)CssColumnFill.Balance);
+
+            // Mask
+            _refValues[PropertyId.MaskImage] = "none";
+            _values[PropertyId.MaskRepeat] = PropertyValue.FromKeyword(0); // repeat
+            _values[PropertyId.MaskMode] = PropertyValue.FromKeyword((int)CssMaskMode.MatchSource);
+
+            // Writing Mode
+            _values[PropertyId.WritingMode] = PropertyValue.FromKeyword((int)CssWritingMode.HorizontalTb);
+            _values[PropertyId.TextOrientation] = PropertyValue.FromKeyword((int)CssTextOrientation.Mixed);
         }
 
         /// <summary>Get the initial PropertyValue for a property.</summary>

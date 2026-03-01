@@ -147,8 +147,13 @@ namespace Rend.Pdf.Internal
         public static readonly PdfName Descent = new PdfName("Descent");
         public static readonly PdfName CapHeight = new PdfName("CapHeight");
         public static readonly PdfName StemV = new PdfName("StemV");
+        public static readonly PdfName FontFile = new PdfName("FontFile");
         public static readonly PdfName FontFile2 = new PdfName("FontFile2");
         public static readonly PdfName FontFile3 = new PdfName("FontFile3");
+        public static readonly PdfName WinAnsiEncoding = new PdfName("WinAnsiEncoding");
+        public static readonly PdfName FirstChar = new PdfName("FirstChar");
+        public static readonly PdfName LastChar = new PdfName("LastChar");
+        public static readonly PdfName Widths = new PdfName("Widths");
         public static readonly PdfName DescendantFonts = new PdfName("DescendantFonts");
         public static readonly PdfName CIDFontType2 = new PdfName("CIDFontType2");
         public static readonly PdfName CIDFontType0 = new PdfName("CIDFontType0");
@@ -258,6 +263,31 @@ namespace Rend.Pdf.Internal
         public static readonly PdfName DocOpen = new PdfName("DocOpen");
         public static readonly PdfName CryptFilter = new PdfName("CryptFilter");
         public static readonly PdfName ID = new PdfName("ID");
+
+        // Output Intents (PDF/A)
+        public static readonly PdfName OutputIntents = new PdfName("OutputIntents");
+        public static readonly PdfName OutputIntent = new PdfName("OutputIntent");
+        public static readonly PdfName GTS_PDFA1 = new PdfName("GTS_PDFA1");
+        public static readonly PdfName GTS_PDFA2 = new PdfName("GTS_PDFA2");
+        public static readonly PdfName DestOutputProfile = new PdfName("DestOutputProfile");
+        public static readonly PdfName OutputConditionIdentifier = new PdfName("OutputConditionIdentifier");
+
+        // Digital Signatures
+        public static readonly PdfName Sig = new PdfName("Sig");
+        public static readonly PdfName SigFlags = new PdfName("SigFlags");
+        public static readonly PdfName SubFilter = new PdfName("SubFilter");
+        public static readonly PdfName ByteRange = new PdfName("ByteRange");
+        public static readonly PdfName Reason = new PdfName("Reason");
+        public static readonly PdfName Location = new PdfName("Location");
+        public static readonly PdfName ContactInfo = new PdfName("ContactInfo");
+
+        // Linearization
+        public static readonly PdfName Linearized = new PdfName("Linearized");
+        public static readonly PdfName H = new PdfName("H");
+        public static readonly PdfName E = new PdfName("E");
+
+        // Separation Color Space (Spot Colors)
+        public static readonly PdfName Separation = new PdfName("Separation");
 
         // Gradients / Shadings
         public static readonly PdfName Shading = new PdfName("Shading");

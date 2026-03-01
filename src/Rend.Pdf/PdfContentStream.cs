@@ -18,6 +18,7 @@ namespace Rend.Pdf
         private readonly Dictionary<string, PdfImage> _usedImages = new Dictionary<string, PdfImage>();
         private readonly Dictionary<string, PdfReference> _extGStates = new Dictionary<string, PdfReference>();
         private readonly Dictionary<string, PdfReference> _shadings = new Dictionary<string, PdfReference>();
+        private readonly Dictionary<string, PdfReference> _colorSpaces = new Dictionary<string, PdfReference>();
         private readonly PdfObjectTable _objectTable;
         private readonly bool _compress;
         private readonly CompressionLevel _compressionLevel;
@@ -39,6 +40,7 @@ namespace Rend.Pdf
         internal IReadOnlyDictionary<string, PdfImage> UsedImages => _usedImages;
         internal IReadOnlyDictionary<string, PdfReference> ExtGStates => _extGStates;
         internal IReadOnlyDictionary<string, PdfReference> Shadings => _shadings;
+        internal IReadOnlyDictionary<string, PdfReference> ColorSpaces => _colorSpaces;
 
         /// <summary>
         /// Build the content stream PDF object. Called internally during Save().
@@ -179,6 +181,40 @@ namespace Rend.Pdf
 
         /// <summary>Set stroke color (DeviceGray, 0.0-1.0).</summary>
         public void SetStrokeColorGray(float gray) => _builder.SetStrokeColorGray(gray);
+
+        /// <summary>Set fill color using a spot (separation) color.</summary>
+        /// <param name="spotColor">The spot color registered with PdfDocument.AddSpotColor().</param>
+        /// <param name="tint">Tint value from 0.0 (no ink / white) to 1.0 (full ink).</param>
+        public void SetFillSpotColor(PdfSpotColor spotColor, float tint)
+        {
+            if (spotColor == null) throw new ArgumentNullException(nameof(spotColor));
+            if (spotColor.ColorSpaceRef == null)
+                throw new InvalidOperationException("Spot color has not been registered with a PdfDocument.");
+            RegisterColorSpace(spotColor);
+            _builder.SetFillColorSpace(spotColor.ResourceName);
+            _builder.SetFillColorScn(Math.Max(0f, Math.Min(1f, tint)));
+        }
+
+        /// <summary>Set stroke color using a spot (separation) color.</summary>
+        /// <param name="spotColor">The spot color registered with PdfDocument.AddSpotColor().</param>
+        /// <param name="tint">Tint value from 0.0 (no ink / white) to 1.0 (full ink).</param>
+        public void SetStrokeSpotColor(PdfSpotColor spotColor, float tint)
+        {
+            if (spotColor == null) throw new ArgumentNullException(nameof(spotColor));
+            if (spotColor.ColorSpaceRef == null)
+                throw new InvalidOperationException("Spot color has not been registered with a PdfDocument.");
+            RegisterColorSpace(spotColor);
+            _builder.SetStrokeColorSpace(spotColor.ResourceName);
+            _builder.SetStrokeColorScn(Math.Max(0f, Math.Min(1f, tint)));
+        }
+
+        private void RegisterColorSpace(PdfSpotColor spotColor)
+        {
+            if (!_colorSpaces.ContainsKey(spotColor.ResourceName))
+            {
+                _colorSpaces[spotColor.ResourceName] = spotColor.ColorSpaceRef!;
+            }
+        }
 
         /// <summary>Set fill opacity (0.0 = transparent, 1.0 = opaque). Uses ExtGState.</summary>
         public void SetFillOpacity(float opacity)
@@ -357,7 +393,7 @@ namespace Rend.Pdf
         public void ShowText(PdfFont font, string text)
         {
             EnsureInTextObject();
-            if (font.IsStandard14)
+            if (font.IsStandard14 || font.IsType1)
             {
                 _builder.ShowTextLiteral(text);
             }
@@ -386,9 +422,9 @@ namespace Rend.Pdf
                 if (entry.HasText)
                 {
                     byte[] encoded;
-                    if (font.IsStandard14)
+                    if (font.IsStandard14 || font.IsType1)
                     {
-                        // Standard14 fonts use literal encoding (1 byte per char)
+                        // Standard14 and Type 1 fonts use literal encoding (1 byte per char)
                         var text = entry.Text!;
                         encoded = new byte[text.Length];
                         for (int i = 0; i < text.Length; i++)
@@ -567,6 +603,153 @@ namespace Rend.Pdf
             shadingDict[PdfName.Function] = functionRef;
 
             RegisterShading(shadingDict);
+        }
+
+        /// <summary>
+        /// Apply a conic (sweep) gradient by approximating it with thin wedge segments,
+        /// each filled with a linear gradient. PDF has no native conic shading type,
+        /// so we tessellate the full sweep into N triangular wedges.
+        /// </summary>
+        public void ApplyConicGradient(PdfConicGradient gradient)
+        {
+            if (gradient == null) throw new ArgumentNullException(nameof(gradient));
+            if (gradient.Stops == null || gradient.Stops.Length < 2)
+                throw new ArgumentException("Conic gradient requires at least 2 color stops.", nameof(gradient));
+
+            int segments = Math.Max(12, gradient.Segments);
+            float cx = gradient.CenterX;
+            float cy = gradient.CenterY;
+            // Radius large enough to cover the bounding box from center
+            float radius = (float)Math.Sqrt(gradient.Width * gradient.Width + gradient.Height * gradient.Height);
+
+            // CSS conic: 0deg = top (12 o'clock), clockwise
+            // PDF coords: y increases downward in our usage (transformed), but we work in
+            // math convention where angle 0 = right (3 o'clock), counterclockwise.
+            // Convert: pdf_angle = 90 - css_angle (then negate for clockwise)
+            // We iterate clockwise from startAngle.
+            float startAngleDeg = gradient.StartAngle;
+            float degreesPerSegment = 360f / segments;
+
+            for (int i = 0; i < segments; i++)
+            {
+                float segStartDeg = startAngleDeg + i * degreesPerSegment;
+                float segEndDeg = segStartDeg + degreesPerSegment;
+
+                // Fractional position along the gradient (0..1)
+                float t0 = (float)i / segments;
+                float t1 = (float)(i + 1) / segments;
+
+                // Interpolate color at t0 and t1 from the gradient stops
+                InterpolateStopColor(gradient.Stops, t0, out float r0, out float g0, out float b0);
+                InterpolateStopColor(gradient.Stops, t1, out float r1, out float g1, out float b1);
+
+                // Convert CSS angles to math radians for coordinate calculation
+                // CSS: 0deg = top (north), clockwise
+                // Math: 0rad = right (east), counterclockwise
+                // CSS angle a -> math angle = (90 - a) in degrees -> radians, but since CSS is CW
+                // we use: math_rad = (90 - css_deg) * PI/180
+                float radStart = (90f - segStartDeg) * (float)(Math.PI / 180.0);
+                float radEnd = (90f - segEndDeg) * (float)(Math.PI / 180.0);
+
+                float x0 = cx + radius * (float)Math.Cos(radStart);
+                float y0 = cy - radius * (float)Math.Sin(radStart);
+                float x1 = cx + radius * (float)Math.Cos(radEnd);
+                float y1 = cy - radius * (float)Math.Sin(radEnd);
+
+                // Draw a filled triangle (cx,cy) -> (x0,y0) -> (x1,y1)
+                // with a linear gradient from the midpoint of edge0 to midpoint of edge1
+                // For simplicity and visual quality, fill the wedge with the average color
+                // and apply a linear gradient shading across it.
+
+                // Save state, clip to wedge, apply linear gradient shading
+                _builder.SaveState();
+                _graphicsStateDepth++;
+
+                // Build wedge clip path: triangle cx,cy -> x0,y0 -> x1,y1
+                _builder.MoveTo(cx, cy);
+                _builder.LineTo(x0, y0);
+                _builder.LineTo(x1, y1);
+                _builder.ClosePath();
+                _builder.Clip();
+
+                // Create a linear gradient shading for this wedge segment
+                // Direction: from center outward at mid-angle, but for color variation
+                // we want the gradient along the sweep direction.
+                // Use a linear gradient from the start edge to end edge of the wedge.
+                float midX0 = (cx + x0) / 2f;
+                float midY0 = (cy + y0) / 2f;
+                float midX1 = (cx + x1) / 2f;
+                float midY1 = (cy + y1) / 2f;
+
+                var shadingDict = new PdfDictionary(6);
+                shadingDict[PdfName.ShadingType] = new PdfInteger((int)PdfShadingType.Linear);
+                shadingDict[PdfName.ColorSpace] = PdfName.DeviceRGB;
+
+                var coords = new PdfArray(4);
+                coords.Add(new PdfReal(midX0));
+                coords.Add(new PdfReal(midY0));
+                coords.Add(new PdfReal(midX1));
+                coords.Add(new PdfReal(midY1));
+                shadingDict[PdfName.Coords] = coords;
+
+                var extend = new PdfArray(2);
+                extend.Add(PdfBoolean.True);
+                extend.Add(PdfBoolean.True);
+                shadingDict[PdfName.Extend] = extend;
+
+                var stops = new PdfGradientColorStop[]
+                {
+                    new PdfGradientColorStop(0, r0, g0, b0),
+                    new PdfGradientColorStop(1, r1, g1, b1)
+                };
+                var functionRef = BuildGradientFunction(stops);
+                shadingDict[PdfName.Function] = functionRef;
+
+                RegisterShading(shadingDict);
+
+                _graphicsStateDepth--;
+                _builder.RestoreState();
+            }
+        }
+
+        /// <summary>
+        /// Interpolates a color from the gradient stops at the given position t (0..1).
+        /// </summary>
+        private static void InterpolateStopColor(PdfGradientColorStop[] stops, float t,
+            out float r, out float g, out float b)
+        {
+            if (t <= stops[0].Position)
+            {
+                r = stops[0].R;
+                g = stops[0].G;
+                b = stops[0].B;
+                return;
+            }
+            if (t >= stops[stops.Length - 1].Position)
+            {
+                r = stops[stops.Length - 1].R;
+                g = stops[stops.Length - 1].G;
+                b = stops[stops.Length - 1].B;
+                return;
+            }
+
+            for (int i = 0; i < stops.Length - 1; i++)
+            {
+                if (t >= stops[i].Position && t <= stops[i + 1].Position)
+                {
+                    float range = stops[i + 1].Position - stops[i].Position;
+                    float frac = range > 0 ? (t - stops[i].Position) / range : 0;
+                    r = stops[i].R + (stops[i + 1].R - stops[i].R) * frac;
+                    g = stops[i].G + (stops[i + 1].G - stops[i].G) * frac;
+                    b = stops[i].B + (stops[i + 1].B - stops[i].B) * frac;
+                    return;
+                }
+            }
+
+            // Fallback: last stop
+            r = stops[stops.Length - 1].R;
+            g = stops[stops.Length - 1].G;
+            b = stops[stops.Length - 1].B;
         }
 
         private void RegisterShading(PdfDictionary shadingDict)

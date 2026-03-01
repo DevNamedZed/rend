@@ -271,7 +271,24 @@ namespace Rend.Css.Properties.Internal
         public const int BorderImageOutset = 160;
         public const int BorderImageRepeat = 161;
 
+        // Column Fill
+        public const int ColumnFill = 162;
+
+        // Backdrop Filter
+        public const int BackdropFilter = 163;
+
+        // Mask
+        public const int MaskImage = 164;
+        public const int MaskSize = 165;
+        public const int MaskPosition = 166;
+        public const int MaskRepeat = 167;
+        public const int MaskMode = 168;
+
+        // Writing Mode
+        public const int WritingMode = 169;
+        public const int TextOrientation = 170;
+
         // Total count
-        public const int Count = 162;
+        public const int Count = 171;
     }
 }

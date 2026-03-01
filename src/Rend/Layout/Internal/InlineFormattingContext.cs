@@ -17,10 +17,37 @@ namespace Rend.Layout.Internal
     /// </summary>
     internal static class InlineFormattingContext
     {
+        /// <summary>
+        /// Lazily-initialized hyphenation dictionary for auto-hyphenation (en-US patterns).
+        /// </summary>
+        private static HyphenationDictionary? s_hyphenationDict;
+        private static readonly object s_hyphenLock = new object();
+
+        private static HyphenationDictionary GetHyphenationDictionary()
+        {
+            if (s_hyphenationDict != null) return s_hyphenationDict;
+            lock (s_hyphenLock)
+            {
+                if (s_hyphenationDict != null) return s_hyphenationDict;
+                var dict = new HyphenationDictionary();
+                dict.LoadPatterns(HyphenationPatterns.GetEnglishPatterns());
+                s_hyphenationDict = dict;
+                return dict;
+            }
+        }
+
         public static void Layout(LayoutBox parent, LayoutContext context)
         {
             var styledElement = parent.StyledNode as StyledElement;
             if (styledElement == null) return;
+
+            bool vertical = BlockFormattingContext.IsVerticalWritingMode(styledElement.Style);
+
+            if (vertical)
+            {
+                // Vertical writing mode: fall back to horizontal layout for now
+                // (full vertical-rl/vertical-lr is a future enhancement)
+            }
 
             float containingWidth = parent.ContentRect.Width;
             float startX = parent.ContentRect.X;
@@ -191,6 +218,250 @@ namespace Rend.Layout.Internal
             }
 
             parent.LineBoxes = lineBoxes;
+        }
+
+        /// <summary>
+        /// Layout inline content in a vertical writing mode context.
+        /// Lines run top-to-bottom (the inline direction), and new lines
+        /// advance horizontally (the block direction).
+        /// </summary>
+        private static void LayoutVertical(LayoutBox parent, LayoutContext context, StyledElement styledElement)
+        {
+            // In vertical writing mode:
+            // - The inline direction is top-to-bottom
+            // - The "line length" is the container height (available inline space)
+            // - Line breaks create new columns advancing horizontally
+            float containingHeight = parent.ContentRect.Height;
+            if (containingHeight <= 0)
+            {
+                // If no definite height, use the container width as a fallback
+                // (this handles the case where height is auto)
+                containingHeight = parent.ContentRect.Width;
+            }
+            if (containingHeight <= 0)
+                containingHeight = 600f; // ultimate fallback
+
+            float startY = parent.ContentRect.Y;
+            float cursorY = startY;
+            // Block cursor: for vertical-rl, columns advance right-to-left;
+            // for vertical-lr, columns advance left-to-right.
+            // We start at the left edge and let the caller/parent handle overall direction.
+            float cursorX = parent.ContentRect.X;
+
+            var lineBoxes = new List<LineBox>();
+            var currentLine = new LineBox { X = cursorX, Y = startY, Width = containingHeight, IsVertical = true };
+            float maxColumnWidth = 0; // "line height" in vertical mode = column width
+
+            for (int i = 0; i < styledElement.Children.Count; i++)
+            {
+                var child = styledElement.Children[i];
+
+                if (child.IsText)
+                {
+                    var textNode = (StyledText)child;
+                    LayoutVerticalTextRun(textNode, context, ref cursorX, ref cursorY, startY,
+                                          containingHeight, currentLine, lineBoxes, ref maxColumnWidth, parent);
+                }
+                else if (child is StyledPseudoElement pseudo)
+                {
+                    var pseudoText = new StyledText(pseudo.Content, pseudo.Style);
+                    LayoutVerticalTextRun(pseudoText, context, ref cursorX, ref cursorY, startY,
+                                          containingHeight, currentLine, lineBoxes, ref maxColumnWidth, parent);
+                }
+                else
+                {
+                    var childElement = (StyledElement)child;
+                    if (childElement.Style.Display == CssDisplay.None) continue;
+
+                    if (childElement.TagName == "br")
+                    {
+                        StartNewVerticalLine(parent, ref cursorX, ref cursorY, startY, containingHeight,
+                                              ref currentLine, lineBoxes, ref maxColumnWidth);
+                        continue;
+                    }
+
+                    // For other inline elements, recurse into their children
+                    for (int j = 0; j < childElement.Children.Count; j++)
+                    {
+                        var grandchild = childElement.Children[j];
+                        if (grandchild.IsText)
+                        {
+                            LayoutVerticalTextRun((StyledText)grandchild, context, ref cursorX, ref cursorY, startY,
+                                                  containingHeight, currentLine, lineBoxes, ref maxColumnWidth, parent,
+                                                  inlineAncestor: childElement);
+                        }
+                    }
+                }
+            }
+
+            // Finalize last line
+            if (currentLine.Fragments.Count > 0)
+            {
+                currentLine.IsLastLine = true;
+                FinalizeVerticalLineBox(currentLine, maxColumnWidth);
+                lineBoxes.Add(currentLine);
+            }
+
+            parent.LineBoxes = lineBoxes;
+        }
+
+        /// <summary>
+        /// Layout a text run within a vertical writing mode inline context.
+        /// Characters advance top-to-bottom. When the inline extent (height)
+        /// overflows, a new column is started.
+        /// </summary>
+        private static void LayoutVerticalTextRun(
+            StyledText textNode, LayoutContext context,
+            ref float cursorX, ref float cursorY, float startY, float containingHeight,
+            LineBox currentLine, List<LineBox> lineBoxes,
+            ref float maxColumnWidth, LayoutBox parent,
+            StyledElement? inlineAncestor = null)
+        {
+            var style = textNode.Style;
+            string text = textNode.Text;
+
+            text = WhitespaceCollapser.Collapse(text, style.WhiteSpace);
+            if (string.IsNullOrEmpty(text)) return;
+
+            text = TextTransformer.Transform(text, style.TextTransform);
+
+            float fontSize = style.FontSize;
+            float lineHeight = style.LineHeight;
+            if (float.IsNaN(lineHeight) || lineHeight <= 0)
+                lineHeight = fontSize * 1.2f;
+
+            if (context.TextMeasurer != null)
+            {
+                var fontDesc = new FontDescriptor(
+                    style.FontFamily ?? "serif",
+                    style.FontWeight,
+                    style.FontStyle,
+                    FontDescriptor.StretchToPercentage(style.FontStretch));
+
+                if (float.IsNaN(lineHeight) || lineHeight <= 0)
+                {
+                    float metricsLh = context.TextMeasurer.GetNormalLineHeight(fontDesc, fontSize);
+                    lineHeight = float.IsNaN(metricsLh) ? fontSize * 1.2f : metricsLh;
+                }
+
+                // In vertical mode, each character or word-segment occupies a vertical slot.
+                // For the pragmatic approach (sideways text), we shape the entire run and
+                // treat its measured width as the vertical extent.
+                var shaped = context.TextMeasurer.Shape(text, fontDesc, fontSize);
+                float textWidth = shaped.TotalWidth + CalculateSpacingExtra(text, style);
+
+                if (cursorY + textWidth <= startY + containingHeight)
+                {
+                    // Fits in the current column
+                    var fragment = new LineFragment
+                    {
+                        X = cursorX - currentLine.X, // offset within line box
+                        Y = cursorY - startY,
+                        Width = lineHeight, // each text run is one "line height" wide (column width)
+                        Height = textWidth,
+                        Baseline = fontSize * 0.8f,
+                        Text = text,
+                        ShapedRun = shaped,
+                        InlineElement = inlineAncestor
+                    };
+                    currentLine.AddFragment(fragment);
+                    cursorY += textWidth;
+                    if (lineHeight > maxColumnWidth) maxColumnWidth = lineHeight;
+                }
+                else
+                {
+                    // Overflow: start a new column
+                    StartNewVerticalLine(parent, ref cursorX, ref cursorY, startY, containingHeight,
+                                          ref currentLine, lineBoxes, ref maxColumnWidth);
+
+                    var fragment = new LineFragment
+                    {
+                        X = cursorX - currentLine.X,
+                        Y = 0,
+                        Width = lineHeight,
+                        Height = textWidth,
+                        Baseline = fontSize * 0.8f,
+                        Text = text,
+                        ShapedRun = shaped,
+                        InlineElement = inlineAncestor
+                    };
+                    currentLine.AddFragment(fragment);
+                    cursorY += textWidth;
+                    if (lineHeight > maxColumnWidth) maxColumnWidth = lineHeight;
+                }
+            }
+            else
+            {
+                if (float.IsNaN(lineHeight) || lineHeight <= 0)
+                    lineHeight = fontSize * 1.2f;
+
+                // Fallback: estimate text extent
+                float charWidth = fontSize * 0.6f;
+                float textExtent = text.Length * charWidth;
+
+                if (cursorY + textExtent > startY + containingHeight)
+                {
+                    StartNewVerticalLine(parent, ref cursorX, ref cursorY, startY, containingHeight,
+                                          ref currentLine, lineBoxes, ref maxColumnWidth);
+                }
+
+                var fragment = new LineFragment
+                {
+                    X = cursorX - currentLine.X,
+                    Y = cursorY - startY,
+                    Width = lineHeight,
+                    Height = textExtent,
+                    Baseline = fontSize * 0.8f,
+                    Text = text,
+                    InlineElement = inlineAncestor
+                };
+                currentLine.AddFragment(fragment);
+                cursorY += textExtent;
+                if (lineHeight > maxColumnWidth) maxColumnWidth = lineHeight;
+            }
+        }
+
+        /// <summary>
+        /// Start a new vertical line (column) when the current column overflows
+        /// in the inline direction.
+        /// </summary>
+        private static void StartNewVerticalLine(LayoutBox parent, ref float cursorX, ref float cursorY,
+            float startY, float containingHeight,
+            ref LineBox currentLine, List<LineBox> lineBoxes,
+            ref float maxColumnWidth)
+        {
+            FinalizeVerticalLineBox(currentLine, maxColumnWidth);
+            lineBoxes.Add(currentLine);
+
+            // Advance in the block direction (horizontal)
+            cursorX += maxColumnWidth;
+            cursorY = startY;
+            currentLine = new LineBox { X = cursorX, Y = startY, Width = containingHeight, IsVertical = true };
+            maxColumnWidth = 0;
+        }
+
+        /// <summary>
+        /// Finalize a vertical line box by setting its dimensions.
+        /// </summary>
+        private static void FinalizeVerticalLineBox(LineBox line, float columnWidth)
+        {
+            // In vertical mode, "Height" is the extent in the inline direction (vertical),
+            // and "Width" is the column width (one line-height).
+            if (columnWidth > 0) line.Height = columnWidth;
+            if (line.Height <= 0) line.Height = 16f;
+
+            // Calculate actual vertical content extent
+            float maxBottom = 0;
+            for (int i = 0; i < line.Fragments.Count; i++)
+            {
+                var frag = line.Fragments[i];
+                float bottom = frag.Y + frag.Height;
+                if (bottom > maxBottom) maxBottom = bottom;
+            }
+            // The Width of a vertical line box is the column width
+            line.Width = columnWidth > 0 ? columnWidth : 16f;
+            // The Height is the max extent in the inline (vertical) direction
+            if (maxBottom > 0) line.Height = maxBottom;
         }
 
         private static void LayoutTextRun(
@@ -426,53 +697,155 @@ namespace Rend.Layout.Internal
                     var shaped = context.TextMeasurer!.Shape(displayWord, fontDesc, fontSize);
                     float wordWidth = shaped.TotalWidth + CalculateSpacingExtraRaw(displayWord, letterSpacing, wordSpacing);
 
+                    bool wordHandled = false;
                     if (cursorX + wordWidth > startX + containingWidth && currentLine.Fragments.Count > 0)
                     {
-                        // If the previous fragment ended with a soft hyphen, add visible hyphen
-                        if (hasSoftHyphens && currentLine.Fragments.Count > 0)
+                        // Try auto-hyphenation when hyphens: auto is set
+                        if (hyphens == CssHyphens.Auto && displayWord.Length >= 4)
                         {
-                            var lastFrag = currentLine.Fragments[currentLine.Fragments.Count - 1];
-                            if (lastFrag.Text != null && lastFrag.Text.Length > 0)
-                            {
-                                // Check if original text had a soft hyphen at this break point
-                                int origEnd = wordStart;
-                                if (origEnd > 0 && origEnd <= text.Length && text[origEnd - 1] == '\u00AD')
-                                {
-                                    string fragText = lastFrag.Text + "-";
-                                    var hyphenShaped = context.TextMeasurer.Shape(fragText, fontDesc, fontSize);
-                                    float hyphenWidth = hyphenShaped.TotalWidth + CalculateSpacingExtraRaw(fragText, letterSpacing, wordSpacing);
-                                    lastFrag.Text = fragText;
-                                    lastFrag.ShapedRun = hyphenShaped;
-                                    lastFrag.Width = hyphenWidth;
-                                }
-                            }
+                            wordHandled = TryAutoHyphenate(displayWord, fontDesc, fontSize, context,
+                                ref cursorX, ref cursorY, startX, containingWidth,
+                                currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
+                                lineHeight, ascent, parent, inlineAncestor, letterSpacing, wordSpacing);
                         }
 
-                        // Start new line
-                        StartNewLine(parent, ref cursorX, ref cursorY, startX, containingWidth,
-                                     ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline);
+                        if (!wordHandled)
+                        {
+                            // If the previous fragment ended with a soft hyphen, add visible hyphen
+                            if (hasSoftHyphens && currentLine.Fragments.Count > 0)
+                            {
+                                var lastFrag = currentLine.Fragments[currentLine.Fragments.Count - 1];
+                                if (lastFrag.Text != null && lastFrag.Text.Length > 0)
+                                {
+                                    // Check if original text had a soft hyphen at this break point
+                                    int origEnd = wordStart;
+                                    if (origEnd > 0 && origEnd <= text.Length && text[origEnd - 1] == '\u00AD')
+                                    {
+                                        string fragText = lastFrag.Text + "-";
+                                        var hyphenShaped = context.TextMeasurer.Shape(fragText, fontDesc, fontSize);
+                                        float hyphenWidth = hyphenShaped.TotalWidth + CalculateSpacingExtraRaw(fragText, letterSpacing, wordSpacing);
+                                        lastFrag.Text = fragText;
+                                        lastFrag.ShapedRun = hyphenShaped;
+                                        lastFrag.Width = hyphenWidth;
+                                    }
+                                }
+                            }
+
+                            // Start new line
+                            StartNewLine(parent, ref cursorX, ref cursorY, startX, containingWidth,
+                                         ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline);
+                        }
                     }
 
-                    // break-word fallback: if the word still doesn't fit on an empty line, break it character by character
-                    bool allowCharBreak = wordBreak == CssWordBreak.BreakWord ||
-                                          overflowWrap == CssOverflowWrap.BreakWord ||
-                                          overflowWrap == CssOverflowWrap.Anywhere;
-                    if (allowCharBreak &&
-                        cursorX + wordWidth > startX + containingWidth && currentLine.Fragments.Count == 0)
+                    if (!wordHandled)
                     {
-                        WrapTextBreakAll(displayWord, fontDesc, fontSize, context, ref cursorX, ref cursorY, startX,
-                                         containingWidth, currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
-                                         lineHeight, ascent, parent, inlineAncestor, letterSpacing, wordSpacing);
-                    }
-                    else
-                    {
-                        AddTextFragment(currentLine, displayWord, shaped, cursorX, wordWidth, lineHeight, ascent, inlineAncestor);
-                        cursorX += wordWidth;
-                        UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, lineHeight, ascent);
+                        // break-word fallback: if the word still doesn't fit on an empty line, break it character by character
+                        bool allowCharBreak = wordBreak == CssWordBreak.BreakWord ||
+                                              overflowWrap == CssOverflowWrap.BreakWord ||
+                                              overflowWrap == CssOverflowWrap.Anywhere;
+                        if (allowCharBreak &&
+                            cursorX + wordWidth > startX + containingWidth && currentLine.Fragments.Count == 0)
+                        {
+                            WrapTextBreakAll(displayWord, fontDesc, fontSize, context, ref cursorX, ref cursorY, startX,
+                                             containingWidth, currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
+                                             lineHeight, ascent, parent, inlineAncestor, letterSpacing, wordSpacing);
+                        }
+                        else
+                        {
+                            AddTextFragment(currentLine, displayWord, shaped, cursorX, wordWidth, lineHeight, ascent, inlineAncestor);
+                            cursorX += wordWidth;
+                            UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, lineHeight, ascent);
+                        }
                     }
                     wordStart = end;
                 }
             }
+        }
+
+        /// <summary>
+        /// Attempts to break a word using dictionary-based auto-hyphenation.
+        /// If successful, the first part (with trailing "-") is placed on the current line
+        /// and the remainder is placed on a new line.
+        /// Returns true if hyphenation was applied.
+        /// </summary>
+        private static bool TryAutoHyphenate(
+            string word, FontDescriptor fontDesc, float fontSize,
+            LayoutContext context,
+            ref float cursorX, ref float cursorY, float startX, float containingWidth,
+            LineBox currentLine, List<LineBox> lineBoxes,
+            ref float maxLineHeight, ref float lineBaseline,
+            float lineHeight, float ascent, LayoutBox parent,
+            StyledElement? inlineAncestor, float letterSpacing, float wordSpacing)
+        {
+            // Extract only the alphabetic portion for dictionary lookup (strip leading/trailing punctuation/spaces)
+            int alphaStart = 0;
+            int alphaEnd = word.Length;
+            while (alphaStart < word.Length && !char.IsLetter(word[alphaStart]))
+                alphaStart++;
+            while (alphaEnd > alphaStart && !char.IsLetter(word[alphaEnd - 1]))
+                alphaEnd--;
+
+            if (alphaEnd - alphaStart < 4)
+                return false; // Too short to hyphenate meaningfully
+
+            string alphaWord = word.Substring(alphaStart, alphaEnd - alphaStart);
+            var dict = GetHyphenationDictionary();
+            var hyphenPoints = dict.FindHyphenPoints(alphaWord);
+
+            if (hyphenPoints.Length == 0)
+                return false;
+
+            // Measure the hyphen character width
+            float hyphenCharWidth = context.TextMeasurer!.MeasureWidth("-", fontDesc, fontSize);
+            float availableWidth = startX + containingWidth - cursorX;
+
+            // Find the best (rightmost) hyphen point that fits on the current line.
+            // hyphenPoints[i] means we can split after alphaWord[i], so the prefix is alphaWord[0..i+1]
+            int bestSplit = -1;
+            for (int i = hyphenPoints.Length - 1; i >= 0; i--)
+            {
+                if (!hyphenPoints[i]) continue;
+
+                // The split in the original word: alphaStart + i + 1 chars of alpha portion
+                int splitInWord = alphaStart + i + 1;
+                string prefix = word.Substring(0, splitInWord) + "-";
+                float prefixWidth = context.TextMeasurer.MeasureWidth(prefix, fontDesc, fontSize)
+                    + CalculateSpacingExtraRaw(prefix, letterSpacing, wordSpacing);
+
+                if (prefixWidth <= availableWidth)
+                {
+                    bestSplit = splitInWord;
+                    break;
+                }
+            }
+
+            if (bestSplit <= 0)
+                return false;
+
+            // Place the hyphenated prefix on the current line
+            string firstPart = word.Substring(0, bestSplit) + "-";
+            var firstShaped = context.TextMeasurer.Shape(firstPart, fontDesc, fontSize);
+            float firstWidth = firstShaped.TotalWidth + CalculateSpacingExtraRaw(firstPart, letterSpacing, wordSpacing);
+            AddTextFragment(currentLine, firstPart, firstShaped, cursorX, firstWidth, lineHeight, ascent, inlineAncestor);
+            cursorX += firstWidth;
+            UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, lineHeight, ascent);
+
+            // Start a new line for the remainder
+            StartNewLine(parent, ref cursorX, ref cursorY, startX, containingWidth,
+                         ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline);
+
+            // Place the remainder on the new line
+            string secondPart = word.Substring(bestSplit);
+            if (secondPart.Length > 0)
+            {
+                var secondShaped = context.TextMeasurer.Shape(secondPart, fontDesc, fontSize);
+                float secondWidth = secondShaped.TotalWidth + CalculateSpacingExtraRaw(secondPart, letterSpacing, wordSpacing);
+                AddTextFragment(currentLine, secondPart, secondShaped, cursorX, secondWidth, lineHeight, ascent, inlineAncestor);
+                cursorX += secondWidth;
+                UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, lineHeight, ascent);
+            }
+
+            return true;
         }
 
         private static void WrapTextBreakAll(
@@ -585,13 +958,19 @@ namespace Rend.Layout.Internal
 
             if (ReplacedElementLayout.IsReplaced(element))
             {
-                // Replaced elements (img, svg, etc.): use intrinsic/attribute dimensions
+                // Replaced elements (img, svg, form controls, etc.): use intrinsic/attribute dimensions
                 float intrinsicW = 0;
                 float intrinsicH = 0;
                 string? attrW = element.GetAttribute("width");
                 string? attrH = element.GetAttribute("height");
                 if (attrW != null && float.TryParse(attrW, out float aw)) intrinsicW = aw;
                 if (attrH != null && float.TryParse(attrH, out float ah)) intrinsicH = ah;
+                // Form controls: apply default intrinsic dimensions if no attributes set
+                if (ReplacedElementLayout.IsFormControl(element))
+                {
+                    if (intrinsicW <= 0) intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(element);
+                    if (intrinsicH <= 0) intrinsicH = ReplacedElementLayout.GetFormControlIntrinsicHeight(element);
+                }
 
                 contentWidth = float.IsNaN(element.Style.Width) ? intrinsicW : element.Style.Width;
                 float tempH = float.IsNaN(element.Style.Height) ? intrinsicH : element.Style.Height;

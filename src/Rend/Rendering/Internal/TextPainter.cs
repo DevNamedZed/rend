@@ -21,9 +21,17 @@ namespace Rend.Rendering.Internal
         /// <param name="lineBaseline">The baseline offset from the top of the line box.</param>
         /// <param name="target">The render target to draw on.</param>
         /// <param name="style">The computed style for the text.</param>
+        /// <param name="isVertical">Whether this fragment belongs to a vertical writing mode line box.</param>
         public static void Paint(LineFragment fragment, float lineX, float lineY,
-                                 float lineBaseline, IRenderTarget target, ComputedStyle style)
+                                 float lineBaseline, IRenderTarget target, ComputedStyle style,
+                                 bool isVertical = false)
         {
+            if (isVertical)
+            {
+                PaintVertical(fragment, lineX, lineY, lineBaseline, target, style);
+                return;
+            }
+
             float drawX = lineX + fragment.X;
             float drawY = lineY + fragment.Y + fragment.Baseline;
 
@@ -67,6 +75,89 @@ namespace Rend.Rendering.Internal
 
             // Paint text decorations.
             PaintDecorations(fragment, lineX, lineY, lineBaseline, target, style);
+        }
+
+        /// <summary>
+        /// Paints text in vertical writing mode by applying a 90-degree clockwise
+        /// rotation transform around the fragment's position.
+        /// This handles the "sideways" text orientation case. For text-orientation: mixed,
+        /// CJK characters should be drawn upright (TODO: implement per-character classification).
+        /// For text-orientation: upright, all characters should be drawn upright (TODO).
+        /// </summary>
+        private static void PaintVertical(LineFragment fragment, float lineX, float lineY,
+                                           float lineBaseline, IRenderTarget target, ComputedStyle style)
+        {
+            // In the vertical layout, fragments are positioned with:
+            //   X = offset within line box (horizontal position of the column)
+            //   Y = offset along the inline (vertical) direction
+            // We need to draw the text rotated 90 degrees clockwise so that
+            // horizontal text appears running top-to-bottom.
+
+            float fragX = lineX + fragment.X;
+            float fragY = lineY + fragment.Y;
+
+            // The rotation pivot is at the top-left of the fragment.
+            // After rotating 90 degrees CW: (x, y) -> (y, -x)
+            // We translate so the text appears in the correct position.
+            float pivotX = fragX + fragment.Width * 0.5f;
+            float pivotY = fragY + fragment.Width * 0.5f; // use Width (line-height) as the square pivot
+
+            // Save state, apply rotation
+            target.Save();
+
+            // Build rotation matrix: rotate 90 degrees clockwise around (pivotX, pivotY)
+            float angle = (float)(Math.PI / 2.0);
+            var toOrigin = Matrix3x2.CreateTranslation(-pivotX, -pivotY);
+            var rotation = Matrix3x2.CreateRotation(angle);
+            var fromOrigin = Matrix3x2.CreateTranslation(pivotX, pivotY);
+            var transform = toOrigin * rotation * fromOrigin;
+            target.SetTransform(transform);
+
+            // Draw text at the pre-rotation position
+            float drawX = fragX;
+            float drawY = fragY + fragment.Baseline;
+
+            CssColor color = style.Color;
+            float fontSize = style.FontSize;
+            string fontFamily = style.FontFamily;
+            CssFontStyle fontStyle = style.FontStyle;
+            float fontWeight = style.FontWeight;
+            float letterSpacing = style.LetterSpacing;
+            float wordSpacing = style.WordSpacing;
+            bool hasSpacing = letterSpacing != 0 || wordSpacing != 0;
+
+            if (fragment.ShapedRun != null && !hasSpacing)
+            {
+                float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
+                var fontDesc = new FontDescriptor(fontFamily, fontWeight, fontStyle, stretch);
+                target.DrawGlyphs(fragment.ShapedRun, drawX, drawY, color, fontDesc);
+            }
+            else
+            {
+                string? text = fragment.ShapedRun?.OriginalText ?? fragment.Text;
+                if (text != null)
+                {
+                    float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
+                    var textStyle = new TextStyle
+                    {
+                        Font = new FontDescriptor(fontFamily, fontWeight, fontStyle, stretch),
+                        FontSize = fontSize,
+                        Color = color,
+                        Bold = fontWeight >= 700f,
+                        Italic = fontStyle == CssFontStyle.Italic || fontStyle == CssFontStyle.Oblique,
+                        LetterSpacing = letterSpacing,
+                        WordSpacing = wordSpacing
+                    };
+                    target.DrawText(text, drawX, drawY, textStyle);
+                }
+            }
+
+            // Restore state (removes rotation)
+            target.Restore();
+
+            // TODO: text-orientation: mixed — classify each character as CJK (upright) or
+            // Latin/other (sideways 90deg). Currently all text is rotated sideways.
+            // TODO: text-orientation: upright — draw each character upright with wider spacing.
         }
 
         private static void PaintDecorations(LineFragment fragment, float lineX, float lineY,

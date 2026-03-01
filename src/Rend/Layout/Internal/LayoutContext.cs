@@ -38,5 +38,43 @@ namespace Rend.Layout.Internal
 
         /// <summary>Current float context from the enclosing BFC, if any.</summary>
         public FloatContext? FloatContext { get; set; }
+
+        /// <summary>
+        /// Parent grid context for CSS subgrid support. When a grid item is itself a grid
+        /// with grid-template-columns/rows: subgrid, this provides the parent grid's resolved
+        /// track sizes so the subgrid can inherit them.
+        /// </summary>
+        public ParentGridContext? ParentGridContext { get; set; }
+    }
+
+    /// <summary>
+    /// Carries resolved track sizes and item placement from a parent grid so that
+    /// a nested subgrid can inherit the parent's tracks for the lines it spans.
+    /// </summary>
+    internal sealed class ParentGridContext
+    {
+        /// <summary>Resolved column widths of the parent grid.</summary>
+        public float[] ColumnWidths { get; set; } = null!;
+
+        /// <summary>Resolved row heights of the parent grid.</summary>
+        public float[] RowHeights { get; set; } = null!;
+
+        /// <summary>Column gap of the parent grid.</summary>
+        public float ColumnGap { get; set; }
+
+        /// <summary>Row gap of the parent grid.</summary>
+        public float RowGap { get; set; }
+
+        /// <summary>The 0-based column start of this item in the parent grid.</summary>
+        public int ItemColStart { get; set; }
+
+        /// <summary>The number of columns this item spans in the parent grid.</summary>
+        public int ItemColSpan { get; set; }
+
+        /// <summary>The 0-based row start of this item in the parent grid.</summary>
+        public int ItemRowStart { get; set; }
+
+        /// <summary>The number of rows this item spans in the parent grid.</summary>
+        public int ItemRowSpan { get; set; }
     }
 }

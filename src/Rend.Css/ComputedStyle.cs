@@ -934,6 +934,38 @@ namespace Rend.Css
 
         #endregion
 
+        #region Column Fill
+
+        public CssColumnFill ColumnFill
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssColumnFill)_values[PropertyId.ColumnFill].IntValue;
+        }
+
+        #endregion
+
+        #region Writing Mode
+
+        public CssWritingMode WritingMode
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssWritingMode)_values[PropertyId.WritingMode].IntValue;
+        }
+
+        public CssTextOrientation TextOrientation
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssTextOrientation)_values[PropertyId.TextOrientation].IntValue;
+        }
+
+        public CssMaskMode MaskMode
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssMaskMode)_values[PropertyId.MaskMode].IntValue;
+        }
+
+        #endregion
+
         #region Generic access
 
         /// <summary>Get a raw PropertyValue by ID.</summary>

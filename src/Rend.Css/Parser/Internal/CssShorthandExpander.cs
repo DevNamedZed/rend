@@ -112,6 +112,11 @@ namespace Rend.Css.Parser.Internal
                 case "border-inline-start-color": return Alias(value, important, output, "border-left-color");
                 case "border-inline-end-color": return Alias(value, important, output, "border-right-color");
 
+                case "mask": return ExpandMask(value, important, output);
+
+                // Compatibility aliases
+                case "word-wrap": return Alias(value, important, output, "overflow-wrap");
+
                 case "all": return ExpandAll(value, important, output);
 
                 default: return false;
@@ -979,6 +984,55 @@ namespace Rend.Css.Parser.Internal
             output.Add(new CssDeclaration("border-image-width", new CssNumberValue(1), important));
             output.Add(new CssDeclaration("border-image-outset", new CssNumberValue(0), important));
             output.Add(new CssDeclaration("border-image-repeat", repeat, important));
+
+            return true;
+        }
+
+        #endregion
+
+        #region Mask
+
+        /// <summary>
+        /// Expand 'mask' shorthand into longhand properties.
+        /// Simplified: treat the first url/gradient as mask-image, keywords as mask-repeat/mask-mode.
+        /// </summary>
+        private static bool ExpandMask(CssValue value, bool important, List<CssDeclaration> output)
+        {
+            // For a simple single-layer mask, the most common pattern is:
+            // mask: url(...) no-repeat / contain
+            // mask: linear-gradient(...)
+            // We'll extract what we can and set the longhands.
+
+            var parts = GetListValues(value);
+            CssValue? imageVal = null;
+            CssValue? repeatVal = null;
+            CssValue? modeVal = null;
+
+            for (int i = 0; i < parts.Count; i++)
+            {
+                var p = parts[i];
+                if (p is CssFunctionValue || p is CssUrlValue)
+                {
+                    imageVal = p;
+                }
+                else if (p is CssKeywordValue kw)
+                {
+                    string k = kw.Keyword;
+                    if (k == "no-repeat" || k == "repeat" || k == "repeat-x" || k == "repeat-y" || k == "space" || k == "round")
+                        repeatVal = p;
+                    else if (k == "alpha" || k == "luminance" || k == "match-source")
+                        modeVal = p;
+                    else if (k == "none")
+                        imageVal = p;
+                }
+            }
+
+            if (imageVal != null)
+                output.Add(new CssDeclaration("mask-image", imageVal, important));
+            if (repeatVal != null)
+                output.Add(new CssDeclaration("mask-repeat", repeatVal, important));
+            if (modeVal != null)
+                output.Add(new CssDeclaration("mask-mode", modeVal, important));
 
             return true;
         }

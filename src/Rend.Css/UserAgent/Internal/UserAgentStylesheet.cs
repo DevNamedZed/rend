@@ -104,7 +104,9 @@ hr {
     display: block;
     margin-top: 0.5em;
     margin-bottom: 0.5em;
-    border-top-style: solid;
+    margin-left: auto;
+    margin-right: auto;
+    border-top-style: inset;
     border-top-width: 1px;
     border-top-color: #808080;
 }

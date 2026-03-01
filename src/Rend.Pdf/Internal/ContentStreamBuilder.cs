@@ -450,6 +450,36 @@ namespace Rend.Pdf.Internal
         /// <summary>T* — Move to next line.</summary>
         public void NextLine() => WriteOp("T*\n");
 
+        /// <summary>cs — Set fill color space (named).</summary>
+        public void SetFillColorSpace(string name)
+        {
+            WriteByte((byte)'/');
+            WriteAscii(name);
+            WriteOp(" cs\n");
+        }
+
+        /// <summary>scn — Set fill color in current color space.</summary>
+        public void SetFillColorScn(float tint)
+        {
+            WriteFloat(tint);
+            WriteOp(" scn\n");
+        }
+
+        /// <summary>CS — Set stroke color space (named).</summary>
+        public void SetStrokeColorSpace(string name)
+        {
+            WriteByte((byte)'/');
+            WriteAscii(name);
+            WriteOp(" CS\n");
+        }
+
+        /// <summary>SCN — Set stroke color in current color space.</summary>
+        public void SetStrokeColorScn(float tint)
+        {
+            WriteFloat(tint);
+            WriteOp(" SCN\n");
+        }
+
         // ═══════════════════════════════════════════
         // Image / XObject Operators
         // ═══════════════════════════════════════════

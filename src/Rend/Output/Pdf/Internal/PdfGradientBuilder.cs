@@ -17,7 +17,8 @@ namespace Rend.Output.Pdf.Internal
             if (gradient == null || gradient.Stops == null || gradient.Stops.Length < 2)
                 return false;
 
-            return gradient.Type == GradientType.Linear || gradient.Type == GradientType.Radial;
+            return gradient.Type == GradientType.Linear || gradient.Type == GradientType.Radial
+                || gradient.Type == GradientType.Conic;
         }
 
         /// <summary>
@@ -65,6 +66,20 @@ namespace Rend.Output.Pdf.Internal
 
                 radial.Stops = ConvertStops(gradient.Stops);
                 content.ApplyRadialGradient(radial);
+            }
+            else if (gradient.Type == GradientType.Conic)
+            {
+                var conic = new PdfConicGradient();
+
+                // Center is stored as fraction (0..1) for conic gradients
+                conic.CenterX = x + gradient.Center.X * width;
+                conic.CenterY = y + gradient.Center.Y * height;
+                conic.StartAngle = gradient.Angle;
+                conic.Width = width;
+                conic.Height = height;
+                conic.Stops = ConvertStops(gradient.Stops);
+
+                content.ApplyConicGradient(conic);
             }
         }
 

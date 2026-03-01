@@ -373,6 +373,18 @@ namespace Rend.Css.Resolution.Internal
                 case PropertyId.GridAutoFlow:
                     return TryMapGridAutoFlow(keyword, out result);
 
+                case PropertyId.ColumnFill:
+                    return TryMapColumnFill(keyword, out result);
+
+                case PropertyId.WritingMode:
+                    return TryMapWritingMode(keyword, out result);
+
+                case PropertyId.TextOrientation:
+                    return TryMapTextOrientation(keyword, out result);
+
+                case PropertyId.MaskMode:
+                    return TryMapMaskMode(keyword, out result);
+
                 default:
                     // Generic keyword as int 0
                     result = PropertyValue.FromKeyword(0);
@@ -1367,6 +1379,53 @@ namespace Rend.Css.Resolution.Internal
                 case "expanded": result = PropertyValue.FromKeyword((int)CssFontStretch.Expanded); return true;
                 case "extra-expanded": result = PropertyValue.FromKeyword((int)CssFontStretch.ExtraExpanded); return true;
                 case "ultra-expanded": result = PropertyValue.FromKeyword((int)CssFontStretch.UltraExpanded); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapColumnFill(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "balance": result = PropertyValue.FromKeyword((int)CssColumnFill.Balance); return true;
+                case "auto": result = PropertyValue.FromKeyword((int)CssColumnFill.Auto); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapWritingMode(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "horizontal-tb": result = PropertyValue.FromKeyword((int)CssWritingMode.HorizontalTb); return true;
+                case "vertical-rl": result = PropertyValue.FromKeyword((int)CssWritingMode.VerticalRl); return true;
+                case "vertical-lr": result = PropertyValue.FromKeyword((int)CssWritingMode.VerticalLr); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapTextOrientation(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "mixed": result = PropertyValue.FromKeyword((int)CssTextOrientation.Mixed); return true;
+                case "upright": result = PropertyValue.FromKeyword((int)CssTextOrientation.Upright); return true;
+                case "sideways": result = PropertyValue.FromKeyword((int)CssTextOrientation.Sideways); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapMaskMode(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "match-source": result = PropertyValue.FromKeyword((int)CssMaskMode.MatchSource); return true;
+                case "luminance": result = PropertyValue.FromKeyword((int)CssMaskMode.Luminance); return true;
+                case "alpha": result = PropertyValue.FromKeyword((int)CssMaskMode.Alpha); return true;
                 default: return false;
             }
         }

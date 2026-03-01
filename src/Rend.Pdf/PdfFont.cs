@@ -13,6 +13,10 @@ namespace Rend.Pdf
         private readonly bool _isStandard14;
         private readonly bool _isCff;
         private readonly byte[]? _cffTableData;
+        private readonly bool _isType1;
+        private readonly byte[]? _type1Header;
+        private readonly byte[]? _type1Encrypted;
+        private readonly byte[]? _type1Trailer;
         private readonly FontMetrics _metrics;
         private readonly FontEmbedMode _embedMode;
 
@@ -36,7 +40,9 @@ namespace Rend.Pdf
                          float[] advanceWidths, Dictionary<int, ushort>? supplementaryMap,
                          bool isStandard14, Dictionary<uint, short>? kerningPairs = null,
                          FontEmbedMode embedMode = FontEmbedMode.Subset,
-                         bool isCff = false, byte[]? cffTableData = null)
+                         bool isCff = false, byte[]? cffTableData = null,
+                         bool isType1 = false, byte[]? type1Header = null,
+                         byte[]? type1Encrypted = null, byte[]? type1Trailer = null)
         {
             _baseFont = baseFont;
             _metrics = metrics;
@@ -48,6 +54,10 @@ namespace Rend.Pdf
             _embedMode = embedMode;
             _isCff = isCff;
             _cffTableData = cffTableData;
+            _isType1 = isType1;
+            _type1Header = type1Header;
+            _type1Encrypted = type1Encrypted;
+            _type1Trailer = type1Trailer;
         }
 
         /// <summary>PostScript base font name.</summary>
@@ -64,6 +74,18 @@ namespace Rend.Pdf
 
         /// <summary>Raw CFF table data for embedding as FontFile3.</summary>
         internal byte[]? CffTableData => _cffTableData;
+
+        /// <summary>Whether this is a Type 1 PostScript font (PFB/PFA).</summary>
+        internal bool IsType1 => _isType1;
+
+        /// <summary>ASCII header segment of a Type 1 font (before eexec).</summary>
+        internal byte[]? Type1Header => _type1Header;
+
+        /// <summary>Binary encrypted segment of a Type 1 font (eexec data).</summary>
+        internal byte[]? Type1Encrypted => _type1Encrypted;
+
+        /// <summary>ASCII trailer segment of a Type 1 font (after cleartomark).</summary>
+        internal byte[]? Type1Trailer => _type1Trailer;
 
         /// <summary>Font embedding mode.</summary>
         internal FontEmbedMode EmbedMode => _embedMode;

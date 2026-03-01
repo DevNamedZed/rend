@@ -36,9 +36,11 @@ namespace Rend.Pdf
         private readonly List<PdfFont> _embeddedFonts = new List<PdfFont>();
         private readonly Dictionary<PdfFont, byte[]> _fontRawData = new Dictionary<PdfFont, byte[]>();
         private readonly List<PdfImage> _images = new List<PdfImage>();
+        private readonly List<PdfSpotColor> _spotColors = new List<PdfSpotColor>();
         private readonly List<PdfReference> _formFieldRefs = new List<PdfReference>();
         private int _fontCounter;
         private int _imageCounter;
+        private int _spotColorCounter;
         private int _subsetTagCounter;
         private bool _disposed;
 
@@ -118,7 +120,7 @@ namespace Rend.Pdf
             return pdfFont;
         }
 
-        /// <summary>Add a TrueType or OpenType font from a stream.</summary>
+        /// <summary>Add a TrueType, OpenType, or Type 1 font from a stream.</summary>
         public PdfFont AddFont(Stream fontData, FontEmbedMode mode = FontEmbedMode.Subset)
         {
             if (fontData == null) throw new ArgumentNullException(nameof(fontData));
@@ -130,13 +132,23 @@ namespace Rend.Pdf
                 fontBytes = ms.ToArray();
             }
 
-            var pdfFont = TrueTypeParser.Parse(fontBytes, _fontCounter++, mode);
+            PdfFont pdfFont;
+            if (Type1FontParser.IsType1Font(fontBytes))
+            {
+                var parsed = Type1FontParser.Parse(fontBytes);
+                pdfFont = parsed.ToPdfFont(_fontCounter++);
+            }
+            else
+            {
+                pdfFont = TrueTypeParser.Parse(fontBytes, _fontCounter++, mode);
+            }
+
             _embeddedFonts.Add(pdfFont);
             _fontRawData[pdfFont] = fontBytes;
             return pdfFont;
         }
 
-        /// <summary>Add a TrueType or OpenType font from a file path.</summary>
+        /// <summary>Add a TrueType, OpenType, or Type 1 font from a file path.</summary>
         public PdfFont AddFont(string fontFilePath, FontEmbedMode mode = FontEmbedMode.Subset)
         {
             using var stream = File.OpenRead(fontFilePath);
@@ -190,6 +202,91 @@ namespace Rend.Pdf
         }
 
         // ═══════════════════════════════════════════
+        // Spot Colors (Separation Color Space)
+        // ═══════════════════════════════════════════
+
+        /// <summary>
+        /// Register a spot color (Separation color space) with the document.
+        /// The spot color can then be used via <see cref="PdfContentStream.SetFillSpotColor"/>
+        /// and <see cref="PdfContentStream.SetStrokeSpotColor"/>.
+        /// </summary>
+        /// <param name="name">The colorant name (e.g. "PANTONE 185 C").</param>
+        /// <param name="approximateColor">An approximate RGB color for fallback rendering.
+        /// This is converted to CMYK internally for the tint transform function.</param>
+        /// <returns>A <see cref="PdfSpotColor"/> that can be used with content stream methods.</returns>
+        public PdfSpotColor AddSpotColor(string name, CssColor approximateColor)
+        {
+            if (name == null) throw new ArgumentNullException(nameof(name));
+
+            _spotColorCounter++;
+            string resourceName = "CS" + _spotColorCounter;
+            var spotColor = new PdfSpotColor(name, approximateColor, resourceName);
+
+            // Convert the approximate RGB color to CMYK for the tint transform
+            approximateColor.ToFloatRgb(out float r, out float g, out float b);
+            float c = 1f - r;
+            float m = 1f - g;
+            float y = 1f - b;
+            float k = Math.Min(c, Math.Min(m, y));
+            if (k < 1f)
+            {
+                c = (c - k) / (1f - k);
+                m = (m - k) / (1f - k);
+                y = (y - k) / (1f - k);
+            }
+            else
+            {
+                c = 0; m = 0; y = 0;
+            }
+
+            // Build the tint transform function: Type 2 (exponential interpolation)
+            // Maps tint (0..1) to CMYK. At tint=0, output is white (0,0,0,0).
+            // At tint=1, output is the full CMYK values.
+            var tintFunc = new PdfDictionary(6);
+            tintFunc[PdfName.FunctionType] = new PdfInteger(2);
+
+            var domain = new PdfArray(2);
+            domain.Add(new PdfReal(0));
+            domain.Add(new PdfReal(1));
+            tintFunc[PdfName.Domain] = domain;
+
+            var range = new PdfArray(8);
+            range.Add(new PdfReal(0)); range.Add(new PdfReal(1)); // C
+            range.Add(new PdfReal(0)); range.Add(new PdfReal(1)); // M
+            range.Add(new PdfReal(0)); range.Add(new PdfReal(1)); // Y
+            range.Add(new PdfReal(0)); range.Add(new PdfReal(1)); // K
+            tintFunc[PdfName.Range] = range;
+
+            var c0 = new PdfArray(4);
+            c0.Add(new PdfReal(0)); c0.Add(new PdfReal(0));
+            c0.Add(new PdfReal(0)); c0.Add(new PdfReal(0));
+            tintFunc[PdfName.C0] = c0;
+
+            var c1 = new PdfArray(4);
+            c1.Add(new PdfReal(c)); c1.Add(new PdfReal(m));
+            c1.Add(new PdfReal(y)); c1.Add(new PdfReal(k));
+            tintFunc[PdfName.C1] = c1;
+
+            tintFunc[PdfName.N] = new PdfInteger(1);
+
+            var tintFuncRef = _objectTable.Allocate(tintFunc);
+
+            // Build the Separation color space array:
+            // [/Separation /ColorantName /DeviceCMYK <tint-transform-ref>]
+            var csArray = new PdfArray(4);
+            csArray.Add(PdfName.Separation);
+            csArray.Add(new PdfName(name));
+            csArray.Add(PdfName.DeviceCMYK);
+            csArray.Add(tintFuncRef);
+
+            var csRef = _objectTable.Allocate(csArray);
+            spotColor.ColorSpaceRef = csRef;
+
+            _spotColors.Add(spotColor);
+            return spotColor;
+        }
+
+        // ═══════════════════════════════════════════
         // Outlines (Bookmarks)
         // ═══════════════════════════════════════════
 
@@ -210,10 +307,30 @@ namespace Rend.Pdf
         {
             if (output == null) throw new ArgumentNullException(nameof(output));
 
-            using var writer = new PdfWriter(output);
-            WriteHeader(writer);
-            BuildAndWriteObjects(writer);
-            writer.Flush();
+            // Build the PDF into a memory buffer first (needed for linearization and signing)
+            byte[] pdfBytes;
+            using (var ms = new MemoryStream())
+            {
+                using var writer = new PdfWriter(ms);
+                WriteHeader(writer);
+                BuildAndWriteObjects(writer);
+                writer.Flush();
+                pdfBytes = ms.ToArray();
+            }
+
+            // Apply linearization if requested
+            if (_options.Linearize)
+            {
+                pdfBytes = PdfLinearizer.Linearize(pdfBytes);
+            }
+
+            // Apply signing if requested
+            if (_options.Signature != null)
+            {
+                pdfBytes = PdfSigner.Sign(pdfBytes, _options.Signature);
+            }
+
+            output.Write(pdfBytes, 0, pdfBytes.Length);
         }
 
         /// <summary>Save the PDF document to a file.</summary>
@@ -252,6 +369,20 @@ namespace Rend.Pdf
 
         private void BuildAndWriteObjects(PdfWriter writer)
         {
+            // 0. Enforce PDF/A requirements before building objects
+            if (_options.PdfAConformance.HasValue)
+            {
+                if (_options.OutputIntentProfile == null || _options.OutputIntentProfile.Length == 0)
+                    throw new InvalidOperationException(
+                        "PDF/A conformance requires an ICC profile. Set PdfDocumentOptions.OutputIntentProfile.");
+
+                // PDF/A always requires XMP metadata
+                _options.IncludeXmpMetadata = true;
+
+                // PDF/A always requires tagged PDF
+                _options.EnableTaggedPdf = true;
+            }
+
             // 1. Build Info dictionary
             PdfReference? infoRef = BuildInfoDictionary();
 
@@ -291,8 +422,13 @@ namespace Rend.Pdf
                 writer.Encryptor = encryptor;
             }
 
+            // 6d. Build Output Intent (if PDF/A)
+            PdfReference? outputIntentRef = null;
+            if (_options.PdfAConformance.HasValue)
+                outputIntentRef = BuildOutputIntent();
+
             // 7. Build catalog
-            var finalCatalogRef = BuildCatalog(pagesRef, outlinesRef, xmpMetadataRef, acroFormRef, structTreeRef);
+            var finalCatalogRef = BuildCatalog(pagesRef, outlinesRef, xmpMetadataRef, acroFormRef, structTreeRef, outputIntentRef);
 
             // 8. Write all objects
             _objectTable.WriteAllObjects(writer);
@@ -357,10 +493,14 @@ namespace Rend.Pdf
                 fontRefs[font.BaseFont] = _objectTable.Allocate(fontDict);
             }
 
-            // Embedded fonts (CIDFont Type 2 with Identity-H)
+            // Embedded fonts
             foreach (var font in _embeddedFonts)
             {
-                var fontRef = BuildEmbeddedFont(font);
+                PdfReference fontRef;
+                if (font.IsType1)
+                    fontRef = BuildType1Font(font);
+                else
+                    fontRef = BuildEmbeddedFont(font);
                 fontRefs[font.BaseFont] = fontRef;
             }
 
@@ -480,6 +620,82 @@ namespace Rend.Pdf
                 type0Dict[PdfName.ToUnicode] = toUnicodeRef;
 
             return _objectTable.Allocate(type0Dict);
+        }
+
+        private PdfReference BuildType1Font(PdfFont font)
+        {
+            // Type 1 fonts use a simple (non-composite) font dictionary with /Subtype /Type1
+            // and WinAnsiEncoding, embedding the font program via /FontFile.
+
+            // 1. Font descriptor
+            var descriptorDict = new PdfDictionary(12);
+            descriptorDict[PdfName.Type] = PdfName.FontDescriptor;
+            descriptorDict[PdfName.FontName] = new PdfName(font.BaseFont);
+            descriptorDict[PdfName.Flags] = new PdfInteger(font.Metrics.Flags);
+
+            var bbox = new PdfArray(4);
+            bbox.Add(new PdfReal(font.Metrics.BBox.X));
+            bbox.Add(new PdfReal(font.Metrics.BBox.Y));
+            bbox.Add(new PdfReal(font.Metrics.BBox.Right));
+            bbox.Add(new PdfReal(font.Metrics.BBox.Bottom));
+            descriptorDict[PdfName.FontBBox] = bbox;
+
+            descriptorDict[PdfName.ItalicAngle] = new PdfReal(font.Metrics.ItalicAngle);
+            descriptorDict[PdfName.Ascent] = new PdfReal(font.Metrics.Ascent);
+            descriptorDict[PdfName.Descent] = new PdfReal(font.Metrics.Descent);
+            descriptorDict[PdfName.CapHeight] = new PdfReal(font.Metrics.CapHeight);
+            descriptorDict[PdfName.StemV] = new PdfReal(font.Metrics.StemV);
+
+            // Embed font program as /FontFile with /Length1 /Length2 /Length3
+            if (font.Type1Header != null && font.Type1Encrypted != null && font.Type1Trailer != null)
+            {
+                int len1 = font.Type1Header.Length;
+                int len2 = font.Type1Encrypted.Length;
+                int len3 = font.Type1Trailer.Length;
+
+                // Concatenate the three segments for the font file stream
+                byte[] fontFileData = new byte[len1 + len2 + len3];
+                Buffer.BlockCopy(font.Type1Header, 0, fontFileData, 0, len1);
+                Buffer.BlockCopy(font.Type1Encrypted, 0, fontFileData, len1, len2);
+                Buffer.BlockCopy(font.Type1Trailer, 0, fontFileData, len1 + len2, len3);
+
+                bool compress = _options.Compression != PdfCompression.None;
+                var fontStream = new PdfStream(fontFileData, compress)
+                {
+                    CompressionLevel = MapCompressionLevel(_options.Compression)
+                };
+                fontStream.Dict[new PdfName("Length1")] = new PdfInteger(len1);
+                fontStream.Dict[new PdfName("Length2")] = new PdfInteger(len2);
+                fontStream.Dict[new PdfName("Length3")] = new PdfInteger(len3);
+
+                var fontFileRef = _objectTable.Allocate(fontStream);
+                descriptorDict[PdfName.FontFile] = fontFileRef;
+            }
+
+            var descriptorRef = _objectTable.Allocate(descriptorDict);
+
+            // 2. Build /Widths array for character codes 32-255 (WinAnsiEncoding)
+            int firstChar = 32;
+            int lastChar = 255;
+            var widths = new PdfArray(lastChar - firstChar + 1);
+            for (int i = firstChar; i <= lastChar; i++)
+            {
+                float w = (ushort)i < font.GlyphCount ? font.GetAdvanceWidth((ushort)i) : 0;
+                widths.Add(new PdfReal(w));
+            }
+
+            // 3. Font dictionary (simple, non-composite Type 1)
+            var fontDict = new PdfDictionary(8);
+            fontDict[PdfName.Type] = PdfName.Font;
+            fontDict[PdfName.Subtype] = PdfName.Type1;
+            fontDict[PdfName.BaseFont] = new PdfName(font.BaseFont);
+            fontDict[PdfName.FirstChar] = new PdfInteger(firstChar);
+            fontDict[PdfName.LastChar] = new PdfInteger(lastChar);
+            fontDict[PdfName.Widths] = widths;
+            fontDict[PdfName.FontDescriptor] = descriptorRef;
+            fontDict[PdfName.Encoding] = PdfName.WinAnsiEncoding;
+
+            return _objectTable.Allocate(fontDict);
         }
 
         private PdfArray? BuildWidthsArray(PdfFont font)
@@ -654,6 +870,17 @@ namespace Rend.Pdf
                     resources[PdfName.Shading] = shDict;
                 }
 
+                // ColorSpace resources (spot colors / separation color spaces)
+                if (page.Content.ColorSpaces.Count > 0)
+                {
+                    var csDict = new PdfDictionary(page.Content.ColorSpaces.Count);
+                    foreach (var cs in page.Content.ColorSpaces)
+                    {
+                        csDict[new PdfName(cs.Key)] = cs.Value;
+                    }
+                    resources[PdfName.ColorSpace] = csDict;
+                }
+
                 if (resources.Count > 0)
                     pageDict[PdfName.Resources] = resources;
 
@@ -752,9 +979,10 @@ namespace Rend.Pdf
         private PdfReference BuildCatalog(PdfReference pagesRef, PdfReference? outlinesRef,
                                             PdfReference? xmpMetadataRef = null,
                                             PdfReference? acroFormRef = null,
-                                            PdfReference? structTreeRef = null)
+                                            PdfReference? structTreeRef = null,
+                                            PdfReference? outputIntentRef = null)
         {
-            var catalog = new PdfDictionary(6);
+            var catalog = new PdfDictionary(8);
             catalog[PdfName.Type] = PdfName.Catalog;
             catalog[PdfName.Pages] = pagesRef;
 
@@ -774,6 +1002,13 @@ namespace Rend.Pdf
                 var markInfo = new PdfDictionary(1);
                 markInfo[PdfName.Marked] = PdfBoolean.True;
                 catalog[PdfName.MarkInfo] = markInfo;
+            }
+
+            if (outputIntentRef != null)
+            {
+                var outputIntents = new PdfArray(1);
+                outputIntents.Add(outputIntentRef);
+                catalog[PdfName.OutputIntents] = outputIntents;
             }
 
             return _objectTable.Allocate(catalog);
@@ -935,6 +1170,28 @@ namespace Rend.Pdf
             return _objectTable.Allocate(stream);
         }
 
+        private PdfReference BuildOutputIntent()
+        {
+            // Embed the ICC profile as a stream object
+            var iccStream = new PdfStream(_options.OutputIntentProfile!, compress: true);
+            iccStream.Dict[PdfName.N] = new PdfInteger(3); // 3 components for RGB
+            var iccProfileRef = _objectTable.Allocate(iccStream);
+
+            // Build the OutputIntent dictionary
+            var intentDict = new PdfDictionary(5);
+            intentDict[PdfName.Type] = PdfName.OutputIntent;
+
+            // /S depends on conformance level: GTS_PDFA1 for A1b, GTS_PDFA2 for A2b/A3b
+            intentDict[PdfName.S] = _options.PdfAConformance == PdfALevel.A1b
+                ? PdfName.GTS_PDFA1
+                : PdfName.GTS_PDFA2;
+
+            intentDict[PdfName.OutputConditionIdentifier] = new PdfString(_options.OutputCondition);
+            intentDict[PdfName.DestOutputProfile] = iccProfileRef;
+
+            return _objectTable.Allocate(intentDict);
+        }
+
         private string GenerateXmpPacket()
         {
             var sb = new StringBuilder(2048);
@@ -944,7 +1201,10 @@ namespace Rend.Pdf
             sb.Append("<rdf:Description rdf:about=\"\"\n");
             sb.Append("  xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n");
             sb.Append("  xmlns:pdf=\"http://ns.adobe.com/pdf/1.3/\"\n");
-            sb.Append("  xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\">\n");
+            sb.Append("  xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"");
+            if (_options.PdfAConformance.HasValue)
+                sb.Append("\n  xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\"");
+            sb.Append(">\n");
 
             // Dublin Core
             if (Info.Title != null)
@@ -967,6 +1227,20 @@ namespace Rend.Pdf
                 sb.Append($"  <xmp:CreateDate>{Info.CreationDate.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}</xmp:CreateDate>\n");
             if (Info.ModDate.HasValue)
                 sb.Append($"  <xmp:ModifyDate>{Info.ModDate.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}</xmp:ModifyDate>\n");
+
+            // PDF/A identification
+            if (_options.PdfAConformance.HasValue)
+            {
+                int part = _options.PdfAConformance.Value switch
+                {
+                    PdfALevel.A1b => 1,
+                    PdfALevel.A2b => 2,
+                    PdfALevel.A3b => 3,
+                    _ => 1
+                };
+                sb.Append($"  <pdfaid:part>{part}</pdfaid:part>\n");
+                sb.Append("  <pdfaid:conformance>B</pdfaid:conformance>\n");
+            }
 
             sb.Append("</rdf:Description>\n");
             sb.Append("</rdf:RDF>\n");

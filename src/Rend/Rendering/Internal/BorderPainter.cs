@@ -2,6 +2,7 @@ using System;
 using Rend.Core.Values;
 using Rend.Css;
 using Rend.Layout;
+using Rend.Style;
 
 namespace Rend.Rendering.Internal
 {
@@ -66,9 +67,40 @@ namespace Rend.Rendering.Internal
             if (topW > 0f && topStyle != CssBorderStyle.None && topStyle != CssBorderStyle.Hidden)
             {
                 CssColor color = style.BorderTopColor;
-                PaintSide(target, color, topStyle, topW,
-                          outerLeft, outerTop, outerRight, outerTop,
-                          innerRight, innerTop, innerLeft, innerTop);
+
+                // Fieldset + legend: split the top border around the legend gap
+                var legendGap = GetFieldsetLegendGap(box);
+                if (legendGap.HasValue)
+                {
+                    float gapLeft = legendGap.Value.Left;
+                    float gapRight = legendGap.Value.Right;
+
+                    // Left segment: outerLeft to gapLeft
+                    if (gapLeft > outerLeft)
+                    {
+                        float segInnerLeft = innerLeft;
+                        float segInnerRight = gapLeft;
+                        PaintSide(target, color, topStyle, topW,
+                                  outerLeft, outerTop, gapLeft, outerTop,
+                                  segInnerRight, innerTop, segInnerLeft, innerTop);
+                    }
+
+                    // Right segment: gapRight to outerRight
+                    if (gapRight < outerRight)
+                    {
+                        float segInnerLeft = gapRight;
+                        float segInnerRight = innerRight;
+                        PaintSide(target, color, topStyle, topW,
+                                  gapRight, outerTop, outerRight, outerTop,
+                                  segInnerRight, innerTop, segInnerLeft, innerTop);
+                    }
+                }
+                else
+                {
+                    PaintSide(target, color, topStyle, topW,
+                              outerLeft, outerTop, outerRight, outerTop,
+                              innerRight, innerTop, innerLeft, innerTop);
+                }
             }
 
             // Right border
@@ -97,6 +129,33 @@ namespace Rend.Rendering.Internal
                           outerLeft, outerBottom, outerLeft, outerTop,
                           innerLeft, innerTop, innerLeft, innerBottom);
             }
+        }
+
+        /// <summary>
+        /// For a fieldset box with a legend child, returns the horizontal gap
+        /// (left x, right x) where the top border should be interrupted.
+        /// Returns null if this is not a fieldset or has no legend child.
+        /// </summary>
+        private static (float Left, float Right)? GetFieldsetLegendGap(LayoutBox box)
+        {
+            if (box.StyledNode is not StyledElement elem || elem.TagName != "fieldset")
+                return null;
+
+            // Find the first legend child in the layout children
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                if (child.StyledNode is StyledElement childElem && childElem.TagName == "legend")
+                {
+                    // The gap spans the legend's border box horizontally
+                    RectF legendBorder = child.BorderRect;
+                    float gapLeft = legendBorder.Left - child.PaddingLeft;
+                    float gapRight = legendBorder.Right + child.PaddingRight;
+                    return (gapLeft, gapRight);
+                }
+            }
+
+            return null;
         }
 
         private static void PaintSide(
@@ -347,8 +406,31 @@ namespace Rend.Rendering.Internal
                 CssColor color = style.BorderTopColor;
                 if (color.A > 0)
                 {
-                    var rect = new RectF(borderRect.Left, borderRect.Top, borderRect.Width, topW);
-                    target.FillRect(rect, BrushInfo.Solid(color));
+                    var legendGap = GetFieldsetLegendGap(box);
+                    if (legendGap.HasValue)
+                    {
+                        float gapLeft = legendGap.Value.Left;
+                        float gapRight = legendGap.Value.Right;
+                        // Left segment
+                        if (gapLeft > borderRect.Left)
+                        {
+                            var leftRect = new RectF(borderRect.Left, borderRect.Top,
+                                                     gapLeft - borderRect.Left, topW);
+                            target.FillRect(leftRect, BrushInfo.Solid(color));
+                        }
+                        // Right segment
+                        if (gapRight < borderRect.Right)
+                        {
+                            var rightRect = new RectF(gapRight, borderRect.Top,
+                                                      borderRect.Right - gapRight, topW);
+                            target.FillRect(rightRect, BrushInfo.Solid(color));
+                        }
+                    }
+                    else
+                    {
+                        var rect = new RectF(borderRect.Left, borderRect.Top, borderRect.Width, topW);
+                        target.FillRect(rect, BrushInfo.Solid(color));
+                    }
                 }
             }
 

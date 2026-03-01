@@ -70,8 +70,19 @@ namespace Rend.Layout.Internal
                 return;
             }
 
-            // Calculate target column height (balanced)
-            float targetHeight = Math.Max(totalHeight / columnCount, style.FontSize * 2);
+            // Calculate target column height
+            float targetHeight;
+            if (style.ColumnFill == CssColumnFill.Auto)
+            {
+                // Auto: fill columns sequentially; use explicit height if set, else total
+                float explicitHeight = style.Height;
+                targetHeight = float.IsNaN(explicitHeight) ? totalHeight : explicitHeight;
+            }
+            else
+            {
+                // Balance: distribute evenly
+                targetHeight = Math.Max(totalHeight / columnCount, style.FontSize * 2);
+            }
 
             // Second pass: layout content constrained to column width
             var columnBox = CreateTempBox(box, styledElement, columnWidth);

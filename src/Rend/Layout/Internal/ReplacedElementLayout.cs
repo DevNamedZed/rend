@@ -5,18 +5,124 @@ using Rend.Style;
 namespace Rend.Layout.Internal
 {
     /// <summary>
-    /// Layout for replaced elements (&lt;img&gt;, &lt;svg&gt;) with intrinsic dimensions.
+    /// Layout for replaced elements (&lt;img&gt;, &lt;svg&gt;, form controls) with intrinsic dimensions.
     /// </summary>
     internal static class ReplacedElementLayout
     {
         /// <summary>
-        /// Returns true if this is a replaced element.
+        /// Returns true if this is a replaced element (media, embedded, or form control).
+        /// Note: &lt;button&gt; is NOT treated as replaced — it renders children normally as inline-block.
         /// </summary>
         public static bool IsReplaced(StyledElement element)
         {
             string tag = element.TagName;
-            return tag == "img" || tag == "svg" || tag == "video" ||
-                   tag == "canvas" || tag == "iframe" || tag == "object" || tag == "embed";
+            if (tag == "img" || tag == "svg" || tag == "video" ||
+                tag == "canvas" || tag == "iframe" || tag == "object" || tag == "embed")
+            {
+                return true;
+            }
+
+            // Form controls are replaced (except <button>, which renders children)
+            if (tag == "input" || tag == "select" || tag == "textarea")
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Returns the default intrinsic width for a form control element, or 0 if not a form control.
+        /// </summary>
+        public static float GetFormControlIntrinsicWidth(StyledElement element)
+        {
+            string tag = element.TagName;
+
+            if (tag == "input")
+            {
+                string inputType = element.GetAttribute("type")?.ToLowerInvariant() ?? "text";
+                switch (inputType)
+                {
+                    case "checkbox":
+                    case "radio":
+                        return 13f;
+                    case "submit":
+                    case "button":
+                    case "reset":
+                        // Auto width based on value text: estimate ~7px per character
+                        string? value = element.GetAttribute("value");
+                        if (string.IsNullOrEmpty(value))
+                        {
+                            value = inputType == "submit" ? "Submit"
+                                  : inputType == "reset" ? "Reset"
+                                  : "Button";
+                        }
+                        return Math.Max(40f, value!.Length * 7f + 20f);
+                    default:
+                        // text, password, email, url, search, tel, number, etc.
+                        return 200f;
+                }
+            }
+
+            if (tag == "select")
+                return 200f;
+
+            if (tag == "textarea")
+            {
+                string? cols = element.GetAttribute("cols");
+                if (cols != null && int.TryParse(cols, out int c) && c > 0)
+                    return c * 8f; // ~8px per column character
+                return 200f;
+            }
+
+            return 0f;
+        }
+
+        /// <summary>
+        /// Returns the default intrinsic height for a form control element, or 0 if not a form control.
+        /// </summary>
+        public static float GetFormControlIntrinsicHeight(StyledElement element)
+        {
+            string tag = element.TagName;
+
+            if (tag == "input")
+            {
+                string inputType = element.GetAttribute("type")?.ToLowerInvariant() ?? "text";
+                switch (inputType)
+                {
+                    case "checkbox":
+                    case "radio":
+                        return 13f;
+                    case "submit":
+                    case "button":
+                    case "reset":
+                        return 20f;
+                    default:
+                        return 20f;
+                }
+            }
+
+            if (tag == "select")
+                return 20f;
+
+            if (tag == "textarea")
+            {
+                string? rows = element.GetAttribute("rows");
+                if (rows != null && int.TryParse(rows, out int r) && r > 0)
+                    return r * 16f; // ~16px per row
+                return 60f;
+            }
+
+            return 0f;
+        }
+
+        /// <summary>
+        /// Returns true if the element is a form control that should be treated as replaced.
+        /// </summary>
+        public static bool IsFormControl(StyledElement element)
+        {
+            string tag = element.TagName;
+            return tag == "input" || tag == "select" || tag == "textarea";
         }
 
         /// <summary>

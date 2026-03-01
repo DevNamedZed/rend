@@ -34,6 +34,21 @@ namespace Rend.Pdf
 
         /// <summary>Encryption algorithm. Default: AES-128.</summary>
         public PdfEncryptionMethod EncryptionMethod { get; set; } = PdfEncryptionMethod.Aes128;
+
+        /// <summary>PDF/A conformance level. If set, enforces PDF/A requirements.</summary>
+        public PdfALevel? PdfAConformance { get; set; }
+
+        /// <summary>ICC profile data for the output intent (required for PDF/A).</summary>
+        public byte[]? OutputIntentProfile { get; set; }
+
+        /// <summary>Output condition identifier for the output intent.</summary>
+        public string OutputCondition { get; set; } = "sRGB IEC61966-2.1";
+
+        /// <summary>Digital signature options. If set, the document will be digitally signed.</summary>
+        public PdfSignatureOptions? Signature { get; set; }
+
+        /// <summary>Enable linearization for fast web view. Default: false.</summary>
+        public bool Linearize { get; set; }
     }
 
     /// <summary>PDF version identifiers.</summary>
@@ -147,6 +162,17 @@ namespace Rend.Pdf
         Rc4_128,
         /// <summary>AES 128-bit encryption (V=4, R=4). Recommended.</summary>
         Aes128
+    }
+
+    /// <summary>PDF/A conformance level.</summary>
+    public enum PdfALevel
+    {
+        /// <summary>PDF/A-1b — Level B conformance based on PDF 1.4.</summary>
+        A1b,
+        /// <summary>PDF/A-2b — Level B conformance based on PDF 1.7 (ISO 19005-2).</summary>
+        A2b,
+        /// <summary>PDF/A-3b — Level B conformance based on PDF 1.7 with embedded files (ISO 19005-3).</summary>
+        A3b
     }
 
     /// <summary>PDF document permissions (ISO 32000-1 Table 22).</summary>

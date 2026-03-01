@@ -271,6 +271,23 @@ namespace Rend.Css.Properties.Internal
             Register("border-image-width", PropertyId.BorderImageWidth, false, PropertyValueType.Raw);
             Register("border-image-outset", PropertyId.BorderImageOutset, false, PropertyValueType.Raw);
             Register("border-image-repeat", PropertyId.BorderImageRepeat, false, PropertyValueType.Keyword);
+
+            // Column Fill
+            Register("column-fill", PropertyId.ColumnFill, false, PropertyValueType.Keyword);
+
+            // Backdrop Filter
+            Register("backdrop-filter", PropertyId.BackdropFilter, false, PropertyValueType.Raw);
+
+            // Mask
+            Register("mask-image", PropertyId.MaskImage, false, PropertyValueType.String);
+            Register("mask-size", PropertyId.MaskSize, false, PropertyValueType.Raw);
+            Register("mask-position", PropertyId.MaskPosition, false, PropertyValueType.Raw);
+            Register("mask-repeat", PropertyId.MaskRepeat, false, PropertyValueType.Keyword);
+            Register("mask-mode", PropertyId.MaskMode, false, PropertyValueType.Keyword);
+
+            // Writing Mode
+            Register("writing-mode", PropertyId.WritingMode, true, PropertyValueType.Keyword);
+            Register("text-orientation", PropertyId.TextOrientation, true, PropertyValueType.Keyword);
         }
 
         private static void Register(string name, int id, bool inherited, PropertyValueType valueType)

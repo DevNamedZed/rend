@@ -85,4 +85,23 @@ namespace Rend.Pdf
         /// <summary>Color stops (must have at least 2).</summary>
         public PdfGradientColorStop[] Stops { get; set; } = Array.Empty<PdfGradientColorStop>();
     }
+
+    /// <summary>A conic (sweep) gradient definition.</summary>
+    public sealed class PdfConicGradient
+    {
+        /// <summary>Center X coordinate.</summary>
+        public float CenterX { get; set; }
+        /// <summary>Center Y coordinate.</summary>
+        public float CenterY { get; set; }
+        /// <summary>Start angle in degrees (CSS convention: 0 = top, clockwise).</summary>
+        public float StartAngle { get; set; }
+        /// <summary>Number of wedge segments used to approximate the conic gradient (default 72).</summary>
+        public int Segments { get; set; } = 72;
+        /// <summary>Bounding box width (used for wedge radius calculation).</summary>
+        public float Width { get; set; }
+        /// <summary>Bounding box height (used for wedge radius calculation).</summary>
+        public float Height { get; set; }
+        /// <summary>Color stops (must have at least 2).</summary>
+        public PdfGradientColorStop[] Stops { get; set; } = Array.Empty<PdfGradientColorStop>();
+    }
 }

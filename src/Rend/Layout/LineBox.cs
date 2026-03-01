@@ -28,6 +28,9 @@ namespace Rend.Layout
         /// <summary>Whether this is the last line in the inline formatting context.</summary>
         internal bool IsLastLine { get; set; }
 
+        /// <summary>Whether this line box belongs to a vertical writing mode context.</summary>
+        public bool IsVertical { get; set; }
+
         /// <summary>Fragments within this line.</summary>
         public IReadOnlyList<LineFragment> Fragments => _fragments;
 

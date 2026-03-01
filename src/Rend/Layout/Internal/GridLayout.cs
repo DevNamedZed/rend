@@ -88,11 +88,43 @@ namespace Rend.Layout.Internal
                 return cmp != 0 ? cmp : a.OriginalIndex.CompareTo(b.OriginalIndex);
             });
 
-            // Resolve explicit tracks
-            var explicitColTracks = ResolveTrackList(
-                style.GetRefValue(PropertyId.GridTemplateColumns), containerWidth);
-            var explicitRowTracks = ResolveTrackList(
-                style.GetRefValue(PropertyId.GridTemplateRows), containerHeight);
+            // Detect CSS Subgrid: if grid-template-columns or grid-template-rows is "subgrid",
+            // inherit track sizes from the parent grid for the lines this item spans.
+            var colRaw = style.GetRefValue(PropertyId.GridTemplateColumns);
+            var rowRaw = style.GetRefValue(PropertyId.GridTemplateRows);
+            bool isSubgridCols = IsSubgrid(colRaw);
+            bool isSubgridRows = IsSubgrid(rowRaw);
+
+            float[]? subgridColTracks = null;
+            float[]? subgridRowTracks = null;
+            float subgridColGap = colGap;
+            float subgridRowGap = rowGap;
+
+            var parentGridCtx = context.ParentGridContext;
+            if (isSubgridCols && parentGridCtx != null)
+            {
+                subgridColTracks = GetSubgridTracks(
+                    parentGridCtx.ColumnWidths, parentGridCtx.ItemColStart, parentGridCtx.ItemColSpan);
+                // Inherit the parent's column gap for the subgridded axis
+                subgridColGap = parentGridCtx.ColumnGap;
+                colGap = subgridColGap;
+            }
+            if (isSubgridRows && parentGridCtx != null)
+            {
+                subgridRowTracks = GetSubgridTracks(
+                    parentGridCtx.RowHeights, parentGridCtx.ItemRowStart, parentGridCtx.ItemRowSpan);
+                // Inherit the parent's row gap for the subgridded axis
+                subgridRowGap = parentGridCtx.RowGap;
+                rowGap = subgridRowGap;
+            }
+
+            // Resolve explicit tracks (use subgrid tracks if the axis is subgridded)
+            var explicitColTracks = isSubgridCols && subgridColTracks != null
+                ? subgridColTracks
+                : ResolveTrackList(colRaw, containerWidth);
+            var explicitRowTracks = isSubgridRows && subgridRowTracks != null
+                ? subgridRowTracks
+                : ResolveTrackList(rowRaw, containerHeight);
 
             int explicitCols = explicitColTracks?.Length ?? 0;
             int explicitRows = explicitRowTracks?.Length ?? 0;
@@ -321,8 +353,19 @@ namespace Rend.Layout.Internal
             int finalCols = maxCol;
             int finalRows = maxRow;
 
-            float[] colWidths = BuildTrackSizes(explicitColTracks, finalCols, containerWidth,
-                colGap, style.GetRefValue(PropertyId.GridAutoColumns), containerWidth);
+            // For subgridded axes, use the inherited tracks directly and do not run BuildTrackSizes
+            // which would redistribute implicit space. The subgrid columns/rows are fixed from the parent.
+            float[] colWidths;
+            if (isSubgridCols && subgridColTracks != null && subgridColTracks.Length >= finalCols)
+            {
+                colWidths = new float[finalCols];
+                Array.Copy(subgridColTracks, colWidths, finalCols);
+            }
+            else
+            {
+                colWidths = BuildTrackSizes(explicitColTracks, finalCols, containerWidth,
+                    colGap, style.GetRefValue(PropertyId.GridAutoColumns), containerWidth);
+            }
             float[] rowHeights = new float[finalRows];
 
             // First pass: layout each item to determine content size and row heights
@@ -365,7 +408,23 @@ namespace Rend.Layout.Internal
                     contentWidth = Math.Max(0, contentWidth);
 
                     item.Box.ContentRect = new RectF(0, 0, contentWidth, 0);
+
+                    // Propagate parent grid context so nested subgrids can inherit tracks.
+                    // Save and restore to avoid leaking context to sibling items.
+                    var savedParentGridCtx = context.ParentGridContext;
+                    context.ParentGridContext = new ParentGridContext
+                    {
+                        ColumnWidths = colWidths,
+                        RowHeights = rowHeights, // will be partially filled; subgrid rows uses this
+                        ColumnGap = colGap,
+                        RowGap = rowGap,
+                        ItemColStart = item.ColStart,
+                        ItemColSpan = item.ColSpan,
+                        ItemRowStart = item.RowStart,
+                        ItemRowSpan = item.RowSpan
+                    };
                     BlockFormattingContext.Layout(item.Box, context);
+                    context.ParentGridContext = savedParentGridCtx;
 
                     float contentHeight = DimensionResolver.ResolveHeight(item.StyledElement.Style, float.NaN, item.Box);
                     if (float.IsNaN(contentHeight))
@@ -409,8 +468,14 @@ namespace Rend.Layout.Internal
                 }
             }
 
-            // Apply explicit row heights
-            if (explicitRowTracks != null)
+            // Apply explicit row heights (or subgrid row heights)
+            if (isSubgridRows && subgridRowTracks != null)
+            {
+                // Subgridded rows: use the parent's row sizes directly
+                for (int r = 0; r < Math.Min(subgridRowTracks.Length, finalRows); r++)
+                    rowHeights[r] = subgridRowTracks[r];
+            }
+            else if (explicitRowTracks != null)
             {
                 for (int r = 0; r < Math.Min(explicitRowTracks.Length, finalRows); r++)
                 {
@@ -805,7 +870,7 @@ namespace Rend.Layout.Internal
         internal static float[]? ResolveTrackList(object? raw, float containerSize)
         {
             if (raw == null) return null;
-            if (raw is CssKeywordValue kw && (kw.Keyword == "none" || kw.Keyword == "auto"))
+            if (raw is CssKeywordValue kw && (kw.Keyword == "none" || kw.Keyword == "auto" || kw.Keyword == "subgrid"))
                 return null;
 
             // Flatten into a list of individual track values (expanding repeat())
@@ -1068,6 +1133,40 @@ namespace Rend.Layout.Internal
             }
 
             return areas.Count > 0 ? areas : null;
+        }
+
+        /// <summary>
+        /// Returns true if the given raw CSS value for grid-template-columns/rows is the "subgrid" keyword.
+        /// </summary>
+        internal static bool IsSubgrid(object? raw)
+        {
+            if (raw is CssKeywordValue kw && kw.Keyword == "subgrid")
+                return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Extract track sizes from the parent grid context for a subgridded axis.
+        /// Returns the parent tracks corresponding to the lines this item spans,
+        /// or null if no parent grid context is available.
+        /// </summary>
+        private static float[]? GetSubgridTracks(float[] parentTracks, int itemStart, int itemSpan)
+        {
+            if (parentTracks == null || parentTracks.Length == 0)
+                return null;
+
+            // The subgrid inherits (itemSpan) tracks starting at itemStart
+            int count = itemSpan;
+            int start = Math.Max(0, itemStart);
+            if (start + count > parentTracks.Length)
+                count = parentTracks.Length - start;
+            if (count <= 0)
+                return null;
+
+            var tracks = new float[count];
+            for (int i = 0; i < count; i++)
+                tracks[i] = parentTracks[start + i];
+            return tracks;
         }
 
         private sealed class GridItem
