@@ -1,5 +1,6 @@
 using System;
 using Rend.Css;
+using Rend.Css.Properties.Internal;
 
 namespace Rend.Layout.Internal
 {
@@ -22,6 +23,11 @@ namespace Rend.Layout.Internal
                 // auto: fill containing block minus margins/padding/border
                 width = containingBlockWidth - BoxModelCalculator.GetHorizontalSpacing(box);
             }
+            else if (SizingKeyword.IsSizingKeyword(specifiedWidth))
+            {
+                // Intrinsic sizing keyword: treat as auto (will be resolved during layout)
+                width = containingBlockWidth - BoxModelCalculator.GetHorizontalSpacing(box);
+            }
             else
             {
                 width = specifiedWidth;
@@ -34,7 +40,10 @@ namespace Rend.Layout.Internal
             }
 
             // Apply min/max constraints
-            width = ApplyMinMax(width, style.MinWidth, style.MaxWidth);
+            float minW = style.MinWidth;
+            float maxW = style.MaxWidth;
+            if (!SizingKeyword.IsSizingKeyword(minW)) width = ApplyMinMax(width, minW, float.NaN);
+            if (!SizingKeyword.IsSizingKeyword(maxW)) width = ApplyMinMax(width, float.NaN, maxW);
 
             return Math.Max(0, width);
         }
@@ -48,7 +57,17 @@ namespace Rend.Layout.Internal
             float specifiedHeight = style.Height;
 
             if (float.IsNaN(specifiedHeight))
+            {
+                // Check for aspect-ratio: if set and width is known, compute height from ratio.
+                float ratio = ParseAspectRatio(style);
+                if (ratio > 0 && box.ContentRect.Width > 0)
+                {
+                    float arHeight = box.ContentRect.Width / ratio;
+                    arHeight = ApplyMinMax(arHeight, style.MinHeight, style.MaxHeight);
+                    return Math.Max(0, arHeight);
+                }
                 return float.NaN; // auto: determined by content
+            }
 
             float height = specifiedHeight;
 
@@ -94,11 +113,44 @@ namespace Rend.Layout.Internal
             }
         }
 
+        /// <summary>
+        /// Parses the aspect-ratio CSS value. Returns the ratio (width/height) or 0 if auto/unset.
+        /// Supports formats: "auto", "16/9", "1.5", etc.
+        /// </summary>
+        private static float ParseAspectRatio(ComputedStyle style)
+        {
+            object? ratioRef = style.GetRefValue(PropertyId.AspectRatio);
+            if (ratioRef == null) return 0;
+
+            if (ratioRef is CssKeywordValue kw && kw.Keyword == "auto") return 0;
+
+            if (ratioRef is CssNumberValue num) return num.Value;
+
+            if (ratioRef is CssListValue list && list.Separator == ' ' && list.Values.Count >= 3)
+            {
+                // "16 / 9" parsed as space-separated list: [16, /, 9]
+                float w = GetNumericValue(list.Values[0]);
+                float h = GetNumericValue(list.Values[2]);
+                if (w > 0 && h > 0) return w / h;
+            }
+
+            if (ratioRef is CssDimensionValue dim) return dim.Value;
+
+            return 0;
+        }
+
+        private static float GetNumericValue(CssValue value)
+        {
+            if (value is CssNumberValue n) return n.Value;
+            if (value is CssDimensionValue d) return d.Value;
+            return 0;
+        }
+
         private static float ApplyMinMax(float value, float min, float max)
         {
-            if (!float.IsNaN(min) && min > 0)
+            if (!float.IsNaN(min) && min >= 0)
                 value = Math.Max(value, min);
-            if (!float.IsNaN(max) && max > 0)
+            if (!float.IsNaN(max) && max >= 0)
                 value = Math.Min(value, max);
             return value;
         }

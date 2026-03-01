@@ -108,8 +108,13 @@ namespace Rend.Layout.Internal
                 float childTop = child.BorderRect.Top;
                 float childBottom = child.BorderRect.Bottom;
 
-                // Check page-break-before: always
-                if (style != null && style.PageBreakBefore == CssPageBreak.Always && childTop > startY)
+                // Resolve effective break values: modern break-* overrides legacy page-break-*.
+                bool forceBreakBefore = ShouldForceBreak(style, before: true);
+                bool forceBreakAfter = ShouldForceBreak(style, before: false);
+                bool avoidBreakInside = ShouldAvoidBreak(style);
+
+                // Check break-before / page-break-before
+                if (forceBreakBefore && childTop > startY)
                 {
                     if (childTop < currentPageEnd)
                     {
@@ -121,8 +126,14 @@ namespace Rend.Layout.Internal
                 // Check if child overflows current page
                 if (childBottom > currentPageEnd)
                 {
-                    // Break before this child if page-break-inside: avoid is not set
-                    if (style == null || style.PageBreakInside != CssPageBreak.Avoid)
+                    // Check orphans/widows for elements with line boxes
+                    if (child.LineBoxes != null && child.LineBoxes.Count > 1)
+                    {
+                        float breakY = FindOrphansWidowsBreak(child, currentPageEnd, pageContentHeight, style);
+                        breakPoints.Add(breakY);
+                        currentPageEnd = breakY + pageContentHeight;
+                    }
+                    else if (!avoidBreakInside)
                     {
                         breakPoints.Add(currentPageEnd);
                         currentPageEnd += pageContentHeight;
@@ -135,8 +146,8 @@ namespace Rend.Layout.Internal
                     }
                 }
 
-                // Check page-break-after: always
-                if (style != null && style.PageBreakAfter == CssPageBreak.Always)
+                // Check break-after / page-break-after
+                if (forceBreakAfter)
                 {
                     breakPoints.Add(childBottom);
                     currentPageEnd = childBottom + pageContentHeight;
@@ -145,6 +156,111 @@ namespace Rend.Layout.Internal
                 // Recurse
                 CollectBreakPoints(child, breakPoints, ref currentPageEnd, pageContentHeight, startY);
             }
+        }
+
+        /// <summary>
+        /// Returns true if a forced page break should occur before or after the element.
+        /// Modern break-before/break-after overrides legacy page-break-before/page-break-after.
+        /// </summary>
+        private static bool ShouldForceBreak(ComputedStyle? style, bool before)
+        {
+            if (style == null) return false;
+
+            // Modern property takes priority
+            CssBreakValue breakVal = before ? style.BreakBefore : style.BreakAfter;
+            if (breakVal != CssBreakValue.Auto)
+            {
+                return breakVal == CssBreakValue.Always ||
+                       breakVal == CssBreakValue.Page ||
+                       breakVal == CssBreakValue.Left ||
+                       breakVal == CssBreakValue.Right;
+            }
+
+            // Fall back to legacy property
+            CssPageBreak pageBreak = before ? style.PageBreakBefore : style.PageBreakAfter;
+            return pageBreak == CssPageBreak.Always;
+        }
+
+        /// <summary>
+        /// Returns true if break-inside should be avoided for the element.
+        /// Modern break-inside overrides legacy page-break-inside.
+        /// </summary>
+        private static bool ShouldAvoidBreak(ComputedStyle? style)
+        {
+            if (style == null) return false;
+
+            // Modern property takes priority
+            CssBreakValue breakInside = style.BreakInside;
+            if (breakInside != CssBreakValue.Auto)
+            {
+                return breakInside == CssBreakValue.Avoid ||
+                       breakInside == CssBreakValue.AvoidPage ||
+                       breakInside == CssBreakValue.AvoidColumn;
+            }
+
+            // Fall back to legacy property
+            return style.PageBreakInside == CssPageBreak.Avoid;
+        }
+
+        /// <summary>
+        /// Finds the best break point inside an element with line boxes,
+        /// respecting CSS orphans and widows properties.
+        /// </summary>
+        private static float FindOrphansWidowsBreak(LayoutBox box, float currentPageEnd,
+            float pageContentHeight, ComputedStyle? style)
+        {
+            var lineBoxes = box.LineBoxes!;
+            int totalLines = lineBoxes.Count;
+            int orphans = style != null ? Math.Max(1, style.Orphans) : 2;
+            int widows = style != null ? Math.Max(1, style.Widows) : 2;
+
+            // Find how many lines fit on the current page
+            int linesFitting = 0;
+            for (int l = 0; l < totalLines; l++)
+            {
+                float lineBottom = lineBoxes[l].Y + lineBoxes[l].Height;
+                if (lineBottom <= currentPageEnd)
+                    linesFitting++;
+                else
+                    break;
+            }
+
+            // Remaining lines go to the next page
+            int linesRemaining = totalLines - linesFitting;
+
+            // Enforce orphans: at least 'orphans' lines must stay on the current page
+            if (linesFitting < orphans)
+            {
+                // Not enough lines on current page — break before this element entirely
+                return box.BorderRect.Top;
+            }
+
+            // Enforce widows: at least 'widows' lines must go to the next page
+            if (linesRemaining > 0 && linesRemaining < widows)
+            {
+                // Move lines from current page to satisfy widows
+                int linesToMove = widows - linesRemaining;
+                int adjustedFitting = linesFitting - linesToMove;
+
+                // But don't violate orphans
+                if (adjustedFitting >= orphans && adjustedFitting > 0)
+                {
+                    linesFitting = adjustedFitting;
+                }
+                else
+                {
+                    // Can't satisfy both — break before element
+                    return box.BorderRect.Top;
+                }
+            }
+
+            // Break after the last fitting line
+            if (linesFitting > 0 && linesFitting < totalLines)
+            {
+                return lineBoxes[linesFitting - 1].Y + lineBoxes[linesFitting - 1].Height;
+            }
+
+            return currentPageEnd;
         }
 
         private static LayoutBox CreatePageSlice(LayoutBox original, float startY, float endY, float offsetY)

@@ -540,5 +540,62 @@ namespace Rend.Css.Tests
         }
 
         #endregion
+
+        #region @namespace
+
+        [Fact]
+        public void Parse_NamespaceWithPrefix_ReturnsNamespaceRule()
+        {
+            var sheet = CssParser.Parse("@namespace svg \"http://www.w3.org/2000/svg\";");
+            Assert.Single(sheet.Rules);
+            var ns = Assert.IsType<NamespaceRule>(sheet.Rules[0]);
+            Assert.Equal("svg", ns.Prefix);
+            Assert.Equal("http://www.w3.org/2000/svg", ns.Uri);
+            Assert.Equal(CssRuleType.Namespace, ns.Type);
+        }
+
+        [Fact]
+        public void Parse_DefaultNamespace_NullPrefix()
+        {
+            var sheet = CssParser.Parse("@namespace \"http://www.w3.org/1999/xhtml\";");
+            Assert.Single(sheet.Rules);
+            var ns = Assert.IsType<NamespaceRule>(sheet.Rules[0]);
+            Assert.Null(ns.Prefix);
+            Assert.Equal("http://www.w3.org/1999/xhtml", ns.Uri);
+        }
+
+        [Fact]
+        public void Parse_NamespaceWithUrl_ReturnsUri()
+        {
+            var sheet = CssParser.Parse("@namespace svg url(\"http://www.w3.org/2000/svg\");");
+            Assert.Single(sheet.Rules);
+            var ns = Assert.IsType<NamespaceRule>(sheet.Rules[0]);
+            Assert.Equal("svg", ns.Prefix);
+            Assert.Equal("http://www.w3.org/2000/svg", ns.Uri);
+        }
+
+        [Fact]
+        public void Parse_NamespaceFollowedByRules_BothParsed()
+        {
+            var css = "@namespace \"http://www.w3.org/1999/xhtml\"; p { color: red; }";
+            var sheet = CssParser.Parse(css);
+            Assert.Equal(2, sheet.Rules.Count);
+            Assert.IsType<NamespaceRule>(sheet.Rules[0]);
+            Assert.IsType<StyleRule>(sheet.Rules[1]);
+        }
+
+        [Fact]
+        public void Parse_MultipleNamespaces_AllParsed()
+        {
+            var css = "@namespace \"http://www.w3.org/1999/xhtml\";\n@namespace svg \"http://www.w3.org/2000/svg\";";
+            var sheet = CssParser.Parse(css);
+            Assert.Equal(2, sheet.Rules.Count);
+            var ns1 = Assert.IsType<NamespaceRule>(sheet.Rules[0]);
+            Assert.Null(ns1.Prefix);
+            var ns2 = Assert.IsType<NamespaceRule>(sheet.Rules[1]);
+            Assert.Equal("svg", ns2.Prefix);
+        }
+
+        #endregion
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Rend.Core.Values;
 using Rend.Css;
+using Rend.Css.Properties.Internal;
 using Rend.Style;
 
 namespace Rend.Layout.Internal
@@ -27,9 +28,16 @@ namespace Rend.Layout.Internal
             var styledElement = parent.StyledNode as StyledElement;
             if (styledElement == null) return;
 
-            for (int i = 0; i < styledElement.Children.Count; i++)
+            var floatCtx = new FloatContext(parent.ContentRect.X, containingWidth);
+            var prevFloatCtx = context.FloatContext;
+            context.FloatContext = floatCtx;
+
+            // Flatten display:contents children into effective child list
+            var effectiveChildren = FlattenContents(styledElement);
+
+            for (int i = 0; i < effectiveChildren.Count; i++)
             {
-                var child = styledElement.Children[i];
+                var child = effectiveChildren[i];
 
                 if (child.IsText)
                 {
@@ -44,11 +52,56 @@ namespace Rend.Layout.Internal
                     continue;
                 }
 
+                if (child is StyledPseudoElement pseudo)
+                {
+                    // Pseudo-element: render as inline text with its own style
+                    var pseudoText = new StyledText(pseudo.Content, pseudo.Style);
+                    var inlineBox = CreateInlineBox(pseudoText, context, containingWidth, cursorY);
+                    parent.AddChild(inlineBox);
+                    cursorY = inlineBox.MarginRect.Bottom;
+                    prevMarginBottom = 0;
+                    continue;
+                }
+
                 var childElement = (StyledElement)child;
                 var childStyle = childElement.Style;
 
                 // Skip display:none
                 if (childStyle.Display == CssDisplay.None) continue;
+
+                // Absolutely/fixed positioned elements are out of normal flow.
+                // Still create the box and add as child (for positioning later),
+                // but don't advance cursorY or participate in margin collapsing.
+                if (childStyle.Position == CssPosition.Absolute || childStyle.Position == CssPosition.Fixed)
+                {
+                    var posBox = CreateLayoutBox(childElement);
+                    BoxModelCalculator.ApplyBoxModel(posBox, childStyle, containingWidth);
+                    float posWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, posBox);
+                    posBox.ContentRect = new RectF(parent.ContentRect.X, cursorY, posWidth, 0);
+                    LayoutChildren(posBox, context);
+                    float posHeight = DimensionResolver.ResolveHeight(childStyle, float.NaN, posBox);
+                    if (float.IsNaN(posHeight)) posHeight = CalculateAutoHeight(posBox);
+                    posBox.ContentRect = new RectF(posBox.ContentRect.X, posBox.ContentRect.Y, posWidth, posHeight);
+                    parent.AddChild(posBox);
+                    continue;
+                }
+
+                // Handle floated elements
+                if (childStyle.Float != CssFloat.None)
+                {
+                    var floatBox = CreateLayoutBox(childElement);
+                    floatCtx.CurrentY = cursorY;
+                    FloatLayout.PlaceFloat(floatBox, floatCtx, parent, context);
+                    parent.AddChild(floatBox);
+                    continue;
+                }
+
+                // Apply clear property
+                if (childStyle.Clear != CssClear.None)
+                {
+                    float clearY = floatCtx.GetClearY(childStyle.Clear);
+                    if (clearY > cursorY) cursorY = clearY;
+                }
 
                 var childBox = CreateLayoutBox(childElement);
 
@@ -56,7 +109,26 @@ namespace Rend.Layout.Internal
                 BoxModelCalculator.ApplyBoxModel(childBox, childStyle, containingWidth);
 
                 // Resolve content width
-                float contentWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, childBox);
+                float contentWidth;
+                bool isReplaced = ReplacedElementLayout.IsReplaced(childElement);
+
+                if (isReplaced && float.IsNaN(childStyle.Width))
+                {
+                    // Replaced element with auto width: use HTML attribute or intrinsic size
+                    float intrinsicW = 0;
+                    string? attrW = childElement.GetAttribute("width");
+                    if (attrW != null && float.TryParse(attrW, out float aw)) intrinsicW = aw;
+                    contentWidth = intrinsicW > 0 ? intrinsicW : 300;
+                }
+                else if (SizingKeyword.IsSizingKeyword(childStyle.Width))
+                {
+                    // Intrinsic sizing keyword: measure content
+                    contentWidth = MeasureIntrinsicWidth(childElement, childStyle.Width, containingWidth, context);
+                }
+                else
+                {
+                    contentWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, childBox);
+                }
 
                 // Resolve auto margins
                 var tempRect = new RectF(0, 0, contentWidth, 0);
@@ -83,15 +155,36 @@ namespace Rend.Layout.Internal
 
                 childBox.ContentRect = new RectF(x, y, contentWidth, 0);
 
-                // Layout children recursively
-                LayoutChildren(childBox, context);
+                float contentHeight;
 
-                // Resolve content height
-                float contentHeight = DimensionResolver.ResolveHeight(childStyle, float.NaN, childBox);
-                if (float.IsNaN(contentHeight))
+                if (isReplaced)
                 {
-                    // Auto height: determined by content
-                    contentHeight = CalculateAutoHeight(childBox);
+                    // Replaced element: resolve dimensions from intrinsic/attribute sizes
+                    float intrinsicW = 0, intrinsicH = 0;
+                    string? attrW = childElement.GetAttribute("width");
+                    string? attrH = childElement.GetAttribute("height");
+                    if (attrW != null && float.TryParse(attrW, out float aw)) intrinsicW = aw;
+                    if (attrH != null && float.TryParse(attrH, out float ah)) intrinsicH = ah;
+                    ReplacedElementLayout.ResolveDimensions(childBox, childStyle, containingWidth, intrinsicW, intrinsicH);
+                    contentWidth = childBox.ContentRect.Width;
+                    contentHeight = childBox.ContentRect.Height;
+                }
+                else
+                {
+                    // Layout children recursively
+                    LayoutChildren(childBox, context);
+
+                    // Resolve content height
+                    contentHeight = DimensionResolver.ResolveHeight(childStyle, float.NaN, childBox);
+                    if (float.IsNaN(contentHeight))
+                    {
+                        // contain: size or contain: strict → treat auto height as 0
+                        var contain = childStyle.Contain;
+                        if (contain == CssContain.Size || contain == CssContain.Strict)
+                            contentHeight = 0;
+                        else
+                            contentHeight = CalculateAutoHeight(childBox);
+                    }
                 }
 
                 childBox.ContentRect = new RectF(x, y, contentWidth, contentHeight);
@@ -103,10 +196,13 @@ namespace Rend.Layout.Internal
             }
 
             // Handle parent-last-child margin collapsing
-            if (styledElement.Children.Count > 0 && MarginCollapsing.ShouldCollapseWithLastChild(parent))
+            if (effectiveChildren.Count > 0 && MarginCollapsing.ShouldCollapseWithLastChild(parent))
             {
                 parent.MarginBottom = MarginCollapsing.Collapse(parent.MarginBottom, prevMarginBottom);
             }
+
+            // Restore previous float context
+            context.FloatContext = prevFloatCtx;
         }
 
         private static LayoutBox CreateLayoutBox(StyledElement element)
@@ -117,9 +213,11 @@ namespace Rend.Layout.Internal
             switch (display)
             {
                 case CssDisplay.Flex:
+                case CssDisplay.InlineFlex:
                     boxType = BoxType.Flex;
                     break;
                 case CssDisplay.Grid:
+                case CssDisplay.InlineGrid:
                     boxType = BoxType.Grid;
                     break;
                 case CssDisplay.Table:
@@ -130,6 +228,9 @@ namespace Rend.Layout.Internal
                     break;
                 case CssDisplay.TableCell:
                     boxType = BoxType.TableCell;
+                    break;
+                case CssDisplay.TableCaption:
+                    boxType = BoxType.TableCaption;
                     break;
                 case CssDisplay.InlineBlock:
                     boxType = BoxType.InlineBlock;
@@ -148,7 +249,7 @@ namespace Rend.Layout.Internal
             return new LayoutBox(element, boxType);
         }
 
-        private static void LayoutChildren(LayoutBox box, LayoutContext context)
+        internal static void LayoutChildren(LayoutBox box, LayoutContext context)
         {
             var styledElement = box.StyledNode as StyledElement;
             if (styledElement == null || styledElement.Children.Count == 0) return;
@@ -158,20 +259,35 @@ namespace Rend.Layout.Internal
             switch (display)
             {
                 case CssDisplay.Flex:
+                case CssDisplay.InlineFlex:
                     FlexLayout.Layout(box, context);
                     break;
                 case CssDisplay.Grid:
+                case CssDisplay.InlineGrid:
                     GridLayout.Layout(box, context);
                     break;
                 case CssDisplay.Table:
                     TableLayout.Layout(box, context);
                     break;
                 default:
-                    // Determine if this is a block or inline formatting context
-                    if (HasBlockChildren(styledElement))
+                    // Check for multi-column layout
+                    float colCount = styledElement.Style.ColumnCount;
+                    float colWidth = styledElement.Style.ColumnWidth;
+                    bool isMultiColumn = (!float.IsNaN(colCount) && colCount > 1) ||
+                                         (!float.IsNaN(colWidth) && colWidth > 0);
+
+                    if (isMultiColumn)
+                    {
+                        MultiColumnLayout.Layout(box, context);
+                    }
+                    else if (HasBlockChildren(styledElement))
+                    {
                         Layout(box, context);
+                    }
                     else
+                    {
                         InlineFormattingContext.Layout(box, context);
+                    }
                     break;
             }
         }
@@ -181,11 +297,18 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < element.Children.Count; i++)
             {
                 var child = element.Children[i];
-                if (child.IsText) continue;
+                if (child.IsText || child is StyledPseudoElement) continue;
                 var childElement = (StyledElement)child;
                 var display = childElement.Style.Display;
+                // display:contents — look through its children
+                if (display == CssDisplay.Contents)
+                {
+                    if (HasBlockChildren(childElement)) return true;
+                    continue;
+                }
                 if (display == CssDisplay.Block || display == CssDisplay.Flex ||
-                    display == CssDisplay.Grid || display == CssDisplay.Table ||
+                    display == CssDisplay.InlineFlex || display == CssDisplay.Grid ||
+                    display == CssDisplay.InlineGrid || display == CssDisplay.Table ||
                     display == CssDisplay.ListItem)
                     return true;
             }
@@ -235,7 +358,7 @@ namespace Rend.Layout.Internal
                     textNode.Style.FontFamily ?? "serif",
                     textNode.Style.FontWeight,
                     textNode.Style.FontStyle,
-                    100f);
+                    Fonts.FontDescriptor.StretchToPercentage(textNode.Style.FontStretch));
 
                 var shaped = context.TextMeasurer.Shape(textNode.Text, fontDesc, fontSize);
                 box.ShapedRun = shaped;
@@ -252,6 +375,105 @@ namespace Rend.Layout.Internal
             }
 
             return box;
+        }
+
+        /// <summary>
+        /// Measure the intrinsic width for min-content, max-content, or fit-content sizing.
+        /// </summary>
+        internal static float MeasureIntrinsicWidth(StyledElement element, float keyword,
+                                                    float containingWidth, LayoutContext context)
+        {
+            // min-content: lay out with very narrow width to find the minimum
+            // max-content: lay out with very wide width to find the maximum
+            float measureWidth;
+            if (keyword == SizingKeyword.MinContent)
+                measureWidth = 1f;
+            else if (keyword == SizingKeyword.MaxContent)
+                measureWidth = 10000f;
+            else // fit-content
+                measureWidth = containingWidth;
+
+            var box = new LayoutBox(element, BoxType.Block);
+            BoxModelCalculator.ApplyBoxModel(box, element.Style, measureWidth);
+            float contentWidth = measureWidth - box.PaddingLeft - box.PaddingRight
+                               - box.BorderLeftWidth - box.BorderRightWidth;
+            contentWidth = Math.Max(0, contentWidth);
+            box.ContentRect = new RectF(0, 0, contentWidth, 0);
+            LayoutChildren(box, context);
+
+            // Measure actual content extent
+            float maxRight = 0;
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                float right = child.ContentRect.X + child.ContentRect.Width
+                            + child.PaddingRight + child.BorderRightWidth + child.MarginRight;
+                if (right > maxRight) maxRight = right;
+            }
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    float right = box.LineBoxes[i].X + box.LineBoxes[i].Width;
+                    if (right > maxRight) maxRight = right;
+                }
+            }
+
+            float measured = maxRight + box.PaddingLeft + box.PaddingRight
+                           + box.BorderLeftWidth + box.BorderRightWidth;
+
+            if (keyword == SizingKeyword.FitContent)
+            {
+                // fit-content = clamp(min-content, available, max-content)
+                float minW = MeasureIntrinsicWidth(element, SizingKeyword.MinContent, containingWidth, context);
+                float maxW = MeasureIntrinsicWidth(element, SizingKeyword.MaxContent, containingWidth, context);
+                float available = containingWidth - BoxModelCalculator.GetHorizontalSpacing(box);
+                return Math.Max(minW, Math.Min(maxW, available));
+            }
+
+            return measured;
+        }
+
+        /// <summary>
+        /// Flatten display:contents children recursively. Elements with display:contents
+        /// are replaced by their children in the effective child list.
+        /// </summary>
+        internal static IReadOnlyList<StyledNode> FlattenContents(StyledElement element)
+        {
+            bool hasContents = false;
+            for (int i = 0; i < element.Children.Count; i++)
+            {
+                var child = element.Children[i];
+                if (!child.IsText && !(child is StyledPseudoElement) &&
+                    child is StyledElement ce && ce.Style.Display == CssDisplay.Contents)
+                {
+                    hasContents = true;
+                    break;
+                }
+            }
+
+            if (!hasContents) return element.Children;
+
+            var result = new List<StyledNode>();
+            FlattenContentsRecursive(element, result);
+            return result;
+        }
+
+        private static void FlattenContentsRecursive(StyledElement element, List<StyledNode> result)
+        {
+            for (int i = 0; i < element.Children.Count; i++)
+            {
+                var child = element.Children[i];
+                if (!child.IsText && !(child is StyledPseudoElement) &&
+                    child is StyledElement ce && ce.Style.Display == CssDisplay.Contents)
+                {
+                    FlattenContentsRecursive(ce, result);
+                }
+                else
+                {
+                    result.Add(child);
+                }
+            }
         }
     }
 }

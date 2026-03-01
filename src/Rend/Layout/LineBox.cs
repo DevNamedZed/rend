@@ -25,6 +25,9 @@ namespace Rend.Layout
         /// <summary>The baseline offset from the top of the line box.</summary>
         public float Baseline { get; set; }
 
+        /// <summary>Whether this is the last line in the inline formatting context.</summary>
+        internal bool IsLastLine { get; set; }
+
         /// <summary>Fragments within this line.</summary>
         public IReadOnlyList<LineFragment> Fragments => _fragments;
 
@@ -32,6 +35,13 @@ namespace Rend.Layout
         public void AddFragment(LineFragment fragment)
         {
             _fragments.Add(fragment);
+        }
+
+        /// <summary>Remove all fragments after the given index (exclusive).</summary>
+        internal void TruncateFragmentsAfter(int keepCount)
+        {
+            if (keepCount < _fragments.Count)
+                _fragments.RemoveRange(keepCount, _fragments.Count - keepCount);
         }
     }
 }

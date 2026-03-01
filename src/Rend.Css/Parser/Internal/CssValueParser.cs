@@ -155,7 +155,14 @@ namespace Rend.Css.Parser.Internal
                 return new CssFunctionValue(lowerName, args);
             }
 
-            // For calc(), var(), and other functions — store as CssFunctionValue
+            // For calc() — preserve arithmetic operators as CssKeywordValue
+            if (lowerName == "calc")
+            {
+                ParseCalcArgs(args);
+                return new CssFunctionValue(lowerName, args);
+            }
+
+            // For var() and other functions — store as CssFunctionValue
             ParseFunctionArgs(args);
             return new CssFunctionValue(lowerName, args);
         }
@@ -227,6 +234,73 @@ namespace Rend.Css.Parser.Internal
                     args.Add(val2);
                 else
                     _pos++; // skip unknown
+            }
+        }
+
+        /// <summary>
+        /// Parses calc() function arguments, preserving arithmetic operators (+, -, *, /)
+        /// as CssKeywordValue nodes so they can be evaluated later.
+        /// </summary>
+        private void ParseCalcArgs(List<CssValue> args)
+        {
+            int depth = 1;
+            SkipWhitespace();
+
+            while (_pos < _count && depth > 0)
+            {
+                ref var t = ref _tokens[_pos];
+
+                if (t.Type == CssTokenType.RightParen)
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        _pos++;
+                        return;
+                    }
+                    _pos++;
+                    continue;
+                }
+
+                if (t.Type == CssTokenType.Function)
+                {
+                    var val = ParseFunction();
+                    if (val != null) args.Add(val);
+                    continue;
+                }
+
+                if (t.Type == CssTokenType.LeftParen)
+                {
+                    depth++;
+                    _pos++;
+                    continue;
+                }
+
+                if (t.Type == CssTokenType.Whitespace)
+                {
+                    SkipWhitespace();
+                    continue;
+                }
+
+                if (t.Type == CssTokenType.Delim)
+                {
+                    string op = t.Value;
+                    if (op == "+" || op == "-" || op == "*" || op == "/")
+                    {
+                        args.Add(new CssKeywordValue(op));
+                        _pos++;
+                        SkipWhitespace();
+                        continue;
+                    }
+                    _pos++;
+                    continue;
+                }
+
+                var val2 = ParseSingleValue();
+                if (val2 != null)
+                    args.Add(val2);
+                else
+                    _pos++;
             }
         }
 

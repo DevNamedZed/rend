@@ -124,6 +124,28 @@ namespace Rend.Text
         }
 
         /// <summary>
+        /// Gets the normal line height for the given font and size, computed from actual font metrics.
+        /// Returns NaN if the font cannot be resolved.
+        /// </summary>
+        public float GetNormalLineHeight(FontDescriptor font, float fontSize)
+        {
+            var metrics = _fontProvider.GetMetrics(font);
+            float lh = metrics.GetLineHeight(fontSize);
+            return lh > 0 ? lh : float.NaN;
+        }
+
+        /// <summary>
+        /// Gets the typographic ascent for the given font and size.
+        /// Returns fontSize * 0.8 as fallback if the font cannot be resolved.
+        /// </summary>
+        public float GetAscent(FontDescriptor font, float fontSize)
+        {
+            var metrics = _fontProvider.GetMetrics(font);
+            float a = metrics.GetAscent(fontSize);
+            return a > 0 ? a : fontSize * 0.8f;
+        }
+
+        /// <summary>
         /// Shapes the text using the resolved font and returns the full shaped run.
         /// </summary>
         /// <param name="text">The text to shape.</param>

@@ -22,6 +22,8 @@ namespace Rend.Output.Pdf
         private readonly PdfImageCache _imageCache = new PdfImageCache();
 
         private PdfPage? _currentPage;
+        private float _currentPageHeight;
+        private readonly PdfOutlineNode?[] _bookmarkStack = new PdfOutlineNode?[6];
 
         /// <summary>
         /// Creates a new <see cref="PdfRenderTarget"/> with the specified options.
@@ -48,6 +50,7 @@ namespace Rend.Output.Pdf
         public void BeginPage(float width, float height)
         {
             _currentPage = _doc.AddPage(width, height);
+            _currentPageHeight = height;
 
             // Set up coordinate transform: CSS top-left origin to PDF bottom-left origin.
             // This flips Y so that (0,0) is at top-left and Y increases downward.
@@ -96,6 +99,43 @@ namespace Rend.Output.Pdf
             EnsurePage();
             _currentPage!.Content.SetFillOpacity(opacity);
             _currentPage!.Content.SetStrokeOpacity(opacity);
+        }
+
+        /// <inheritdoc />
+        public void SetBlendMode(Css.CssMixBlendMode blendMode)
+        {
+            if (blendMode == Css.CssMixBlendMode.Normal) return;
+            EnsurePage();
+            _currentPage!.Content.SetBlendMode(MapBlendMode(blendMode));
+        }
+
+        private static string MapBlendMode(Css.CssMixBlendMode mode)
+        {
+            switch (mode)
+            {
+                case Css.CssMixBlendMode.Multiply: return "Multiply";
+                case Css.CssMixBlendMode.Screen: return "Screen";
+                case Css.CssMixBlendMode.Overlay: return "Overlay";
+                case Css.CssMixBlendMode.Darken: return "Darken";
+                case Css.CssMixBlendMode.Lighten: return "Lighten";
+                case Css.CssMixBlendMode.ColorDodge: return "ColorDodge";
+                case Css.CssMixBlendMode.ColorBurn: return "ColorBurn";
+                case Css.CssMixBlendMode.HardLight: return "HardLight";
+                case Css.CssMixBlendMode.SoftLight: return "SoftLight";
+                case Css.CssMixBlendMode.Difference: return "Difference";
+                case Css.CssMixBlendMode.Exclusion: return "Exclusion";
+                case Css.CssMixBlendMode.Hue: return "Hue";
+                case Css.CssMixBlendMode.Saturation: return "Saturation";
+                case Css.CssMixBlendMode.Color: return "Color";
+                case Css.CssMixBlendMode.Luminosity: return "Luminosity";
+                default: return "Normal";
+            }
+        }
+
+        /// <inheritdoc />
+        public void SetImageRendering(Css.CssImageRendering rendering)
+        {
+            // PDF rendering quality is controlled by the viewer, not the writer
         }
 
         /// <inheritdoc />
@@ -194,8 +234,20 @@ namespace Rend.Output.Pdf
 
             content.BeginText();
             content.SetFont(pdfFont, style.FontSize);
+
+            if (style.LetterSpacing != 0)
+                content.SetCharacterSpacing(style.LetterSpacing);
+            if (style.WordSpacing != 0)
+                content.SetWordSpacing(style.WordSpacing);
+
             content.MoveTextPosition(x, y);
             content.ShowText(pdfFont, text);
+
+            if (style.LetterSpacing != 0)
+                content.SetCharacterSpacing(0);
+            if (style.WordSpacing != 0)
+                content.SetWordSpacing(0);
+
             content.EndText();
         }
 
@@ -219,6 +271,66 @@ namespace Rend.Output.Pdf
             // CID encoding for embedded fonts.
             content.ShowText(pdfFont, run.OriginalText);
             content.EndText();
+        }
+
+        /// <inheritdoc />
+        public void AddLink(RectF rect, string uri)
+        {
+            if (_currentPage == null || string.IsNullOrEmpty(uri))
+            {
+                return;
+            }
+
+            if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsedUri))
+            {
+                return;
+            }
+
+            // Convert CSS coordinates (top-left origin, Y down) to PDF (bottom-left origin, Y up).
+            float pdfBottom = _currentPageHeight - rect.Y - rect.Height;
+            float pdfTop = _currentPageHeight - rect.Y;
+            var pdfRect = new RectF(rect.X, pdfBottom, rect.Width, pdfTop - pdfBottom);
+            PdfLinkCollector.AddLink(_currentPage, pdfRect, parsedUri);
+        }
+
+        /// <inheritdoc />
+        public void AddBookmark(string title, int level, float yPosition)
+        {
+            if (_currentPage == null || string.IsNullOrEmpty(title) || level < 1 || level > 6)
+            {
+                return;
+            }
+
+            float pdfY = _currentPageHeight - yPosition;
+
+            // Build hierarchy: h1 is top-level, h2 nests under last h1, etc.
+            PdfOutlineNode? parent = null;
+            for (int i = level - 2; i >= 0; i--)
+            {
+                if (_bookmarkStack[i] != null)
+                {
+                    parent = _bookmarkStack[i];
+                    break;
+                }
+            }
+
+            PdfOutlineNode node;
+            if (parent != null)
+            {
+                node = parent.AddChild(title, _currentPage, pdfY);
+            }
+            else
+            {
+                node = PdfBookmarkBuilder.AddBookmark(_doc, title, _currentPage, pdfY)!;
+            }
+
+            _bookmarkStack[level - 1] = node;
+
+            // Clear deeper levels so subsequent lower-level headings nest under this one.
+            for (int i = level; i < 6; i++)
+            {
+                _bookmarkStack[i] = null;
+            }
         }
 
         /// <inheritdoc />

@@ -1,6 +1,7 @@
 using System;
 using Rend.Core.Values;
 using Rend.Css;
+using Rend.Css.Properties.Internal;
 using Rend.Style;
 
 namespace Rend.Layout.Internal
@@ -20,7 +21,15 @@ namespace Rend.Layout.Internal
             float containingWidth = parent.ContentRect.Width;
             BoxModelCalculator.ApplyBoxModel(floatBox, style, containingWidth);
 
-            float contentWidth = DimensionResolver.ResolveWidth(style, containingWidth, floatBox);
+            float contentWidth;
+            if (SizingKeyword.IsSizingKeyword(style.Width) && floatBox.StyledNode is StyledElement floatEl)
+            {
+                contentWidth = BlockFormattingContext.MeasureIntrinsicWidth(floatEl, style.Width, containingWidth, context);
+            }
+            else
+            {
+                contentWidth = DimensionResolver.ResolveWidth(style, containingWidth, floatBox);
+            }
             float totalWidth = contentWidth + floatBox.PaddingLeft + floatBox.PaddingRight
                              + floatBox.BorderLeftWidth + floatBox.BorderRightWidth
                              + floatBox.MarginLeft + floatBox.MarginRight;

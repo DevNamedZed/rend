@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Rend" />
+    <InternalsVisibleTo Include="Rend.Tests" />
+    <InternalsVisibleTo Include="Rend.Css.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Rend.Core\Rend.Core.csproj" />
   </ItemGroup>
 

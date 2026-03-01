@@ -26,6 +26,7 @@ namespace Rend.Html.Parser.Internal
 #pragma warning restore CS0414
         private readonly StringBuilder _pendingTableText;
         private bool _pendingTableTextHasNonWhitespace;
+        private bool _skipNextNewline;
 
         // Pre-interned tag names used in tree construction
         private static readonly StringPool P = StringPool.HtmlNames;
@@ -495,6 +496,14 @@ namespace Rend.Html.Parser.Internal
                 if (token.Character == '\0')
                     return; // Ignore null
 
+                // Skip leading newline after <pre>/<listing>/<textarea> per WHATWG spec
+                if (_skipNextNewline)
+                {
+                    _skipNextNewline = false;
+                    if (token.Character == '\n')
+                        return;
+                }
+
                 _activeFormattingElements.Reconstruct(this);
                 InsertCharacter(token.Character);
 
@@ -566,7 +575,7 @@ namespace Rend.Html.Parser.Internal
                 if (ReferenceEquals(tag, _pre) || ReferenceEquals(tag, _listing))
                 {
                     _framesetOk = false;
-                    // Skip next newline if present (handled by next token)
+                    _skipNextNewline = true;
                 }
 
                 if (ReferenceEquals(tag, _form))
@@ -766,6 +775,7 @@ namespace Rend.Html.Parser.Internal
             {
                 var el = InsertElement(tag);
                 CopyAttributes(el);
+                _skipNextNewline = true;
                 _tokenizer.State = TokenizerState.RcData;
                 _originalInsertionMode = _insertionMode;
                 _framesetOk = false;
@@ -1029,6 +1039,14 @@ namespace Rend.Html.Parser.Internal
         {
             if (token.Type == HtmlTokenType.Character)
             {
+                // Skip leading newline after <textarea> per WHATWG spec
+                if (_skipNextNewline)
+                {
+                    _skipNextNewline = false;
+                    if (token.Character == '\n')
+                        return;
+                }
+
                 InsertCharacter(token.Character);
                 return;
             }

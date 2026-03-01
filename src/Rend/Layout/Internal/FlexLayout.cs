@@ -35,17 +35,58 @@ namespace Rend.Layout.Internal
 
             // Collect flex items
             var items = new List<FlexItem>();
-            for (int i = 0; i < styledElement.Children.Count; i++)
+            var children = BlockFormattingContext.FlattenContents(styledElement);
+            for (int i = 0; i < children.Count; i++)
             {
-                var child = styledElement.Children[i];
+                var child = children[i];
                 if (child.IsText) continue;
+
+                if (child is StyledPseudoElement pseudo)
+                {
+                    // Pseudo-elements become flex items containing their generated text
+                    var pseudoText = new StyledText(pseudo.Content, pseudo.Style);
+                    var pseudoBox = new LayoutText(pseudoText);
+                    float fontSize = pseudo.Style.FontSize;
+                    float lineHeight = pseudo.Style.LineHeight;
+                    if (float.IsNaN(lineHeight) || lineHeight <= 0)
+                        lineHeight = fontSize * 1.2f;
+                    float estimatedWidth = pseudo.Content.Length * fontSize * 0.6f;
+                    pseudoBox.ContentRect = new RectF(0, 0, estimatedWidth, lineHeight);
+                    items.Add(new FlexItem
+                    {
+                        Box = pseudoBox,
+                        Style = pseudo.Style,
+                        FlexGrow = 0,
+                        FlexShrink = 1,
+                        BaseSize = isColumn ? lineHeight : estimatedWidth,
+                        Order = 0
+                    });
+                    continue;
+                }
+
                 var childElement = (StyledElement)child;
                 if (childElement.Style.Display == CssDisplay.None) continue;
+
+                // Absolutely/fixed positioned items are out of flow
+                if (childElement.Style.Position == CssPosition.Absolute ||
+                    childElement.Style.Position == CssPosition.Fixed)
+                {
+                    var posBox = new LayoutBox(childElement, BoxType.Block);
+                    BoxModelCalculator.ApplyBoxModel(posBox, childElement.Style, containerWidth);
+                    float posWidth = DimensionResolver.ResolveWidth(childElement.Style, containerWidth, posBox);
+                    posBox.ContentRect = new RectF(parent.ContentRect.X, parent.ContentRect.Y, posWidth, 0);
+                    BlockFormattingContext.LayoutChildren(posBox, context);
+                    float posHeight = DimensionResolver.ResolveHeight(childElement.Style, float.NaN, posBox);
+                    if (float.IsNaN(posHeight)) posHeight = 0;
+                    posBox.ContentRect = new RectF(posBox.ContentRect.X, posBox.ContentRect.Y, posWidth, posHeight);
+                    parent.AddChild(posBox);
+                    continue;
+                }
 
                 var box = new LayoutBox(childElement, BoxType.Block);
                 BoxModelCalculator.ApplyBoxModel(box, childElement.Style, containerWidth);
 
-                float baseSize = ResolveFlexBasis(childElement.Style, isColumn, containerWidth, box);
+                float baseSize = ResolveFlexBasis(childElement.Style, isColumn, containerWidth, box, childElement, context);
                 items.Add(new FlexItem
                 {
                     Box = box,
@@ -84,6 +125,10 @@ namespace Rend.Layout.Internal
             if (currentLine.Items.Count > 0)
                 lines.Add(currentLine);
 
+            // flex-wrap: wrap-reverse reverses cross-axis line order
+            if (style.FlexWrap == CssFlexWrap.WrapReverse && lines.Count > 1)
+                lines.Reverse();
+
             // Resolve flexible lengths and position items
             float crossCursor = isColumn ? parent.ContentRect.X : parent.ContentRect.Y;
 
@@ -114,17 +159,79 @@ namespace Rend.Layout.Internal
                     else if (freeSpace < 0 && totalShrink > 0)
                         resolved += freeSpace * (item.FlexShrink / totalShrink);
 
-                    item.ResolvedMainSize = Math.Max(0, resolved);
+                    resolved = Math.Max(0, resolved);
+
+                    // Apply min/max constraints on the main axis
+                    if (item.Style != null)
+                    {
+                        float minMain = isColumn ? item.Style.MinHeight : item.Style.MinWidth;
+                        float maxMain = isColumn ? item.Style.MaxHeight : item.Style.MaxWidth;
+                        if (!float.IsNaN(minMain) && minMain > 0 && resolved < minMain)
+                            resolved = minMain;
+                        if (!float.IsNaN(maxMain) && maxMain > 0 && resolved > maxMain)
+                            resolved = maxMain;
+                    }
+
+                    // visibility: collapse → zero main size, still affects cross size
+                    if (item.Style != null && item.Style.Visibility == CssVisibility.Collapse)
+                        resolved = 0;
+
+                    item.ResolvedMainSize = resolved;
+                }
+
+                // Distribute auto margins on the main axis (overrides justify-content)
+                float resolvedFreeSpace = mainSize - totalGaps;
+                for (int i = 0; i < line.Items.Count; i++)
+                    resolvedFreeSpace -= line.Items[i].ResolvedMainSize + GetItemMainMargins(line.Items[i], isColumn);
+
+                int autoMarginCount = 0;
+                for (int i = 0; i < line.Items.Count; i++)
+                {
+                    if (line.Items[i].Style == null) continue;
+                    if (isColumn)
+                    {
+                        if (float.IsNaN(line.Items[i].Style.MarginTop)) autoMarginCount++;
+                        if (float.IsNaN(line.Items[i].Style.MarginBottom)) autoMarginCount++;
+                    }
+                    else
+                    {
+                        if (float.IsNaN(line.Items[i].Style.MarginLeft)) autoMarginCount++;
+                        if (float.IsNaN(line.Items[i].Style.MarginRight)) autoMarginCount++;
+                    }
+                }
+
+                bool hasAutoMargins = autoMarginCount > 0 && resolvedFreeSpace > 0;
+                if (hasAutoMargins)
+                {
+                    float perAutoMargin = resolvedFreeSpace / autoMarginCount;
+                    for (int i = 0; i < line.Items.Count; i++)
+                    {
+                        var item = line.Items[i];
+                        if (item.Style == null) continue;
+                        if (isColumn)
+                        {
+                            if (float.IsNaN(item.Style.MarginTop)) item.Box.MarginTop = perAutoMargin;
+                            if (float.IsNaN(item.Style.MarginBottom)) item.Box.MarginBottom = perAutoMargin;
+                        }
+                        else
+                        {
+                            if (float.IsNaN(item.Style.MarginLeft)) item.Box.MarginLeft = perAutoMargin;
+                            if (float.IsNaN(item.Style.MarginRight)) item.Box.MarginRight = perAutoMargin;
+                        }
+                    }
                 }
 
                 // Position items on main axis
                 float mainCursor = isColumn ? parent.ContentRect.Y : parent.ContentRect.X;
-                mainCursor = ApplyJustifyContent(style.JustifyContent, mainCursor, freeSpace, line.Items.Count, totalGrow > 0);
+                var (startOffset, justifyGap) = hasAutoMargins
+                    ? (0f, gap)
+                    : ApplyJustifyContent(style.JustifyContent, freeSpace, line.Items.Count, totalGrow > 0, gap);
+                mainCursor += startOffset;
 
                 float maxCross = 0;
                 for (int i = 0; i < line.Items.Count; i++)
                 {
-                    if (i > 0) mainCursor += gap;
+                    if (i > 0) mainCursor += justifyGap;
                     var item = line.Items[i];
                     var box = item.Box;
 
@@ -178,11 +285,179 @@ namespace Rend.Layout.Internal
                 }
 
                 line.CrossSize = maxCross;
+
+                // Apply cross-axis alignment (align-items / align-self)
+                for (int i = 0; i < line.Items.Count; i++)
+                {
+                    var item = line.Items[i];
+                    var box = item.Box;
+
+                    // Determine alignment: align-self overrides align-items (255 = auto)
+                    var align = item.Style.AlignSelf;
+                    if ((int)align == 255)
+                        align = style.AlignItems;
+
+                    // Calculate item's total cross size
+                    float itemCross;
+                    if (isColumn)
+                    {
+                        itemCross = box.ContentRect.Width + box.PaddingLeft + box.PaddingRight
+                                  + box.BorderLeftWidth + box.BorderRightWidth
+                                  + box.MarginLeft + box.MarginRight;
+                    }
+                    else
+                    {
+                        itemCross = box.ContentRect.Height + box.PaddingTop + box.PaddingBottom
+                                  + box.BorderTopWidth + box.BorderBottomWidth
+                                  + box.MarginTop + box.MarginBottom;
+                    }
+
+                    float freeCross = maxCross - itemCross;
+                    if (freeCross <= 0) continue;
+
+                    float crossOffset = 0;
+                    switch (align)
+                    {
+                        case CssAlignItems.FlexStart:
+                        case CssAlignItems.Start:
+                            crossOffset = 0;
+                            break;
+                        case CssAlignItems.Baseline:
+                            // Approximate baseline alignment using first line box baseline
+                            crossOffset = GetBaselineOffset(box, line, isColumn);
+                            break;
+                        case CssAlignItems.FlexEnd:
+                        case CssAlignItems.End:
+                            crossOffset = freeCross;
+                            break;
+                        case CssAlignItems.Center:
+                            crossOffset = freeCross / 2;
+                            break;
+                        case CssAlignItems.Stretch:
+                        default:
+                            // Stretch: expand cross dimension if auto, clamped to min/max
+                            if (isColumn)
+                            {
+                                if (float.IsNaN(item.Style.Width))
+                                {
+                                    float newWidth = box.ContentRect.Width + freeCross;
+                                    float minW = item.Style.MinWidth;
+                                    float maxW = item.Style.MaxWidth;
+                                    if (!float.IsNaN(minW) && minW >= 0) newWidth = Math.Max(newWidth, minW);
+                                    if (!float.IsNaN(maxW) && maxW >= 0) newWidth = Math.Min(newWidth, maxW);
+                                    box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y,
+                                                                newWidth, box.ContentRect.Height);
+                                }
+                            }
+                            else
+                            {
+                                if (float.IsNaN(item.Style.Height))
+                                {
+                                    float newHeight = box.ContentRect.Height + freeCross;
+                                    float minH = item.Style.MinHeight;
+                                    float maxH = item.Style.MaxHeight;
+                                    if (!float.IsNaN(minH) && minH >= 0) newHeight = Math.Max(newHeight, minH);
+                                    if (!float.IsNaN(maxH) && maxH >= 0) newHeight = Math.Min(newHeight, maxH);
+                                    box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y,
+                                                                box.ContentRect.Width, newHeight);
+                                }
+                            }
+                            crossOffset = 0;
+                            break;
+                    }
+
+                    if (crossOffset > 0)
+                    {
+                        if (isColumn)
+                            OffsetBoxInPlace(box, crossOffset, 0);
+                        else
+                            OffsetBoxInPlace(box, 0, crossOffset);
+                    }
+                }
+
                 crossCursor += maxCross;
+            }
+
+            // Apply align-content for multi-line flex containers
+            if (isWrap && lines.Count > 1)
+            {
+                float totalLineCross = 0;
+                for (int li = 0; li < lines.Count; li++)
+                    totalLineCross += lines[li].CrossSize;
+
+                float crossSpace = (isColumn ? containerWidth : containerHeight);
+                if (!float.IsNaN(crossSpace) && crossSpace > totalLineCross)
+                {
+                    float freeCrossSpace = crossSpace - totalLineCross;
+                    var alignContent = style.AlignContent;
+                    float lineOffset = 0;
+                    float lineGap = 0;
+
+                    switch (alignContent)
+                    {
+                        case CssAlignItems.Center:
+                            lineOffset = freeCrossSpace / 2;
+                            break;
+                        case CssAlignItems.FlexEnd:
+                        case CssAlignItems.End:
+                            lineOffset = freeCrossSpace;
+                            break;
+                        case CssAlignItems.SpaceBetween:
+                            if (lines.Count > 1)
+                                lineGap = freeCrossSpace / (lines.Count - 1);
+                            break;
+                        case CssAlignItems.SpaceAround:
+                            if (lines.Count > 0)
+                            {
+                                float halfGap = freeCrossSpace / (lines.Count * 2);
+                                lineOffset = halfGap;
+                                lineGap = halfGap * 2;
+                            }
+                            break;
+                        case CssAlignItems.SpaceEvenly:
+                            if (lines.Count > 0)
+                            {
+                                float evenGap = freeCrossSpace / (lines.Count + 1);
+                                lineOffset = evenGap;
+                                lineGap = evenGap;
+                            }
+                            break;
+                        case CssAlignItems.Stretch:
+                        default:
+                            // Stretch distributes extra space equally among lines
+                            lineGap = freeCrossSpace / lines.Count;
+                            break;
+                        case CssAlignItems.FlexStart:
+                        case CssAlignItems.Start:
+                        case CssAlignItems.Baseline:
+                            // No offset
+                            break;
+                    }
+
+                    if (lineOffset > 0 || lineGap > 0)
+                    {
+                        float cumOffset = lineOffset;
+                        for (int li = 0; li < lines.Count; li++)
+                        {
+                            if (cumOffset > 0)
+                            {
+                                for (int i = 0; i < lines[li].Items.Count; i++)
+                                {
+                                    if (isColumn)
+                                        OffsetBoxInPlace(lines[li].Items[i].Box, cumOffset, 0);
+                                    else
+                                        OffsetBoxInPlace(lines[li].Items[i].Box, 0, cumOffset);
+                                }
+                            }
+                            cumOffset += lineGap;
+                        }
+                    }
+                }
             }
         }
 
-        private static float ResolveFlexBasis(ComputedStyle style, bool isColumn, float containerWidth, LayoutBox box)
+        private static float ResolveFlexBasis(ComputedStyle style, bool isColumn, float containerWidth,
+            LayoutBox box, StyledElement element, LayoutContext context)
         {
             float basis = style.FlexBasis;
             if (!float.IsNaN(basis) && basis >= 0)
@@ -193,8 +468,50 @@ namespace Rend.Layout.Internal
             if (!float.IsNaN(size) && size >= 0)
                 return size;
 
-            // Auto: use content size (estimated)
-            return 0;
+            // Auto: measure content size via trial layout
+            var measureBox = new LayoutBox(element, BoxType.Block);
+            BoxModelCalculator.ApplyBoxModel(measureBox, style, containerWidth);
+
+            if (isColumn)
+            {
+                // Column: main axis is height, measure content height
+                float w = DimensionResolver.ResolveWidth(style, containerWidth, measureBox);
+                measureBox.ContentRect = new RectF(0, 0, w, 0);
+                BlockFormattingContext.Layout(measureBox, context);
+                return CalculateAutoHeight(measureBox);
+            }
+            else
+            {
+                // Row: main axis is width, use shrink-to-fit heuristic
+                // Lay out with full available width, then measure actual content extent
+                float availWidth = containerWidth - BoxModelCalculator.GetHorizontalSpacing(measureBox);
+                measureBox.ContentRect = new RectF(0, 0, availWidth, 0);
+                BlockFormattingContext.Layout(measureBox, context);
+                float contentWidth = MeasureContentWidth(measureBox);
+                return Math.Min(contentWidth, availWidth);
+            }
+        }
+
+        private static float MeasureContentWidth(LayoutBox box)
+        {
+            float maxRight = 0;
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                float right = child.ContentRect.X + child.ContentRect.Width
+                            + child.PaddingRight + child.BorderRightWidth + child.MarginRight
+                            - box.ContentRect.X;
+                if (right > maxRight) maxRight = right;
+            }
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    float right = box.LineBoxes[i].X + box.LineBoxes[i].Width - box.ContentRect.X;
+                    if (right > maxRight) maxRight = right;
+                }
+            }
+            return maxRight;
         }
 
         private static float GetItemMainMargins(FlexItem item, bool isColumn)
@@ -207,25 +524,33 @@ namespace Rend.Layout.Internal
                  + box.BorderLeftWidth + box.BorderRightWidth;
         }
 
-        private static float ApplyJustifyContent(CssJustifyContent justify, float start, float freeSpace,
-                                                   int itemCount, bool hasGrow)
+        private static (float startOffset, float gap) ApplyJustifyContent(
+            CssJustifyContent justify, float freeSpace, int itemCount, bool hasGrow, float defaultGap)
         {
-            if (hasGrow || freeSpace <= 0) return start;
+            if (hasGrow || freeSpace <= 0)
+                return (0, defaultGap);
 
             switch (justify)
             {
                 case CssJustifyContent.Center:
-                    return start + freeSpace / 2;
+                    return (freeSpace / 2, defaultGap);
                 case CssJustifyContent.FlexEnd:
-                    return start + freeSpace;
+                    return (freeSpace, defaultGap);
                 case CssJustifyContent.SpaceBetween:
-                    return start; // gaps handled separately
+                    if (itemCount <= 1) return (0, defaultGap);
+                    return (0, freeSpace / (itemCount - 1));
                 case CssJustifyContent.SpaceAround:
-                    return start + freeSpace / (itemCount * 2);
+                {
+                    float perItem = freeSpace / itemCount;
+                    return (perItem / 2, perItem);
+                }
                 case CssJustifyContent.SpaceEvenly:
-                    return start + freeSpace / (itemCount + 1);
+                {
+                    float slot = freeSpace / (itemCount + 1);
+                    return (slot, slot);
+                }
                 default:
-                    return start;
+                    return (0, defaultGap);
             }
         }
 
@@ -249,6 +574,65 @@ namespace Rend.Layout.Internal
                 }
             }
             return height;
+        }
+
+        /// <summary>
+        /// Get the baseline offset for a flex item for baseline alignment.
+        /// Returns how much to offset the item so its baseline aligns with the line's max baseline.
+        /// </summary>
+        private static float GetBaselineOffset(LayoutBox box, FlexLine line, bool isColumn)
+        {
+            if (isColumn) return 0; // Baseline alignment only applies to row flex
+
+            float itemBaseline = GetItemBaseline(box);
+            float maxBaseline = 0;
+            for (int i = 0; i < line.Items.Count; i++)
+            {
+                float b = GetItemBaseline(line.Items[i].Box);
+                if (b > maxBaseline) maxBaseline = b;
+            }
+            return maxBaseline - itemBaseline;
+        }
+
+        /// <summary>
+        /// Get the first baseline of a flex item from its first line box,
+        /// or approximate from font size.
+        /// </summary>
+        private static float GetItemBaseline(LayoutBox box)
+        {
+            // Check for line boxes (inline content)
+            if (box.LineBoxes != null && box.LineBoxes.Count > 0)
+                return box.LineBoxes[0].Baseline + (box.LineBoxes[0].Y - box.ContentRect.Y)
+                     + box.PaddingTop + box.BorderTopWidth;
+
+            // Check first child with line boxes
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                if (child.LineBoxes != null && child.LineBoxes.Count > 0)
+                    return child.LineBoxes[0].Baseline + (child.LineBoxes[0].Y - box.ContentRect.Y)
+                         + box.PaddingTop + box.BorderTopWidth;
+            }
+
+            // Fallback: use bottom edge of content as baseline
+            return box.ContentRect.Height + box.PaddingTop + box.BorderTopWidth;
+        }
+
+        private static void OffsetBoxInPlace(LayoutBox box, float dx, float dy)
+        {
+            box.ContentRect = new RectF(box.ContentRect.X + dx, box.ContentRect.Y + dy,
+                                        box.ContentRect.Width, box.ContentRect.Height);
+            for (int i = 0; i < box.Children.Count; i++)
+                OffsetBoxInPlace(box.Children[i], dx, dy);
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    var lb = box.LineBoxes[i];
+                    lb.X += dx;
+                    lb.Y += dy;
+                }
+            }
         }
 
         private sealed class FlexItem

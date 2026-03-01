@@ -70,5 +70,25 @@ namespace Rend.Fonts
 
         /// <inheritdoc />
         public override string ToString() => $"{Family} W{Weight} {Style} S{Stretch}";
+
+        /// <summary>
+        /// Converts a <see cref="CssFontStretch"/> enum value to its CSS percentage equivalent.
+        /// </summary>
+        public static float StretchToPercentage(CssFontStretch stretch)
+        {
+            switch (stretch)
+            {
+                case CssFontStretch.UltraCondensed: return 50f;
+                case CssFontStretch.ExtraCondensed: return 62.5f;
+                case CssFontStretch.Condensed: return 75f;
+                case CssFontStretch.SemiCondensed: return 87.5f;
+                case CssFontStretch.Normal: return 100f;
+                case CssFontStretch.SemiExpanded: return 112.5f;
+                case CssFontStretch.Expanded: return 125f;
+                case CssFontStretch.ExtraExpanded: return 150f;
+                case CssFontStretch.UltraExpanded: return 200f;
+                default: return 100f;
+            }
+        }
     }
 }

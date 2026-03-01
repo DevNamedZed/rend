@@ -15,7 +15,7 @@ namespace Rend.Css.Resolution.Internal
         /// - non-inherited property → use initial value
         /// </summary>
         public static void ApplyInheritance(PropertyValue[] values, object?[] refValues,
-            PropertyValue[] parentValues, object?[] parentRefValues)
+            PropertyValue[]? parentValues, object?[]? parentRefValues)
         {
             for (int i = 0; i < PropertyId.Count; i++)
             {
@@ -30,7 +30,7 @@ namespace Rend.Css.Resolution.Internal
                 {
                     // Inherit from parent
                     values[i] = parentValues[i];
-                    refValues[i] = parentRefValues[i];
+                    refValues[i] = parentRefValues![i];
                 }
                 else
                 {
@@ -63,6 +63,17 @@ namespace Rend.Css.Resolution.Internal
         public static bool IsUnset(CssValue value)
         {
             return value is CssKeywordValue kw && kw.Keyword == "unset";
+        }
+
+        /// <summary>
+        /// Check if a CssValue is the 'revert' keyword.
+        /// Per CSS Cascade 4, revert rolls back to the previous cascade origin.
+        /// In our engine (no user stylesheet), author revert = UA default,
+        /// which behaves like unset (inherit if inherited, initial otherwise).
+        /// </summary>
+        public static bool IsRevert(CssValue value)
+        {
+            return value is CssKeywordValue kw && kw.Keyword == "revert";
         }
     }
 }

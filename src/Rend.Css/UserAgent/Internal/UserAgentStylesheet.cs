@@ -130,6 +130,14 @@ fieldset {
 }
 
 legend { padding-left: 2px; padding-right: 2px; }
+
+/* Print defaults: prevent awkward page breaks */
+@media print {
+    img, svg { page-break-inside: avoid; }
+    h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }
+    table, figure, blockquote { page-break-inside: avoid; }
+    p { orphans: 2; widows: 2; }
+}
 ";
     }
 }

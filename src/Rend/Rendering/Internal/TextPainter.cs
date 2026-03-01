@@ -1,3 +1,4 @@
+using System;
 using Rend.Core.Values;
 using Rend.Css;
 using Rend.Fonts;
@@ -26,28 +27,42 @@ namespace Rend.Rendering.Internal
             float drawX = lineX + fragment.X;
             float drawY = lineY + fragment.Y + fragment.Baseline;
 
+            // Paint text shadows before main text.
+            TextShadowPainter.Paint(fragment, drawX, drawY, target, style);
+
             CssColor color = style.Color;
             float fontSize = style.FontSize;
             string fontFamily = style.FontFamily;
             CssFontStyle fontStyle = style.FontStyle;
             float fontWeight = style.FontWeight;
+            float letterSpacing = style.LetterSpacing;
+            float wordSpacing = style.WordSpacing;
+            bool hasSpacing = letterSpacing != 0 || wordSpacing != 0;
 
-            if (fragment.ShapedRun != null)
+            if (fragment.ShapedRun != null && !hasSpacing)
             {
-                var fontDesc = new FontDescriptor(fontFamily, fontWeight, fontStyle);
+                float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
+                var fontDesc = new FontDescriptor(fontFamily, fontWeight, fontStyle, stretch);
                 target.DrawGlyphs(fragment.ShapedRun, drawX, drawY, color, fontDesc);
             }
-            else if (fragment.Text != null)
+            else
             {
-                var textStyle = new TextStyle
+                string? text = fragment.ShapedRun?.OriginalText ?? fragment.Text;
+                if (text != null)
                 {
-                    Font = new FontDescriptor(fontFamily, fontWeight, fontStyle),
-                    FontSize = fontSize,
-                    Color = color,
-                    Bold = fontWeight >= 700f,
-                    Italic = fontStyle == CssFontStyle.Italic || fontStyle == CssFontStyle.Oblique
-                };
-                target.DrawText(fragment.Text, drawX, drawY, textStyle);
+                    float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
+                    var textStyle = new TextStyle
+                    {
+                        Font = new FontDescriptor(fontFamily, fontWeight, fontStyle, stretch),
+                        FontSize = fontSize,
+                        Color = color,
+                        Bold = fontWeight >= 700f,
+                        Italic = fontStyle == CssFontStyle.Italic || fontStyle == CssFontStyle.Oblique,
+                        LetterSpacing = letterSpacing,
+                        WordSpacing = wordSpacing
+                    };
+                    target.DrawText(text, drawX, drawY, textStyle);
+                }
             }
 
             // Paint text decorations.
@@ -63,24 +78,32 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
-            CssColor color = style.Color;
-            if (color.A == 0)
+            // Use text-decoration-color if set, otherwise fall back to element's color.
+            CssColor decoColor = style.TextDecorationColor;
+            if (decoColor.A == 0)
             {
                 return;
             }
 
             float fontSize = style.FontSize;
-            // Decoration stroke width is typically 1/16th of font size, at minimum 1px.
-            float strokeWidth = fontSize > 16f ? fontSize / 16f : 1f;
-            var pen = new PenInfo(color, strokeWidth);
+            // Use text-decoration-thickness if set, otherwise default to 1/16th of font size (min 1px).
+            float thickness = style.TextDecorationThickness;
+            float strokeWidth = thickness > 0 ? thickness : (fontSize > 16f ? fontSize / 16f : 1f);
+
+            // Build pen based on text-decoration-style.
+            CssTextDecorationStyle decoStyle = style.TextDecorationStyle;
+            PenInfo pen = BuildDecorationPen(decoColor, strokeWidth, decoStyle);
 
             float startX = lineX + fragment.X;
             float endX = startX + fragment.Width;
 
+            // text-underline-offset: additional offset for underlines (positive = further from text)
+            float underlineOffset = style.TextUnderlineOffset;
+
             if (decoration == CssTextDecorationLine.Underline)
             {
-                // Underline sits slightly below the baseline.
-                float underlineY = lineY + fragment.Y + fragment.Baseline + fontSize * 0.15f;
+                // Underline sits slightly below the baseline, plus any custom offset.
+                float underlineY = lineY + fragment.Y + fragment.Baseline + fontSize * 0.15f + underlineOffset;
                 DrawLine(target, pen, startX, underlineY, endX, underlineY);
             }
             else if (decoration == CssTextDecorationLine.Overline)
@@ -94,6 +117,70 @@ namespace Rend.Rendering.Internal
                 // Line-through goes through the middle of the text.
                 float strikeY = lineY + fragment.Y + fragment.Height * 0.5f;
                 DrawLine(target, pen, startX, strikeY, endX, strikeY);
+            }
+
+            // For "wavy" style, draw a second offset line to approximate a wave.
+            if (decoStyle == CssTextDecorationStyle.Wavy)
+            {
+                float wavyOffset = strokeWidth * 2f;
+                if (decoration == CssTextDecorationLine.Underline)
+                {
+                    float underlineY = lineY + fragment.Y + fragment.Baseline + fontSize * 0.15f + underlineOffset + wavyOffset;
+                    DrawLine(target, pen, startX, underlineY, endX, underlineY);
+                }
+                else if (decoration == CssTextDecorationLine.Overline)
+                {
+                    float overlineY = lineY + fragment.Y + wavyOffset;
+                    DrawLine(target, pen, startX, overlineY, endX, overlineY);
+                }
+                else if (decoration == CssTextDecorationLine.LineThrough)
+                {
+                    float strikeY = lineY + fragment.Y + fragment.Height * 0.5f + wavyOffset;
+                    DrawLine(target, pen, startX, strikeY, endX, strikeY);
+                }
+            }
+
+            // For "double" style, draw a second line offset below/above.
+            if (decoStyle == CssTextDecorationStyle.Double)
+            {
+                float doubleOffset = strokeWidth * 2f;
+                if (decoration == CssTextDecorationLine.Underline)
+                {
+                    float underlineY = lineY + fragment.Y + fragment.Baseline + fontSize * 0.15f + underlineOffset + doubleOffset;
+                    DrawLine(target, pen, startX, underlineY, endX, underlineY);
+                }
+                else if (decoration == CssTextDecorationLine.Overline)
+                {
+                    float overlineY = lineY + fragment.Y - doubleOffset;
+                    DrawLine(target, pen, startX, overlineY, endX, overlineY);
+                }
+                else if (decoration == CssTextDecorationLine.LineThrough)
+                {
+                    float strikeY = lineY + fragment.Y + fragment.Height * 0.5f + doubleOffset;
+                    DrawLine(target, pen, startX, strikeY, endX, strikeY);
+                }
+            }
+        }
+
+        private static PenInfo BuildDecorationPen(CssColor color, float strokeWidth, CssTextDecorationStyle decoStyle)
+        {
+            switch (decoStyle)
+            {
+                case CssTextDecorationStyle.Dashed:
+                {
+                    float dashLen = Math.Max(strokeWidth * 3f, 3f);
+                    return new PenInfo(color, strokeWidth, new[] { dashLen, dashLen });
+                }
+
+                case CssTextDecorationStyle.Dotted:
+                {
+                    float dotLen = Math.Max(strokeWidth, 1f);
+                    return new PenInfo(color, strokeWidth, new[] { dotLen, dotLen });
+                }
+
+                default:
+                    // Solid, double, wavy all use a solid pen (double/wavy draw extra lines).
+                    return new PenInfo(color, strokeWidth);
             }
         }
 

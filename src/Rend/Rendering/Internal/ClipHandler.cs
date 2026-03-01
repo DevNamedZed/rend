@@ -1,3 +1,4 @@
+using Rend.Core.Values;
 using Rend.Css;
 using Rend.Layout;
 
@@ -11,7 +12,7 @@ namespace Rend.Rendering.Internal
     {
         /// <summary>
         /// If the box has overflow hidden, scroll, auto, or clip on either axis,
-        /// pushes a clip rectangle matching the padding rect.
+        /// pushes a clip rectangle (or rounded rect path) matching the padding rect.
         /// </summary>
         /// <param name="box">The layout box whose overflow to handle.</param>
         /// <param name="target">The render target.</param>
@@ -23,16 +24,36 @@ namespace Rend.Rendering.Internal
                 return false;
             }
 
-            CssOverflow overflowX = box.StyledNode.Style.OverflowX;
-            CssOverflow overflowY = box.StyledNode.Style.OverflowY;
+            ComputedStyle style = box.StyledNode.Style;
+            CssOverflow overflowX = style.OverflowX;
+            CssOverflow overflowY = style.OverflowY;
 
-            bool needsClip = NeedsClipping(overflowX) || NeedsClipping(overflowY);
+            // contain: paint, content, or strict also establishes clipping
+            CssContain contain = style.Contain;
+            bool needsClip = NeedsClipping(overflowX) || NeedsClipping(overflowY)
+                || contain == CssContain.Paint || contain == CssContain.Content || contain == CssContain.Strict;
             if (!needsClip)
             {
                 return false;
             }
 
-            target.PushClipRect(box.PaddingRect);
+            // Use rounded clip path when border-radius is set
+            float tlr = style.BorderTopLeftRadius;
+            float trr = style.BorderTopRightRadius;
+            float brr = style.BorderBottomRightRadius;
+            float blr = style.BorderBottomLeftRadius;
+
+            if (tlr > 0 || trr > 0 || brr > 0 || blr > 0)
+            {
+                var path = new PathData();
+                path.AddRoundedRectangle(box.PaddingRect, tlr, trr, brr, blr);
+                target.PushClipPath(path);
+            }
+            else
+            {
+                target.PushClipRect(box.PaddingRect);
+            }
+
             return true;
         }
 

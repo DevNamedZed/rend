@@ -196,12 +196,12 @@ namespace Rend.Css.Tests
         }
 
         [Fact]
-        public void Default_FontSize_RootWithoutParent_IsZero()
+        public void Default_FontSize_RootWithoutParent_IsInitial()
         {
             // At root level without a parent ComputedStyle, inherited properties
-            // copy from an empty parent array (zeroed), not the CSS initial values.
+            // use the CSS initial value (medium = 16px for font-size).
             var style = ResolveElement("");
-            Assert.Equal(0f, style.FontSize);
+            Assert.Equal(16f, style.FontSize);
         }
 
         [Fact]
@@ -219,11 +219,11 @@ namespace Rend.Css.Tests
         }
 
         [Fact]
-        public void Default_FontWeight_RootWithoutParent_IsZero()
+        public void Default_FontWeight_RootWithoutParent_IsInitial()
         {
-            // Inherited property at root without parent copies from zeroed parent array
+            // Inherited property at root without parent uses CSS initial value (400 = normal)
             var style = ResolveElement("");
-            Assert.Equal(0f, style.FontWeight);
+            Assert.Equal(400f, style.FontWeight);
         }
 
         [Fact]
@@ -234,12 +234,11 @@ namespace Rend.Css.Tests
         }
 
         [Fact]
-        public void Default_TextAlign_RootWithoutParent_IsLeft()
+        public void Default_TextAlign_RootWithoutParent_IsStart()
         {
-            // Inherited property at root without parent copies from zeroed parent array
-            // (CssTextAlign)0 = CssTextAlign.Left
+            // Inherited property at root without parent uses CSS initial value (Start)
             var style = ResolveElement("");
-            Assert.Equal(CssTextAlign.Left, style.TextAlign);
+            Assert.Equal(CssTextAlign.Start, style.TextAlign);
         }
 
         [Fact]
@@ -350,19 +349,19 @@ namespace Rend.Css.Tests
         }
 
         [Fact]
-        public void Default_Orphans_RootWithoutParent_IsZero()
+        public void Default_Orphans_RootWithoutParent_IsInitial()
         {
-            // Inherited property at root without parent copies from zeroed parent array
+            // Inherited property at root without parent uses CSS initial value (2)
             var style = ResolveElement("");
-            Assert.Equal(0, style.Orphans);
+            Assert.Equal(2, style.Orphans);
         }
 
         [Fact]
-        public void Default_Widows_RootWithoutParent_IsZero()
+        public void Default_Widows_RootWithoutParent_IsInitial()
         {
-            // Inherited property at root without parent copies from zeroed parent array
+            // Inherited property at root without parent uses CSS initial value (2)
             var style = ResolveElement("");
-            Assert.Equal(0, style.Widows);
+            Assert.Equal(2, style.Widows);
         }
 
         [Fact]
@@ -688,6 +687,41 @@ namespace Rend.Css.Tests
             Assert.Equal(255, style.BorderTopColor.R);
             Assert.Equal(0, style.BorderTopColor.G);
             Assert.Equal(0, style.BorderTopColor.B);
+        }
+
+        [Fact]
+        public void BorderColor_DefaultIsCurrentColor_ResolvesToBlack()
+        {
+            // Default color is black; border-color defaults to currentColor
+            // which should resolve to the element's color (black).
+            var style = ResolveElement("div { }");
+            Assert.Equal(0, style.BorderTopColor.R);
+            Assert.Equal(0, style.BorderTopColor.G);
+            Assert.Equal(0, style.BorderTopColor.B);
+        }
+
+        [Fact]
+        public void BorderColor_CurrentColor_ResolvesToElementColor()
+        {
+            var style = ResolveElement("div { color: red; border-color: currentColor; }");
+            Assert.Equal(255, style.BorderTopColor.R);
+            Assert.Equal(0, style.BorderTopColor.G);
+            Assert.Equal(0, style.BorderTopColor.B);
+            Assert.Equal(255, style.BorderRightColor.R);
+            Assert.Equal(255, style.BorderBottomColor.R);
+            Assert.Equal(255, style.BorderLeftColor.R);
+        }
+
+        [Fact]
+        public void BorderColor_DefaultCurrentColor_ResolvesToInheritedColor()
+        {
+            // Parent has color: blue. Child border-color defaults to currentColor.
+            // currentColor should resolve to the inherited color value.
+            var parentStyle = ResolveElement("div { color: blue; }");
+            var childStyle = ResolveElement("span { }", parentStyle: parentStyle);
+            Assert.Equal(0, childStyle.BorderTopColor.R);
+            Assert.Equal(0, childStyle.BorderTopColor.G);
+            Assert.Equal(255, childStyle.BorderTopColor.B);
         }
 
         [Fact]

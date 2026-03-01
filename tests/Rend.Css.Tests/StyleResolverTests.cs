@@ -54,7 +54,12 @@ namespace Rend.Css.Tests
 
         private bool MatchesSingle(IStylableElement element, string selector)
         {
-            if (selector == "*")
+            // Strip pseudo-elements (::before, ::after) for matching
+            int pseudoIdx = selector.IndexOf("::", StringComparison.Ordinal);
+            if (pseudoIdx >= 0)
+                selector = selector.Substring(0, pseudoIdx).Trim();
+
+            if (selector == "*" || selector.Length == 0)
                 return true;
 
             // Simple tag match

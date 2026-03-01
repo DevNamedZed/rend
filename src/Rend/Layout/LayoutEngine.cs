@@ -62,6 +62,9 @@ namespace Rend.Layout
             // Apply positioning to all boxes
             ApplyPositioningRecursive(rootBox, rootBox);
 
+            // Build stacking contexts (sets ZIndex and EstablishesStackingContext on boxes)
+            StackingContext.Build(rootBox);
+
             // Calculate final root height
             float rootHeight = CalculateAutoHeight(rootBox);
             rootBox.ContentRect = new RectF(
@@ -87,19 +90,20 @@ namespace Rend.Layout
             return new LayoutDocument(rootBox, pages);
         }
 
-        private static void ApplyPositioningRecursive(LayoutBox box, LayoutBox containingBlock)
+        private static void ApplyPositioningRecursive(LayoutBox box, LayoutBox containingBlock, LayoutBox? rootBox = null)
         {
+            var root = rootBox ?? box;
             var style = box.StyledNode?.Style;
             if (style != null && style.Position != CssPosition.Static)
             {
-                PositionedLayout.ApplyPositioning(box, containingBlock);
+                PositionedLayout.ApplyPositioning(box, containingBlock, root);
             }
 
             var newContaining = (style != null && style.Position != CssPosition.Static) ? box : containingBlock;
 
             for (int i = 0; i < box.Children.Count; i++)
             {
-                ApplyPositioningRecursive(box.Children[i], newContaining);
+                ApplyPositioningRecursive(box.Children[i], newContaining, root);
             }
         }
 

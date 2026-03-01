@@ -8,6 +8,8 @@ namespace Rend.Css
         Center,
         Justify,
         Start,
-        End
+        End,
+        /// <summary>Only used for text-align-last: auto (inherit from text-align).</summary>
+        Auto
     }
 }

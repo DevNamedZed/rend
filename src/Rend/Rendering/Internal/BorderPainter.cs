@@ -132,8 +132,26 @@ namespace Rend.Rendering.Internal
                     PaintDouble(target, color, width, outerX1, outerY1, outerX2, outerY2, innerX2, innerY2, innerX1, innerY1);
                     break;
 
+                case CssBorderStyle.Groove:
+                    PaintGrooveRidge(target, color, width, true,
+                                    outerX1, outerY1, outerX2, outerY2,
+                                    innerX2, innerY2, innerX1, innerY1);
+                    break;
+
+                case CssBorderStyle.Ridge:
+                    PaintGrooveRidge(target, color, width, false,
+                                    outerX1, outerY1, outerX2, outerY2,
+                                    innerX2, innerY2, innerX1, innerY1);
+                    break;
+
+                case CssBorderStyle.Inset:
+                case CssBorderStyle.Outset:
+                    PaintInsetOutset(target, color, borderStyle,
+                                    outerX1, outerY1, outerX2, outerY2,
+                                    innerX2, innerY2, innerX1, innerY1);
+                    break;
+
                 default:
-                    // Groove, Ridge, Inset, Outset: fall back to solid rendering.
                     FillTrapezoid(target, color, outerX1, outerY1, outerX2, outerY2, innerX2, innerY2, innerX1, innerY1);
                     break;
             }
@@ -232,6 +250,77 @@ namespace Rend.Rendering.Internal
             float iMidX2 = outerX2 + dx2 * ratioInner;
             float iMidY2 = outerY2 + dy2 * ratioInner;
             FillTrapezoid(target, color, iMidX1, iMidY1, iMidX2, iMidY2, innerX2, innerY2, innerX1, innerY1);
+        }
+
+        private static void PaintGrooveRidge(
+            IRenderTarget target, CssColor color, float width, bool isGroove,
+            float outerX1, float outerY1, float outerX2, float outerY2,
+            float innerX2, float innerY2, float innerX1, float innerY1)
+        {
+            // Groove: outer half darker, inner half lighter.
+            // Ridge: outer half lighter, inner half darker.
+            CssColor dark = DarkenColor(color);
+            CssColor light = LightenColor(color);
+
+            float half = width / 2f;
+            float dx = innerX1 - outerX1;
+            float dy = innerY1 - outerY1;
+            float dx2 = innerX2 - outerX2;
+            float dy2 = innerY2 - outerY2;
+            float ratio = half / width;
+
+            float midX1 = outerX1 + dx * ratio;
+            float midY1 = outerY1 + dy * ratio;
+            float midX2 = outerX2 + dx2 * ratio;
+            float midY2 = outerY2 + dy2 * ratio;
+
+            CssColor outerColor = isGroove ? dark : light;
+            CssColor innerColor = isGroove ? light : dark;
+
+            FillTrapezoid(target, outerColor, outerX1, outerY1, outerX2, outerY2, midX2, midY2, midX1, midY1);
+            FillTrapezoid(target, innerColor, midX1, midY1, midX2, midY2, innerX2, innerY2, innerX1, innerY1);
+        }
+
+        private static void PaintInsetOutset(
+            IRenderTarget target, CssColor color, CssBorderStyle style,
+            float outerX1, float outerY1, float outerX2, float outerY2,
+            float innerX2, float innerY2, float innerX1, float innerY1)
+        {
+            // Determine if this side should be dark or light.
+            // For inset: top/left are dark, bottom/right are light.
+            // For outset: top/left are light, bottom/right are dark.
+            // We detect the side by examining the direction of the outer edge.
+            float edgeDx = outerX2 - outerX1;
+            float edgeDy = outerY2 - outerY1;
+
+            bool isTopOrLeft;
+            if (Math.Abs(edgeDx) > Math.Abs(edgeDy))
+                isTopOrLeft = edgeDy == 0 && outerY1 <= (outerY1 + innerY1) * 0.5f; // horizontal → top if y is smaller
+            else
+                isTopOrLeft = edgeDx == 0 && outerX1 <= (outerX1 + innerX1) * 0.5f; // vertical → left if x is smaller
+
+            bool useDark = style == CssBorderStyle.Inset ? isTopOrLeft : !isTopOrLeft;
+            CssColor sideColor = useDark ? DarkenColor(color) : LightenColor(color);
+
+            FillTrapezoid(target, sideColor, outerX1, outerY1, outerX2, outerY2, innerX2, innerY2, innerX1, innerY1);
+        }
+
+        private static CssColor DarkenColor(CssColor c)
+        {
+            return new CssColor(
+                (byte)(c.R * 2 / 3),
+                (byte)(c.G * 2 / 3),
+                (byte)(c.B * 2 / 3),
+                c.A);
+        }
+
+        private static CssColor LightenColor(CssColor c)
+        {
+            return new CssColor(
+                (byte)Math.Min(255, c.R + (255 - c.R) / 3),
+                (byte)Math.Min(255, c.G + (255 - c.G) / 3),
+                (byte)Math.Min(255, c.B + (255 - c.B) / 3),
+                c.A);
         }
 
         private static void PaintWithRadius(

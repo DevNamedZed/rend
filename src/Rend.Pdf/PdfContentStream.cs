@@ -176,6 +176,20 @@ namespace Rend.Pdf
             _builder.SetExtGState(key);
         }
 
+        /// <summary>Set blend mode via ExtGState. Uses PDF blend mode names (e.g. "Multiply").</summary>
+        public void SetBlendMode(string blendModeName)
+        {
+            string key = $"BM_{blendModeName}";
+            if (!_extGStates.ContainsKey(key))
+            {
+                var gsDict = new PdfDictionary(2);
+                gsDict[PdfName.Type] = new PdfName("ExtGState");
+                gsDict[new PdfName("BM")] = new PdfName(blendModeName);
+                _extGStates[key] = _objectTable.Allocate(gsDict);
+            }
+            _builder.SetExtGState(key);
+        }
+
         // ═══════════════════════════════════════════
         // Path Construction
         // ═══════════════════════════════════════════

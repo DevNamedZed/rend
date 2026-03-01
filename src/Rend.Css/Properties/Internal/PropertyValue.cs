@@ -93,5 +93,22 @@ namespace Rend.Css.Properties.Internal
                 (byte)(ColorValue & 0xFF),
                 (byte)((ColorValue >> 24) & 0xFF));
         }
+
+        /// <summary>
+        /// The currentColor sentinel value: RGBA(0, 0, 1, 0).
+        /// Used to mark properties that should resolve to the element's computed color.
+        /// </summary>
+        internal static readonly PropertyValue CurrentColorSentinel =
+            FromColor(new CssColor(0, 0, 1, 0));
+
+        /// <summary>
+        /// Returns true if this property value is the currentColor sentinel.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsCurrentColor()
+        {
+            // currentColor sentinel: RGBA(0, 0, 1, 0) packed as 0x00000001
+            return Type == PropertyValueType.Color && ColorValue == 0x00000001u;
+        }
     }
 }

@@ -39,8 +39,9 @@ namespace Rend.Output.Image.Internal
                     return CreateLinearShader(gradient, bounds, colors, positions);
                 case GradientType.Radial:
                     return CreateRadialShader(gradient, bounds, colors, positions);
+                case GradientType.Conic:
+                    return CreateSweepShader(gradient, bounds, colors, positions);
                 default:
-                    // Conic and unsupported types: fall back to linear.
                     return CreateLinearShader(gradient, bounds, colors, positions);
             }
         }
@@ -76,6 +77,22 @@ namespace Rend.Output.Image.Internal
 
             return SKShader.CreateRadialGradient(
                 new SKPoint(cx, cy), radius, colors, positions, SKShaderTileMode.Clamp);
+        }
+
+        private static SKShader CreateSweepShader(GradientInfo gradient, RectF bounds,
+            SKColor[] colors, float[] positions)
+        {
+            float cx = bounds.X + gradient.Center.X * bounds.Width;
+            float cy = bounds.Y + gradient.Center.Y * bounds.Height;
+
+            // CSS conic: 0deg = top (12 o'clock), clockwise
+            // Skia sweep: 0deg = right (3 o'clock), clockwise
+            // Offset: skia = css - 90
+            float startAngle = gradient.Angle - 90f;
+            float endAngle = startAngle + 360f;
+
+            return SKShader.CreateSweepGradient(
+                new SKPoint(cx, cy), colors, positions, SKShaderTileMode.Clamp, startAngle, endAngle);
         }
     }
 }

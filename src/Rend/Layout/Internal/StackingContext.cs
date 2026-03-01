@@ -66,6 +66,24 @@ namespace Rend.Layout.Internal
             if (style.Opacity < 1f)
                 return true;
 
+            // Elements with isolation: isolate
+            if (style.Isolation == CssIsolation.Isolate)
+                return true;
+
+            // Elements with mix-blend-mode other than normal
+            if (style.MixBlendMode != CssMixBlendMode.Normal)
+                return true;
+
+            // Elements with CSS transforms
+            if (style.GetRefValue(Css.Properties.Internal.PropertyId.Transform) != null)
+                return true;
+
+            // Elements with CSS containment (layout, paint, content, or strict)
+            var contain = style.Contain;
+            if (contain == CssContain.Layout || contain == CssContain.Paint ||
+                contain == CssContain.Content || contain == CssContain.Strict)
+                return true;
+
             return false;
         }
 

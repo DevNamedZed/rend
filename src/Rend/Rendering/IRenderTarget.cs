@@ -33,6 +33,14 @@ namespace Rend.Rendering
         /// <param name="opacity">The opacity value from 0 (fully transparent) to 1 (fully opaque).</param>
         void SetOpacity(float opacity);
 
+        /// <summary>Sets the current blend mode for subsequent drawing operations.</summary>
+        /// <param name="blendMode">The CSS blend mode value.</param>
+        void SetBlendMode(Css.CssMixBlendMode blendMode);
+
+        /// <summary>Sets the image rendering quality hint for subsequent DrawImage calls.</summary>
+        /// <param name="rendering">The CSS image-rendering value.</param>
+        void SetImageRendering(Css.CssImageRendering rendering);
+
         /// <summary>Pushes a rectangular clipping region onto the clip stack.</summary>
         /// <param name="rect">The clipping rectangle.</param>
         void PushClipRect(RectF rect);
@@ -87,5 +95,22 @@ namespace Rend.Rendering
         /// <summary>Finalizes rendering and writes the output to the provided stream.</summary>
         /// <param name="output">The stream to write the final output to.</param>
         void Finish(Stream output);
+
+        /// <summary>
+        /// Adds a hyperlink annotation at the specified rectangle.
+        /// Called by the painter when an &lt;a&gt; element is encountered.
+        /// </summary>
+        /// <param name="rect">The clickable region in layout coordinates.</param>
+        /// <param name="uri">The link target URI string.</param>
+        void AddLink(RectF rect, string uri);
+
+        /// <summary>
+        /// Adds a bookmark (outline) entry at the current page position.
+        /// Called by the painter when a heading element (h1-h6) is encountered.
+        /// </summary>
+        /// <param name="title">The bookmark display text.</param>
+        /// <param name="level">The heading level (1-6).</param>
+        /// <param name="yPosition">The Y position in layout coordinates.</param>
+        void AddBookmark(string title, int level, float yPosition);
     }
 }

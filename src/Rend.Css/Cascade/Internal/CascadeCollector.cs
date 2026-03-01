@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Rend.Css.Cascade.Internal
@@ -18,15 +19,26 @@ namespace Rend.Css.Cascade.Internal
 
         /// <summary>
         /// Collect all declarations matching the element from the given stylesheet.
+        /// Only collects rules that have no pseudo-element (normal element styles).
         /// </summary>
         public void Collect(IStylableElement element, Stylesheet stylesheet, CascadeOrigin origin,
             List<CascadedDeclaration> output)
         {
-            CollectRules(element, stylesheet.Rules, origin, output);
+            CollectRules(element, stylesheet.Rules, origin, output, null);
+        }
+
+        /// <summary>
+        /// Collect declarations matching the element for a specific pseudo-element (e.g. "before", "after").
+        /// Only collects rules whose selector targets the given pseudo-element.
+        /// </summary>
+        public void CollectPseudoElement(IStylableElement element, Stylesheet stylesheet, CascadeOrigin origin,
+            string pseudoElement, List<CascadedDeclaration> output)
+        {
+            CollectRules(element, stylesheet.Rules, origin, output, pseudoElement);
         }
 
         private void CollectRules(IStylableElement element, IReadOnlyList<CssRule> rules, CascadeOrigin origin,
-            List<CascadedDeclaration> output)
+            List<CascadedDeclaration> output, string? targetPseudo)
         {
             for (int i = 0; i < rules.Count; i++)
             {
@@ -34,6 +46,12 @@ namespace Rend.Css.Cascade.Internal
 
                 if (rule is StyleRule sr)
                 {
+                    var selectorPseudo = ExtractPseudoElement(sr.SelectorText);
+
+                    // Filter: only collect if pseudo-element matches what we're looking for
+                    if (targetPseudo == null && selectorPseudo != null) continue;
+                    if (targetPseudo != null && selectorPseudo != targetPseudo) continue;
+
                     if (_matcher.Matches(element, sr.SelectorText))
                     {
                         var specificity = _matcher.GetSpecificity(sr.SelectorText);
@@ -47,11 +65,35 @@ namespace Rend.Css.Cascade.Internal
                 }
                 else if (rule is MediaRule mr)
                 {
-                    // Media rules: collected at resolution time (after media evaluation)
-                    // For now, recurse into all media rules (evaluator handles filtering upstream)
-                    CollectRules(element, mr.Rules, origin, output);
+                    CollectRules(element, mr.Rules, origin, output, targetPseudo);
+                }
+                else if (rule is SupportsRule sup)
+                {
+                    CollectRules(element, sup.Rules, origin, output, targetPseudo);
+                }
+                else if (rule is LayerRule lr && lr.IsBlock)
+                {
+                    CollectRules(element, lr.Rules, origin, output, targetPseudo);
                 }
             }
+        }
+
+        /// <summary>
+        /// Extracts the pseudo-element name from a selector text, or null if none.
+        /// e.g. "p::before" → "before", "div::after" → "after", "p" → null
+        /// </summary>
+        internal static string? ExtractPseudoElement(string selectorText)
+        {
+            int idx = selectorText.LastIndexOf("::", StringComparison.Ordinal);
+            if (idx < 0) return null;
+
+            // Extract the pseudo-element name after ::
+            string pseudo = selectorText.Substring(idx + 2).Trim().ToLowerInvariant();
+
+            if (pseudo == "before" || pseudo == "after" || pseudo == "first-letter" || pseudo == "first-line")
+                return pseudo;
+
+            return null;
         }
 
         /// <summary>

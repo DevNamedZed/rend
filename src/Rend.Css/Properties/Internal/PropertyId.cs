@@ -149,7 +149,116 @@ namespace Rend.Css.Properties.Internal
         // Content
         public const int Content = 100;
 
+        // Transform
+        public const int Transform = 101;
+        public const int TransformOrigin = 102;
+
+        // Multi-Column
+        public const int ColumnCount = 103;
+        public const int ColumnWidth = 104;
+        public const int ColumnRuleWidth = 105;
+        public const int ColumnRuleStyle = 106;
+        public const int ColumnRuleColor = 107;
+
+        // Text Overflow
+        public const int TextOverflow = 108;
+        public const int OverflowWrap = 109;
+
+        // Text Decoration Detail
+        public const int TextDecorationThickness = 110;
+        public const int TextUnderlineOffset = 111;
+
+        // Background Clip / Origin
+        public const int BackgroundClip = 112;
+        public const int BackgroundOrigin = 113;
+
+        // Text Shadow
+        public const int TextShadow = 114;
+
+        // Object Fit / Position
+        public const int ObjectFit = 115;
+        public const int ObjectPosition = 116;
+
+        // Aspect Ratio
+        public const int AspectRatio = 117;
+
+        // Tab Size
+        public const int TabSize = 118;
+
+        // Counters
+        public const int CounterReset = 119;
+        public const int CounterIncrement = 120;
+
+        // Quotes
+        public const int Quotes = 121;
+
+        // Justify
+        public const int JustifyItems = 122;
+        public const int JustifySelf = 123;
+
+        // Column Span
+        public const int ColumnSpan = 124;
+
+        // Background Attachment
+        public const int BackgroundAttachment = 125;
+
+        // Font Stretch
+        public const int FontStretch = 126;
+
+        // Break (modern page-break replacements)
+        public const int BreakBefore = 127;
+        public const int BreakAfter = 128;
+        public const int BreakInside = 129;
+
+        // Hyphens
+        public const int Hyphens = 130;
+
+        // Text Rendering
+        public const int TextRendering = 131;
+
+        // Image Rendering
+        public const int ImageRendering = 132;
+
+        // Containment
+        public const int Contain = 133;
+        public const int WillChange = 134;
+
+        // Resize / Appearance / User-Select
+        public const int Resize = 135;
+        public const int Appearance = 136;
+        public const int UserSelect = 137;
+
+        // Isolation / Blend Mode
+        public const int Isolation = 138;
+        public const int MixBlendMode = 139;
+
+        // Border Spacing (vertical component — horizontal reuses BorderSpacing = 77)
+        public const int BorderSpacingV = 140;
+
+        // Grid
+        public const int GridTemplateColumns = 141;
+        public const int GridTemplateRows = 142;
+        public const int GridAutoFlow = 143;
+        public const int GridAutoRows = 144;
+        public const int GridAutoColumns = 145;
+        public const int GridRowStart = 146;
+        public const int GridRowEnd = 147;
+        public const int GridColumnStart = 148;
+        public const int GridColumnEnd = 149;
+
+        // Bidi
+        public const int UnicodeBidi = 150;
+
+        // Counter set
+        public const int CounterSet = 151;
+
+        // Box Decoration Break
+        public const int BoxDecorationBreak = 152;
+
+        // Text Align Last
+        public const int TextAlignLast = 153;
+
         // Total count
-        public const int Count = 101;
+        public const int Count = 154;
     }
 }

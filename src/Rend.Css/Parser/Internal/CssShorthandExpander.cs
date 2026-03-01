@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Rend.Css.Properties.Internal;
 
 namespace Rend.Css.Parser.Internal
 {
@@ -43,10 +44,73 @@ namespace Rend.Css.Parser.Internal
 
                 case "overflow": return ExpandTwoValue(value, important, output, "overflow-x", "overflow-y");
                 case "gap": return ExpandTwoValue(value, important, output, "row-gap", "column-gap");
+                case "border-spacing": return ExpandTwoValue(value, important, output, "border-spacing-h", "border-spacing-v");
+                case "place-content": return ExpandTwoValue(value, important, output, "align-content", "justify-content");
+                case "place-items": return ExpandTwoValue(value, important, output, "align-items", "justify-items");
+                case "place-self": return ExpandTwoValue(value, important, output, "align-self", "justify-self");
 
                 case "outline": return ExpandOutline(value, important, output);
 
                 case "text-decoration": return ExpandTextDecoration(value, important, output);
+
+                case "columns": return ExpandColumns(value, important, output);
+                case "column-rule": return ExpandColumnRule(value, important, output);
+
+                case "inset": return ExpandBox(value, important, output, "top", "right", "bottom", "left");
+
+                case "grid-row": return ExpandGridLine(value, important, output, "grid-row-start", "grid-row-end");
+                case "grid-column": return ExpandGridLine(value, important, output, "grid-column-start", "grid-column-end");
+                case "grid-area": return ExpandGridArea(value, important, output);
+
+                // Logical properties (block = top/bottom, inline = left/right in LTR horizontal)
+                case "margin-block": return ExpandTwoValue(value, important, output, "margin-top", "margin-bottom");
+                case "margin-inline": return ExpandTwoValue(value, important, output, "margin-left", "margin-right");
+                case "padding-block": return ExpandTwoValue(value, important, output, "padding-top", "padding-bottom");
+                case "padding-inline": return ExpandTwoValue(value, important, output, "padding-left", "padding-right");
+                case "inset-block": return ExpandTwoValue(value, important, output, "top", "bottom");
+                case "inset-inline": return ExpandTwoValue(value, important, output, "left", "right");
+
+                case "border-block-width": return ExpandTwoValue(value, important, output, "border-top-width", "border-bottom-width");
+                case "border-block-style": return ExpandTwoValue(value, important, output, "border-top-style", "border-bottom-style");
+                case "border-block-color": return ExpandTwoValue(value, important, output, "border-top-color", "border-bottom-color");
+                case "border-inline-width": return ExpandTwoValue(value, important, output, "border-left-width", "border-right-width");
+                case "border-inline-style": return ExpandTwoValue(value, important, output, "border-left-style", "border-right-style");
+                case "border-inline-color": return ExpandTwoValue(value, important, output, "border-left-color", "border-right-color");
+
+                case "border-block": return ExpandLogicalBorderPair(value, important, output, "top", "bottom");
+                case "border-inline": return ExpandLogicalBorderPair(value, important, output, "left", "right");
+                case "border-block-start": return ExpandBorderSide(value, important, output, "top");
+                case "border-block-end": return ExpandBorderSide(value, important, output, "bottom");
+                case "border-inline-start": return ExpandBorderSide(value, important, output, "left");
+                case "border-inline-end": return ExpandBorderSide(value, important, output, "right");
+
+                // Single-side logical property aliases
+                case "margin-block-start": return Alias(value, important, output, "margin-top");
+                case "margin-block-end": return Alias(value, important, output, "margin-bottom");
+                case "margin-inline-start": return Alias(value, important, output, "margin-left");
+                case "margin-inline-end": return Alias(value, important, output, "margin-right");
+                case "padding-block-start": return Alias(value, important, output, "padding-top");
+                case "padding-block-end": return Alias(value, important, output, "padding-bottom");
+                case "padding-inline-start": return Alias(value, important, output, "padding-left");
+                case "padding-inline-end": return Alias(value, important, output, "padding-right");
+                case "inset-block-start": return Alias(value, important, output, "top");
+                case "inset-block-end": return Alias(value, important, output, "bottom");
+                case "inset-inline-start": return Alias(value, important, output, "left");
+                case "inset-inline-end": return Alias(value, important, output, "right");
+                case "border-block-start-width": return Alias(value, important, output, "border-top-width");
+                case "border-block-end-width": return Alias(value, important, output, "border-bottom-width");
+                case "border-inline-start-width": return Alias(value, important, output, "border-left-width");
+                case "border-inline-end-width": return Alias(value, important, output, "border-right-width");
+                case "border-block-start-style": return Alias(value, important, output, "border-top-style");
+                case "border-block-end-style": return Alias(value, important, output, "border-bottom-style");
+                case "border-inline-start-style": return Alias(value, important, output, "border-left-style");
+                case "border-inline-end-style": return Alias(value, important, output, "border-right-style");
+                case "border-block-start-color": return Alias(value, important, output, "border-top-color");
+                case "border-block-end-color": return Alias(value, important, output, "border-bottom-color");
+                case "border-inline-start-color": return Alias(value, important, output, "border-left-color");
+                case "border-inline-end-color": return Alias(value, important, output, "border-right-color");
+
+                case "all": return ExpandAll(value, important, output);
 
                 default: return false;
             }
@@ -106,6 +170,29 @@ namespace Rend.Css.Parser.Internal
             return true;
         }
 
+        /// <summary>
+        /// Simple alias: maps a logical property name to a physical one.
+        /// </summary>
+        private static bool Alias(CssValue value, bool important, List<CssDeclaration> output, string target)
+        {
+            output.Add(new CssDeclaration(target, value, important));
+            return true;
+        }
+
+        /// <summary>
+        /// Expand the CSS `all` shorthand: resets all properties except direction and unicode-bidi.
+        /// </summary>
+        private static bool ExpandAll(CssValue value, bool important, List<CssDeclaration> output)
+        {
+            foreach (var prop in PropertyRegistry.GetAll())
+            {
+                if (prop.Id == PropertyId.Direction || prop.Id == PropertyId.UnicodeBidi)
+                    continue;
+                output.Add(new CssDeclaration(prop.Name, value, important));
+            }
+            return true;
+        }
+
         #endregion
 
         #region Border
@@ -130,6 +217,18 @@ namespace Rend.Css.Parser.Internal
             output.Add(new CssDeclaration($"border-{side}-width", width, important));
             output.Add(new CssDeclaration($"border-{side}-style", style, important));
             output.Add(new CssDeclaration($"border-{side}-color", color, important));
+            return true;
+        }
+
+        private static bool ExpandLogicalBorderPair(CssValue value, bool important, List<CssDeclaration> output, string side1, string side2)
+        {
+            ClassifyBorderParts(value, out var width, out var style, out var color);
+            output.Add(new CssDeclaration($"border-{side1}-width", width, important));
+            output.Add(new CssDeclaration($"border-{side1}-style", style, important));
+            output.Add(new CssDeclaration($"border-{side1}-color", color, important));
+            output.Add(new CssDeclaration($"border-{side2}-width", width, important));
+            output.Add(new CssDeclaration($"border-{side2}-style", style, important));
+            output.Add(new CssDeclaration($"border-{side2}-color", color, important));
             return true;
         }
 
@@ -456,25 +555,101 @@ namespace Rend.Css.Parser.Internal
 
         private static bool ExpandBackground(CssValue value, bool important, List<CssDeclaration> output)
         {
-            // v1: only handle background-color. Other sub-properties get defaults.
             var parts = GetListValues(value);
 
             CssValue bgColor = new CssKeywordValue("transparent");
+            CssValue bgImage = new CssKeywordValue("none");
+            CssValue bgRepeat = new CssKeywordValue("repeat");
+            CssValue bgSize = new CssKeywordValue("auto");
+            CssValue bgClip = new CssKeywordValue("border-box");
+            CssValue bgOrigin = new CssKeywordValue("padding-box");
+            var positionParts = new List<CssValue>();
+            bool sizeNext = false;
+            var sizeParts = new List<CssValue>();
 
-            foreach (var p in parts)
+            for (int i = 0; i < parts.Count; i++)
             {
-                if (p is CssColorValue || (p is CssKeywordValue kw &&
-                    (kw.Keyword == "transparent" || kw.Keyword == "currentcolor" || kw.Keyword == "inherit")))
+                var p = parts[i];
+
+                // After a "/" separator, next values are background-size
+                if (p is CssKeywordValue slash && slash.Keyword == "/")
+                {
+                    sizeNext = true;
+                    continue;
+                }
+
+                if (sizeNext)
+                {
+                    sizeParts.Add(p);
+                    // Size takes at most 2 values
+                    if (sizeParts.Count >= 2 || (p is CssKeywordValue sk && (sk.Keyword == "cover" || sk.Keyword == "contain")))
+                        sizeNext = false;
+                    continue;
+                }
+
+                if (p is CssUrlValue)
+                {
+                    bgImage = p;
+                }
+                else if (p is CssColorValue)
                 {
                     bgColor = p;
                 }
+                else if (p is CssKeywordValue kw)
+                {
+                    string k = kw.Keyword;
+                    if (k == "transparent" || k == "currentcolor" || k == "inherit")
+                        bgColor = p;
+                    else if (k == "none")
+                        bgImage = p;
+                    else if (k == "repeat" || k == "no-repeat" || k == "repeat-x" || k == "repeat-y" ||
+                             k == "space" || k == "round")
+                        bgRepeat = p;
+                    else if (k == "border-box" || k == "padding-box" || k == "content-box")
+                    {
+                        // First box value is origin, second is clip
+                        if (bgOrigin is CssKeywordValue origKw && origKw.Keyword == "padding-box")
+                            bgOrigin = p;
+                        else
+                            bgClip = p;
+                    }
+                    else if (k == "cover" || k == "contain")
+                        bgSize = p;
+                    else if (k == "left" || k == "right" || k == "top" || k == "bottom" || k == "center")
+                        positionParts.Add(p);
+                }
+                else if (p is CssPercentageValue || p is CssDimensionValue)
+                {
+                    positionParts.Add(p);
+                }
+                else if (p is CssNumberValue num && num.Value == 0)
+                {
+                    positionParts.Add(p);
+                }
             }
 
+            // Build background-position from collected parts
+            CssValue bgPosition;
+            if (positionParts.Count == 0)
+                bgPosition = new CssKeywordValue("0% 0%");
+            else if (positionParts.Count == 1)
+                bgPosition = positionParts[0];
+            else
+                bgPosition = new CssListValue(positionParts);
+
+            // Build background-size from collected parts
+            if (sizeParts.Count == 1)
+                bgSize = sizeParts[0];
+            else if (sizeParts.Count >= 2)
+                bgSize = new CssListValue(sizeParts);
+
             output.Add(new CssDeclaration("background-color", bgColor, important));
-            output.Add(new CssDeclaration("background-image", new CssKeywordValue("none"), important));
-            output.Add(new CssDeclaration("background-repeat", new CssKeywordValue("repeat"), important));
-            output.Add(new CssDeclaration("background-position", new CssKeywordValue("0% 0%"), important));
-            output.Add(new CssDeclaration("background-size", new CssKeywordValue("auto"), important));
+            output.Add(new CssDeclaration("background-image", bgImage, important));
+            output.Add(new CssDeclaration("background-repeat", bgRepeat, important));
+            output.Add(new CssDeclaration("background-position", bgPosition, important));
+            output.Add(new CssDeclaration("background-size", bgSize, important));
+            output.Add(new CssDeclaration("background-clip", bgClip, important));
+            output.Add(new CssDeclaration("background-origin", bgOrigin, important));
             return true;
         }
 
@@ -609,6 +784,154 @@ namespace Rend.Css.Parser.Internal
                 return result;
             }
             return new List<CssValue> { value };
+        }
+
+        #endregion
+
+        #region Multi-Column
+
+        /// <summary>
+        /// Expand 'columns' shorthand → column-width, column-count.
+        /// Format: [column-width] || [column-count]
+        /// </summary>
+        private static bool ExpandColumns(CssValue value, bool important, List<CssDeclaration> output)
+        {
+            var parts = GetListValues(value);
+            CssValue? width = null;
+            CssValue? count = null;
+
+            foreach (var part in parts)
+            {
+                if (part is CssKeywordValue kw && kw.Keyword == "auto")
+                    continue; // auto is the default for both
+
+                if (part is CssDimensionValue || (part is CssNumberValue n && n.Value == 0))
+                {
+                    width = part;
+                }
+                else if (part is CssNumberValue num && num.Value >= 1)
+                {
+                    count = part;
+                }
+            }
+
+            var auto = new CssKeywordValue("auto");
+            output.Add(new CssDeclaration("column-width", width ?? auto, important));
+            output.Add(new CssDeclaration("column-count", count ?? auto, important));
+            return true;
+        }
+
+        /// <summary>
+        /// Expand 'column-rule' shorthand → column-rule-width, column-rule-style, column-rule-color.
+        /// Same format as border shorthand.
+        /// </summary>
+        private static bool ExpandColumnRule(CssValue value, bool important, List<CssDeclaration> output)
+        {
+            var parts = GetListValues(value);
+            CssValue? width = null;
+            CssValue? style = null;
+            CssValue? color = null;
+
+            foreach (var part in parts)
+            {
+                if (part is CssKeywordValue kw)
+                {
+                    if (IsBorderStyleKeyword(kw.Keyword))
+                        style = part;
+                    else if (IsBorderWidthKeyword(kw.Keyword))
+                        width = part;
+                    else
+                        color = part;
+                }
+                else if (part is CssColorValue || part is CssFunctionValue)
+                {
+                    color = part;
+                }
+                else if (part is CssDimensionValue || part is CssNumberValue)
+                {
+                    width = part;
+                }
+            }
+
+            output.Add(new CssDeclaration("column-rule-width", width ?? new CssKeywordValue("medium"), important));
+            output.Add(new CssDeclaration("column-rule-style", style ?? new CssKeywordValue("none"), important));
+            output.Add(new CssDeclaration("column-rule-color", color ?? new CssKeywordValue("currentColor"), important));
+            return true;
+        }
+
+        #endregion
+
+        #region Grid
+
+        /// <summary>
+        /// Expands grid-row / grid-column shorthands.
+        /// Format: &lt;start&gt; / &lt;end&gt; or just &lt;start&gt; (end defaults to auto).
+        /// </summary>
+        private static bool ExpandGridLine(CssValue value, bool important, List<CssDeclaration> output,
+            string startProp, string endProp)
+        {
+            var parts = GetListValues(value);
+            int slashIdx = -1;
+            for (int i = 0; i < parts.Count; i++)
+            {
+                if (parts[i] is CssKeywordValue kw && kw.Keyword == "/")
+                {
+                    slashIdx = i;
+                    break;
+                }
+            }
+
+            if (slashIdx >= 0 && slashIdx + 1 < parts.Count)
+            {
+                // Collect values before and after slash
+                var startParts = parts.GetRange(0, slashIdx);
+                var endParts = parts.GetRange(slashIdx + 1, parts.Count - slashIdx - 1);
+                output.Add(new CssDeclaration(startProp,
+                    startParts.Count == 1 ? startParts[0] : new CssListValue(startParts), important));
+                output.Add(new CssDeclaration(endProp,
+                    endParts.Count == 1 ? endParts[0] : new CssListValue(endParts), important));
+            }
+            else
+            {
+                output.Add(new CssDeclaration(startProp, value, important));
+                output.Add(new CssDeclaration(endProp, new CssKeywordValue("auto"), important));
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Expands grid-area: row-start / column-start / row-end / column-end.
+        /// Missing values default to auto.
+        /// </summary>
+        private static bool ExpandGridArea(CssValue value, bool important, List<CssDeclaration> output)
+        {
+            var parts = GetListValues(value);
+
+            // Split on "/" separators
+            var segments = new List<CssValue>[4];
+            for (int i = 0; i < 4; i++) segments[i] = new List<CssValue>();
+            int segIdx = 0;
+            for (int i = 0; i < parts.Count && segIdx < 4; i++)
+            {
+                if (parts[i] is CssKeywordValue kw && kw.Keyword == "/")
+                {
+                    segIdx++;
+                    continue;
+                }
+                segments[segIdx].Add(parts[i]);
+            }
+
+            string[] props = { "grid-row-start", "grid-column-start", "grid-row-end", "grid-column-end" };
+            var autoVal = new CssKeywordValue("auto");
+            for (int i = 0; i < 4; i++)
+            {
+                CssValue val = segments[i].Count == 1 ? segments[i][0]
+                    : segments[i].Count > 1 ? new CssListValue(segments[i])
+                    : (CssValue)autoVal;
+                output.Add(new CssDeclaration(props[i], val, important));
+            }
+            return true;
         }
 
         #endregion

@@ -4,6 +4,7 @@ using Rend.Core.Values;
 using Rend.Css.Cascade.Internal;
 using Rend.Css.Media.Internal;
 using Rend.Css.Resolution.Internal;
+using Rend.Css.Supports.Internal;
 using Rend.Css.UserAgent.Internal;
 
 namespace Rend.Css
@@ -86,6 +87,56 @@ namespace Rend.Css
             return builder.Build(winners, parentStyle);
         }
 
+        /// <summary>
+        /// Resolve the computed style for a pseudo-element (::before, ::after, ::first-letter, ::first-line).
+        /// Returns null if no rules target the pseudo-element.
+        /// For ::before/::after, also returns null if content is "none"/empty.
+        /// </summary>
+        /// <param name="element">The element the pseudo-element belongs to.</param>
+        /// <param name="pseudoElement">The pseudo-element name.</param>
+        /// <param name="elementStyle">The parent element's computed style.</param>
+        public ComputedStyle? ResolvePseudoElement(IStylableElement element, string pseudoElement, ComputedStyle elementStyle)
+        {
+            var collector = new CascadeCollector(_matcher);
+            var declarations = new List<CascadedDeclaration>();
+
+            // 1. User-agent stylesheet
+            if (_options.ApplyUserAgentStyles)
+            {
+                var ua = GetFilteredUserAgentStylesheet();
+                collector.CollectPseudoElement(element, ua, CascadeOrigin.UserAgent, pseudoElement, declarations);
+            }
+
+            // 2. Author stylesheets
+            foreach (var sheet in _authorStylesheets)
+            {
+                var filtered = FilterMediaRules(sheet);
+                collector.CollectPseudoElement(element, filtered, CascadeOrigin.Author, pseudoElement, declarations);
+            }
+
+            // No pseudo-element rules found
+            if (declarations.Count == 0) return null;
+
+            // 3. Resolve cascade winners
+            var winners = CascadeSorter.ResolveWinners(declarations);
+
+            // 4. Check if content property is set (required for ::before/::after to generate)
+            //    ::first-letter and ::first-line don't need content — they style existing text
+            bool needsContent = pseudoElement == "before" || pseudoElement == "after";
+            if (needsContent && !winners.ContainsKey("content")) return null;
+
+            // 5. Build computed style (inherits from the element, not the element's parent)
+            float parentFontSize = elementStyle.FontSize;
+            var ctx = new CssResolutionContext(
+                parentFontSize,
+                _options.DefaultFontSize,
+                _options.ViewportWidth,
+                _options.ViewportHeight);
+
+            var builder = new ComputedStyleBuilder(ctx);
+            return builder.Build(winners, elementStyle);
+        }
+
         private Stylesheet GetFilteredUserAgentStylesheet()
         {
             if (_filteredUserAgent != null) return _filteredUserAgent;
@@ -119,6 +170,15 @@ namespace Rend.Css
                         FilterRules(mr.Rules, output);
                     }
                     // else: skip this @media block entirely
+                }
+                else if (rule is SupportsRule sr)
+                {
+                    if (SupportsEvaluator.Evaluate(sr.ConditionText))
+                    {
+                        // Flatten: add the nested rules directly
+                        FilterRules(sr.Rules, output);
+                    }
+                    // else: skip this @supports block entirely
                 }
                 else
                 {

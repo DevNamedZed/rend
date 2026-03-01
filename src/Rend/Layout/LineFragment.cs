@@ -1,3 +1,5 @@
+using Rend.Css;
+using Rend.Style;
 using Rend.Text;
 
 namespace Rend.Layout
@@ -31,5 +33,18 @@ namespace Rend.Layout
 
         /// <summary>The text content if this is a text fragment.</summary>
         public string? Text { get; set; }
+
+        /// <summary>
+        /// The containing inline element (e.g., an &lt;a&gt; or &lt;span&gt;) if this
+        /// fragment was created inside an inline element during layout.
+        /// Used for link annotation detection.
+        /// </summary>
+        public StyledElement? InlineElement { get; set; }
+
+        /// <summary>
+        /// Optional style override for this fragment (e.g., ::first-letter or ::first-line styling).
+        /// When set, the painter uses this instead of the parent/inline element style.
+        /// </summary>
+        public ComputedStyle? StyleOverride { get; set; }
     }
 }

@@ -151,6 +151,13 @@ namespace Rend.Core.Values
             return new Matrix3x2(cos, sin, -sin, cos, 0, 0);
         }
 
+        public static Matrix3x2 CreateSkew(float angleXRadians, float angleYRadians)
+        {
+            float tanX = (float)Math.Tan(angleXRadians);
+            float tanY = (float)Math.Tan(angleYRadians);
+            return new Matrix3x2(1, tanY, tanX, 1, 0, 0);
+        }
+
         public static Matrix3x2 operator *(Matrix3x2 a, Matrix3x2 b)
         {
             return new Matrix3x2(

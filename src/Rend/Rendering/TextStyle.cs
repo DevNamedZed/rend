@@ -22,5 +22,11 @@ namespace Rend.Rendering
 
         /// <summary>Gets or sets a value indicating whether the text is italic.</summary>
         public bool Italic { get; set; }
+
+        /// <summary>Gets or sets the extra spacing between characters in pixels (CSS letter-spacing).</summary>
+        public float LetterSpacing { get; set; }
+
+        /// <summary>Gets or sets the extra spacing between words in pixels (CSS word-spacing).</summary>
+        public float WordSpacing { get; set; }
     }
 }

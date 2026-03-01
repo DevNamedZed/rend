@@ -3,6 +3,7 @@ using Rend.Core;
 using Rend.Core.Values;
 using Rend.Fonts;
 
+
 namespace Rend
 {
     /// <summary>
@@ -51,6 +52,21 @@ namespace Rend
 
         /// <summary>Default font size in CSS pixels. Default: 16.</summary>
         public float DefaultFontSize { get; set; } = 16f;
+
+        /// <summary>
+        /// HTML content for page headers. Rendered in the top margin area of each page.
+        /// Supports template variables: {pageNumber}, {totalPages}, {date}.
+        /// </summary>
+        public string? HeaderHtml { get; set; }
+
+        /// <summary>
+        /// HTML content for page footers. Rendered in the bottom margin area of each page.
+        /// Supports template variables: {pageNumber}, {totalPages}, {date}.
+        /// </summary>
+        public string? FooterHtml { get; set; }
+
+        /// <summary>Progress reporter. If set, receives progress updates during rendering.</summary>
+        public IProgress<RenderProgress>? Progress { get; set; }
 
         /// <summary>Default options.</summary>
         public static readonly RenderOptions Default = new RenderOptions();

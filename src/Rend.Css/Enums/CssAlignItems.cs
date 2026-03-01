@@ -1,6 +1,6 @@
 namespace Rend.Css
 {
-    /// <summary>CSS align-items property values.</summary>
+    /// <summary>CSS align-items / align-content property values.</summary>
     public enum CssAlignItems : byte
     {
         Stretch,
@@ -9,6 +9,10 @@ namespace Rend.Css
         Center,
         Baseline,
         Start,
-        End
+        End,
+        SpaceBetween,
+        SpaceAround,
+        SpaceEvenly,
+        Normal
     }
 }

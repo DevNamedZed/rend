@@ -30,6 +30,12 @@ namespace Rend.Style
         /// <summary>The styled children (elements and text nodes).</summary>
         public IReadOnlyList<StyledNode> Children => _children;
 
+        /// <summary>Resolved ::first-letter style, or null if none.</summary>
+        public ComputedStyle? FirstLetterStyle { get; internal set; }
+
+        /// <summary>Resolved ::first-line style, or null if none.</summary>
+        public ComputedStyle? FirstLineStyle { get; internal set; }
+
         /// <summary>Get attribute value from the underlying element.</summary>
         public string? GetAttribute(string name) => Element.GetAttribute(name);
     }

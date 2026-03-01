@@ -26,7 +26,7 @@ namespace Rend.Css
     /// <summary>Kind discriminator for CSS rules.</summary>
     public enum CssRuleType : byte
     {
-        Style, Media, FontFace, Import, Page
+        Style, Media, FontFace, Import, Page, Supports, Namespace, Keyframes, Layer
     }
 
     /// <summary>
@@ -106,6 +106,47 @@ namespace Rend.Css
     }
 
     /// <summary>
+    /// A @supports rule containing a feature query and nested rules.
+    /// </summary>
+    public sealed class SupportsRule : CssRule
+    {
+        public override CssRuleType Type => CssRuleType.Supports;
+
+        /// <summary>The raw condition text.</summary>
+        public string ConditionText { get; }
+
+        /// <summary>Nested rules inside this @supports block.</summary>
+        public IReadOnlyList<CssRule> Rules { get; }
+
+        internal SupportsRule(string conditionText, List<CssRule> rules)
+        {
+            ConditionText = conditionText;
+            Rules = rules;
+        }
+    }
+
+    /// <summary>
+    /// A @namespace rule declaring an XML namespace prefix.
+    /// e.g. @namespace svg "http://www.w3.org/2000/svg";
+    /// </summary>
+    public sealed class NamespaceRule : CssRule
+    {
+        public override CssRuleType Type => CssRuleType.Namespace;
+
+        /// <summary>The namespace prefix (e.g. "svg"), or null for the default namespace.</summary>
+        public string? Prefix { get; }
+
+        /// <summary>The namespace URI.</summary>
+        public string Uri { get; }
+
+        internal NamespaceRule(string? prefix, string uri)
+        {
+            Prefix = prefix;
+            Uri = uri;
+        }
+    }
+
+    /// <summary>
     /// A @page rule with page-specific declarations.
     /// </summary>
     public sealed class PageRule : CssRule
@@ -121,6 +162,69 @@ namespace Rend.Css
         {
             PageSelector = pageSelector;
             Declarations = declarations;
+        }
+    }
+
+    /// <summary>
+    /// A @keyframes rule defining an animation's keyframes.
+    /// </summary>
+    public sealed class KeyframesRule : CssRule
+    {
+        public override CssRuleType Type => CssRuleType.Keyframes;
+
+        /// <summary>The animation name.</summary>
+        public string Name { get; }
+
+        /// <summary>The keyframe stops.</summary>
+        public IReadOnlyList<Keyframe> Keyframes { get; }
+
+        internal KeyframesRule(string name, List<Keyframe> keyframes)
+        {
+            Name = name;
+            Keyframes = keyframes;
+        }
+    }
+
+    /// <summary>
+    /// A single keyframe stop within a @keyframes rule.
+    /// </summary>
+    public sealed class Keyframe
+    {
+        /// <summary>The selector text (e.g. "from", "to", "50%").</summary>
+        public string Selector { get; }
+
+        /// <summary>The declarations at this keyframe stop.</summary>
+        public IReadOnlyList<CssDeclaration> Declarations { get; }
+
+        internal Keyframe(string selector, List<CssDeclaration> declarations)
+        {
+            Selector = selector;
+            Declarations = declarations;
+        }
+    }
+
+    /// <summary>
+    /// A @layer rule declaring cascade layers.
+    /// Can be a declaration form (@layer name;) or block form (@layer name { ... }).
+    /// </summary>
+    public sealed class LayerRule : CssRule
+    {
+        public override CssRuleType Type => CssRuleType.Layer;
+
+        /// <summary>The layer name(s). Dotted names represent nested layers (e.g. "framework.base").</summary>
+        public IReadOnlyList<string> Names { get; }
+
+        /// <summary>Nested rules inside this layer block. Empty for declaration-only form.</summary>
+        public IReadOnlyList<CssRule> Rules { get; }
+
+        /// <summary>True if this is a block rule (has { } body), false if declaration-only.</summary>
+        public bool IsBlock { get; }
+
+        internal LayerRule(List<string> names, List<CssRule> rules, bool isBlock)
+        {
+            Names = names;
+            Rules = rules;
+            IsBlock = isBlock;
         }
     }
 }

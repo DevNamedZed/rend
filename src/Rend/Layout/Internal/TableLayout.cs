@@ -37,28 +37,54 @@ namespace Rend.Layout.Internal
             else
                 colWidths = CalculateAutoWidths(tableCtx, numCols, containerWidth, context);
 
-            // Layout cells
-            float borderSpacing = style.BorderCollapse == CssBorderCollapse.Collapse ? 0 : 2f;
-            float cursorY = parent.ContentRect.Y;
+            // Layout cells — use CSS border-spacing (defaults to 0 if collapsed)
+            bool collapsed = style.BorderCollapse == CssBorderCollapse.Collapse;
+            float borderSpacingH = collapsed ? 0 : Math.Max(style.BorderSpacing, 0);
+            float borderSpacingV = collapsed ? 0 : Math.Max(style.BorderSpacingV, 0);
 
-            for (int r = 0; r < tableCtx.Rows.Count; r++)
+            int numRows = tableCtx.Rows.Count;
+
+            // Build occupied grid for rowspan/colspan tracking
+            var occupied = new bool[numRows, numCols];
+            float[] rowHeights = new float[numRows];
+            var rowBoxes = new LayoutBox[numRows];
+
+            // Track cells with rowspan > 1 for height distribution
+            var rowspanCells = new List<RowspanCellInfo>();
+
+            // First pass: lay out all cells, determine row heights for rowspan=1 cells
+            for (int r = 0; r < numRows; r++)
             {
                 var row = tableCtx.Rows[r];
-                float rowHeight = 0;
-                float cursorX = parent.ContentRect.X;
-
-                // Create row box
                 var rowBox = new LayoutBox(row.StyledElement, BoxType.TableRow);
+                rowBoxes[r] = rowBox;
 
-                for (int c = 0; c < row.Cells.Count && c < numCols; c++)
+                // visibility: collapse — row takes no space but structure is preserved
+                if (row.StyledElement?.Style.Visibility == CssVisibility.Collapse)
                 {
-                    var cell = row.Cells[c];
+                    rowHeights[r] = 0;
+                    continue;
+                }
+
+                int cellIdx = 0;
+                for (int c = 0; c < numCols && cellIdx < row.Cells.Count; c++)
+                {
+                    if (occupied[r, c]) continue;
+
+                    var cell = row.Cells[cellIdx++];
                     if (cell == null) continue;
 
+                    // Mark occupied cells
+                    int effectiveRowSpan = Math.Min(cell.RowSpan, numRows - r);
+                    int effectiveColSpan = Math.Min(cell.ColSpan, numCols - c);
+                    for (int rs = 0; rs < effectiveRowSpan; rs++)
+                        for (int cs = 0; cs < effectiveColSpan; cs++)
+                            occupied[r + rs, c + cs] = true;
+
+                    // Calculate cell width (with colspan)
                     float cellWidth = colWidths[c];
-                    // Handle colspan
-                    for (int cs = 1; cs < cell.ColSpan && c + cs < numCols; cs++)
-                        cellWidth += colWidths[c + cs] + borderSpacing;
+                    for (int cs = 1; cs < effectiveColSpan; cs++)
+                        cellWidth += colWidths[c + cs] + borderSpacingH;
 
                     var cellBox = new LayoutBox(cell.StyledElement, BoxType.TableCell);
                     if (cell.StyledElement != null)
@@ -68,30 +94,357 @@ namespace Rend.Layout.Internal
                                        - cellBox.BorderLeftWidth - cellBox.BorderRightWidth;
                     contentWidth = Math.Max(0, contentWidth);
 
-                    cellBox.ContentRect = new RectF(
-                        cursorX + cellBox.MarginLeft + cellBox.BorderLeftWidth + cellBox.PaddingLeft,
-                        cursorY + cellBox.MarginTop + cellBox.BorderTopWidth + cellBox.PaddingTop,
-                        contentWidth, 0);
-
-                    // Layout cell contents
+                    // Temporary Y — will be repositioned in second pass
+                    cellBox.ContentRect = new RectF(0, 0, contentWidth, 0);
                     BlockFormattingContext.Layout(cellBox, context);
                     float cellContentHeight = CalculateAutoHeight(cellBox);
-                    cellBox.ContentRect = new RectF(cellBox.ContentRect.X, cellBox.ContentRect.Y,
-                                                    contentWidth, cellContentHeight);
+                    cellBox.ContentRect = new RectF(0, 0, contentWidth, cellContentHeight);
 
                     float totalCellHeight = cellContentHeight + cellBox.PaddingTop + cellBox.PaddingBottom
                                           + cellBox.BorderTopWidth + cellBox.BorderBottomWidth;
-                    if (totalCellHeight > rowHeight) rowHeight = totalCellHeight;
+
+                    if (effectiveRowSpan == 1)
+                    {
+                        if (totalCellHeight > rowHeights[r]) rowHeights[r] = totalCellHeight;
+                    }
+                    else
+                    {
+                        rowspanCells.Add(new RowspanCellInfo
+                        {
+                            CellBox = cellBox,
+                            StartRow = r,
+                            RowSpan = effectiveRowSpan,
+                            Col = c,
+                            ColSpan = effectiveColSpan,
+                            TotalHeight = totalCellHeight
+                        });
+                    }
 
                     rowBox.AddChild(cellBox);
-                    cursorX += cellWidth + borderSpacing;
+
+                    // Skip columns occupied by colspan
+                    c += effectiveColSpan - 1;
+                }
+            }
+
+            // Distribute rowspan cell heights across spanned rows
+            for (int s = 0; s < rowspanCells.Count; s++)
+            {
+                var rsc = rowspanCells[s];
+                float spannedHeight = 0;
+                for (int rs = 0; rs < rsc.RowSpan; rs++)
+                    spannedHeight += rowHeights[rsc.StartRow + rs] + (rs > 0 ? borderSpacingV : 0);
+
+                if (rsc.TotalHeight > spannedHeight)
+                {
+                    float extra = rsc.TotalHeight - spannedHeight;
+                    // Distribute extra height proportionally to existing row heights
+                    float totalRowHeight = 0;
+                    for (int rs = 0; rs < rsc.RowSpan; rs++)
+                        totalRowHeight += rowHeights[rsc.StartRow + rs];
+
+                    if (totalRowHeight > 0)
+                    {
+                        for (int rs = 0; rs < rsc.RowSpan; rs++)
+                            rowHeights[rsc.StartRow + rs] += extra * (rowHeights[rsc.StartRow + rs] / totalRowHeight);
+                    }
+                    else
+                    {
+                        // All spanned rows have zero height: distribute equally
+                        float perRow = extra / rsc.RowSpan;
+                        for (int rs = 0; rs < rsc.RowSpan; rs++)
+                            rowHeights[rsc.StartRow + rs] += perRow;
+                    }
+                }
+            }
+
+            // Build column X positions
+            float[] colXPositions = new float[numCols];
+            float cx = parent.ContentRect.X;
+            for (int c = 0; c < numCols; c++)
+            {
+                colXPositions[c] = cx;
+                cx += colWidths[c] + borderSpacingH;
+            }
+
+            // Build cell-to-column mapping by replaying the grid walk
+            var cellColumns = new Dictionary<LayoutBox, int>();
+            var occupied2 = new bool[numRows, numCols];
+            for (int r = 0; r < numRows; r++)
+            {
+                var row2 = tableCtx.Rows[r];
+                int cellIdx2 = 0;
+                for (int c = 0; c < numCols && cellIdx2 < row2.Cells.Count; c++)
+                {
+                    if (occupied2[r, c]) continue;
+                    var cell2 = row2.Cells[cellIdx2++];
+                    int rs2 = Math.Min(cell2.RowSpan, numRows - r);
+                    int cs2 = Math.Min(cell2.ColSpan, numCols - c);
+                    for (int ri = 0; ri < rs2; ri++)
+                        for (int ci = 0; ci < cs2; ci++)
+                            occupied2[r + ri, c + ci] = true;
+
+                    // Map the corresponding child box in rowBoxes[r]
+                    int childIdx = cellIdx2 - 1;
+                    if (childIdx < rowBoxes[r].Children.Count)
+                        cellColumns[rowBoxes[r].Children[childIdx]] = c;
+
+                    c += cs2 - 1;
+                }
+            }
+
+            // Layout top captions (caption-side: top or default)
+            float cursorY = parent.ContentRect.Y;
+            for (int cap = 0; cap < tableCtx.Captions.Count; cap++)
+            {
+                var captionEl = tableCtx.Captions[cap];
+                if (captionEl.Style.CaptionSide == CssCaptionSide.Bottom) continue;
+                cursorY = LayoutCaption(captionEl, parent, context, containerWidth, cursorY);
+            }
+
+            // Second pass: position cells with final Y coordinates
+            float[] rowYPositions = new float[numRows];
+            for (int r = 0; r < numRows; r++)
+            {
+                rowYPositions[r] = cursorY;
+                cursorY += rowHeights[r] + borderSpacingV;
+            }
+
+            for (int r = 0; r < numRows; r++)
+            {
+                var rowBox = rowBoxes[r];
+
+                for (int ci = 0; ci < rowBox.Children.Count; ci++)
+                {
+                    var cellBox = rowBox.Children[ci];
+                    int cellCol = cellColumns.ContainsKey(cellBox) ? cellColumns[cellBox] : 0;
+                    float cellX = colXPositions[cellCol];
+
+                    // Calculate cell height (may span multiple rows)
+                    float cellHeight = rowHeights[r];
+                    int cellRowSpan = GetCellRowSpan(cellBox, rowspanCells, r);
+                    if (cellRowSpan > 1)
+                    {
+                        cellHeight = 0;
+                        for (int rs = 0; rs < cellRowSpan && r + rs < numRows; rs++)
+                            cellHeight += rowHeights[r + rs] + (rs > 0 ? borderSpacingV : 0);
+                    }
+
+                    // Position the cell
+                    float cellContentHeight = cellBox.ContentRect.Height;
+                    cellBox.ContentRect = new RectF(
+                        cellX + cellBox.MarginLeft + cellBox.BorderLeftWidth + cellBox.PaddingLeft,
+                        rowYPositions[r] + cellBox.MarginTop + cellBox.BorderTopWidth + cellBox.PaddingTop,
+                        cellBox.ContentRect.Width, cellContentHeight);
+
+                    // Reposition children from (0,0) to actual cell position
+                    float dx = cellBox.ContentRect.X;
+                    float dy = cellBox.ContentRect.Y;
+                    for (int cci = 0; cci < cellBox.Children.Count; cci++)
+                        OffsetBoxInPlace(cellBox.Children[cci], dx, dy);
+                    if (cellBox.LineBoxes != null)
+                    {
+                        for (int li = 0; li < cellBox.LineBoxes.Count; li++)
+                        {
+                            cellBox.LineBoxes[li].X += dx;
+                            cellBox.LineBoxes[li].Y += dy;
+                        }
+                    }
+
+                    // Apply vertical-align
+                    float totalCellHeight = cellContentHeight + cellBox.PaddingTop + cellBox.PaddingBottom
+                                          + cellBox.BorderTopWidth + cellBox.BorderBottomWidth;
+                    float freeSpace = cellHeight - totalCellHeight;
+                    if (freeSpace > 0)
+                    {
+                        var valign = CssVerticalAlign.Baseline;
+                        if (cellBox.StyledNode is StyledElement cellEl)
+                            valign = cellEl.Style.VerticalAlign;
+
+                        float offsetY = 0;
+                        switch (valign)
+                        {
+                            case CssVerticalAlign.Middle:
+                                offsetY = freeSpace / 2;
+                                break;
+                            case CssVerticalAlign.Bottom:
+                            case CssVerticalAlign.TextBottom:
+                                offsetY = freeSpace;
+                                break;
+                        }
+
+                        if (offsetY > 0)
+                        {
+                            cellBox.ContentRect = new RectF(
+                                cellBox.ContentRect.X,
+                                cellBox.ContentRect.Y + offsetY,
+                                cellBox.ContentRect.Width,
+                                cellBox.ContentRect.Height);
+                            for (int cci = 0; cci < cellBox.Children.Count; cci++)
+                                OffsetBoxInPlace(cellBox.Children[cci], 0, offsetY);
+                        }
+                    }
                 }
 
-                rowBox.ContentRect = new RectF(parent.ContentRect.X, cursorY,
-                                               containerWidth, rowHeight);
+                rowBox.ContentRect = new RectF(parent.ContentRect.X, rowYPositions[r],
+                                               containerWidth, rowHeights[r]);
                 parent.AddChild(rowBox);
-                cursorY += rowHeight + borderSpacing;
             }
+
+            // Apply border collapsing: zero out shared borders where neighbor has wider border
+            if (style.BorderCollapse == CssBorderCollapse.Collapse)
+            {
+                CollapseBorders(rowBoxes, numRows, numCols, occupied2, cellColumns);
+            }
+
+            // Layout bottom captions
+            for (int cap = 0; cap < tableCtx.Captions.Count; cap++)
+            {
+                var captionEl = tableCtx.Captions[cap];
+                if (captionEl.Style.CaptionSide != CssCaptionSide.Bottom) continue;
+                cursorY = LayoutCaption(captionEl, parent, context, containerWidth, cursorY);
+            }
+        }
+
+        private static void CollapseBorders(LayoutBox[] rowBoxes, int numRows, int numCols,
+            bool[,] occupied, Dictionary<LayoutBox, int> cellColumns)
+        {
+            // Build a grid mapping (row, col) -> cellBox for quick adjacency lookups
+            var cellGrid = new LayoutBox[numRows, numCols];
+            for (int r = 0; r < numRows; r++)
+            {
+                var rowBox = rowBoxes[r];
+                for (int ci = 0; ci < rowBox.Children.Count; ci++)
+                {
+                    var cellBox = rowBox.Children[ci];
+                    int col = cellColumns.ContainsKey(cellBox) ? cellColumns[cellBox] : 0;
+                    cellGrid[r, col] = cellBox;
+                }
+            }
+
+            // Collapse adjacent horizontal borders: cell's right border vs right neighbor's left border
+            for (int r = 0; r < numRows; r++)
+            {
+                for (int c = 0; c < numCols - 1; c++)
+                {
+                    var left = cellGrid[r, c];
+                    var right = cellGrid[r, c + 1];
+                    if (left == null || right == null) continue;
+                    if (ReferenceEquals(left, right)) continue; // same cell (colspan)
+
+                    var leftStyle = left.StyledNode?.Style;
+                    var rightStyle = right.StyledNode?.Style;
+                    if (BorderWins(left.BorderRightWidth, leftStyle?.BorderRightStyle ?? CssBorderStyle.None,
+                                   right.BorderLeftWidth, rightStyle?.BorderLeftStyle ?? CssBorderStyle.None))
+                        right.BorderLeftWidth = 0;
+                    else
+                        left.BorderRightWidth = 0;
+                }
+            }
+
+            // Collapse adjacent vertical borders: cell's bottom border vs bottom neighbor's top border
+            for (int r = 0; r < numRows - 1; r++)
+            {
+                for (int c = 0; c < numCols; c++)
+                {
+                    var top = cellGrid[r, c];
+                    var bottom = cellGrid[r + 1, c];
+                    if (top == null || bottom == null) continue;
+                    if (ReferenceEquals(top, bottom)) continue; // same cell (rowspan)
+
+                    var topStyle = top.StyledNode?.Style;
+                    var bottomStyle = bottom.StyledNode?.Style;
+                    if (BorderWins(top.BorderBottomWidth, topStyle?.BorderBottomStyle ?? CssBorderStyle.None,
+                                   bottom.BorderTopWidth, bottomStyle?.BorderTopStyle ?? CssBorderStyle.None))
+                        bottom.BorderTopWidth = 0;
+                    else
+                        top.BorderBottomWidth = 0;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Determines if border A wins over border B per CSS 2.1 §17.6.2.
+        /// hidden always wins (both zeroed). Then wider wins. Then style priority.
+        /// </summary>
+        private static bool BorderWins(float widthA, CssBorderStyle styleA,
+                                       float widthB, CssBorderStyle styleB)
+        {
+            // hidden always wins — both borders get suppressed, but the hidden side "wins"
+            if (styleA == CssBorderStyle.Hidden) return true;
+            if (styleB == CssBorderStyle.Hidden) return false;
+
+            // none always loses
+            if (styleA == CssBorderStyle.None && styleB != CssBorderStyle.None) return false;
+            if (styleB == CssBorderStyle.None && styleA != CssBorderStyle.None) return true;
+
+            // Wider border wins
+            if (widthA > widthB) return true;
+            if (widthB > widthA) return false;
+
+            // Equal width: style priority (CSS 2.1 §17.6.2)
+            return StylePriority(styleA) >= StylePriority(styleB);
+        }
+
+        private static int StylePriority(CssBorderStyle style)
+        {
+            switch (style)
+            {
+                case CssBorderStyle.Double: return 8;
+                case CssBorderStyle.Solid: return 7;
+                case CssBorderStyle.Dashed: return 6;
+                case CssBorderStyle.Dotted: return 5;
+                case CssBorderStyle.Ridge: return 4;
+                case CssBorderStyle.Outset: return 3;
+                case CssBorderStyle.Groove: return 2;
+                case CssBorderStyle.Inset: return 1;
+                default: return 0; // none
+            }
+        }
+
+        private static int GetCellRowSpan(LayoutBox cellBox, List<RowspanCellInfo> rowspanCells, int row)
+        {
+            for (int i = 0; i < rowspanCells.Count; i++)
+            {
+                if (rowspanCells[i].CellBox == cellBox && rowspanCells[i].StartRow == row)
+                    return rowspanCells[i].RowSpan;
+            }
+            return 1;
+        }
+
+        private struct RowspanCellInfo
+        {
+            public LayoutBox CellBox;
+            public int StartRow;
+            public int RowSpan;
+            public int Col;
+            public int ColSpan;
+            public float TotalHeight;
+        }
+
+        private static float LayoutCaption(StyledElement captionEl, LayoutBox parent,
+            LayoutContext context, float containerWidth, float cursorY)
+        {
+            var captionBox = new LayoutBox(captionEl, BoxType.TableCaption);
+            BoxModelCalculator.ApplyBoxModel(captionBox, captionEl.Style, containerWidth);
+
+            float contentWidth = containerWidth - captionBox.PaddingLeft - captionBox.PaddingRight
+                               - captionBox.BorderLeftWidth - captionBox.BorderRightWidth
+                               - captionBox.MarginLeft - captionBox.MarginRight;
+            contentWidth = Math.Max(0, contentWidth);
+
+            float x = parent.ContentRect.X + captionBox.MarginLeft + captionBox.BorderLeftWidth + captionBox.PaddingLeft;
+            float y = cursorY + captionBox.MarginTop + captionBox.BorderTopWidth + captionBox.PaddingTop;
+
+            captionBox.ContentRect = new RectF(x, y, contentWidth, 0);
+            BlockFormattingContext.Layout(captionBox, context);
+
+            float contentHeight = CalculateAutoHeight(captionBox);
+            captionBox.ContentRect = new RectF(x, y, contentWidth, contentHeight);
+
+            parent.AddChild(captionBox);
+
+            return y + contentHeight + captionBox.PaddingBottom + captionBox.BorderBottomWidth + captionBox.MarginBottom;
         }
 
         private static void CollectTableStructure(StyledElement table, TableContext ctx)
@@ -99,11 +452,15 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < table.Children.Count; i++)
             {
                 var child = table.Children[i];
-                if (child.IsText) continue;
+                if (child.IsText || child is StyledPseudoElement) continue;
                 var childEl = (StyledElement)child;
                 var display = childEl.Style.Display;
 
-                if (display == CssDisplay.TableRow)
+                if (display == CssDisplay.TableCaption || childEl.TagName == "caption")
+                {
+                    ctx.Captions.Add(childEl);
+                }
+                else if (display == CssDisplay.TableRow)
                 {
                     ctx.Rows.Add(BuildRow(childEl));
                 }
@@ -113,7 +470,7 @@ namespace Rend.Layout.Internal
                     for (int j = 0; j < childEl.Children.Count; j++)
                     {
                         var rowChild = childEl.Children[j];
-                        if (!rowChild.IsText)
+                        if (!rowChild.IsText && !(rowChild is StyledPseudoElement))
                         {
                             var rowEl = (StyledElement)rowChild;
                             if (rowEl.Style.Display == CssDisplay.TableRow || rowEl.TagName == "tr")
@@ -130,7 +487,7 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < rowElement.Children.Count; i++)
             {
                 var child = rowElement.Children[i];
-                if (child.IsText) continue;
+                if (child.IsText || child is StyledPseudoElement) continue;
                 var cellEl = (StyledElement)child;
                 if (cellEl.Style.Display == CssDisplay.TableCell ||
                     cellEl.TagName == "td" || cellEl.TagName == "th")
@@ -140,10 +497,16 @@ namespace Rend.Layout.Internal
                     if (csVal != null && int.TryParse(csVal, out int cs) && cs > 0)
                         colspan = cs;
 
+                    int rowspan = 1;
+                    var rsVal = cellEl.GetAttribute("rowspan");
+                    if (rsVal != null && int.TryParse(rsVal, out int rs) && rs > 0)
+                        rowspan = rs;
+
                     row.Cells.Add(new TableCell
                     {
                         StyledElement = cellEl,
-                        ColSpan = colspan
+                        ColSpan = colspan,
+                        RowSpan = rowspan
                     });
                 }
             }
@@ -187,11 +550,124 @@ namespace Rend.Layout.Internal
         private static float[] CalculateAutoWidths(TableContext ctx, int numCols, float containerWidth,
                                                     LayoutContext context)
         {
-            float[] widths = new float[numCols];
-            float equalWidth = containerWidth / numCols;
+            float[] minWidths = new float[numCols];
+            float[] maxWidths = new float[numCols];
+
+            // Measure each cell's min-content and max-content width
+            for (int r = 0; r < ctx.Rows.Count; r++)
+            {
+                int col = 0;
+                for (int c = 0; c < ctx.Rows[r].Cells.Count && col < numCols; c++)
+                {
+                    var cell = ctx.Rows[r].Cells[c];
+                    if (cell.StyledElement == null) { col += cell.ColSpan; continue; }
+
+                    // Check for specified width
+                    float specWidth = cell.StyledElement.Style.Width;
+                    if (!float.IsNaN(specWidth) && specWidth > 0 && cell.ColSpan == 1)
+                    {
+                        if (specWidth > minWidths[col]) minWidths[col] = specWidth;
+                        if (specWidth > maxWidths[col]) maxWidths[col] = specWidth;
+                        col += cell.ColSpan;
+                        continue;
+                    }
+
+                    // Measure min-content width (very narrow container)
+                    float minW = MeasureCellWidth(cell.StyledElement, 1f, context);
+                    // Measure max-content width (very wide container)
+                    float maxW = MeasureCellWidth(cell.StyledElement, 10000f, context);
+
+                    if (cell.ColSpan == 1)
+                    {
+                        if (minW > minWidths[col]) minWidths[col] = minW;
+                        if (maxW > maxWidths[col]) maxWidths[col] = maxW;
+                    }
+                    else
+                    {
+                        // Distribute spanned widths equally for now
+                        float perCol = minW / cell.ColSpan;
+                        float perColMax = maxW / cell.ColSpan;
+                        for (int s = 0; s < cell.ColSpan && col + s < numCols; s++)
+                        {
+                            if (perCol > minWidths[col + s]) minWidths[col + s] = perCol;
+                            if (perColMax > maxWidths[col + s]) maxWidths[col + s] = perColMax;
+                        }
+                    }
+                    col += cell.ColSpan;
+                }
+            }
+
+            // Ensure min <= max for each column
             for (int i = 0; i < numCols; i++)
-                widths[i] = equalWidth;
+                if (maxWidths[i] < minWidths[i]) maxWidths[i] = minWidths[i];
+
+            float totalMin = 0, totalMax = 0;
+            for (int i = 0; i < numCols; i++)
+            {
+                totalMin += minWidths[i];
+                totalMax += maxWidths[i];
+            }
+
+            float[] widths = new float[numCols];
+
+            if (totalMax <= containerWidth)
+            {
+                // All columns fit at max-content width; distribute remaining space proportionally
+                float extra = containerWidth - totalMax;
+                for (int i = 0; i < numCols; i++)
+                    widths[i] = maxWidths[i] + (totalMax > 0 ? extra * (maxWidths[i] / totalMax) : extra / numCols);
+            }
+            else if (totalMin >= containerWidth)
+            {
+                // Use min-content widths
+                for (int i = 0; i < numCols; i++)
+                    widths[i] = minWidths[i];
+            }
+            else
+            {
+                // Interpolate between min and max proportionally
+                float range = totalMax - totalMin;
+                float avail = containerWidth - totalMin;
+                for (int i = 0; i < numCols; i++)
+                {
+                    float colRange = maxWidths[i] - minWidths[i];
+                    widths[i] = minWidths[i] + (range > 0 ? avail * (colRange / range) : 0);
+                }
+            }
+
             return widths;
+        }
+
+        private static float MeasureCellWidth(StyledElement cellElement, float availWidth, LayoutContext context)
+        {
+            var box = new LayoutBox(cellElement, BoxType.TableCell);
+            BoxModelCalculator.ApplyBoxModel(box, cellElement.Style, availWidth);
+            float contentWidth = availWidth - box.PaddingLeft - box.PaddingRight
+                               - box.BorderLeftWidth - box.BorderRightWidth;
+            contentWidth = Math.Max(0, contentWidth);
+            box.ContentRect = new RectF(0, 0, contentWidth, 0);
+            BlockFormattingContext.Layout(box, context);
+
+            // Measure actual content extent
+            float maxRight = 0;
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                float right = child.ContentRect.X + child.ContentRect.Width
+                            + child.PaddingRight + child.BorderRightWidth + child.MarginRight;
+                if (right > maxRight) maxRight = right;
+            }
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    float right = box.LineBoxes[i].X + box.LineBoxes[i].Width;
+                    if (right > maxRight) maxRight = right;
+                }
+            }
+
+            return maxRight + box.PaddingLeft + box.PaddingRight
+                 + box.BorderLeftWidth + box.BorderRightWidth;
         }
 
         private static float CalculateAutoHeight(LayoutBox box)
@@ -215,11 +691,28 @@ namespace Rend.Layout.Internal
             }
             return Math.Max(height, 0);
         }
+
+        private static void OffsetBoxInPlace(LayoutBox box, float dx, float dy)
+        {
+            box.ContentRect = new RectF(box.ContentRect.X + dx, box.ContentRect.Y + dy,
+                                        box.ContentRect.Width, box.ContentRect.Height);
+            for (int i = 0; i < box.Children.Count; i++)
+                OffsetBoxInPlace(box.Children[i], dx, dy);
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    box.LineBoxes[i].X += dx;
+                    box.LineBoxes[i].Y += dy;
+                }
+            }
+        }
     }
 
     internal sealed class TableContext
     {
         public List<TableRow> Rows { get; } = new List<TableRow>();
+        public List<StyledElement> Captions { get; } = new List<StyledElement>();
 
         public int GetColumnCount()
         {

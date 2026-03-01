@@ -99,9 +99,16 @@ namespace Rend.Css.Parser.Internal
             switch (keyword)
             {
                 case "media": return ParseMediaRule();
+                case "supports": return ParseSupportsRule();
                 case "font-face": return ParseFontFaceRule();
                 case "import": return ParseImportRule();
                 case "page": return ParsePageRule();
+                case "namespace": return ParseNamespaceRule();
+                case "keyframes":
+                case "-webkit-keyframes":
+                case "-moz-keyframes":
+                    return ParseKeyframesRule();
+                case "layer": return ParseLayerRule();
                 default:
                     // Unknown at-rule — skip it
                     SkipAtRule();
@@ -144,6 +151,43 @@ namespace Rend.Css.Parser.Internal
                 Advance();
 
             return new MediaRule(mediaText, rules);
+        }
+
+        private SupportsRule ParseSupportsRule()
+        {
+            SkipWhitespace();
+
+            // Consume condition text until '{'
+            var condBuilder = new StringBuilder();
+            while (_current.Type != CssTokenType.EOF && _current.Type != CssTokenType.LeftBrace)
+            {
+                AppendTokenText(condBuilder);
+                Advance();
+            }
+
+            var conditionText = condBuilder.ToString().Trim();
+
+            if (_current.Type != CssTokenType.LeftBrace)
+                return new SupportsRule(conditionText, new List<CssRule>());
+
+            Advance(); // skip '{'
+
+            // Parse nested rules (same as @media)
+            var rules = new List<CssRule>();
+            SkipWhitespaceAndCDx();
+
+            while (_current.Type != CssTokenType.EOF && _current.Type != CssTokenType.RightBrace)
+            {
+                var rule = ParseRule();
+                if (rule != null)
+                    rules.Add(rule);
+                SkipWhitespaceAndCDx();
+            }
+
+            if (_current.Type == CssTokenType.RightBrace)
+                Advance();
+
+            return new SupportsRule(conditionText, rules);
         }
 
         private FontFaceRule ParseFontFaceRule()
@@ -253,6 +297,220 @@ namespace Rend.Css.Parser.Internal
                 Advance();
 
             return new PageRule(pageSelector, declarations);
+        }
+
+        private NamespaceRule? ParseNamespaceRule()
+        {
+            SkipWhitespace();
+
+            string? prefix = null;
+            string? uri = null;
+
+            // @namespace [prefix] <url|string>;
+            // If first token is an ident, it's the prefix
+            if (_current.Type == CssTokenType.Ident)
+            {
+                prefix = _current.Value;
+                Advance();
+                SkipWhitespace();
+            }
+
+            // Now expect a URL or string for the namespace URI
+            if (_current.Type == CssTokenType.String)
+            {
+                uri = _current.Value;
+                Advance();
+            }
+            else if (_current.Type == CssTokenType.Url)
+            {
+                uri = _current.Value;
+                Advance();
+            }
+            else if (_current.Type == CssTokenType.Function &&
+                     _current.Value.Equals("url", System.StringComparison.OrdinalIgnoreCase))
+            {
+                Advance(); // skip function token
+                SkipWhitespace();
+                if (_current.Type == CssTokenType.String)
+                {
+                    uri = _current.Value;
+                    Advance();
+                }
+                SkipWhitespace();
+                if (_current.Type == CssTokenType.RightParen)
+                    Advance();
+            }
+
+            if (uri == null)
+            {
+                SkipToSemicolon();
+                return null;
+            }
+
+            if (_current.Type == CssTokenType.Semicolon)
+                Advance();
+
+            return new NamespaceRule(prefix, uri);
+        }
+
+        private KeyframesRule ParseKeyframesRule()
+        {
+            SkipWhitespace();
+
+            // Animation name (ident or string)
+            string? name = null;
+            if (_current.Type == CssTokenType.Ident)
+            {
+                name = _current.Value;
+                Advance();
+            }
+            else if (_current.Type == CssTokenType.String)
+            {
+                name = _current.Value;
+                Advance();
+            }
+
+            if (name == null)
+            {
+                SkipAtRule();
+                return new KeyframesRule("", new List<Keyframe>());
+            }
+
+            SkipWhitespace();
+
+            if (_current.Type != CssTokenType.LeftBrace)
+            {
+                SkipAtRule();
+                return new KeyframesRule(name, new List<Keyframe>());
+            }
+
+            Advance(); // skip '{'
+            SkipWhitespace();
+
+            var keyframes = new List<Keyframe>();
+
+            while (_current.Type != CssTokenType.EOF && _current.Type != CssTokenType.RightBrace)
+            {
+                // Parse keyframe selector (from, to, percentage, or comma-separated list)
+                var selectorBuilder = new StringBuilder();
+                while (_current.Type != CssTokenType.EOF &&
+                       _current.Type != CssTokenType.LeftBrace &&
+                       _current.Type != CssTokenType.RightBrace)
+                {
+                    AppendTokenText(selectorBuilder);
+                    Advance();
+                }
+
+                var selector = selectorBuilder.ToString().Trim();
+
+                if (_current.Type == CssTokenType.LeftBrace)
+                {
+                    Advance(); // skip '{'
+                    var declarations = ParseDeclarationBlock();
+                    if (_current.Type == CssTokenType.RightBrace)
+                        Advance();
+
+                    if (!string.IsNullOrEmpty(selector))
+                        keyframes.Add(new Keyframe(selector, declarations));
+                }
+                else
+                {
+                    // Malformed — skip
+                    break;
+                }
+
+                SkipWhitespace();
+            }
+
+            if (_current.Type == CssTokenType.RightBrace)
+                Advance();
+
+            return new KeyframesRule(name, keyframes);
+        }
+
+        private CssRule ParseLayerRule()
+        {
+            SkipWhitespace();
+
+            // Collect layer name(s)
+            var names = new List<string>();
+            var nameBuilder = new StringBuilder();
+
+            while (_current.Type != CssTokenType.EOF &&
+                   _current.Type != CssTokenType.Semicolon &&
+                   _current.Type != CssTokenType.LeftBrace)
+            {
+                if (_current.Type == CssTokenType.Comma)
+                {
+                    var n = nameBuilder.ToString().Trim();
+                    if (n.Length > 0) names.Add(n);
+                    nameBuilder.Clear();
+                    Advance();
+                    SkipWhitespace();
+                    continue;
+                }
+
+                if (_current.Type == CssTokenType.Ident)
+                    nameBuilder.Append(_current.Value);
+                else if (_current.Type == CssTokenType.Delim && _current.Value == ".")
+                    nameBuilder.Append('.');
+
+                Advance();
+                // Skip whitespace between tokens but don't consume structural tokens
+                if (_current.Type == CssTokenType.Whitespace &&
+                    PeekIsLayerContinuation())
+                {
+                    Advance();
+                }
+            }
+
+            var lastName = nameBuilder.ToString().Trim();
+            if (lastName.Length > 0) names.Add(lastName);
+
+            // Declaration form: @layer name1, name2;
+            if (_current.Type == CssTokenType.Semicolon)
+            {
+                Advance();
+                return new LayerRule(names, new List<CssRule>(), false);
+            }
+
+            // Block form: @layer name { ... }
+            if (_current.Type == CssTokenType.LeftBrace)
+            {
+                Advance(); // skip '{'
+
+                var rules = new List<CssRule>();
+                SkipWhitespaceAndCDx();
+
+                while (_current.Type != CssTokenType.EOF && _current.Type != CssTokenType.RightBrace)
+                {
+                    var rule = ParseRule();
+                    if (rule != null)
+                        rules.Add(rule);
+                    SkipWhitespaceAndCDx();
+                }
+
+                if (_current.Type == CssTokenType.RightBrace)
+                    Advance();
+
+                return new LayerRule(names, rules, true);
+            }
+
+            // Malformed
+            return new LayerRule(names, new List<CssRule>(), false);
+        }
+
+        private bool PeekIsLayerContinuation()
+        {
+            // Check if next non-whitespace token continues a layer name (dot or ident)
+            // without consuming tokens
+            if (!_hasNext)
+            {
+                _tokenizer.Read(ref _next);
+                _hasNext = true;
+            }
+            return _next.Type == CssTokenType.Delim && _next.Value == "." ||
+                   _next.Type == CssTokenType.Ident;
         }
 
         #endregion

@@ -1,4 +1,6 @@
 using System;
+using Rend.Css;
+using Rend.Css.Properties.Internal;
 
 namespace Rend.Layout.Internal
 {
@@ -29,8 +31,14 @@ namespace Rend.Layout.Internal
         /// </summary>
         public static bool ShouldCollapseWithFirstChild(LayoutBox parent)
         {
-            return parent.PaddingTop == 0
-                && parent.BorderTopWidth == 0;
+            if (parent.PaddingTop != 0 || parent.BorderTopWidth != 0)
+                return false;
+
+            // Elements that establish a new BFC do not collapse margins with children.
+            if (EstablishesBfc(parent))
+                return false;
+
+            return true;
         }
 
         /// <summary>
@@ -38,9 +46,51 @@ namespace Rend.Layout.Internal
         /// </summary>
         public static bool ShouldCollapseWithLastChild(LayoutBox parent)
         {
-            return parent.PaddingBottom == 0
-                && parent.BorderBottomWidth == 0
-                && float.IsNaN(parent.StyledNode?.Style.Height ?? float.NaN);
+            if (parent.PaddingBottom != 0 || parent.BorderBottomWidth != 0)
+                return false;
+
+            if (!float.IsNaN(parent.StyledNode?.Style.Height ?? float.NaN))
+                return false;
+
+            if (EstablishesBfc(parent))
+                return false;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Returns true if the box establishes a new block formatting context,
+        /// which prevents margin collapsing through its boundary.
+        /// </summary>
+        private static bool EstablishesBfc(LayoutBox box)
+        {
+            var style = box.StyledNode?.Style;
+            if (style == null) return false;
+
+            // overflow != visible establishes a BFC
+            if (style.OverflowX != CssOverflow.Visible || style.OverflowY != CssOverflow.Visible)
+                return true;
+
+            // Floated elements establish a BFC
+            if (style.Float != CssFloat.None)
+                return true;
+
+            // Absolutely/fixed positioned elements establish a BFC
+            if (style.Position == CssPosition.Absolute || style.Position == CssPosition.Fixed)
+                return true;
+
+            // display: inline-block, flex, grid establish a BFC
+            if (style.Display == CssDisplay.InlineBlock ||
+                style.Display == CssDisplay.Flex ||
+                style.Display == CssDisplay.Grid)
+                return true;
+
+            // contain: layout, content, or strict establish a BFC
+            var contain = style.Contain;
+            if (contain == CssContain.Layout || contain == CssContain.Content || contain == CssContain.Strict)
+                return true;
+
+            return false;
         }
     }
 }

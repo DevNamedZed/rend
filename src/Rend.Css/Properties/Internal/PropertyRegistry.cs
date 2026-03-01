@@ -89,6 +89,7 @@ namespace Rend.Css.Properties.Internal
             Register("letter-spacing", PropertyId.LetterSpacing, true, PropertyValueType.Length);
             Register("word-spacing", PropertyId.WordSpacing, true, PropertyValueType.Length);
             Register("text-align", PropertyId.TextAlign, true, PropertyValueType.Keyword);
+            Register("text-align-last", PropertyId.TextAlignLast, true, PropertyValueType.Keyword);
             Register("text-decoration-line", PropertyId.TextDecoration_Line, false, PropertyValueType.Keyword);
             Register("text-decoration-style", PropertyId.TextDecoration_Style, false, PropertyValueType.Keyword);
             Register("text-decoration-color", PropertyId.TextDecoration_Color, false, PropertyValueType.Color);
@@ -98,6 +99,7 @@ namespace Rend.Css.Properties.Internal
             Register("word-break", PropertyId.WordBreak, true, PropertyValueType.Keyword);
             Register("vertical-align", PropertyId.VerticalAlign, false, PropertyValueType.Keyword);
             Register("direction", PropertyId.Direction, true, PropertyValueType.Keyword);
+            Register("unicode-bidi", PropertyId.UnicodeBidi, false, PropertyValueType.Keyword);
 
             // Flexbox
             Register("flex-direction", PropertyId.FlexDirection, false, PropertyValueType.Keyword);
@@ -118,7 +120,8 @@ namespace Rend.Css.Properties.Internal
             // Table
             Register("table-layout", PropertyId.TableLayout, false, PropertyValueType.Keyword);
             Register("border-collapse", PropertyId.BorderCollapse, true, PropertyValueType.Keyword);
-            Register("border-spacing", PropertyId.BorderSpacing, true, PropertyValueType.Length);
+            Register("border-spacing-h", PropertyId.BorderSpacing, true, PropertyValueType.Length);
+            Register("border-spacing-v", PropertyId.BorderSpacingV, true, PropertyValueType.Length);
             Register("caption-side", PropertyId.CaptionSide, true, PropertyValueType.Keyword);
             Register("empty-cells", PropertyId.EmptyCells, true, PropertyValueType.Keyword);
 
@@ -156,8 +159,106 @@ namespace Rend.Css.Properties.Internal
             Register("orphans", PropertyId.Orphans, true, PropertyValueType.Number);
             Register("widows", PropertyId.Widows, true, PropertyValueType.Number);
 
-            // Content
-            Register("content", PropertyId.Content, false, PropertyValueType.String);
+            // Content (Raw to preserve function values like attr())
+            Register("content", PropertyId.Content, false, PropertyValueType.Raw);
+
+            // Transform
+            Register("transform", PropertyId.Transform, false, PropertyValueType.Raw);
+            Register("transform-origin", PropertyId.TransformOrigin, false, PropertyValueType.Raw);
+
+            // Multi-Column
+            Register("column-count", PropertyId.ColumnCount, false, PropertyValueType.Number);
+            Register("column-width", PropertyId.ColumnWidth, false, PropertyValueType.Length);
+            Register("column-rule-width", PropertyId.ColumnRuleWidth, false, PropertyValueType.Length);
+            Register("column-rule-style", PropertyId.ColumnRuleStyle, false, PropertyValueType.Keyword);
+            Register("column-rule-color", PropertyId.ColumnRuleColor, false, PropertyValueType.Color);
+
+            // Text Overflow
+            Register("text-overflow", PropertyId.TextOverflow, false, PropertyValueType.Keyword);
+            Register("overflow-wrap", PropertyId.OverflowWrap, true, PropertyValueType.Keyword);
+
+            // Text Decoration Detail
+            Register("text-decoration-thickness", PropertyId.TextDecorationThickness, false, PropertyValueType.Length);
+            Register("text-underline-offset", PropertyId.TextUnderlineOffset, false, PropertyValueType.Length);
+
+            // Background Clip / Origin
+            Register("background-clip", PropertyId.BackgroundClip, false, PropertyValueType.Keyword);
+            Register("background-origin", PropertyId.BackgroundOrigin, false, PropertyValueType.Keyword);
+
+            // Text Shadow (stored as raw CssValue like box-shadow)
+            Register("text-shadow", PropertyId.TextShadow, true, PropertyValueType.Raw);
+
+            // Object Fit / Position
+            Register("object-fit", PropertyId.ObjectFit, false, PropertyValueType.Keyword);
+            Register("object-position", PropertyId.ObjectPosition, false, PropertyValueType.Raw);
+
+            // Aspect Ratio
+            Register("aspect-ratio", PropertyId.AspectRatio, false, PropertyValueType.Raw);
+
+            // Tab Size
+            Register("tab-size", PropertyId.TabSize, true, PropertyValueType.Number);
+
+            // Counters (stored as Raw CssValue: list of name/value pairs)
+            Register("counter-reset", PropertyId.CounterReset, false, PropertyValueType.Raw);
+            Register("counter-increment", PropertyId.CounterIncrement, false, PropertyValueType.Raw);
+            Register("counter-set", PropertyId.CounterSet, false, PropertyValueType.Raw);
+
+            // Quotes (inherited, stored as Raw: pairs of open/close strings)
+            Register("quotes", PropertyId.Quotes, true, PropertyValueType.Raw);
+
+            // Justify (same keyword space as align-items)
+            Register("justify-items", PropertyId.JustifyItems, false, PropertyValueType.Keyword);
+            Register("justify-self", PropertyId.JustifySelf, false, PropertyValueType.Keyword);
+
+            // Column Span
+            Register("column-span", PropertyId.ColumnSpan, false, PropertyValueType.Keyword);
+
+            // Background Attachment
+            Register("background-attachment", PropertyId.BackgroundAttachment, false, PropertyValueType.Keyword);
+
+            // Font Stretch
+            Register("font-stretch", PropertyId.FontStretch, true, PropertyValueType.Keyword);
+
+            // Break (modern page-break replacements)
+            Register("break-before", PropertyId.BreakBefore, false, PropertyValueType.Keyword);
+            Register("break-after", PropertyId.BreakAfter, false, PropertyValueType.Keyword);
+            Register("break-inside", PropertyId.BreakInside, false, PropertyValueType.Keyword);
+
+            // Hyphens
+            Register("hyphens", PropertyId.Hyphens, true, PropertyValueType.Keyword);
+
+            // Text Rendering
+            Register("text-rendering", PropertyId.TextRendering, true, PropertyValueType.Keyword);
+
+            // Image Rendering
+            Register("image-rendering", PropertyId.ImageRendering, false, PropertyValueType.Keyword);
+
+            // Containment
+            Register("contain", PropertyId.Contain, false, PropertyValueType.Keyword);
+            Register("will-change", PropertyId.WillChange, false, PropertyValueType.Raw);
+
+            // Resize / Appearance / User-Select
+            Register("resize", PropertyId.Resize, false, PropertyValueType.Keyword);
+            Register("appearance", PropertyId.Appearance, false, PropertyValueType.Keyword);
+            Register("user-select", PropertyId.UserSelect, false, PropertyValueType.Keyword);
+
+            // Isolation / Blend Mode
+            Register("isolation", PropertyId.Isolation, false, PropertyValueType.Keyword);
+            Register("mix-blend-mode", PropertyId.MixBlendMode, false, PropertyValueType.Keyword);
+
+            // Grid
+            Register("grid-template-columns", PropertyId.GridTemplateColumns, false, PropertyValueType.Raw);
+            Register("grid-template-rows", PropertyId.GridTemplateRows, false, PropertyValueType.Raw);
+            Register("grid-auto-flow", PropertyId.GridAutoFlow, false, PropertyValueType.Keyword);
+            Register("grid-auto-rows", PropertyId.GridAutoRows, false, PropertyValueType.Raw);
+            Register("grid-auto-columns", PropertyId.GridAutoColumns, false, PropertyValueType.Raw);
+            Register("grid-row-start", PropertyId.GridRowStart, false, PropertyValueType.Raw);
+            Register("grid-row-end", PropertyId.GridRowEnd, false, PropertyValueType.Raw);
+            Register("grid-column-start", PropertyId.GridColumnStart, false, PropertyValueType.Raw);
+            Register("grid-column-end", PropertyId.GridColumnEnd, false, PropertyValueType.Raw);
+
+            // Box Decoration Break
+            Register("box-decoration-break", PropertyId.BoxDecorationBreak, false, PropertyValueType.Keyword);
         }
 
         private static void Register(string name, int id, bool inherited, PropertyValueType valueType)
@@ -181,5 +282,14 @@ namespace Rend.Css.Properties.Internal
 
         /// <summary>Total number of properties.</summary>
         public static int Count => PropertyId.Count;
+
+        /// <summary>Get all registered properties.</summary>
+        internal static IEnumerable<PropertyDescriptor> GetAll()
+        {
+            for (int i = 0; i < PropertyId.Count; i++)
+            {
+                if (_byId[i] != null) yield return _byId[i];
+            }
+        }
     }
 }

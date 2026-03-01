@@ -24,6 +24,8 @@ namespace Rend.Output.Image
         private SKBitmap? _currentBitmap;
         private SKCanvas? _currentCanvas;
         private float _currentOpacity = 1f;
+        private SKBlendMode _currentBlendMode = SKBlendMode.SrcOver;
+        private SKFilterQuality _currentFilterQuality = SKFilterQuality.Medium;
         private float _dpiScale;
         private bool _disposed;
 
@@ -59,6 +61,8 @@ namespace Rend.Output.Image
             }
 
             _currentOpacity = 1f;
+            _currentBlendMode = SKBlendMode.SrcOver;
+            _currentFilterQuality = SKFilterQuality.Medium;
         }
 
         /// <inheritdoc />
@@ -117,6 +121,50 @@ namespace Rend.Output.Image
         public void SetOpacity(float opacity)
         {
             _currentOpacity = Math.Max(0f, Math.Min(1f, opacity));
+        }
+
+        /// <inheritdoc />
+        public void SetBlendMode(Css.CssMixBlendMode blendMode)
+        {
+            _currentBlendMode = MapBlendMode(blendMode);
+        }
+
+        private static SKBlendMode MapBlendMode(Css.CssMixBlendMode mode)
+        {
+            switch (mode)
+            {
+                case Css.CssMixBlendMode.Multiply: return SKBlendMode.Multiply;
+                case Css.CssMixBlendMode.Screen: return SKBlendMode.Screen;
+                case Css.CssMixBlendMode.Overlay: return SKBlendMode.Overlay;
+                case Css.CssMixBlendMode.Darken: return SKBlendMode.Darken;
+                case Css.CssMixBlendMode.Lighten: return SKBlendMode.Lighten;
+                case Css.CssMixBlendMode.ColorDodge: return SKBlendMode.ColorDodge;
+                case Css.CssMixBlendMode.ColorBurn: return SKBlendMode.ColorBurn;
+                case Css.CssMixBlendMode.HardLight: return SKBlendMode.HardLight;
+                case Css.CssMixBlendMode.SoftLight: return SKBlendMode.SoftLight;
+                case Css.CssMixBlendMode.Difference: return SKBlendMode.Difference;
+                case Css.CssMixBlendMode.Exclusion: return SKBlendMode.Exclusion;
+                case Css.CssMixBlendMode.Hue: return SKBlendMode.Hue;
+                case Css.CssMixBlendMode.Saturation: return SKBlendMode.Saturation;
+                case Css.CssMixBlendMode.Color: return SKBlendMode.Color;
+                case Css.CssMixBlendMode.Luminosity: return SKBlendMode.Luminosity;
+                default: return SKBlendMode.SrcOver;
+            }
+        }
+
+        /// <inheritdoc />
+        public void SetImageRendering(Css.CssImageRendering rendering)
+        {
+            switch (rendering)
+            {
+                case Css.CssImageRendering.Pixelated:
+                case Css.CssImageRendering.CrispEdges:
+                    _currentFilterQuality = SKFilterQuality.None;
+                    break;
+                default:
+                    _currentFilterQuality = SKFilterQuality.Medium;
+                    break;
+            }
         }
 
         /// <inheritdoc />
@@ -244,7 +292,8 @@ namespace Rend.Output.Image
                     var paint = _paintPool.Rent();
                     try
                     {
-                        paint.IsAntialias = true;
+                        paint.IsAntialias = _currentFilterQuality != SKFilterQuality.None;
+                        paint.FilterQuality = _currentFilterQuality;
                         paint.Color = new SKColor(255, 255, 255, (byte)(_currentOpacity * 255));
 
                         var sourceRect = new SKRect(0, 0, skImage.Width, skImage.Height);
@@ -273,7 +322,15 @@ namespace Rend.Output.Image
                 SKTypeface typeface = _fontMapper.GetOrCreate(style.Font, null);
                 paint.Typeface = typeface;
 
-                _currentCanvas!.DrawText(text, x, y, paint);
+                if (style.LetterSpacing != 0 || style.WordSpacing != 0)
+                {
+                    // Draw characters individually with adjusted positions
+                    DrawTextWithSpacing(text, x, y, paint, style.LetterSpacing, style.WordSpacing);
+                }
+                else
+                {
+                    _currentCanvas!.DrawText(text, x, y, paint);
+                }
             }
             finally
             {
@@ -306,6 +363,18 @@ namespace Rend.Output.Image
             {
                 _paintPool.Return(paint);
             }
+        }
+
+        /// <inheritdoc />
+        public void AddLink(RectF rect, string uri)
+        {
+            // Links are not applicable to raster image output.
+        }
+
+        /// <inheritdoc />
+        public void AddBookmark(string title, int level, float yPosition)
+        {
+            // Bookmarks are not applicable to raster image output.
         }
 
         /// <inheritdoc />
@@ -397,6 +466,7 @@ namespace Rend.Output.Image
 
         private void ApplyBrush(SKPaint paint, BrushInfo brush, RectF bounds)
         {
+            paint.BlendMode = _currentBlendMode;
             byte alpha = (byte)(_currentOpacity * 255);
 
             if (brush.Gradient != null && brush.Gradient.Stops.Length > 0)
@@ -421,6 +491,7 @@ namespace Rend.Output.Image
 
         private void ApplyPen(SKPaint paint, PenInfo pen)
         {
+            paint.BlendMode = _currentBlendMode;
             paint.Color = new SKColor(pen.Color.R, pen.Color.G, pen.Color.B, (byte)(pen.Color.A * _currentOpacity));
             paint.StrokeWidth = pen.Width;
 
@@ -468,6 +539,25 @@ namespace Rend.Output.Image
         private static SKColor ToSKColor(CssColor color)
         {
             return new SKColor(color.R, color.G, color.B, color.A);
+        }
+
+        private void DrawTextWithSpacing(string text, float x, float y, SKPaint paint,
+                                           float letterSpacing, float wordSpacing)
+        {
+            float cursorX = x;
+            for (int i = 0; i < text.Length; i++)
+            {
+                char ch = text[i];
+                string s = ch.ToString();
+                _currentCanvas!.DrawText(s, cursorX, y, paint);
+                float advance = paint.MeasureText(s);
+                cursorX += advance;
+
+                if (i < text.Length - 1)
+                    cursorX += letterSpacing;
+                if (ch == ' ')
+                    cursorX += wordSpacing;
+            }
         }
 
         private static RectF GetPathBounds(SKPath path)

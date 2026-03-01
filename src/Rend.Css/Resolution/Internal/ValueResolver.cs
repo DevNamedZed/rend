@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Rend.Core.Values;
 using Rend.Css.Properties.Internal;
 
@@ -83,6 +84,21 @@ namespace Rend.Css.Resolution.Internal
                     result = PropertyValue.FromLength(float.NaN); // sentinel for auto/none
                     return true;
                 }
+                if (kw.Keyword == "min-content")
+                {
+                    result = PropertyValue.FromLength(SizingKeyword.MinContent);
+                    return true;
+                }
+                if (kw.Keyword == "max-content")
+                {
+                    result = PropertyValue.FromLength(SizingKeyword.MaxContent);
+                    return true;
+                }
+                if (kw.Keyword == "fit-content")
+                {
+                    result = PropertyValue.FromLength(SizingKeyword.FitContent);
+                    return true;
+                }
                 if (kw.Keyword == "0")
                 {
                     result = PropertyValue.FromLength(0);
@@ -111,11 +127,42 @@ namespace Rend.Css.Resolution.Internal
                 }
             }
 
-            // CssFunctionValue (calc, var, etc.) — store as raw, not resolved in v1
-            if (value is CssFunctionValue)
+            // Math function evaluation: calc(), min(), max(), clamp()
+            if (value is CssFunctionValue fn)
             {
-                result = PropertyValue.FromLength(0);
-                return true;
+                switch (fn.Name)
+                {
+                    case "calc":
+                    {
+                        float calcResult = EvaluateCalc(fn.Arguments, ctx);
+                        result = PropertyValue.FromLength(calcResult);
+                        return true;
+                    }
+                    case "min":
+                    {
+                        float minResult = EvaluateMin(fn.Arguments, ctx);
+                        result = PropertyValue.FromLength(minResult);
+                        return true;
+                    }
+                    case "max":
+                    {
+                        float maxResult = EvaluateMax(fn.Arguments, ctx);
+                        result = PropertyValue.FromLength(maxResult);
+                        return true;
+                    }
+                    case "clamp":
+                    {
+                        float clampResult = EvaluateClamp(fn.Arguments, ctx);
+                        result = PropertyValue.FromLength(clampResult);
+                        return true;
+                    }
+                    default:
+                    {
+                        // Other functions (var, etc.) — store as raw
+                        result = PropertyValue.FromLength(0);
+                        return true;
+                    }
+                }
             }
 
             return false;
@@ -211,16 +258,21 @@ namespace Rend.Css.Resolution.Internal
                 case PropertyId.Overflow_Y: return TryMapOverflow(keyword, out result);
                 case PropertyId.FontStyle: return TryMapFontStyle(keyword, out result);
                 case PropertyId.TextAlign: return TryMapTextAlign(keyword, out result);
+                case PropertyId.TextAlignLast: return TryMapTextAlign(keyword, out result);
                 case PropertyId.TextTransform: return TryMapTextTransform(keyword, out result);
                 case PropertyId.WhiteSpace: return TryMapWhiteSpace(keyword, out result);
                 case PropertyId.WordBreak: return TryMapWordBreak(keyword, out result);
                 case PropertyId.VerticalAlign: return TryMapVerticalAlign(keyword, out result);
                 case PropertyId.Direction: return TryMapDirection(keyword, out result);
+                case PropertyId.UnicodeBidi: return TryMapUnicodeBidi(keyword, out result);
+                case PropertyId.BoxDecorationBreak: return TryMapBoxDecorationBreak(keyword, out result);
                 case PropertyId.FlexDirection: return TryMapFlexDirection(keyword, out result);
                 case PropertyId.FlexWrap: return TryMapFlexWrap(keyword, out result);
                 case PropertyId.AlignItems:
                 case PropertyId.AlignSelf:
-                case PropertyId.AlignContent: return TryMapAlignItems(keyword, out result);
+                case PropertyId.AlignContent:
+                case PropertyId.JustifyItems:
+                case PropertyId.JustifySelf: return TryMapAlignItems(keyword, out result);
                 case PropertyId.JustifyContent: return TryMapJustifyContent(keyword, out result);
                 case PropertyId.TableLayout: return TryMapTableLayout(keyword, out result);
                 case PropertyId.BorderCollapse: return TryMapBorderCollapse(keyword, out result);
@@ -235,7 +287,91 @@ namespace Rend.Css.Resolution.Internal
                 case PropertyId.BorderBottomStyle:
                 case PropertyId.BorderLeftStyle:
                 case PropertyId.OutlineStyle:
+                case PropertyId.ColumnRuleStyle:
                     return TryMapBorderStyle(keyword, out result);
+
+                case PropertyId.BackgroundRepeat:
+                    return TryMapBackgroundRepeat(keyword, out result);
+
+                case PropertyId.TextOverflow:
+                    return TryMapTextOverflow(keyword, out result);
+
+                case PropertyId.OverflowWrap:
+                    return TryMapOverflowWrap(keyword, out result);
+
+                case PropertyId.TextDecoration_Style:
+                    return TryMapTextDecorationStyle(keyword, out result);
+
+                case PropertyId.ListStylePosition:
+                    return TryMapListStylePosition(keyword, out result);
+
+                case PropertyId.CaptionSide:
+                    return TryMapCaptionSide(keyword, out result);
+
+                case PropertyId.EmptyCells:
+                    return TryMapEmptyCells(keyword, out result);
+
+                case PropertyId.Cursor:
+                    return TryMapCursor(keyword, out result);
+
+                case PropertyId.PointerEvents:
+                    return TryMapPointerEvents(keyword, out result);
+
+                case PropertyId.FontVariant:
+                    return TryMapFontVariant(keyword, out result);
+
+                case PropertyId.BackgroundClip:
+                    return TryMapBackgroundClip(keyword, out result);
+
+                case PropertyId.BackgroundOrigin:
+                    return TryMapBackgroundOrigin(keyword, out result);
+
+                case PropertyId.ObjectFit:
+                    return TryMapObjectFit(keyword, out result);
+
+                case PropertyId.ColumnSpan:
+                    return TryMapColumnSpan(keyword, out result);
+
+                case PropertyId.BackgroundAttachment:
+                    return TryMapBackgroundAttachment(keyword, out result);
+
+                case PropertyId.FontStretch:
+                    return TryMapFontStretch(keyword, out result);
+
+                case PropertyId.BreakBefore:
+                case PropertyId.BreakAfter:
+                case PropertyId.BreakInside:
+                    return TryMapBreakValue(keyword, out result);
+
+                case PropertyId.Hyphens:
+                    return TryMapHyphens(keyword, out result);
+
+                case PropertyId.TextRendering:
+                    return TryMapTextRendering(keyword, out result);
+
+                case PropertyId.ImageRendering:
+                    return TryMapImageRendering(keyword, out result);
+
+                case PropertyId.Contain:
+                    return TryMapContain(keyword, out result);
+
+                case PropertyId.Resize:
+                    return TryMapResize(keyword, out result);
+
+                case PropertyId.Appearance:
+                    return TryMapAppearance(keyword, out result);
+
+                case PropertyId.UserSelect:
+                    return TryMapUserSelect(keyword, out result);
+
+                case PropertyId.Isolation:
+                    return TryMapIsolation(keyword, out result);
+
+                case PropertyId.MixBlendMode:
+                    return TryMapMixBlendMode(keyword, out result);
+
+                case PropertyId.GridAutoFlow:
+                    return TryMapGridAutoFlow(keyword, out result);
 
                 default:
                     // Generic keyword as int 0
@@ -272,6 +408,192 @@ namespace Rend.Css.Resolution.Internal
             refResult = value.ToString();
             return true;
         }
+
+        #region calc() evaluation
+
+        /// <summary>
+        /// Evaluates a calc() expression to a single px value.
+        /// Handles +, -, *, / with standard operator precedence.
+        /// Percentages are resolved against the context's percent base.
+        /// </summary>
+        private static float EvaluateCalc(IReadOnlyList<CssValue> args, CssResolutionContext ctx)
+        {
+            if (args.Count == 0) return 0;
+
+            // Convert arguments to a flat list of values and operators.
+            var values = new List<float>();
+            var operators = new List<char>();
+
+            for (int i = 0; i < args.Count; i++)
+            {
+                var arg = args[i];
+
+                if (arg is CssKeywordValue kw)
+                {
+                    if (kw.Keyword.Length == 1 && "+-*/".Contains(kw.Keyword))
+                    {
+                        operators.Add(kw.Keyword[0]);
+                        continue;
+                    }
+                }
+
+                // Nested math functions
+                if (arg is CssFunctionValue fn)
+                {
+                    values.Add(EvaluateMathFunction(fn, ctx));
+                    continue;
+                }
+
+                float v = ResolveCalcOperand(arg, ctx);
+                values.Add(v);
+            }
+
+            if (values.Count == 0) return 0;
+            if (values.Count == 1) return values[0];
+
+            // Apply operator precedence: first *, / then +, -
+            // Phase 1: Handle * and /
+            var reduced = new List<float> { values[0] };
+            var reducedOps = new List<char>();
+
+            for (int i = 0; i < operators.Count && i + 1 < values.Count; i++)
+            {
+                char op = operators[i];
+                float right = values[i + 1];
+
+                if (op == '*')
+                {
+                    reduced[reduced.Count - 1] *= right;
+                }
+                else if (op == '/')
+                {
+                    if (right != 0)
+                        reduced[reduced.Count - 1] /= right;
+                }
+                else
+                {
+                    reduced.Add(right);
+                    reducedOps.Add(op);
+                }
+            }
+
+            // Phase 2: Handle + and -
+            float result = reduced[0];
+            for (int i = 0; i < reducedOps.Count && i + 1 < reduced.Count; i++)
+            {
+                if (reducedOps[i] == '+')
+                    result += reduced[i + 1];
+                else if (reducedOps[i] == '-')
+                    result -= reduced[i + 1];
+            }
+
+            return result;
+        }
+
+        private static float EvaluateMathFunction(CssFunctionValue fn, CssResolutionContext ctx)
+        {
+            switch (fn.Name)
+            {
+                case "calc": return EvaluateCalc(fn.Arguments, ctx);
+                case "min": return EvaluateMin(fn.Arguments, ctx);
+                case "max": return EvaluateMax(fn.Arguments, ctx);
+                case "clamp": return EvaluateClamp(fn.Arguments, ctx);
+                default: return 0;
+            }
+        }
+
+        private static float EvaluateMin(IReadOnlyList<CssValue> args, CssResolutionContext ctx)
+        {
+            float result = float.MaxValue;
+            for (int i = 0; i < args.Count; i++)
+            {
+                if (args[i] is CssFunctionValue fn)
+                {
+                    float v = EvaluateMathFunction(fn, ctx);
+                    if (v < result) result = v;
+                }
+                else if (args[i] is CssKeywordValue) continue; // skip comma separators
+                else
+                {
+                    float v = ResolveCalcOperand(args[i], ctx);
+                    if (v < result) result = v;
+                }
+            }
+            return result == float.MaxValue ? 0 : result;
+        }
+
+        private static float EvaluateMax(IReadOnlyList<CssValue> args, CssResolutionContext ctx)
+        {
+            float result = float.MinValue;
+            for (int i = 0; i < args.Count; i++)
+            {
+                if (args[i] is CssFunctionValue fn)
+                {
+                    float v = EvaluateMathFunction(fn, ctx);
+                    if (v > result) result = v;
+                }
+                else if (args[i] is CssKeywordValue) continue; // skip comma separators
+                else
+                {
+                    float v = ResolveCalcOperand(args[i], ctx);
+                    if (v > result) result = v;
+                }
+            }
+            return result == float.MinValue ? 0 : result;
+        }
+
+        private static float EvaluateClamp(IReadOnlyList<CssValue> args, CssResolutionContext ctx)
+        {
+            // clamp(MIN, VAL, MAX) = max(MIN, min(VAL, MAX))
+            // Arguments may include comma separators as keywords
+            var resolved = new List<float>();
+            for (int i = 0; i < args.Count; i++)
+            {
+                if (args[i] is CssFunctionValue fn)
+                    resolved.Add(EvaluateMathFunction(fn, ctx));
+                else if (args[i] is CssKeywordValue) continue; // skip comma
+                else
+                    resolved.Add(ResolveCalcOperand(args[i], ctx));
+            }
+
+            if (resolved.Count < 3) return resolved.Count > 0 ? resolved[0] : 0;
+
+            float min = resolved[0];
+            float val = resolved[1];
+            float max = resolved[2];
+            return Math.Max(min, Math.Min(val, max));
+        }
+
+        /// <summary>
+        /// Resolves a single operand in a calc() expression to px.
+        /// </summary>
+        private static float ResolveCalcOperand(CssValue value, CssResolutionContext ctx)
+        {
+            if (value is CssDimensionValue dim)
+            {
+                var unit = MapUnit(dim.Unit);
+                if (unit != CssLengthUnit.None)
+                {
+                    var length = new CssLength(dim.Value, unit);
+                    return length.ToPx(ctx);
+                }
+                return dim.Value; // unknown unit, treat as px
+            }
+
+            if (value is CssPercentageValue pct)
+            {
+                return pct.Value * ctx.PercentBase / 100f;
+            }
+
+            if (value is CssNumberValue num)
+            {
+                return num.Value;
+            }
+
+            return 0;
+        }
+
+        #endregion
 
         #region Keyword mapping helpers
 
@@ -421,6 +743,7 @@ namespace Rend.Css.Resolution.Internal
                 case "justify": result = PropertyValue.FromKeyword((int)CssTextAlign.Justify); return true;
                 case "start": result = PropertyValue.FromKeyword((int)CssTextAlign.Start); return true;
                 case "end": result = PropertyValue.FromKeyword((int)CssTextAlign.End); return true;
+                case "auto": result = PropertyValue.FromKeyword((int)CssTextAlign.Auto); return true;
                 default: return false;
             }
         }
@@ -494,6 +817,32 @@ namespace Rend.Css.Resolution.Internal
             }
         }
 
+        private static bool TryMapUnicodeBidi(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "normal": result = PropertyValue.FromKeyword((int)CssUnicodeBidi.Normal); return true;
+                case "embed": result = PropertyValue.FromKeyword((int)CssUnicodeBidi.Embed); return true;
+                case "isolate": result = PropertyValue.FromKeyword((int)CssUnicodeBidi.Isolate); return true;
+                case "bidi-override": result = PropertyValue.FromKeyword((int)CssUnicodeBidi.BidiOverride); return true;
+                case "isolate-override": result = PropertyValue.FromKeyword((int)CssUnicodeBidi.IsolateOverride); return true;
+                case "plaintext": result = PropertyValue.FromKeyword((int)CssUnicodeBidi.Plaintext); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapBoxDecorationBreak(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "slice": result = PropertyValue.FromKeyword((int)CssBoxDecorationBreak.Slice); return true;
+                case "clone": result = PropertyValue.FromKeyword((int)CssBoxDecorationBreak.Clone); return true;
+                default: return false;
+            }
+        }
+
         private static bool TryMapFlexDirection(string kw, out PropertyValue result)
         {
             result = default;
@@ -531,6 +880,10 @@ namespace Rend.Css.Resolution.Internal
                 case "baseline": result = PropertyValue.FromKeyword((int)CssAlignItems.Baseline); return true;
                 case "start": result = PropertyValue.FromKeyword((int)CssAlignItems.Start); return true;
                 case "end": result = PropertyValue.FromKeyword((int)CssAlignItems.End); return true;
+                case "space-between": result = PropertyValue.FromKeyword((int)CssAlignItems.SpaceBetween); return true;
+                case "space-around": result = PropertyValue.FromKeyword((int)CssAlignItems.SpaceAround); return true;
+                case "space-evenly": result = PropertyValue.FromKeyword((int)CssAlignItems.SpaceEvenly); return true;
+                case "normal": result = PropertyValue.FromKeyword((int)CssAlignItems.Normal); return true;
                 default: return false;
             }
         }
@@ -622,6 +975,19 @@ namespace Rend.Css.Resolution.Internal
             }
         }
 
+        private static bool TryMapBackgroundRepeat(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "repeat": result = PropertyValue.FromKeyword(0); return true;
+                case "no-repeat": result = PropertyValue.FromKeyword(1); return true;
+                case "repeat-x": result = PropertyValue.FromKeyword(2); return true;
+                case "repeat-y": result = PropertyValue.FromKeyword(3); return true;
+                default: return false;
+            }
+        }
+
         #endregion
 
         #region Unit mapping
@@ -647,6 +1013,361 @@ namespace Rend.Css.Resolution.Internal
                 case "vmax": return CssLengthUnit.Vmax;
                 case "%": return CssLengthUnit.Percent;
                 default: return CssLengthUnit.None;
+            }
+        }
+
+        private static bool TryMapTextOverflow(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "clip": result = PropertyValue.FromKeyword((int)CssTextOverflow.Clip); return true;
+                case "ellipsis": result = PropertyValue.FromKeyword((int)CssTextOverflow.Ellipsis); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapOverflowWrap(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "normal": result = PropertyValue.FromKeyword((int)CssOverflowWrap.Normal); return true;
+                case "break-word": result = PropertyValue.FromKeyword((int)CssOverflowWrap.BreakWord); return true;
+                case "anywhere": result = PropertyValue.FromKeyword((int)CssOverflowWrap.Anywhere); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapTextDecorationStyle(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "solid": result = PropertyValue.FromKeyword((int)CssTextDecorationStyle.Solid); return true;
+                case "double": result = PropertyValue.FromKeyword((int)CssTextDecorationStyle.Double); return true;
+                case "dotted": result = PropertyValue.FromKeyword((int)CssTextDecorationStyle.Dotted); return true;
+                case "dashed": result = PropertyValue.FromKeyword((int)CssTextDecorationStyle.Dashed); return true;
+                case "wavy": result = PropertyValue.FromKeyword((int)CssTextDecorationStyle.Wavy); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapListStylePosition(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "outside": result = PropertyValue.FromKeyword((int)CssListStylePosition.Outside); return true;
+                case "inside": result = PropertyValue.FromKeyword((int)CssListStylePosition.Inside); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapCaptionSide(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "top": result = PropertyValue.FromKeyword((int)CssCaptionSide.Top); return true;
+                case "bottom": result = PropertyValue.FromKeyword((int)CssCaptionSide.Bottom); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapEmptyCells(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "show": result = PropertyValue.FromKeyword((int)CssEmptyCells.Show); return true;
+                case "hide": result = PropertyValue.FromKeyword((int)CssEmptyCells.Hide); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapCursor(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "auto": result = PropertyValue.FromKeyword((int)CssCursor.Auto); return true;
+                case "default": result = PropertyValue.FromKeyword((int)CssCursor.Default); return true;
+                case "none": result = PropertyValue.FromKeyword((int)CssCursor.None); return true;
+                case "context-menu": result = PropertyValue.FromKeyword((int)CssCursor.ContextMenu); return true;
+                case "help": result = PropertyValue.FromKeyword((int)CssCursor.Help); return true;
+                case "pointer": result = PropertyValue.FromKeyword((int)CssCursor.Pointer); return true;
+                case "progress": result = PropertyValue.FromKeyword((int)CssCursor.Progress); return true;
+                case "wait": result = PropertyValue.FromKeyword((int)CssCursor.Wait); return true;
+                case "cell": result = PropertyValue.FromKeyword((int)CssCursor.Cell); return true;
+                case "crosshair": result = PropertyValue.FromKeyword((int)CssCursor.Crosshair); return true;
+                case "text": result = PropertyValue.FromKeyword((int)CssCursor.Text); return true;
+                case "vertical-text": result = PropertyValue.FromKeyword((int)CssCursor.VerticalText); return true;
+                case "alias": result = PropertyValue.FromKeyword((int)CssCursor.Alias); return true;
+                case "copy": result = PropertyValue.FromKeyword((int)CssCursor.Copy); return true;
+                case "move": result = PropertyValue.FromKeyword((int)CssCursor.Move); return true;
+                case "no-drop": result = PropertyValue.FromKeyword((int)CssCursor.NoDrop); return true;
+                case "not-allowed": result = PropertyValue.FromKeyword((int)CssCursor.NotAllowed); return true;
+                case "grab": result = PropertyValue.FromKeyword((int)CssCursor.Grab); return true;
+                case "grabbing": result = PropertyValue.FromKeyword((int)CssCursor.Grabbing); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapPointerEvents(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "auto": result = PropertyValue.FromKeyword((int)CssPointerEvents.Auto); return true;
+                case "none": result = PropertyValue.FromKeyword((int)CssPointerEvents.None); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapFontVariant(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "normal": result = PropertyValue.FromKeyword((int)CssFontVariant.Normal); return true;
+                case "small-caps": result = PropertyValue.FromKeyword((int)CssFontVariant.SmallCaps); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapBackgroundClip(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "border-box": result = PropertyValue.FromKeyword((int)CssBackgroundClip.BorderBox); return true;
+                case "padding-box": result = PropertyValue.FromKeyword((int)CssBackgroundClip.PaddingBox); return true;
+                case "content-box": result = PropertyValue.FromKeyword((int)CssBackgroundClip.ContentBox); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapBackgroundOrigin(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "padding-box": result = PropertyValue.FromKeyword((int)CssBackgroundOrigin.PaddingBox); return true;
+                case "border-box": result = PropertyValue.FromKeyword((int)CssBackgroundOrigin.BorderBox); return true;
+                case "content-box": result = PropertyValue.FromKeyword((int)CssBackgroundOrigin.ContentBox); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapObjectFit(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "fill": result = PropertyValue.FromKeyword((int)CssObjectFit.Fill); return true;
+                case "contain": result = PropertyValue.FromKeyword((int)CssObjectFit.Contain); return true;
+                case "cover": result = PropertyValue.FromKeyword((int)CssObjectFit.Cover); return true;
+                case "none": result = PropertyValue.FromKeyword((int)CssObjectFit.None); return true;
+                case "scale-down": result = PropertyValue.FromKeyword((int)CssObjectFit.ScaleDown); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapColumnSpan(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "none": result = PropertyValue.FromKeyword((int)CssColumnSpan.None); return true;
+                case "all": result = PropertyValue.FromKeyword((int)CssColumnSpan.All); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapBackgroundAttachment(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "scroll": result = PropertyValue.FromKeyword((int)CssBackgroundAttachment.Scroll); return true;
+                case "fixed": result = PropertyValue.FromKeyword((int)CssBackgroundAttachment.Fixed); return true;
+                case "local": result = PropertyValue.FromKeyword((int)CssBackgroundAttachment.Local); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapHyphens(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "none": result = PropertyValue.FromKeyword((int)CssHyphens.None); return true;
+                case "manual": result = PropertyValue.FromKeyword((int)CssHyphens.Manual); return true;
+                case "auto": result = PropertyValue.FromKeyword((int)CssHyphens.Auto); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapTextRendering(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "auto": result = PropertyValue.FromKeyword((int)CssTextRendering.Auto); return true;
+                case "optimizespeed": result = PropertyValue.FromKeyword((int)CssTextRendering.OptimizeSpeed); return true;
+                case "optimizelegibility": result = PropertyValue.FromKeyword((int)CssTextRendering.OptimizeLegibility); return true;
+                case "geometricprecision": result = PropertyValue.FromKeyword((int)CssTextRendering.GeometricPrecision); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapImageRendering(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "auto": result = PropertyValue.FromKeyword((int)CssImageRendering.Auto); return true;
+                case "crisp-edges": result = PropertyValue.FromKeyword((int)CssImageRendering.CrispEdges); return true;
+                case "pixelated": result = PropertyValue.FromKeyword((int)CssImageRendering.Pixelated); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapContain(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "none": result = PropertyValue.FromKeyword((int)CssContain.None); return true;
+                case "strict": result = PropertyValue.FromKeyword((int)CssContain.Strict); return true;
+                case "content": result = PropertyValue.FromKeyword((int)CssContain.Content); return true;
+                case "size": result = PropertyValue.FromKeyword((int)CssContain.Size); return true;
+                case "layout": result = PropertyValue.FromKeyword((int)CssContain.Layout); return true;
+                case "style": result = PropertyValue.FromKeyword((int)CssContain.Style); return true;
+                case "paint": result = PropertyValue.FromKeyword((int)CssContain.Paint); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapIsolation(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "auto": result = PropertyValue.FromKeyword((int)CssIsolation.Auto); return true;
+                case "isolate": result = PropertyValue.FromKeyword((int)CssIsolation.Isolate); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapMixBlendMode(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "normal": result = PropertyValue.FromKeyword((int)CssMixBlendMode.Normal); return true;
+                case "multiply": result = PropertyValue.FromKeyword((int)CssMixBlendMode.Multiply); return true;
+                case "screen": result = PropertyValue.FromKeyword((int)CssMixBlendMode.Screen); return true;
+                case "overlay": result = PropertyValue.FromKeyword((int)CssMixBlendMode.Overlay); return true;
+                case "darken": result = PropertyValue.FromKeyword((int)CssMixBlendMode.Darken); return true;
+                case "lighten": result = PropertyValue.FromKeyword((int)CssMixBlendMode.Lighten); return true;
+                case "color-dodge": result = PropertyValue.FromKeyword((int)CssMixBlendMode.ColorDodge); return true;
+                case "color-burn": result = PropertyValue.FromKeyword((int)CssMixBlendMode.ColorBurn); return true;
+                case "hard-light": result = PropertyValue.FromKeyword((int)CssMixBlendMode.HardLight); return true;
+                case "soft-light": result = PropertyValue.FromKeyword((int)CssMixBlendMode.SoftLight); return true;
+                case "difference": result = PropertyValue.FromKeyword((int)CssMixBlendMode.Difference); return true;
+                case "exclusion": result = PropertyValue.FromKeyword((int)CssMixBlendMode.Exclusion); return true;
+                case "hue": result = PropertyValue.FromKeyword((int)CssMixBlendMode.Hue); return true;
+                case "saturation": result = PropertyValue.FromKeyword((int)CssMixBlendMode.Saturation); return true;
+                case "color": result = PropertyValue.FromKeyword((int)CssMixBlendMode.Color); return true;
+                case "luminosity": result = PropertyValue.FromKeyword((int)CssMixBlendMode.Luminosity); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapGridAutoFlow(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "row": result = PropertyValue.FromKeyword((int)CssGridAutoFlow.Row); return true;
+                case "column": result = PropertyValue.FromKeyword((int)CssGridAutoFlow.Column); return true;
+                case "dense": result = PropertyValue.FromKeyword((int)CssGridAutoFlow.RowDense); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapResize(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "none": result = PropertyValue.FromKeyword((int)CssResize.None); return true;
+                case "both": result = PropertyValue.FromKeyword((int)CssResize.Both); return true;
+                case "horizontal": result = PropertyValue.FromKeyword((int)CssResize.Horizontal); return true;
+                case "vertical": result = PropertyValue.FromKeyword((int)CssResize.Vertical); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapAppearance(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "none": result = PropertyValue.FromKeyword((int)CssAppearance.None); return true;
+                case "auto": result = PropertyValue.FromKeyword((int)CssAppearance.Auto); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapUserSelect(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "auto": result = PropertyValue.FromKeyword((int)CssUserSelect.Auto); return true;
+                case "text": result = PropertyValue.FromKeyword((int)CssUserSelect.Text); return true;
+                case "none": result = PropertyValue.FromKeyword((int)CssUserSelect.None); return true;
+                case "all": result = PropertyValue.FromKeyword((int)CssUserSelect.All); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapBreakValue(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "auto": result = PropertyValue.FromKeyword((int)CssBreakValue.Auto); return true;
+                case "avoid": result = PropertyValue.FromKeyword((int)CssBreakValue.Avoid); return true;
+                case "always": result = PropertyValue.FromKeyword((int)CssBreakValue.Always); return true;
+                case "page": result = PropertyValue.FromKeyword((int)CssBreakValue.Page); return true;
+                case "left": result = PropertyValue.FromKeyword((int)CssBreakValue.Left); return true;
+                case "right": result = PropertyValue.FromKeyword((int)CssBreakValue.Right); return true;
+                case "column": result = PropertyValue.FromKeyword((int)CssBreakValue.Column); return true;
+                case "avoid-page": result = PropertyValue.FromKeyword((int)CssBreakValue.AvoidPage); return true;
+                case "avoid-column": result = PropertyValue.FromKeyword((int)CssBreakValue.AvoidColumn); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapFontStretch(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "ultra-condensed": result = PropertyValue.FromKeyword((int)CssFontStretch.UltraCondensed); return true;
+                case "extra-condensed": result = PropertyValue.FromKeyword((int)CssFontStretch.ExtraCondensed); return true;
+                case "condensed": result = PropertyValue.FromKeyword((int)CssFontStretch.Condensed); return true;
+                case "semi-condensed": result = PropertyValue.FromKeyword((int)CssFontStretch.SemiCondensed); return true;
+                case "normal": result = PropertyValue.FromKeyword((int)CssFontStretch.Normal); return true;
+                case "semi-expanded": result = PropertyValue.FromKeyword((int)CssFontStretch.SemiExpanded); return true;
+                case "expanded": result = PropertyValue.FromKeyword((int)CssFontStretch.Expanded); return true;
+                case "extra-expanded": result = PropertyValue.FromKeyword((int)CssFontStretch.ExtraExpanded); return true;
+                case "ultra-expanded": result = PropertyValue.FromKeyword((int)CssFontStretch.UltraExpanded); return true;
+                default: return false;
             }
         }
 

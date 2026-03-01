@@ -2,13 +2,14 @@ using System;
 using System.Globalization;
 using Rend.Core.Values;
 using Rend.Css;
+using Rend.Css.Properties.Internal;
 using Rend.Fonts;
 using Rend.Layout;
 
 namespace Rend.Rendering.Internal
 {
     /// <summary>
-    /// Paints list markers (bullets and counters) for list-item boxes.
+    /// Paints list markers (bullets, counters, and images) for list-item boxes.
     /// </summary>
     internal static class ListMarkerPainter
     {
@@ -16,14 +17,12 @@ namespace Rend.Rendering.Internal
         private const float BulletRadius = 3f;
 
         /// <summary>
-        /// Paints the list marker for a list-item box. For disc, circle, and square
-        /// types, draws a graphical marker. For numeric and alpha types, draws
-        /// counter text to the left of the content area.
+        /// Paints the list marker for a list-item box. If list-style-image is set,
+        /// draws the image. Otherwise, for disc, circle, and square types, draws a
+        /// graphical marker. For numeric and alpha types, draws counter text.
         /// </summary>
-        /// <param name="box">The layout box to paint a marker for.</param>
-        /// <param name="target">The render target to draw on.</param>
-        /// <param name="itemIndex">The 1-based ordinal index for numeric/alpha markers.</param>
-        public static void Paint(LayoutBox box, IRenderTarget target, int itemIndex)
+        public static void Paint(LayoutBox box, IRenderTarget target, int itemIndex,
+                                 ImageResolverDelegate? imageResolver = null)
         {
             if (box.BoxType != BoxType.ListItem)
             {
@@ -37,18 +36,28 @@ namespace Rend.Rendering.Internal
             }
 
             CssListStyleType listType = style.ListStyleType;
+
+            RectF contentRect = box.ContentRect;
+            CssColor color = style.Color;
+            float fontSize = style.FontSize;
+            bool isInside = style.ListStylePosition == CssListStylePosition.Inside;
+
+            // Try list-style-image first
+            if (imageResolver != null && TryPaintImageMarker(box, target, style, imageResolver, contentRect, fontSize, isInside))
+            {
+                return;
+            }
+
             if (listType == CssListStyleType.None)
             {
                 return;
             }
 
-            RectF contentRect = box.ContentRect;
-            CssColor color = style.Color;
-            float fontSize = style.FontSize;
-
             // Vertical center of the first line (approximate as top + fontSize * 0.5).
             float markerCenterY = contentRect.Y + fontSize * 0.5f;
-            float markerX = contentRect.X - MarkerOffset;
+            float markerX = isInside
+                ? contentRect.X + MarkerOffset
+                : contentRect.X - MarkerOffset;
 
             switch (listType)
             {
@@ -68,10 +77,49 @@ namespace Rend.Rendering.Internal
                     string? markerText = GetMarkerText(listType, itemIndex);
                     if (markerText != null)
                     {
-                        PaintCounterText(target, markerText, contentRect, color, fontSize, style);
+                        PaintCounterText(target, markerText, contentRect, color, fontSize, style, isInside);
                     }
                     break;
             }
+        }
+
+        private static bool TryPaintImageMarker(LayoutBox box, IRenderTarget target,
+            ComputedStyle style, ImageResolverDelegate imageResolver,
+            RectF contentRect, float fontSize, bool isInside)
+        {
+            object? imageRef = style.GetRefValue(PropertyId.ListStyleImage);
+            if (imageRef == null) return false;
+
+            string? imageUrl = null;
+            if (imageRef is string s && s != "none")
+            {
+                imageUrl = s;
+            }
+            else if (imageRef is CssUrlValue urlVal)
+            {
+                imageUrl = urlVal.Url;
+            }
+
+            if (imageUrl == null) return false;
+
+            ImageData? imageData = imageResolver(imageUrl);
+            if (imageData == null) return false;
+
+            // Size marker image to fontSize x fontSize
+            float size = fontSize;
+            float markerY = contentRect.Y;
+            float markerX;
+            if (isInside)
+            {
+                markerX = contentRect.X;
+            }
+            else
+            {
+                markerX = contentRect.X - size - 4f;
+            }
+
+            target.DrawImage(imageData, new RectF(markerX, markerY, size, size));
+            return true;
         }
 
         private static void PaintDisc(IRenderTarget target, float cx, float cy, CssColor color)
@@ -101,7 +149,8 @@ namespace Rend.Rendering.Internal
         }
 
         private static void PaintCounterText(IRenderTarget target, string text, RectF contentRect,
-                                               CssColor color, float fontSize, ComputedStyle style)
+                                               CssColor color, float fontSize, ComputedStyle style,
+                                               bool isInside)
         {
             string fontFamily = style.FontFamily;
             float fontWeight = style.FontWeight;
@@ -109,20 +158,28 @@ namespace Rend.Rendering.Internal
 
             var textStyle = new TextStyle
             {
-                Font = new FontDescriptor(fontFamily, fontWeight, fontStyle),
+                Font = new FontDescriptor(fontFamily, fontWeight, fontStyle, FontDescriptor.StretchToPercentage(style.FontStretch)),
                 FontSize = fontSize,
                 Color = color,
                 Bold = fontWeight >= 700f,
                 Italic = fontStyle == CssFontStyle.Italic || fontStyle == CssFontStyle.Oblique
             };
 
-            // Draw the counter text to the left of the content area.
-            // Estimate width: approximate at 0.6 * fontSize per character.
-            float estimatedWidth = text.Length * fontSize * 0.6f;
-            float x = contentRect.X - estimatedWidth - 4f;
             float y = contentRect.Y + fontSize;
 
-            target.DrawText(text, x, y, textStyle);
+            if (isInside)
+            {
+                // Inside: draw at the start of the content area.
+                float x = contentRect.X;
+                target.DrawText(text, x, y, textStyle);
+            }
+            else
+            {
+                // Outside: draw to the left of the content area.
+                float estimatedWidth = text.Length * fontSize * 0.6f;
+                float x = contentRect.X - estimatedWidth - 4f;
+                target.DrawText(text, x, y, textStyle);
+            }
         }
 
         private static string? GetMarkerText(CssListStyleType listType, int index)

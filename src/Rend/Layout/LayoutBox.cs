@@ -87,5 +87,21 @@ namespace Rend.Layout
 
         /// <summary>Z-index for stacking order.</summary>
         public float ZIndex { get; set; }
+
+        /// <summary>Column rules to paint between multi-column columns.</summary>
+        internal List<ColumnRuleInfo>? ColumnRules { get; set; }
+    }
+
+    /// <summary>
+    /// Describes a column rule line to be painted between multi-column columns.
+    /// </summary>
+    internal struct ColumnRuleInfo
+    {
+        public float X;
+        public float Y;
+        public float Height;
+        public float Width;
+        public Css.CssBorderStyle Style;
+        public Core.Values.CssColor Color;
     }
 }
