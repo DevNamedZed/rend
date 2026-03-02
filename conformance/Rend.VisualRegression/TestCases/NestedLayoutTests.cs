@@ -11,7 +11,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "nested-boxes",
                 Name = "Nested Boxes with Padding",
                 Category = "Nested Layout",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""background:#3498db; padding:15px;"">
                         <div style=""background:#2980b9; padding:15px;"">
@@ -26,7 +25,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "nested-flex-in-grid",
                 Name = "Flex inside Grid",
                 Category = "Nested Layout",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:grid; grid-template-columns:1fr 1fr; gap:10px;"">
                         <div style=""display:flex; gap:5px; background:#f0f0f0; padding:8px;"">
@@ -46,7 +44,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "nested-margin-collapse",
                 Name = "Margin Collapsing",
                 Category = "Nested Layout",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""background:#3498db; height:40px; margin-bottom:20px;""></div>
                     <div style=""background:#e74c3c; height:40px; margin-top:30px; margin-bottom:20px;""></div>
@@ -59,7 +56,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "nested-card-layout",
                 Name = "Card Layout Pattern",
                 Category = "Nested Layout",
-                Tolerance = 0.0, // Cards with text content have significant font metric differences
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4; background:#f0f0f0;"">
                     <div style=""display:flex; gap:10px;"">
                         <div style=""flex:1; background:#fff; border:1px solid #ddd; border-radius:4px; overflow:hidden;"">

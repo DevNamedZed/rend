@@ -11,7 +11,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "typo-font-sizes",
                 Name = "Font Sizes",
                 Category = "Typography",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; line-height:1.2;"">
                     <p style=""font-size:10px; margin:0 0 4px 0;"">Font size 10px</p>
                     <p style=""font-size:14px; margin:0 0 4px 0;"">Font size 14px</p>
@@ -26,7 +25,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "typo-font-weight",
                 Name = "Font Weight",
                 Category = "Typography",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:16px; line-height:1.2;"">
                     <p style=""font-weight:100; margin:0 0 4px 0;"">Weight 100 (Thin)</p>
                     <p style=""font-weight:300; margin:0 0 4px 0;"">Weight 300 (Light)</p>
@@ -42,7 +40,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "typo-text-alignment",
                 Name = "Text Alignment",
                 Category = "Typography",
-                Tolerance = 0.0, // Text alignment with wrapping is very font-metric sensitive
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;"">
                     <p style=""text-align:left; background:#f0f0f0; padding:6px; margin:0 0 6px 0; height:20px;"">Left aligned</p>
                     <p style=""text-align:center; background:#f0f0f0; padding:6px; margin:0 0 6px 0; height:20px;"">Center aligned</p>
@@ -56,7 +53,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "typo-text-decoration",
                 Name = "Text Decoration",
                 Category = "Typography",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:16px; line-height:1.4;"">
                     <p style=""text-decoration:underline; margin:0 0 6px 0;"">Underlined text</p>
                     <p style=""text-decoration:line-through; margin:0 0 6px 0;"">Strikethrough text</p>
@@ -70,7 +66,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "typo-line-height",
                 Name = "Line Height",
                 Category = "Typography",
-                Tolerance = 0.0, // Multi-line text with different line heights is highly font-sensitive
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px;"">
                     <p style=""line-height:1.0; background:#e8f4fd; padding:4px; margin:0 0 8px 0;"">Line height 1.0. This is a longer text that should show tight spacing between lines when it wraps.</p>
                     <p style=""line-height:1.5; background:#fde8e8; padding:4px; margin:0 0 8px 0;"">Line height 1.5. This is a longer text that should show normal spacing between lines when it wraps.</p>

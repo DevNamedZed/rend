@@ -34,7 +34,7 @@ namespace Rend.Internal
         {
             if (node is Element el && el.TagName == "img")
             {
-                var src = el.GetAttribute("src");
+                string? src = ResolveImageSource(el);
                 if (!string.IsNullOrEmpty(src) && !images.ContainsKey(src!))
                 {
                     var imageData = LoadImage(src!);
@@ -49,6 +49,107 @@ namespace Rend.Internal
                 CollectImages(child, images);
                 child = child.NextSibling;
             }
+        }
+
+        /// <summary>
+        /// Resolves the best image source for an &lt;img&gt; element, considering
+        /// parent &lt;picture&gt; element's &lt;source&gt; children and srcset attribute.
+        /// </summary>
+        private static string? ResolveImageSource(Element img)
+        {
+            // Check if inside a <picture> element
+            if (img.Parent is Element parent && parent.TagName == "picture")
+            {
+                // Walk <source> siblings before the <img> — first match wins
+                var sibling = parent.FirstChild;
+                while (sibling != null)
+                {
+                    if (sibling == img) break; // Stop at the <img> itself
+
+                    if (sibling is Element source && source.TagName == "source")
+                    {
+                        // Check type attribute — skip unsupported formats
+                        string? type = source.GetAttribute("type");
+                        if (type != null && !IsSupportedImageType(type))
+                        {
+                            sibling = sibling.NextSibling;
+                            continue;
+                        }
+
+                        // Check srcset on <source> (use first entry)
+                        string? srcset = source.GetAttribute("srcset");
+                        if (srcset != null)
+                        {
+                            string? resolved = ParseFirstSrcsetEntry(srcset);
+                            if (resolved != null) return resolved;
+                        }
+
+                        // Check src on <source>
+                        string? src = source.GetAttribute("src");
+                        if (!string.IsNullOrEmpty(src))
+                            return src;
+                    }
+
+                    sibling = sibling.NextSibling;
+                }
+            }
+
+            // Check srcset on the <img> itself (use first entry or 1x descriptor)
+            string? imgSrcset = img.GetAttribute("srcset");
+            if (imgSrcset != null)
+            {
+                string? resolved = ParseFirstSrcsetEntry(imgSrcset);
+                if (resolved != null) return resolved;
+            }
+
+            // Fallback to src attribute
+            return img.GetAttribute("src");
+        }
+
+        /// <summary>
+        /// Parses a srcset attribute and returns the URL of the first entry (or the 1x entry if present).
+        /// srcset format: "url1 1x, url2 2x, url3 300w"
+        /// </summary>
+        private static string? ParseFirstSrcsetEntry(string srcset)
+        {
+            string? firstUrl = null;
+            string? oneXUrl = null;
+
+            var entries = srcset.Split(',');
+            for (int i = 0; i < entries.Length; i++)
+            {
+                string entry = entries[i].Trim();
+                if (entry.Length == 0) continue;
+
+                // Split into URL and descriptor
+                int spaceIdx = entry.LastIndexOf(' ');
+                string url;
+                string descriptor;
+                if (spaceIdx > 0)
+                {
+                    url = entry.Substring(0, spaceIdx).Trim();
+                    descriptor = entry.Substring(spaceIdx + 1).Trim();
+                }
+                else
+                {
+                    url = entry;
+                    descriptor = "1x";
+                }
+
+                if (firstUrl == null) firstUrl = url;
+                if (descriptor == "1x") oneXUrl = url;
+            }
+
+            return oneXUrl ?? firstUrl;
+        }
+
+        /// <summary>
+        /// Returns true if the given MIME type represents a supported image format.
+        /// </summary>
+        private static bool IsSupportedImageType(string type)
+        {
+            return type == "image/png" || type == "image/jpeg" || type == "image/jpg" ||
+                   type == "image/gif" || type == "image/webp" || type == "image/svg+xml";
         }
 
         private ImageData? LoadImage(string src)

@@ -71,6 +71,11 @@ namespace Rend.Css.Cascade.Internal
                 {
                     CollectRules(element, sup.Rules, origin, output, targetPseudo);
                 }
+                else if (rule is ContainerRule cr)
+                {
+                    // Container rules already filtered at style resolution time
+                    CollectRules(element, cr.Rules, origin, output, targetPseudo);
+                }
                 else if (rule is LayerRule lr && lr.IsBlock)
                 {
                     CollectRules(element, lr.Rules, origin, output, targetPseudo);

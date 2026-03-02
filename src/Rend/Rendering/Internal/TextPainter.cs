@@ -75,6 +75,60 @@ namespace Rend.Rendering.Internal
 
             // Paint text decorations.
             PaintDecorations(fragment, lineX, lineY, lineBaseline, target, style);
+
+            // Paint ruby annotation text if present
+            if (fragment.RubyText != null)
+            {
+                PaintRubyAnnotation(fragment, lineX, lineY, target, style);
+            }
+        }
+
+        /// <summary>
+        /// Paints ruby annotation text above or below a base text fragment.
+        /// </summary>
+        private static void PaintRubyAnnotation(LineFragment fragment, float lineX, float lineY,
+                                                  IRenderTarget target, ComputedStyle baseStyle)
+        {
+            var rubyStyle = fragment.RubyStyle ?? baseStyle;
+            float rubyFontSize = fragment.RubyStyle != null ? rubyStyle.FontSize : baseStyle.FontSize * 0.5f;
+
+            float drawX = lineX + fragment.X;
+            float drawY;
+
+            if (fragment.RubyBelow)
+            {
+                // Position below the base text
+                drawY = lineY + fragment.Y + fragment.Height + rubyFontSize * 0.2f;
+            }
+            else
+            {
+                // Position above the base text (default: over)
+                drawY = lineY + fragment.Y - rubyFontSize * 0.3f;
+            }
+
+            // Center the ruby text over the base text
+            float baseWidth = fragment.Width;
+            float stretch = FontDescriptor.StretchToPercentage(baseStyle.FontStretch);
+            var rubyTextStyle = new TextStyle
+            {
+                Font = new FontDescriptor(
+                    rubyStyle.FontFamily,
+                    rubyStyle.FontWeight,
+                    rubyStyle.FontStyle,
+                    stretch),
+                FontSize = rubyFontSize,
+                Color = rubyStyle.Color,
+                Bold = rubyStyle.FontWeight >= 700f,
+                Italic = rubyStyle.FontStyle == CssFontStyle.Italic || rubyStyle.FontStyle == CssFontStyle.Oblique
+            };
+
+            // Estimate ruby text width for centering
+            float charWidth = rubyFontSize * 0.6f; // approximate average char width
+            float rubyWidth = fragment.RubyText!.Length * charWidth;
+            float xOffset = (baseWidth - rubyWidth) * 0.5f;
+            if (xOffset > 0) drawX += xOffset;
+
+            target.DrawText(fragment.RubyText, drawX, drawY, rubyTextStyle);
         }
 
         /// <summary>

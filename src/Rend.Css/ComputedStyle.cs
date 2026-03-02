@@ -966,6 +966,131 @@ namespace Rend.Css
 
         #endregion
 
+        #region Accent Color
+
+        public CssColor AccentColor
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _values[PropertyId.AccentColor].ToColor();
+        }
+
+        #endregion
+
+        #region Text Wrap
+
+        public CssTextWrap TextWrap
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssTextWrap)_values[PropertyId.TextWrap].IntValue;
+        }
+
+        #endregion
+
+        #region Forced Color Adjust
+
+        public CssForcedColorAdjust ForcedColorAdjust
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssForcedColorAdjust)_values[PropertyId.ForcedColorAdjust].IntValue;
+        }
+
+        #endregion
+
+        #region Hanging Punctuation
+
+        public CssHangingPunctuation HangingPunctuation
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssHangingPunctuation)_values[PropertyId.HangingPunctuation].IntValue;
+        }
+
+        #endregion
+
+        #region CSS Shapes
+
+        public string? ShapeOutside
+        {
+            get => _refValues[PropertyId.ShapeOutside] as string;
+        }
+
+        public float ShapeMargin
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _values[PropertyId.ShapeMargin].FloatValue;
+        }
+
+        public float ShapeImageThreshold
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _values[PropertyId.ShapeImageThreshold].FloatValue;
+        }
+
+        #endregion
+
+        #region Font Variant Sub-properties
+
+        public CssFontVariantLigatures FontVariantLigatures
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssFontVariantLigatures)_values[PropertyId.FontVariantLigatures].IntValue;
+        }
+
+        public CssFontVariantCaps FontVariantCaps
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssFontVariantCaps)_values[PropertyId.FontVariantCaps].IntValue;
+        }
+
+        public CssFontVariantNumeric FontVariantNumeric
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssFontVariantNumeric)_values[PropertyId.FontVariantNumeric].IntValue;
+        }
+
+        public CssFontVariantEastAsian FontVariantEastAsian
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssFontVariantEastAsian)_values[PropertyId.FontVariantEastAsian].IntValue;
+        }
+
+        public string? FontFeatureSettings
+        {
+            get => _refValues[PropertyId.FontFeatureSettings] as string;
+        }
+
+        #endregion
+
+        #region Container Queries
+
+        public CssContainerType ContainerType
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssContainerType)_values[PropertyId.ContainerType].IntValue;
+        }
+
+        public string? ContainerName
+        {
+            get => _refValues[PropertyId.ContainerName] as string;
+        }
+
+        #endregion
+
+        #region Ruby
+
+        public CssRubyPosition RubyPosition
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssRubyPosition)_values[PropertyId.RubyPosition].IntValue;
+        }
+
+        public CssRubyAlign RubyAlign
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssRubyAlign)_values[PropertyId.RubyAlign].IntValue;
+        }
+
+        #endregion
+
         #region Generic access
 
         /// <summary>Get a raw PropertyValue by ID.</summary>

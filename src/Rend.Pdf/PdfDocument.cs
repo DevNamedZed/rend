@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using System.Threading.Tasks;
 using Rend.Core.Values;
 using Rend.Pdf.Internal;
 using Rend.Pdf.Fonts;
@@ -37,6 +38,8 @@ namespace Rend.Pdf
         private readonly Dictionary<PdfFont, byte[]> _fontRawData = new Dictionary<PdfFont, byte[]>();
         private readonly List<PdfImage> _images = new List<PdfImage>();
         private readonly List<PdfSpotColor> _spotColors = new List<PdfSpotColor>();
+        private readonly List<PdfOptionalContentGroup> _layers = new List<PdfOptionalContentGroup>();
+        private readonly List<PdfFileAttachment> _attachments = new List<PdfFileAttachment>();
         private readonly List<PdfReference> _formFieldRefs = new List<PdfReference>();
         private int _fontCounter;
         private int _imageCounter;
@@ -287,6 +290,79 @@ namespace Rend.Pdf
         }
 
         // ═══════════════════════════════════════════
+        // Tiling Patterns
+        // ═══════════════════════════════════════════
+
+        /// <summary>
+        /// Create a colored tiling pattern. Draw into the returned pattern's Content stream
+        /// to define the repeating cell.
+        /// </summary>
+        /// <param name="width">Width of the pattern bounding box.</param>
+        /// <param name="height">Height of the pattern bounding box.</param>
+        /// <param name="xStep">Horizontal spacing between pattern cell origins. Use width for seamless tiling.</param>
+        /// <param name="yStep">Vertical spacing between pattern cell origins. Use height for seamless tiling.</param>
+        /// <param name="paintType">Whether the pattern defines its own colors (Colored) or colors are applied at use (Uncolored).</param>
+        /// <param name="tilingType">Tiling behavior (spacing/distortion tradeoff).</param>
+        public PdfTilingPattern CreateTilingPattern(
+            float width, float height,
+            float xStep = 0, float yStep = 0,
+            PdfPatternPaintType paintType = PdfPatternPaintType.Colored,
+            PdfTilingType tilingType = PdfTilingType.ConstantSpacing)
+        {
+            if (width <= 0) throw new ArgumentOutOfRangeException(nameof(width));
+            if (height <= 0) throw new ArgumentOutOfRangeException(nameof(height));
+
+            if (xStep <= 0) xStep = width;
+            if (yStep <= 0) yStep = height;
+
+            bool compress = _options.Compression != PdfCompression.None;
+            var level = MapCompressionLevel(_options.Compression);
+            var content = new PdfContentStream(_objectTable, compress, 4096, level);
+
+            return new PdfTilingPattern(width, height, xStep, yStep, paintType, tilingType, content);
+        }
+
+        // ═══════════════════════════════════════════
+        // Optional Content Groups (Layers)
+        // ═══════════════════════════════════════════
+
+        /// <summary>
+        /// Add a named layer (Optional Content Group). Content drawn between
+        /// <see cref="PdfContentStream.BeginLayer"/> and <see cref="PdfContentStream.EndLayer"/>
+        /// can be toggled visible/hidden in PDF viewers.
+        /// </summary>
+        /// <param name="name">Display name shown in the PDF viewer's layer panel.</param>
+        /// <param name="defaultVisible">Whether the layer is visible by default. Default: true.</param>
+        public PdfOptionalContentGroup AddLayer(string name, bool defaultVisible = true)
+        {
+            if (name == null) throw new ArgumentNullException(nameof(name));
+            var layer = new PdfOptionalContentGroup(name) { DefaultVisible = defaultVisible };
+            _layers.Add(layer);
+            return layer;
+        }
+
+        // ═══════════════════════════════════════════
+        // File Attachments
+        // ═══════════════════════════════════════════
+
+        /// <summary>
+        /// Attach a file to the PDF document. The file will be embedded in the PDF and
+        /// available in the viewer's attachments panel.
+        /// </summary>
+        /// <param name="fileName">File name as displayed in the PDF viewer.</param>
+        /// <param name="data">File content bytes.</param>
+        /// <param name="mimeType">MIME type (e.g. "text/plain", "application/pdf"). Default: "application/octet-stream".</param>
+        public PdfFileAttachment AttachFile(string fileName, byte[] data, string mimeType = "application/octet-stream")
+        {
+            if (fileName == null) throw new ArgumentNullException(nameof(fileName));
+            if (data == null) throw new ArgumentNullException(nameof(data));
+
+            var attachment = new PdfFileAttachment(fileName, data, mimeType);
+            _attachments.Add(attachment);
+            return attachment;
+        }
+
+        // ═══════════════════════════════════════════
         // Outlines (Bookmarks)
         // ═══════════════════════════════════════════
 
@@ -427,18 +503,38 @@ namespace Rend.Pdf
             if (_options.PdfAConformance.HasValue)
                 outputIntentRef = BuildOutputIntent();
 
+            // 6e. Build OCG (Optional Content Groups) if layers exist
+            PdfReference? ocPropertiesRef = null;
+            if (_layers.Count > 0)
+                ocPropertiesRef = BuildOCProperties();
+
+            // 6f. Build file attachments
+            PdfReference? namesRef = null;
+            if (_attachments.Count > 0)
+                namesRef = BuildEmbeddedFiles();
+
             // 7. Build catalog
-            var finalCatalogRef = BuildCatalog(pagesRef, outlinesRef, xmpMetadataRef, acroFormRef, structTreeRef, outputIntentRef);
+            var finalCatalogRef = BuildCatalog(pagesRef, outlinesRef, xmpMetadataRef, acroFormRef, structTreeRef, outputIntentRef, ocPropertiesRef, namesRef);
 
             // 8. Write all objects
-            _objectTable.WriteAllObjects(writer);
+            bool useObjStreams = _options.UseObjectStreams && _options.Version >= PdfVersion.Pdf15;
+            if (useObjStreams)
+                _objectTable.WriteAllObjectsWithStreams(writer);
+            else
+                _objectTable.WriteAllObjects(writer);
 
-            // 9. Write xref table
-            long xrefOffset = _objectTable.WriteXRefTable(writer);
-
-            // 10. Write trailer
-            _objectTable.WriteTrailer(writer, finalCatalogRef, infoRef, encryptRef,
-                                       encryptor?.FileId, xrefOffset);
+            // 9-10. Write xref + trailer (stream or traditional)
+            if (useObjStreams)
+            {
+                _objectTable.WriteXRefStream(writer, finalCatalogRef, infoRef, encryptRef,
+                                              encryptor?.FileId);
+            }
+            else
+            {
+                long xrefOffset = _objectTable.WriteXRefTable(writer);
+                _objectTable.WriteTrailer(writer, finalCatalogRef, infoRef, encryptRef,
+                                           encryptor?.FileId, xrefOffset);
+            }
         }
 
         private PdfReference? BuildInfoDictionary()
@@ -802,9 +898,22 @@ namespace Rend.Pdf
             var pageLeafRefs = new List<PdfReference>(_pages.Count);
             var pageLeafDicts = new List<PdfDictionary>(_pages.Count);
 
-            foreach (var page in _pages)
+            // Parallel content stream building: when enabled and there are multiple pages,
+            // build all content streams concurrently before serial object allocation.
+            PdfStream?[]? prebuiltStreams = null;
+            if (_options.ParallelPageGeneration && _pages.Count > 1)
             {
-                var contentStream = page.Content.Build();
+                prebuiltStreams = new PdfStream[_pages.Count];
+                Parallel.For(0, _pages.Count, i =>
+                {
+                    prebuiltStreams[i] = _pages[i].Content.Build();
+                });
+            }
+
+            for (int pageIdx = 0; pageIdx < _pages.Count; pageIdx++)
+            {
+                var page = _pages[pageIdx];
+                var contentStream = prebuiltStreams != null ? prebuiltStreams[pageIdx]! : page.Content.Build();
                 var contentRef = _objectTable.Allocate(contentStream);
 
                 var pageDict = new PdfDictionary(8);
@@ -881,6 +990,66 @@ namespace Rend.Pdf
                     resources[PdfName.ColorSpace] = csDict;
                 }
 
+                // Properties resources (OCG layer references for BDC operator)
+                if (page.Content.OCGs.Count > 0)
+                {
+                    var propsDict = new PdfDictionary(page.Content.OCGs.Count);
+                    foreach (var ocg in page.Content.OCGs)
+                    {
+                        var layer = ocg.Value;
+                        // Build OCG object if not yet built
+                        if (layer.ObjectReference == null)
+                        {
+                            var ocgDict = new PdfDictionary(3);
+                            ocgDict[PdfName.Type] = PdfName.OCG;
+                            ocgDict[PdfName.Name] = new PdfString(layer.Name);
+                            layer.ObjectReference = _objectTable.Allocate(ocgDict);
+                        }
+                        propsDict[new PdfName(ocg.Key)] = layer.ObjectReference;
+                    }
+                    resources[new PdfName("Properties")] = propsDict;
+                }
+
+                // Pattern resources (tiling patterns)
+                if (page.Content.Patterns.Count > 0)
+                {
+                    var patDict = new PdfDictionary(page.Content.Patterns.Count);
+                    foreach (var pat in page.Content.Patterns)
+                    {
+                        var pattern = pat.Value;
+                        // Build the pattern object if not already built
+                        if (pattern.ObjectReference == null)
+                        {
+                            var patternStream = pattern.Content.Build();
+
+                            // Pattern stream dict entries (ISO 32000-1 §8.7.4.2, Table 75)
+                            patternStream.Dict[PdfName.Type] = PdfName.Pattern;
+                            patternStream.Dict[PdfName.PatternType] = new PdfInteger(1); // Tiling
+                            patternStream.Dict[PdfName.PaintType] = new PdfInteger((int)pattern.PaintType);
+                            patternStream.Dict[PdfName.TilingType] = new PdfInteger((int)pattern.TilingType);
+
+                            var bbox = new PdfArray(4);
+                            bbox.Add(new PdfReal(0));
+                            bbox.Add(new PdfReal(0));
+                            bbox.Add(new PdfReal(pattern.Width));
+                            bbox.Add(new PdfReal(pattern.Height));
+                            patternStream.Dict[PdfName.BBox] = bbox;
+
+                            patternStream.Dict[PdfName.XStep] = new PdfReal(pattern.XStep);
+                            patternStream.Dict[PdfName.YStep] = new PdfReal(pattern.YStep);
+
+                            // Build pattern's own resources (fonts, images, etc.)
+                            var patResources = BuildPatternResources(pattern.Content, fontRefs);
+                            if (patResources.Count > 0)
+                                patternStream.Dict[PdfName.Resources] = patResources;
+
+                            pattern.ObjectReference = _objectTable.Allocate(patternStream);
+                        }
+                        patDict[new PdfName(pat.Key)] = pattern.ObjectReference;
+                    }
+                    resources[PdfName.Pattern] = patDict;
+                }
+
                 if (resources.Count > 0)
                     pageDict[PdfName.Resources] = resources;
 
@@ -923,6 +1092,152 @@ namespace Rend.Pdf
             var rootRef = BuildPageTreeLevel(pageLeafRefs, pageLeafDicts, 0, _pages.Count, fanOut);
 
             return rootRef;
+        }
+
+        private PdfReference BuildOCProperties()
+        {
+            // Build OCG dictionary objects for each layer
+            var ocgRefs = new PdfArray(_layers.Count);
+            var onRefs = new PdfArray(_layers.Count);
+            var offRefs = new PdfArray(_layers.Count);
+            var orderArray = new PdfArray(_layers.Count);
+
+            foreach (var layer in _layers)
+            {
+                if (layer.ObjectReference == null)
+                {
+                    var ocgDict = new PdfDictionary(3);
+                    ocgDict[PdfName.Type] = PdfName.OCG;
+                    ocgDict[PdfName.Name] = new PdfString(layer.Name);
+                    layer.ObjectReference = _objectTable.Allocate(ocgDict);
+                }
+
+                ocgRefs.Add(layer.ObjectReference);
+                orderArray.Add(layer.ObjectReference);
+
+                if (layer.DefaultVisible)
+                    onRefs.Add(layer.ObjectReference);
+                else
+                    offRefs.Add(layer.ObjectReference);
+            }
+
+            // D (default viewing configuration) dictionary
+            var dDict = new PdfDictionary(4);
+            dDict[PdfName.BaseState] = PdfName.ON;
+            if (offRefs.Items.Count > 0)
+                dDict[PdfName.OFF] = offRefs;
+            dDict[PdfName.Order] = orderArray;
+
+            // OCProperties dictionary
+            var ocProps = new PdfDictionary(2);
+            ocProps[PdfName.OCGs] = ocgRefs;
+            ocProps[PdfName.D] = dDict;
+
+            return _objectTable.Allocate(ocProps);
+        }
+
+        private PdfReference BuildEmbeddedFiles()
+        {
+            // Sort attachments by file name for the name tree (ISO 32000-1 §7.9.6)
+            _attachments.Sort((a, b) => string.Compare(a.FileName, b.FileName, StringComparison.Ordinal));
+
+            // Build the name tree /Names array: [name1 ref1 name2 ref2 ...]
+            var namesArray = new PdfArray(_attachments.Count * 2);
+            bool compress = _options.Compression != PdfCompression.None;
+            var level = MapCompressionLevel(_options.Compression);
+
+            foreach (var attachment in _attachments)
+            {
+                // 1. Build embedded file stream
+                var efStream = new PdfStream(attachment.Data, compress)
+                {
+                    CompressionLevel = level
+                };
+                efStream.Dict[PdfName.Type] = PdfName.EmbeddedFile;
+                efStream.Dict[PdfName.Subtype] = new PdfName(attachment.MimeType);
+
+                // Params dict (file size, dates)
+                var paramsDict = new PdfDictionary(3);
+                paramsDict[PdfName.Size] = new PdfInteger(attachment.Data.Length);
+                if (attachment.CreationDate.HasValue)
+                    paramsDict[PdfName.CreationDate] = new PdfString(PdfDocumentInfo.FormatPdfDate(attachment.CreationDate.Value));
+                if (attachment.ModDate.HasValue)
+                    paramsDict[PdfName.ModDate] = new PdfString(PdfDocumentInfo.FormatPdfDate(attachment.ModDate.Value));
+                efStream.Dict[PdfName.Params] = paramsDict;
+
+                var efRef = _objectTable.Allocate(efStream);
+
+                // 2. Build EF dictionary
+                var efDict = new PdfDictionary(1);
+                efDict[PdfName.F_Name] = efRef;
+
+                // 3. Build Filespec dictionary
+                var filespecDict = new PdfDictionary(4);
+                filespecDict[PdfName.Type] = PdfName.Filespec;
+                filespecDict[PdfName.F_Name] = new PdfString(attachment.FileName);
+                filespecDict[PdfName.UF] = new PdfString(attachment.FileName);
+                filespecDict[PdfName.EF] = efDict;
+                if (attachment.Description != null)
+                    filespecDict[new PdfName("Desc")] = new PdfString(attachment.Description);
+
+                var filespecRef = _objectTable.Allocate(filespecDict);
+                attachment.FilespecRef = filespecRef;
+
+                namesArray.Add(new PdfString(attachment.FileName));
+                namesArray.Add(filespecRef);
+            }
+
+            // Build the EmbeddedFiles name tree node
+            var efTreeNode = new PdfDictionary(1);
+            efTreeNode[PdfName.Names] = namesArray;
+
+            // Build the Names dictionary (catalog-level)
+            var namesDict = new PdfDictionary(1);
+            namesDict[PdfName.EmbeddedFiles] = _objectTable.Allocate(efTreeNode);
+
+            return _objectTable.Allocate(namesDict);
+        }
+
+        private PdfDictionary BuildPatternResources(PdfContentStream content,
+                                                      Dictionary<string, PdfReference> fontRefs)
+        {
+            var resources = new PdfDictionary(4);
+
+            if (content.UsedFonts.Count > 0)
+            {
+                var fontResDict = new PdfDictionary(content.UsedFonts.Count);
+                foreach (var usedFont in content.UsedFonts)
+                {
+                    if (content.FontResourceNames.TryGetValue(usedFont.Key, out var resName) &&
+                        fontRefs.TryGetValue(usedFont.Value.BaseFont, out var fontRef))
+                    {
+                        fontResDict[new PdfName(resName)] = fontRef;
+                    }
+                }
+                resources[PdfName.Font] = fontResDict;
+            }
+
+            if (content.UsedImages.Count > 0)
+            {
+                var xobjDict = new PdfDictionary(content.UsedImages.Count);
+                foreach (var usedImage in content.UsedImages)
+                {
+                    xobjDict[new PdfName(usedImage.Key)] = usedImage.Value.ObjectReference;
+                }
+                resources[PdfName.XObject] = xobjDict;
+            }
+
+            if (content.ExtGStates.Count > 0)
+            {
+                var gsDict = new PdfDictionary(content.ExtGStates.Count);
+                foreach (var gs in content.ExtGStates)
+                {
+                    gsDict[new PdfName(gs.Key)] = gs.Value;
+                }
+                resources[PdfName.ExtGState] = gsDict;
+            }
+
+            return resources;
         }
 
         /// <summary>
@@ -980,7 +1295,9 @@ namespace Rend.Pdf
                                             PdfReference? xmpMetadataRef = null,
                                             PdfReference? acroFormRef = null,
                                             PdfReference? structTreeRef = null,
-                                            PdfReference? outputIntentRef = null)
+                                            PdfReference? outputIntentRef = null,
+                                            PdfReference? ocPropertiesRef = null,
+                                            PdfReference? namesRef = null)
         {
             var catalog = new PdfDictionary(8);
             catalog[PdfName.Type] = PdfName.Catalog;
@@ -1010,6 +1327,12 @@ namespace Rend.Pdf
                 outputIntents.Add(outputIntentRef);
                 catalog[PdfName.OutputIntents] = outputIntents;
             }
+
+            if (ocPropertiesRef != null)
+                catalog[PdfName.OCProperties] = ocPropertiesRef;
+
+            if (namesRef != null)
+                catalog[PdfName.Names] = namesRef;
 
             return _objectTable.Allocate(catalog);
         }

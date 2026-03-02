@@ -95,7 +95,30 @@ namespace Rend.Css.Media.Internal
             var name = feature.Substring(0, colonIdx).Trim().ToLowerInvariant();
             var valueStr = feature.Substring(colonIdx + 1).Trim();
 
-            // Parse numeric value with optional unit
+            // Handle keyword-based media features first
+            switch (name)
+            {
+                case "prefers-color-scheme":
+                    var scheme = valueStr.ToLowerInvariant();
+                    if (scheme == "dark") return context.PrefersColorSchemeDark;
+                    if (scheme == "light") return !context.PrefersColorSchemeDark;
+                    return true; // no-preference or unknown
+                case "prefers-reduced-motion":
+                    var motion = valueStr.ToLowerInvariant();
+                    if (motion == "reduce") return context.PrefersReducedMotion;
+                    if (motion == "no-preference") return !context.PrefersReducedMotion;
+                    return true;
+                case "prefers-contrast":
+                    var contrast = valueStr.ToLowerInvariant();
+                    if (contrast == "more" || contrast == "custom") return context.PrefersContrast;
+                    if (contrast == "no-preference") return !context.PrefersContrast;
+                    if (contrast == "less") return false; // we don't distinguish less from more
+                    return true;
+                case "orientation":
+                    return valueStr.Trim().Equals(context.Orientation, StringComparison.OrdinalIgnoreCase);
+            }
+
+            // Parse numeric value with optional unit (for width/height/resolution)
             if (!TryParseLength(valueStr, out float value))
                 return true; // can't parse — assume match (permissive)
 
@@ -107,11 +130,23 @@ namespace Rend.Css.Media.Internal
                 case "height": return context.Height == value;
                 case "min-height": return context.Height >= value;
                 case "max-height": return context.Height <= value;
-                case "orientation":
-                    return valueStr.Trim().Equals(context.Orientation, StringComparison.OrdinalIgnoreCase);
+                case "resolution": return Math.Abs(context.Resolution - ConvertResolutionToDpi(value, valueStr)) < 0.5f;
+                case "min-resolution": return context.Resolution >= ConvertResolutionToDpi(value, valueStr);
+                case "max-resolution": return context.Resolution <= ConvertResolutionToDpi(value, valueStr);
                 default:
                     return true; // unknown feature — assume match
             }
+        }
+
+        private static float ConvertResolutionToDpi(float parsedValue, string originalStr)
+        {
+            var lower = originalStr.Trim().ToLowerInvariant();
+            if (lower.EndsWith("dpcm"))
+                return parsedValue * 2.54f; // TryParseLength won't know dpcm, parsedValue is raw number
+            if (lower.EndsWith("dppx") || lower.EndsWith("x"))
+                return parsedValue * 96f;
+            // dpi or unknown — already in DPI
+            return parsedValue;
         }
 
         private static bool TryParseLength(string value, out float px)

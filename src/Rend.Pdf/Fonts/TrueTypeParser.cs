@@ -56,6 +56,9 @@ namespace Rend.Pdf.Fonts
                 Buffer.BlockCopy(fontData, (int)cffEntry.Offset, cffTableData, 0, (int)cffEntry.Length);
             }
 
+            // Parse fvar table if present (variable font detection)
+            bool isVariableFont = tables.ContainsKey("fvar");
+
             // Parse kerning tables (GPOS takes priority over kern per OpenType spec)
             Dictionary<uint, short>? kerningPairs = null;
             if (tables.ContainsKey("GPOS"))

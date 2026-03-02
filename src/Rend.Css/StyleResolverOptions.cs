@@ -20,6 +20,12 @@ namespace Rend.Css
         /// <summary>Whether to apply the user-agent default stylesheet.</summary>
         public bool ApplyUserAgentStyles { get; set; } = true;
 
+        /// <summary>Whether the user prefers a dark color scheme.</summary>
+        public bool PrefersColorSchemeDark { get; set; }
+
+        /// <summary>Whether the user prefers reduced motion. Default: true (static output).</summary>
+        public bool PrefersReducedMotion { get; set; } = true;
+
         /// <summary>Default options.</summary>
         public static readonly StyleResolverOptions Default = new StyleResolverOptions();
     }

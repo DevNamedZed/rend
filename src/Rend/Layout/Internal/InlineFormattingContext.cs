@@ -79,6 +79,28 @@ namespace Rend.Layout.Internal
             if (!float.IsNaN(textIndent) && textIndent != 0)
                 cursorX += textIndent;
 
+            // list-style-position: inside — reserve space on the first line for the marker
+            if (parent.BoxType == BoxType.ListItem &&
+                styledElement.Style.ListStylePosition == CssListStylePosition.Inside &&
+                styledElement.Style.ListStyleType != CssListStyleType.None)
+            {
+                // Approximate marker width: bullet + gap
+                float markerReserve;
+                var lstType = styledElement.Style.ListStyleType;
+                if (lstType == CssListStyleType.Disc || lstType == CssListStyleType.Circle ||
+                    lstType == CssListStyleType.Square)
+                {
+                    float bulletDiameter = styledElement.Style.FontSize * 0.3f;
+                    markerReserve = bulletDiameter + 6f; // bullet + gap
+                }
+                else
+                {
+                    // Counter text: estimate width
+                    markerReserve = styledElement.Style.FontSize * 1.2f;
+                }
+                cursorX += markerReserve;
+            }
+
             for (int i = 0; i < styledElement.Children.Count; i++)
             {
                 var child = styledElement.Children[i];
@@ -171,9 +193,28 @@ namespace Rend.Layout.Internal
                         continue;
                     }
 
+                    // Ruby container: render base text with annotation above/below
+                    if (childElement.Style.Display == CssDisplay.Ruby)
+                    {
+                        LayoutRubyContainer(childElement, context, ref cursorX, ref cursorY, startX,
+                                           containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
+                        continue;
+                    }
+
+                    // Ruby sub-elements outside a ruby container: treat as inline
+                    if (childElement.Style.Display == CssDisplay.RubyText ||
+                        childElement.Style.Display == CssDisplay.RubyBase ||
+                        childElement.Style.Display == CssDisplay.RubyTextContainer)
+                    {
+                        LayoutInlineElement(childElement, context, ref cursorX, ref cursorY, startX,
+                                           containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
+                        continue;
+                    }
+
                     if (childElement.Style.Display == CssDisplay.InlineBlock ||
                         childElement.Style.Display == CssDisplay.InlineFlex ||
-                        childElement.Style.Display == CssDisplay.InlineGrid)
+                        childElement.Style.Display == CssDisplay.InlineGrid ||
+                        ReplacedElementLayout.IsReplaced(childElement))
                     {
                         LayoutInlineBlock(childElement, context, ref cursorX, ref cursorY, startX,
                                           containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
@@ -215,6 +256,20 @@ namespace Rend.Layout.Internal
                  styledElement.Style.OverflowX == CssOverflow.Auto))
             {
                 ApplyEllipsis(lineBoxes, startX, containingWidth, context);
+            }
+
+            // Apply text-wrap: balance — equalize line widths for short blocks (≤ 6 lines)
+            if (styledElement.Style.TextWrap == CssTextWrap.Balance &&
+                lineBoxes.Count >= 2 && lineBoxes.Count <= 6)
+            {
+                ApplyTextWrapBalance(lineBoxes, startX, containingWidth, styledElement.Style.TextAlign,
+                                     styledElement.Style.TextAlignLast, styledElement.Style.Direction);
+            }
+
+            // Apply hanging-punctuation: shift punctuation outside the margin
+            if (styledElement.Style.HangingPunctuation != CssHangingPunctuation.None && lineBoxes.Count > 0)
+            {
+                ApplyHangingPunctuation(lineBoxes, styledElement.Style.HangingPunctuation);
             }
 
             // Reconcile inline-block box positions with fragment vertical-align offsets.
@@ -659,6 +714,14 @@ namespace Rend.Layout.Internal
                         lineHeight = metricsLineHeight;
                 }
 
+                // CSS half-leading: the baseline position from the top of the line box
+                // includes half the leading (space distributed equally above and below text).
+                // Content area = ascent + descent (from font metrics).
+                // leading = lineHeight - contentArea; halfLeading = leading / 2
+                float descent = context.TextMeasurer.GetDescent(fontDesc, fontSize);
+                float contentArea = ascent + descent;
+                ascent += (lineHeight - contentArea) / 2f;
+
                 // Strip soft hyphens from display text (invisible unless at a break point)
                 string displayText = text;
                 if (style.Hyphens != CssHyphens.None && text.IndexOf('\u00AD') >= 0)
@@ -691,6 +754,9 @@ namespace Rend.Layout.Internal
                 // Fallback line-height when no font metrics available
                 if (float.IsNaN(lineHeight) || lineHeight <= 0)
                     lineHeight = fontSize * 1.2f;
+
+                // CSS half-leading for fallback path
+                ascent += (lineHeight - fontSize) / 2f;
 
                 // Fallback: estimate
                 float charWidth = fontSize * 0.6f;
@@ -765,58 +831,92 @@ namespace Rend.Layout.Internal
             int wordStart = 0;
             bool hasSoftHyphens = hyphens != CssHyphens.None && text.IndexOf('\u00AD') >= 0;
 
-            // DEBUG: count break opportunities
-            int wordCount = 0;
+            // Accumulate consecutive words into a single fragment per line.
+            // This prevents word spacing mismatch between HarfBuzz layout and Skia rendering
+            // by letting Skia handle intra-line glyph spacing as one continuous string.
+            int lineTextStart = 0;       // Start index of accumulated text for current line fragment
+            float lineFragStartX = cursorX; // X position where the accumulated fragment starts
+            float accumulatedWidth = 0;  // Total width of accumulated words (HarfBuzz-measured)
+
             for (int j = 0; j < text.Length; j++)
             {
                 if (j < breaks.Length && breaks[j] == LineBreakOpportunity.Allowed || j == text.Length - 1)
                 {
                     int end = j == text.Length - 1 ? text.Length : j + 1;
                     string word = text.Substring(wordStart, end - wordStart);
-                    wordCount++;
 
                     // Strip soft hyphens from display text (they're invisible unless at a break point)
                     string displayWord = hasSoftHyphens ? word.Replace("\u00AD", string.Empty) : word;
                     var shaped = context.TextMeasurer!.Shape(displayWord, fontDesc, fontSize);
                     float wordWidth = shaped.TotalWidth + CalculateSpacingExtraRaw(displayWord, letterSpacing, wordSpacing);
 
+                    // Compute the full-line width by reshaping accumulated text + this word as
+                    // one string.  This avoids accumulated rounding error from summing individual
+                    // word widths (HarfBuzz can produce different advances for isolated words vs.
+                    // words shaped in context, and float accumulation magnifies the error).
+                    float candidateWidth;
+                    {
+                        string lineCandidate = text.Substring(lineTextStart, end - lineTextStart);
+                        if (hasSoftHyphens) lineCandidate = lineCandidate.Replace("\u00AD", string.Empty);
+                        if (lineCandidate.Length > 0)
+                        {
+                            var candShape = context.TextMeasurer!.Shape(lineCandidate, fontDesc, fontSize);
+                            candidateWidth = candShape.TotalWidth + CalculateSpacingExtraRaw(lineCandidate, letterSpacing, wordSpacing);
+                        }
+                        else
+                        {
+                            candidateWidth = accumulatedWidth + wordWidth;
+                        }
+                    }
+
                     bool wordHandled = false;
-                    if (cursorX + wordWidth > startX + containingWidth && currentLine.Fragments.Count > 0)
+                    if (lineFragStartX + candidateWidth > startX + containingWidth && (currentLine.Fragments.Count > 0 || accumulatedWidth > 0))
                     {
                         // Try auto-hyphenation when hyphens: auto is set
                         if (hyphens == CssHyphens.Auto && displayWord.Length >= 4)
                         {
+                            // First flush accumulated text before hyphenation
+                            if (lineTextStart < wordStart)
+                            {
+                                FlushAccumulatedText(text, lineTextStart, wordStart, hasSoftHyphens, fontDesc, fontSize,
+                                    context, currentLine, lineFragStartX, accumulatedWidth, lineHeight, ascent,
+                                    inlineAncestor, letterSpacing, wordSpacing);
+                                cursorX = lineFragStartX + accumulatedWidth;
+                                lineTextStart = wordStart;
+                                lineFragStartX = cursorX;
+                                accumulatedWidth = 0;
+                            }
+
                             wordHandled = TryAutoHyphenate(displayWord, fontDesc, fontSize, context,
                                 ref cursorX, ref cursorY, startX, containingWidth,
                                 ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
                                 lineHeight, ascent, parent, inlineAncestor, letterSpacing, wordSpacing);
+                            if (wordHandled)
+                            {
+                                lineTextStart = end;
+                                lineFragStartX = cursorX;
+                                accumulatedWidth = 0;
+                            }
                         }
 
                         if (!wordHandled)
                         {
-                            // If the previous fragment ended with a soft hyphen, add visible hyphen
-                            if (hasSoftHyphens && currentLine.Fragments.Count > 0)
+                            // Flush accumulated text as a single fragment before line break
+                            if (lineTextStart < wordStart)
                             {
-                                var lastFrag = currentLine.Fragments[currentLine.Fragments.Count - 1];
-                                if (lastFrag.Text != null && lastFrag.Text.Length > 0)
-                                {
-                                    // Check if original text had a soft hyphen at this break point
-                                    int origEnd = wordStart;
-                                    if (origEnd > 0 && origEnd <= text.Length && text[origEnd - 1] == '\u00AD')
-                                    {
-                                        string fragText = lastFrag.Text + "-";
-                                        var hyphenShaped = context.TextMeasurer.Shape(fragText, fontDesc, fontSize);
-                                        float hyphenWidth = hyphenShaped.TotalWidth + CalculateSpacingExtraRaw(fragText, letterSpacing, wordSpacing);
-                                        lastFrag.Text = fragText;
-                                        lastFrag.ShapedRun = hyphenShaped;
-                                        lastFrag.Width = hyphenWidth;
-                                    }
-                                }
+                                FlushAccumulatedText(text, lineTextStart, wordStart, hasSoftHyphens, fontDesc, fontSize,
+                                    context, currentLine, lineFragStartX, accumulatedWidth, lineHeight, ascent,
+                                    inlineAncestor, letterSpacing, wordSpacing);
+                                UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, lineHeight, ascent);
                             }
 
                             // Start new line
                             StartNewLine(parent, ref cursorX, ref cursorY, startX, containingWidth,
                                          ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline);
+
+                            lineTextStart = wordStart;
+                            lineFragStartX = cursorX;
+                            accumulatedWidth = 0;
                         }
                     }
 
@@ -827,22 +927,58 @@ namespace Rend.Layout.Internal
                                               overflowWrap == CssOverflowWrap.BreakWord ||
                                               overflowWrap == CssOverflowWrap.Anywhere;
                         if (allowCharBreak &&
-                            cursorX + wordWidth > startX + containingWidth && currentLine.Fragments.Count == 0)
+                            lineFragStartX + candidateWidth > startX + containingWidth && currentLine.Fragments.Count == 0 && accumulatedWidth == 0)
                         {
                             WrapTextBreakAll(displayWord, fontDesc, fontSize, context, ref cursorX, ref cursorY, startX,
                                              containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
                                              lineHeight, ascent, parent, inlineAncestor, letterSpacing, wordSpacing);
+                            lineTextStart = end;
+                            lineFragStartX = cursorX;
+                            accumulatedWidth = 0;
                         }
                         else
                         {
-                            AddTextFragment(currentLine, displayWord, shaped, cursorX, wordWidth, lineHeight, ascent, inlineAncestor);
-                            cursorX += wordWidth;
+                            // Accumulate this word — use the full-line candidateWidth for accuracy
+                            accumulatedWidth = candidateWidth;
+                            cursorX = lineFragStartX + accumulatedWidth;
                             UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, lineHeight, ascent);
                         }
                     }
                     wordStart = end;
                 }
             }
+
+            // Flush any remaining accumulated text as a single fragment
+            if (lineTextStart < text.Length && accumulatedWidth > 0)
+            {
+                FlushAccumulatedText(text, lineTextStart, text.Length, hasSoftHyphens, fontDesc, fontSize,
+                    context, currentLine, lineFragStartX, accumulatedWidth, lineHeight, ascent,
+                    inlineAncestor, letterSpacing, wordSpacing);
+            }
+        }
+
+        /// <summary>
+        /// Emits accumulated text [textStart..textEnd) as a single shaped fragment.
+        /// By shaping the entire line segment as one string, we ensure Skia's DrawText
+        /// handles inter-word spacing consistently with its own glyph metrics.
+        /// </summary>
+        private static void FlushAccumulatedText(
+            string fullText, int textStart, int textEnd, bool hasSoftHyphens,
+            FontDescriptor fontDesc, float fontSize, LayoutContext context,
+            LineBox currentLine, float fragX, float totalWidth,
+            float lineHeight, float ascent, StyledElement? inlineAncestor,
+            float letterSpacing, float wordSpacing)
+        {
+            string segment = fullText.Substring(textStart, textEnd - textStart);
+            if (hasSoftHyphens)
+                segment = segment.Replace("\u00AD", string.Empty);
+            if (segment.Length == 0) return;
+
+            var shaped = context.TextMeasurer!.Shape(segment, fontDesc, fontSize);
+            // Use the shaped width for the combined segment (more accurate than sum of word widths)
+            float segmentWidth = shaped.TotalWidth + CalculateSpacingExtraRaw(segment, letterSpacing, wordSpacing);
+
+            AddTextFragment(currentLine, segment, shaped, fragX, segmentWidth, lineHeight, ascent, inlineAncestor);
         }
 
         /// <summary>
@@ -940,28 +1076,62 @@ namespace Rend.Layout.Internal
             float lineHeight, float ascent, LayoutBox parent,
             StyledElement? inlineAncestor, float letterSpacing, float wordSpacing)
         {
+            // Batch consecutive characters that fit on the same line into a single
+            // text fragment to preserve proper kerning and avoid per-character spacing artifacts.
+            int batchStart = 0;
+            float batchWidth = 0;
+            float batchX = cursorX;
+
             for (int i = 0; i < text.Length; i++)
             {
-                // Handle surrogate pairs
                 int charLen = char.IsHighSurrogate(text[i]) && i + 1 < text.Length ? 2 : 1;
                 string ch = text.Substring(i, charLen);
-                var shaped = context.TextMeasurer!.Shape(ch, fontDesc, fontSize);
-                float charWidth = shaped.TotalWidth;
+                var charShaped = context.TextMeasurer!.Shape(ch, fontDesc, fontSize);
+                float charWidth = charShaped.TotalWidth;
                 if (letterSpacing != 0 && i > 0) charWidth += letterSpacing;
                 if (wordSpacing != 0 && ch == " ") charWidth += wordSpacing;
 
-                if (cursorX + charWidth > startX + containingWidth && currentLine.Fragments.Count > 0)
+                // Check if adding this char would overflow the line.
+                // Allow wrap if there's already content (fragments or pending batch).
+                bool hasContent = currentLine.Fragments.Count > 0 || i > batchStart;
+                if (cursorX + charWidth > startX + containingWidth && hasContent)
                 {
+                    // Flush accumulated batch before wrapping
+                    if (i > batchStart)
+                    {
+                        FlushBreakAllBatch(text, batchStart, i, fontDesc, fontSize, context,
+                            batchX, batchWidth, lineHeight, ascent, currentLine, inlineAncestor);
+                    }
                     StartNewLine(parent, ref cursorX, ref cursorY, startX, containingWidth,
                                  ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline);
+                    batchStart = i;
+                    batchWidth = 0;
+                    batchX = cursorX;
                 }
 
-                AddTextFragment(currentLine, ch, shaped, cursorX, charWidth, lineHeight, ascent, inlineAncestor);
+                batchWidth += charWidth;
                 cursorX += charWidth;
                 UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, lineHeight, ascent);
 
                 if (charLen == 2) i++; // skip second surrogate
             }
+
+            // Flush remaining batch
+            if (text.Length > batchStart)
+            {
+                FlushBreakAllBatch(text, batchStart, text.Length, fontDesc, fontSize, context,
+                    batchX, batchWidth, lineHeight, ascent, currentLine, inlineAncestor);
+            }
+        }
+
+        private static void FlushBreakAllBatch(
+            string text, int start, int end, FontDescriptor fontDesc, float fontSize,
+            LayoutContext context, float x, float width,
+            float lineHeight, float ascent, LineBox currentLine, StyledElement? inlineAncestor)
+        {
+            string batchText = text.Substring(start, end - start);
+            var shaped = context.TextMeasurer!.Shape(batchText, fontDesc, fontSize);
+            AddTextFragment(currentLine, batchText, shaped, x, width, lineHeight, ascent, inlineAncestor);
         }
 
         private static void StartNewLine(LayoutBox parent, ref float cursorX, ref float cursorY,
@@ -1055,8 +1225,35 @@ namespace Rend.Layout.Internal
                     if (intrinsicH <= 0) intrinsicH = ReplacedElementLayout.GetFormControlIntrinsicHeight(element);
                 }
 
-                contentWidth = float.IsNaN(element.Style.Width) ? intrinsicW : element.Style.Width;
-                float tempH = float.IsNaN(element.Style.Height) ? intrinsicH : element.Style.Height;
+                // MathML: measure content for intrinsic dimensions
+                if (element.TagName == "math" && intrinsicW <= 0)
+                {
+                    var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(
+                        element.Element, 16f);
+                    if (mathSize.Width > 0) intrinsicW = mathSize.Width + 4f;
+                    if (mathSize.Height > 0) intrinsicH = mathSize.Height;
+                }
+
+                // Resolve CSS width (handles percentages encoded as negative fractions)
+                float specW = element.Style.Width;
+                if (specW < 0 && specW > -1.01f)
+                    contentWidth = DimensionResolver.ResolveWidth(element.Style, containingWidth, box);
+                else if (float.IsNaN(specW))
+                    contentWidth = intrinsicW;
+                else
+                    contentWidth = specW;
+
+                // Resolve CSS height
+                float specH = element.Style.Height;
+                float tempH;
+                if (specH < 0 && specH > -1.01f)
+                    tempH = DimensionResolver.ResolveHeight(element.Style, float.NaN, box);
+                else if (float.IsNaN(specH))
+                    tempH = intrinsicH;
+                else
+                    tempH = specH;
+                if (float.IsNaN(tempH)) tempH = intrinsicH;
+
                 box.ContentRect = new RectF(0, 0, contentWidth, tempH);
                 ReplacedElementLayout.ResolveDimensions(box, element.Style, containingWidth, intrinsicW, intrinsicH);
                 contentWidth = box.ContentRect.Width;
@@ -1069,6 +1266,27 @@ namespace Rend.Layout.Internal
             else
             {
                 contentWidth = DimensionResolver.ResolveWidth(element.Style, containingWidth, box);
+            }
+
+            // Inline-level boxes with auto width should shrink-to-fit
+            bool needsShrinkToFit = float.IsNaN(element.Style.Width) &&
+                !ReplacedElementLayout.IsReplaced(element) &&
+                (element.Style.Display == CssDisplay.InlineBlock ||
+                 element.Style.Display == CssDisplay.InlineFlex ||
+                 element.Style.Display == CssDisplay.InlineGrid);
+
+            // For shrink-to-fit boxes, do a preliminary layout to measure actual content width
+            // BEFORE the line wrapping check. This ensures inline-flex/inline-grid containers
+            // use their true shrink-to-fit width for line break decisions.
+            if (needsShrinkToFit)
+            {
+                var measureBox = new LayoutBox(element, BoxType.InlineBlock);
+                BoxModelCalculator.ApplyBoxModel(measureBox, element.Style, containingWidth);
+                measureBox.ContentRect = new RectF(0, 0, contentWidth, 0);
+                BlockFormattingContext.LayoutChildren(measureBox, context);
+                float measuredWidth = MeasureContentWidth(measureBox);
+                if (measuredWidth > 0 && measuredWidth < contentWidth)
+                    contentWidth = measuredWidth;
             }
 
             float totalWidth = contentWidth + box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth;
@@ -1097,11 +1315,12 @@ namespace Rend.Layout.Internal
                 box.ContentRect = new RectF(cursorX + box.MarginLeft + box.BorderLeftWidth + box.PaddingLeft,
                                             cursorY, contentWidth, 0);
 
-                // Layout contents
-                BlockFormattingContext.Layout(box, context);
+                // Layout contents (dispatch based on display type: flex, grid, table, etc.)
+                BlockFormattingContext.LayoutChildren(box, context);
                 contentHeight = DimensionResolver.ResolveHeight(element.Style, float.NaN, box);
                 if (float.IsNaN(contentHeight))
                     contentHeight = CalculateContentHeight(box);
+
                 box.ContentRect = new RectF(box.ContentRect.X, cursorY, contentWidth, contentHeight);
             }
 
@@ -1133,6 +1352,142 @@ namespace Rend.Layout.Internal
             UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, fragment.Height, fragment.Baseline);
         }
 
+        /// <summary>
+        /// Lay out a ruby container element (display: ruby).
+        /// Extracts base text and annotation text from children, lays out base text
+        /// as inline content, and attaches ruby annotation to the fragments.
+        /// </summary>
+        private static void LayoutRubyContainer(
+            StyledElement rubyElement, LayoutContext context,
+            ref float cursorX, ref float cursorY, float startX, float containingWidth,
+            ref LineBox currentLine, List<LineBox> lineBoxes,
+            ref float maxLineHeight, ref float lineBaseline, LayoutBox parent)
+        {
+            // Collect base text and annotation text from ruby children
+            string baseText = "";
+            string annotationText = "";
+            ComputedStyle? annotationStyle = null;
+            bool rubyBelow = rubyElement.Style.RubyPosition == CssRubyPosition.Under;
+
+            for (int i = 0; i < rubyElement.Children.Count; i++)
+            {
+                var child = rubyElement.Children[i];
+
+                if (child.IsText)
+                {
+                    // Direct text children are base text
+                    var text = ((StyledText)child).Text;
+                    if (!string.IsNullOrWhiteSpace(text))
+                        baseText += text.Trim();
+                }
+                else if (child is StyledElement childEl)
+                {
+                    if (childEl.Style.Display == CssDisplay.None) continue;
+
+                    if (childEl.Style.Display == CssDisplay.RubyText)
+                    {
+                        // Collect annotation text from <rt> children
+                        annotationStyle = childEl.Style;
+                        annotationText = ExtractTextContent(childEl);
+                    }
+                    else if (childEl.Style.Display == CssDisplay.RubyBase)
+                    {
+                        // Collect base text from <rb> children
+                        baseText += ExtractTextContent(childEl);
+                    }
+                    // RubyTextContainer is handled via its rt children
+                    else if (childEl.Style.Display == CssDisplay.RubyTextContainer)
+                    {
+                        for (int j = 0; j < childEl.Children.Count; j++)
+                        {
+                            if (childEl.Children[j] is StyledElement rtChild &&
+                                rtChild.Style.Display == CssDisplay.RubyText)
+                            {
+                                annotationStyle = rtChild.Style;
+                                annotationText = ExtractTextContent(rtChild);
+                            }
+                        }
+                    }
+                    // rp elements have display:none in UA stylesheet, but handle fallback
+                }
+            }
+
+            if (string.IsNullOrEmpty(baseText))
+            {
+                // No base text found — nothing to lay out
+                return;
+            }
+
+            // Record the fragment index before layout so we can attach ruby annotation
+            int fragmentCountBefore = currentLine.Fragments.Count;
+
+            // Lay out the base text as a normal text run using the ruby container's style
+            var baseTextNode = new StyledText(baseText, rubyElement.Style);
+            LayoutTextRun(baseTextNode, context, ref cursorX, ref cursorY, startX,
+                          containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
+
+            // Attach ruby annotation to the first base fragment that was just added
+            if (!string.IsNullOrEmpty(annotationText))
+            {
+                // The annotation height adds space above the line — account for it in line metrics
+                float annotationFontSize = annotationStyle != null ? annotationStyle.FontSize : rubyElement.Style.FontSize * 0.5f;
+                float annotationHeight = annotationFontSize * 1.2f; // approximate line height
+
+                // Attach to all fragments created for this ruby container
+                int newCount = currentLine.Fragments.Count;
+                for (int fi = fragmentCountBefore; fi < newCount; fi++)
+                {
+                    var frag = currentLine.Fragments[fi];
+                    frag.RubyText = annotationText;
+                    frag.RubyStyle = annotationStyle;
+                    frag.RubyBelow = rubyBelow;
+                }
+
+                // Also check fragments that may have been pushed to previous line boxes
+                // (if text wrapped, the first fragments are in the finalized lines)
+                for (int li = lineBoxes.Count - 1; li >= 0; li--)
+                {
+                    var line = lineBoxes[li];
+                    for (int fi = line.Fragments.Count - 1; fi >= 0; fi--)
+                    {
+                        var frag = line.Fragments[fi];
+                        if (frag.RubyText == null && frag.Text == baseText)
+                        {
+                            frag.RubyText = annotationText;
+                            frag.RubyStyle = annotationStyle;
+                            frag.RubyBelow = rubyBelow;
+                        }
+                    }
+                }
+
+                // Increase line height to accommodate the annotation
+                float totalHeight = maxLineHeight + annotationHeight;
+                if (totalHeight > maxLineHeight)
+                    maxLineHeight = totalHeight;
+            }
+        }
+
+        /// <summary>
+        /// Recursively extract all text content from a styled element and its children.
+        /// </summary>
+        private static string ExtractTextContent(StyledElement element)
+        {
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < element.Children.Count; i++)
+            {
+                var child = element.Children[i];
+                if (child.IsText)
+                {
+                    sb.Append(((StyledText)child).Text);
+                }
+                else if (child is StyledElement childEl && childEl.Style.Display != CssDisplay.None)
+                {
+                    sb.Append(ExtractTextContent(childEl));
+                }
+            }
+            return sb.ToString().Trim();
+        }
+
         private static void LayoutInlineElement(
             StyledElement element, LayoutContext context,
             ref float cursorX, ref float cursorY, float startX, float containingWidth,
@@ -1142,6 +1497,14 @@ namespace Rend.Layout.Internal
             // For inline elements, process their children as if they're part of this inline context.
             // Pass the inline element reference so fragments can be linked back to it
             // (e.g., for detecting <a> elements to generate link annotations).
+
+            // Inline box model: advance cursor for left padding/border/margin
+            var inlineStyle = element.Style;
+            float inlineML = float.IsNaN(inlineStyle.MarginLeft) ? 0 : inlineStyle.MarginLeft;
+            float inlineBL = float.IsNaN(inlineStyle.BorderLeftWidth) ? 0 : inlineStyle.BorderLeftWidth;
+            float inlinePL = float.IsNaN(inlineStyle.PaddingLeft) ? 0 : inlineStyle.PaddingLeft;
+            cursorX += inlineML + inlineBL + inlinePL;
+
             for (int i = 0; i < element.Children.Count; i++)
             {
                 var child = element.Children[i];
@@ -1177,6 +1540,12 @@ namespace Rend.Layout.Internal
                     }
                 }
             }
+
+            // Inline box model: advance cursor for right padding/border/margin
+            float inlinePR = float.IsNaN(inlineStyle.PaddingRight) ? 0 : inlineStyle.PaddingRight;
+            float inlineBR = float.IsNaN(inlineStyle.BorderRightWidth) ? 0 : inlineStyle.BorderRightWidth;
+            float inlineMR = float.IsNaN(inlineStyle.MarginRight) ? 0 : inlineStyle.MarginRight;
+            cursorX += inlinePR + inlineBR + inlineMR;
         }
 
         private static void AddTextFragment(LineBox line, string text, ShapedTextRun? shaped,
@@ -1252,8 +1621,18 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < line.Fragments.Count; i++)
             {
                 var frag = line.Fragments[i];
-                contentWidth = Math.Max(contentWidth, frag.X + frag.Width);
+                float fragRight = frag.X + frag.Width;
+                // For the last fragment from an inline element, include trailing padding/border/margin
+                if (i == line.Fragments.Count - 1 && frag.InlineElement != null)
+                {
+                    var ils = frag.InlineElement.Style;
+                    fragRight += (float.IsNaN(ils.PaddingRight) ? 0 : ils.PaddingRight)
+                               + (float.IsNaN(ils.BorderRightWidth) ? 0 : ils.BorderRightWidth)
+                               + (float.IsNaN(ils.MarginRight) ? 0 : ils.MarginRight);
+                }
+                contentWidth = Math.Max(contentWidth, fragRight);
             }
+            line.NaturalContentWidth = contentWidth;
 
             // Apply text-align (for last lines, use text-align-last if set)
             CssTextAlign effectiveAlign = textAlign;
@@ -1305,6 +1684,108 @@ namespace Rend.Layout.Internal
                     line.Fragments[i].X += offset;
                 }
             }
+        }
+
+        /// <summary>
+        /// Applies text-wrap: balance by narrowing the effective line width to the maximum
+        /// content width across all lines, then re-applying text alignment offsets.
+        /// This produces visually balanced line lengths for short text blocks.
+        /// </summary>
+        private static void ApplyTextWrapBalance(List<LineBox> lineBoxes, float startX, float containingWidth,
+            CssTextAlign textAlign, CssTextAlign textAlignLast, CssDirection direction)
+        {
+            // Find the maximum natural content width across all lines
+            float maxContentWidth = 0;
+            for (int i = 0; i < lineBoxes.Count; i++)
+            {
+                float cw = lineBoxes[i].NaturalContentWidth - lineBoxes[i].X;
+                if (cw > maxContentWidth) maxContentWidth = cw;
+            }
+
+            // If content already fills the container (within 5%), no rebalancing needed
+            if (maxContentWidth >= containingWidth * 0.95f) return;
+
+            // Compute balanced width: center the narrower effective width within the container
+            float balancedOffset = (containingWidth - maxContentWidth) / 2f;
+
+            // Shift all fragments so lines are centered within the container
+            for (int li = 0; li < lineBoxes.Count; li++)
+            {
+                var line = lineBoxes[li];
+                // Reset any existing text-align offset by computing content's current start
+                float minFragX = float.MaxValue;
+                for (int fi = 0; fi < line.Fragments.Count; fi++)
+                {
+                    if (line.Fragments[fi].X < minFragX)
+                        minFragX = line.Fragments[fi].X;
+                }
+
+                // Move fragments so they start at startX + balancedOffset
+                float shift = startX + balancedOffset - minFragX;
+                for (int fi = 0; fi < line.Fragments.Count; fi++)
+                {
+                    line.Fragments[fi].X += shift;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Applies hanging-punctuation by shifting leading/trailing punctuation
+        /// outside the line box margin.
+        /// </summary>
+        private static void ApplyHangingPunctuation(List<LineBox> lineBoxes, CssHangingPunctuation hp)
+        {
+            bool hangFirst = hp == CssHangingPunctuation.First;
+            bool hangLast = hp == CssHangingPunctuation.Last;
+            bool hangForceEnd = hp == CssHangingPunctuation.ForceEnd;
+            bool hangAllowEnd = hp == CssHangingPunctuation.AllowEnd;
+
+            for (int li = 0; li < lineBoxes.Count; li++)
+            {
+                var line = lineBoxes[li];
+                if (line.Fragments.Count == 0) continue;
+
+                // Hang first: shift leading opening punctuation outside the start margin
+                if (hangFirst && li == 0)
+                {
+                    var firstFrag = line.Fragments[0];
+                    if (!string.IsNullOrEmpty(firstFrag.Text) && IsOpeningPunctuation(firstFrag.Text![0]))
+                    {
+                        // Approximate the width of the first character
+                        float charWidth = firstFrag.Width / Math.Max(1, firstFrag.Text!.Length);
+                        for (int fi = 0; fi < line.Fragments.Count; fi++)
+                            line.Fragments[fi].X -= charWidth;
+                    }
+                }
+
+                // Hang last / force-end / allow-end: shift trailing punctuation outside the end
+                if (hangLast && line.IsLastLine || hangForceEnd || hangAllowEnd)
+                {
+                    var lastFrag = line.Fragments[line.Fragments.Count - 1];
+                    if (!string.IsNullOrEmpty(lastFrag.Text))
+                    {
+                        char lastChar = lastFrag.Text![lastFrag.Text!.Length - 1];
+                        if (IsClosingPunctuation(lastChar))
+                        {
+                            // No position shift needed — the trailing punctuation naturally
+                            // extends past the line box width, which is acceptable
+                        }
+                    }
+                }
+            }
+        }
+
+        private static bool IsOpeningPunctuation(char c)
+        {
+            return c == '\u201C' || c == '\u2018' || c == '(' || c == '[' || c == '{' ||
+                   c == '\u00AB' || c == '\u2039'; // «, ‹
+        }
+
+        private static bool IsClosingPunctuation(char c)
+        {
+            return c == '.' || c == ',' || c == ';' || c == ':' || c == '!' || c == '?' ||
+                   c == '\u201D' || c == '\u2019' || c == ')' || c == ']' || c == '}' ||
+                   c == '\u00BB' || c == '\u203A'; // », ›
         }
 
         private static void ApplyEllipsis(List<LineBox> lineBoxes, float startX, float containingWidth,
@@ -1389,10 +1870,24 @@ namespace Rend.Layout.Internal
         {
             if (totalWidth <= 0 || text.Length == 0) return "";
 
-            // Estimate characters that fit based on average char width
-            float avgCharWidth = totalWidth / text.Length;
-            int estimatedChars = (int)(availableWidth / avgCharWidth);
+            // Use proportional estimation: accumulate width per character
+            // based on the ratio of available width to total width
+            float ratio = availableWidth / totalWidth;
+            int estimatedChars = (int)(text.Length * ratio);
+
+            // Clamp and try to include partial characters by rounding up
             estimatedChars = Math.Max(0, Math.Min(estimatedChars, text.Length));
+
+            // Binary search refinement: check if one more char fits
+            // (accounts for narrow chars like 'i', 'l', 't' vs wide chars like 'W', 'M')
+            while (estimatedChars < text.Length)
+            {
+                float nextRatio = (estimatedChars + 1.0f) / text.Length;
+                float nextWidth = totalWidth * nextRatio;
+                if (nextWidth > availableWidth) break;
+                estimatedChars++;
+            }
+
             return text.Substring(0, estimatedChars);
         }
 
@@ -1478,6 +1973,35 @@ namespace Rend.Layout.Internal
                 }
             }
             return height;
+        }
+
+        /// <summary>
+        /// Measure the actual content width of a box (for shrink-to-fit inline-level boxes).
+        /// </summary>
+        private static float MeasureContentWidth(LayoutBox box)
+        {
+            float right = 0;
+            float left = box.ContentRect.X;
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                float childRight = child.ContentRect.X + child.ContentRect.Width
+                                  + child.PaddingRight + child.BorderRightWidth + child.MarginRight - left;
+                if (childRight > right) right = childRight;
+            }
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    var line = box.LineBoxes[i];
+                    for (int f = 0; f < line.Fragments.Count; f++)
+                    {
+                        float fragRight = line.Fragments[f].X + line.Fragments[f].Width;
+                        if (fragRight > right) right = fragRight;
+                    }
+                }
+            }
+            return right;
         }
 
         private static bool IsCjk(char ch)

@@ -133,7 +133,10 @@ namespace Rend.Tests.Rendering
             public void SetOpacity(float opacity) { }
             public void SetBlendMode(Rend.Css.CssMixBlendMode blendMode) { }
             public void SetImageRendering(Rend.Css.CssImageRendering rendering) { }
+            public void ApplyFilter(CssFilterEffect[] effects) { }
             public void SetMaskBlur(float sigma) { }
+            public void BeginMask() { }
+            public void EndMask(GradientInfo gradient, RectF bounds) { }
             public void PushClipRect(RectF rect) { }
             public void PushClipPath(PathData path) { }
             public void PopClip() { }

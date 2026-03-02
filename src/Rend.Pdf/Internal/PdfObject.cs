@@ -286,6 +286,61 @@ namespace Rend.Pdf.Internal
         public static readonly PdfName H = new PdfName("H");
         public static readonly PdfName E = new PdfName("E");
 
+        // Cross-Reference Streams / Object Streams (PDF 1.5+)
+        public static readonly PdfName XRef = new PdfName("XRef");
+        public static readonly PdfName ObjStm = new PdfName("ObjStm");
+        // W is already defined above (CID font widths) — same PDF name, reused for xref streams
+        public static readonly PdfName Index = new PdfName("Index");
+        public static readonly PdfName N_Name = new PdfName("N");
+        // First is already defined above (outline tree) — reused for object streams
+
+        // General
+        public static readonly PdfName Name = new PdfName("Name");
+
+        // Optional Content Groups (OCG / Layers)
+        public static readonly PdfName OCG = new PdfName("OCG");
+        public static readonly PdfName OCProperties = new PdfName("OCProperties");
+        public static readonly PdfName OCGs = new PdfName("OCGs");
+        public static readonly PdfName OC = new PdfName("OC");
+        public static readonly PdfName ON = new PdfName("ON");
+        public static readonly PdfName OFF = new PdfName("OFF");
+        public static readonly PdfName Order = new PdfName("Order");
+        public static readonly PdfName BaseState = new PdfName("BaseState");
+        public static readonly PdfName Intent = new PdfName("Intent");
+        public static readonly PdfName View = new PdfName("View");
+        public static readonly PdfName Design = new PdfName("Design");
+        public static readonly PdfName Usage = new PdfName("Usage");
+
+        // Markup Annotations
+        public static readonly PdfName Highlight = new PdfName("Highlight");
+        public static readonly PdfName Underline = new PdfName("Underline");
+        public static readonly PdfName StrikeOut = new PdfName("StrikeOut");
+        public static readonly PdfName Squiggly = new PdfName("Squiggly");
+        public static readonly PdfName Text_Annot = new PdfName("Text");
+        public static readonly PdfName QuadPoints = new PdfName("QuadPoints");
+        public static readonly PdfName C = new PdfName("C");
+        public static readonly PdfName Open = new PdfName("Open");
+
+        // File Attachments
+        public static readonly PdfName Names = new PdfName("Names");
+        public static readonly PdfName EmbeddedFiles = new PdfName("EmbeddedFiles");
+        public static readonly PdfName Filespec = new PdfName("Filespec");
+        public static readonly PdfName EF = new PdfName("EF");
+        public static readonly PdfName F_Name = new PdfName("F");
+        public static readonly PdfName UF = new PdfName("UF");
+        public static readonly PdfName EmbeddedFile = new PdfName("EmbeddedFile");
+        public static readonly PdfName Params = new PdfName("Params");
+
+        // Tiling Patterns
+        public static readonly PdfName Pattern = new PdfName("Pattern");
+        public static readonly PdfName PatternType = new PdfName("PatternType");
+        public static readonly PdfName PaintType = new PdfName("PaintType");
+        public static readonly PdfName TilingType = new PdfName("TilingType");
+        public static readonly PdfName BBox = new PdfName("BBox");
+        public static readonly PdfName XStep = new PdfName("XStep");
+        public static readonly PdfName YStep = new PdfName("YStep");
+        public static readonly PdfName Matrix = new PdfName("Matrix");
+
         // Separation Color Space (Spot Colors)
         public static readonly PdfName Separation = new PdfName("Separation");
 

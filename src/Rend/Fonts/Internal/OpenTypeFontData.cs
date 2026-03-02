@@ -17,6 +17,7 @@ namespace Rend.Fonts.Internal
         private const uint TagName = 0x6E616D65; // "name"
         private const uint TagCmap = 0x636D6170; // "cmap"
         private const uint TagMaxp = 0x6D617870; // "maxp"
+        private const uint TagFvar = 0x66766172; // "fvar"
 
         private readonly byte[] _data;
         private readonly int _sfntOffset;
@@ -46,6 +47,10 @@ namespace Rend.Fonts.Internal
         private int _cmapFormat12Offset = -1;
         private int _numGlyphs;
 
+        // Variable font data (fvar table).
+        private List<FontVariationAxis>? _variationAxes;
+        private List<FontNamedInstance>? _namedInstances;
+
         /// <summary>Gets the font family name from the name table.</summary>
         public string FamilyName => _familyName;
 
@@ -72,6 +77,15 @@ namespace Rend.Fonts.Internal
 
         /// <summary>Gets the x-height in font design units.</summary>
         public int XHeight => _xHeight;
+
+        /// <summary>Gets the variation axes if this is a variable font, or null.</summary>
+        public IReadOnlyList<FontVariationAxis>? VariationAxes => _variationAxes;
+
+        /// <summary>Gets the named instances if this is a variable font, or null.</summary>
+        public IReadOnlyList<FontNamedInstance>? NamedInstances => _namedInstances;
+
+        /// <summary>Returns true if this font has an fvar table (is a variable font).</summary>
+        public bool IsVariableFont => _variationAxes != null && _variationAxes.Count > 0;
 
         /// <summary>
         /// Parses the given font data. The data must be a valid TrueType or OpenType sfnt.
@@ -101,6 +115,7 @@ namespace Rend.Fonts.Internal
             ParseOs2Table();
             ParseNameTable();
             FindCmapSubtables();
+            ParseFvarTable();
         }
 
         /// <summary>
@@ -525,6 +540,151 @@ namespace Rend.Fonts.Internal
             }
 
             return 0;
+        }
+
+        #endregion
+
+        #region fvar (Font Variations)
+
+        private void ParseFvarTable()
+        {
+            if (!_tables.TryGetValue(TagFvar, out TableRecord rec)) return;
+            int o = (int)rec.Offset;
+            if (o + 16 > _data.Length) return;
+
+            // fvar table header:
+            // offset 0: majorVersion (uint16)
+            // offset 2: minorVersion (uint16)
+            // offset 4: axesArrayOffset (uint16)
+            // offset 6: reserved (uint16)
+            // offset 8: axisCount (uint16)
+            // offset 10: axisSize (uint16) — typically 20
+            // offset 12: instanceCount (uint16)
+            // offset 14: instanceSize (uint16)
+            ushort axesArrayOffset = ReadUInt16(o + 4);
+            ushort axisCount = ReadUInt16(o + 8);
+            ushort axisSize = ReadUInt16(o + 10);
+            ushort instanceCount = ReadUInt16(o + 12);
+            ushort instanceSize = ReadUInt16(o + 14);
+
+            if (axisCount == 0 || axisSize < 20) return;
+
+            // Parse variation axes
+            _variationAxes = new List<FontVariationAxis>(axisCount);
+            int axisOffset = o + axesArrayOffset;
+
+            for (int i = 0; i < axisCount; i++)
+            {
+                if (axisOffset + 20 > _data.Length) break;
+
+                // Axis record:
+                // offset 0: axisTag (uint32, 4-char tag)
+                // offset 4: minValue (Fixed 16.16)
+                // offset 8: defaultValue (Fixed 16.16)
+                // offset 12: maxValue (Fixed 16.16)
+                // offset 16: flags (uint16)
+                // offset 18: axisNameID (uint16)
+                string tag = ReadTag(axisOffset);
+                float minValue = ReadFixed(axisOffset + 4);
+                float defaultValue = ReadFixed(axisOffset + 8);
+                float maxValue = ReadFixed(axisOffset + 12);
+                ushort axisNameId = ReadUInt16(axisOffset + 18);
+
+                string axisName = LookupNameId(axisNameId);
+
+                _variationAxes.Add(new FontVariationAxis(tag, minValue, defaultValue, maxValue, axisName));
+                axisOffset += axisSize;
+            }
+
+            // Parse named instances
+            if (instanceCount > 0 && instanceSize >= 4 + axisCount * 4)
+            {
+                _namedInstances = new List<FontNamedInstance>(instanceCount);
+                int instanceOffset = axisOffset; // instances follow axes
+
+                for (int i = 0; i < instanceCount; i++)
+                {
+                    if (instanceOffset + 4 + axisCount * 4 > _data.Length) break;
+
+                    // Instance record:
+                    // offset 0: subfamilyNameID (uint16)
+                    // offset 2: flags (uint16)
+                    // offset 4: coordinates[axisCount] (Fixed 16.16 each)
+                    ushort subfamilyNameId = ReadUInt16(instanceOffset);
+                    string instanceName = LookupNameId(subfamilyNameId);
+
+                    var coords = new Dictionary<string, float>(axisCount);
+                    for (int a = 0; a < axisCount; a++)
+                    {
+                        float value = ReadFixed(instanceOffset + 4 + a * 4);
+                        coords[_variationAxes[a].Tag] = value;
+                    }
+
+                    _namedInstances.Add(new FontNamedInstance(instanceName, coords));
+                    instanceOffset += instanceSize;
+                }
+            }
+        }
+
+        private string ReadTag(int offset)
+        {
+            if (offset + 4 > _data.Length) return "????";
+            return new string(new char[]
+            {
+                (char)_data[offset],
+                (char)_data[offset + 1],
+                (char)_data[offset + 2],
+                (char)_data[offset + 3]
+            });
+        }
+
+        private float ReadFixed(int offset)
+        {
+            // Fixed 16.16: signed 16-bit integer part + unsigned 16-bit fractional part
+            short intPart = ReadInt16(offset);
+            ushort fracPart = ReadUInt16(offset + 2);
+            return intPart + fracPart / 65536f;
+        }
+
+        /// <summary>
+        /// Looks up a name by nameID in the name table. Returns empty string if not found.
+        /// </summary>
+        private string LookupNameId(ushort nameId)
+        {
+            if (!_tables.TryGetValue(TagName, out TableRecord rec)) return string.Empty;
+            int o = (int)rec.Offset;
+            if (o + 6 > _data.Length) return string.Empty;
+
+            ushort count = ReadUInt16(o + 2);
+            ushort stringOffset = ReadUInt16(o + 4);
+            int storageOffset = o + stringOffset;
+
+            int nameRecordOffset = o + 6;
+            for (int i = 0; i < count; i++)
+            {
+                if (nameRecordOffset + 12 > _data.Length) break;
+
+                ushort platformId = ReadUInt16(nameRecordOffset);
+                ushort encodingId = ReadUInt16(nameRecordOffset + 2);
+                ushort nid = ReadUInt16(nameRecordOffset + 6);
+                ushort nameLength = ReadUInt16(nameRecordOffset + 8);
+                ushort nameOff = ReadUInt16(nameRecordOffset + 10);
+
+                if (nid == nameId)
+                {
+                    int strStart = storageOffset + nameOff;
+                    if (strStart + nameLength <= _data.Length)
+                    {
+                        string? value = DecodeName(platformId, encodingId, strStart, nameLength);
+                        if (!string.IsNullOrEmpty(value))
+                            return value!;
+                    }
+                }
+
+                nameRecordOffset += 12;
+            }
+
+            return string.Empty;
         }
 
         #endregion

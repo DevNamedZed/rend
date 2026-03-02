@@ -288,7 +288,42 @@ namespace Rend.Css.Properties.Internal
         public const int WritingMode = 169;
         public const int TextOrientation = 170;
 
+        // Accent Color
+        public const int AccentColor = 171;
+
+        // Text Wrap
+        public const int TextWrap = 172;
+
+        // Forced Color Adjust
+        public const int ForcedColorAdjust = 173;
+
+        // Initial Letter
+        public const int InitialLetter = 174;
+
+        // Hanging Punctuation
+        public const int HangingPunctuation = 175;
+
+        // Container Queries
+        public const int ContainerType = 176;
+        public const int ContainerName = 177;
+
+        // Font Variant Sub-properties
+        public const int FontVariantLigatures = 178;
+        public const int FontVariantCaps = 179;
+        public const int FontVariantNumeric = 180;
+        public const int FontVariantEastAsian = 181;
+        public const int FontFeatureSettings = 182;
+
+        // CSS Shapes
+        public const int ShapeOutside = 183;
+        public const int ShapeMargin = 184;
+        public const int ShapeImageThreshold = 185;
+
+        // Ruby
+        public const int RubyPosition = 186;
+        public const int RubyAlign = 187;
+
         // Total count
-        public const int Count = 171;
+        public const int Count = 188;
     }
 }

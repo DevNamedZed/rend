@@ -109,6 +109,8 @@ namespace Rend.Html.Parser.Internal
         private static readonly string _section = P.Intern("section");
         private static readonly string _summary = P.Intern("summary");
         private static readonly string _ul = P.Intern("ul");
+        private static readonly string _svg = P.Intern("svg");
+        private static readonly string _math = P.Intern("math");
 
         internal HtmlTreeBuilder(Document document, HtmlTokenizer tokenizer)
         {
@@ -135,8 +137,89 @@ namespace Rend.Html.Parser.Internal
             return _document;
         }
 
+        private bool IsInForeignContent()
+        {
+            if (_openElements.Count == 0) return false;
+            var current = _openElements[_openElements.Count - 1];
+            string tag = current.TagName;
+            return ReferenceEquals(tag, _svg) || ReferenceEquals(tag, _math) ||
+                   IsForeignContentChild(tag);
+        }
+
+        private bool IsForeignContentChild(string tag)
+        {
+            // Check if any ancestor is an SVG or MathML element (but not if
+            // the current element is an HTML integration point).
+            for (int i = _openElements.Count - 1; i >= 0; i--)
+            {
+                string t = _openElements[i].TagName;
+                if (ReferenceEquals(t, _svg) || ReferenceEquals(t, _math))
+                    return true;
+                // Stop at known HTML elements that establish HTML context
+                if (ReferenceEquals(t, _html) || ReferenceEquals(t, _body) ||
+                    ReferenceEquals(t, _head) || ReferenceEquals(t, _table) ||
+                    ReferenceEquals(t, _div) || ReferenceEquals(t, _p) ||
+                    ReferenceEquals(t, _span))
+                    return false;
+            }
+            return false;
+        }
+
+        private static readonly string _span = StringPool.HtmlNames.Intern("span");
+
+        private void HandleForeignContent(ref HtmlToken token)
+        {
+            if (token.Type == HtmlTokenType.Character)
+            {
+                // Insert text data character by character into the tree
+                string data = token.Data ?? "";
+                for (int ci = 0; ci < data.Length; ci++)
+                    InsertCharacter(data[ci]);
+                return;
+            }
+
+            if (token.Type == HtmlTokenType.StartTag)
+            {
+                string tag = token.TagName!;
+                var el = InsertElement(tag);
+                CopyAttributes(el);
+                // In foreign content, self-closing tags are immediately closed
+                if (token.SelfClosing)
+                    PopOpenElement();
+                return;
+            }
+
+            if (token.Type == HtmlTokenType.EndTag)
+            {
+                // Pop elements until we find a matching tag
+                string tag = token.TagName!;
+                for (int i = _openElements.Count - 1; i >= 0; i--)
+                {
+                    if (string.Equals(_openElements[i].TagName, tag, StringComparison.OrdinalIgnoreCase))
+                    {
+                        while (_openElements.Count > i + 1)
+                            PopOpenElement();
+                        PopOpenElement();
+                        return;
+                    }
+                    // If we hit an HTML element, fall through to normal processing
+                    string t = _openElements[i].TagName;
+                    if (ReferenceEquals(t, _html) || ReferenceEquals(t, _body))
+                        break;
+                }
+                return;
+            }
+        }
+
         private void ProcessToken(ref HtmlToken token)
         {
+            // Foreign content: SVG and MathML elements
+            if (IsInForeignContent() && token.Type != HtmlTokenType.EndOfFile)
+            {
+                HandleForeignContent(ref token);
+                return;
+            }
+
             switch (_insertionMode)
             {
                 case InsertionMode.Initial:
@@ -875,6 +958,17 @@ namespace Rend.Html.Parser.Internal
                 ReferenceEquals(tag, _meta) || ReferenceEquals(tag, _title))
             {
                 HandleInHead(ref token);
+                return;
+            }
+
+            // SVG and MathML: insert as foreign content element
+            if (ReferenceEquals(tag, _svg) || ReferenceEquals(tag, _math))
+            {
+                _activeFormattingElements.Reconstruct(this);
+                var foreignEl = InsertElement(tag);
+                CopyAttributes(foreignEl);
+                if (token.SelfClosing)
+                    PopOpenElement();
                 return;
             }
 

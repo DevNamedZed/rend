@@ -26,6 +26,8 @@ namespace Rend.Rendering.Internal
 
         private const float FormFontSize = 11f;
         private const float FormTextPadding = 3f;
+        // Approximate ascent ratio for sans-serif fonts (baseline sits ~80% below top of em square)
+        private const float FormFontAscent = FormFontSize * 0.8f;
 
         /// <summary>
         /// If the layout box represents a replaced element (e.g. &lt;img&gt; or form control),
@@ -53,6 +55,13 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
+            // MathML elements: render math notation
+            if (tagName == "math")
+            {
+                MathmlRenderer.Render(element.Element, target, box.ContentRect);
+                return;
+            }
+
             // Form controls: paint visual appearance
             if (tagName == "input")
             {
@@ -69,6 +78,42 @@ namespace Rend.Rendering.Internal
             if (tagName == "textarea")
             {
                 PaintTextarea(element, box, target);
+                return;
+            }
+
+            if (tagName == "meter")
+            {
+                PaintMeter(element, box, target);
+                return;
+            }
+
+            if (tagName == "progress")
+            {
+                PaintProgress(element, box, target);
+                return;
+            }
+
+            if (tagName == "video")
+            {
+                PaintVideoPlaceholder(element, box, target, imageResolver);
+                return;
+            }
+
+            if (tagName == "audio")
+            {
+                PaintAudioPlaceholder(element, box, target);
+                return;
+            }
+
+            if (tagName == "canvas")
+            {
+                PaintCanvasPlaceholder(element, box, target);
+                return;
+            }
+
+            if (tagName == "iframe")
+            {
+                PaintIframePlaceholder(element, box, target);
                 return;
             }
 
@@ -185,7 +230,8 @@ namespace Rend.Rendering.Internal
                 target.PushClipRect(rect);
 
                 CssColor textColor = isPlaceholder ? PlaceholderColor : CssColor.Black;
-                float textY = rect.Y + (rect.Height - FormFontSize) / 2f;
+                // DrawText uses Y as baseline; center by placing baseline at vertical midpoint + half cap height
+                float textY = rect.Y + rect.Height / 2f + FormFontAscent * 0.4f;
                 target.DrawText(displayText!, rect.X + FormTextPadding, textY,
                     new TextStyle
                     {
@@ -203,14 +249,17 @@ namespace Rend.Rendering.Internal
         /// </summary>
         private static void PaintCheckbox(StyledElement element, RectF rect, IRenderTarget target)
         {
-            // White background
-            target.FillRect(rect, BrushInfo.Solid(CssColor.White));
+            bool isChecked = element.GetAttribute("checked") != null;
+            var accent = GetAccentColor(element);
+            bool hasAccent = accent.A > 0 && isChecked;
+
+            // Background: accent color when checked with accent-color set, otherwise white
+            target.FillRect(rect, BrushInfo.Solid(hasAccent ? accent : CssColor.White));
 
             // 1px border
-            target.StrokeRect(rect, new PenInfo(BorderColor, 1f));
+            target.StrokeRect(rect, new PenInfo(hasAccent ? accent : BorderColor, 1f));
 
             // Draw checkmark if checked
-            bool isChecked = element.GetAttribute("checked") != null;
             if (isChecked)
             {
                 float cx = rect.X;
@@ -224,7 +273,8 @@ namespace Rend.Rendering.Internal
                 path.LineTo(cx + w * 0.4f, cy + h * 0.75f);
                 path.LineTo(cx + w * 0.8f, cy + h * 0.25f);
 
-                target.StrokePath(path, new PenInfo(CheckmarkColor, 1.5f));
+                // White checkmark on accent background, black otherwise
+                target.StrokePath(path, new PenInfo(hasAccent ? CssColor.White : CheckmarkColor, 1.5f));
             }
         }
 
@@ -236,19 +286,21 @@ namespace Rend.Rendering.Internal
             float cx = rect.X + rect.Width / 2f;
             float cy = rect.Y + rect.Height / 2f;
             float radius = Math.Min(rect.Width, rect.Height) / 2f;
+            bool isChecked = element.GetAttribute("checked") != null;
+            var accent = GetAccentColor(element);
+            bool hasAccent = accent.A > 0 && isChecked;
 
             // Outer circle (white fill + border)
             var outerCircle = BuildCirclePath(cx, cy, radius);
-            target.FillPath(outerCircle, BrushInfo.Solid(CssColor.White));
-            target.StrokePath(outerCircle, new PenInfo(BorderColor, 1f));
+            target.FillPath(outerCircle, BrushInfo.Solid(hasAccent ? accent : CssColor.White));
+            target.StrokePath(outerCircle, new PenInfo(hasAccent ? accent : BorderColor, 1f));
 
             // Inner filled circle if checked
-            bool isChecked = element.GetAttribute("checked") != null;
             if (isChecked)
             {
                 float innerRadius = radius * 0.45f;
                 var innerCircle = BuildCirclePath(cx, cy, innerRadius);
-                target.FillPath(innerCircle, BrushInfo.Solid(CheckmarkColor));
+                target.FillPath(innerCircle, BrushInfo.Solid(hasAccent ? CssColor.White : CheckmarkColor));
             }
         }
 
@@ -284,7 +336,7 @@ namespace Rend.Rendering.Internal
             // Center text in the button
             float estimatedTextWidth = label!.Length * FormFontSize * 0.55f;
             float textX = rect.X + (rect.Width - estimatedTextWidth) / 2f;
-            float textY = rect.Y + (rect.Height - FormFontSize) / 2f;
+            float textY = rect.Y + rect.Height / 2f + FormFontAscent * 0.4f;
 
             target.DrawText(label, textX, textY,
                 new TextStyle
@@ -328,7 +380,7 @@ namespace Rend.Rendering.Internal
                 var textClip = new RectF(rect.X, rect.Y, rect.Width - arrowAreaWidth, rect.Height);
                 target.PushClipRect(textClip);
 
-                float textY = rect.Y + (rect.Height - FormFontSize) / 2f;
+                float textY = rect.Y + rect.Height / 2f + FormFontAscent * 0.4f;
                 target.DrawText(displayText, rect.X + FormTextPadding, textY,
                     new TextStyle
                     {
@@ -536,6 +588,289 @@ namespace Rend.Rendering.Internal
                 default: // Fill
                     return contentRect;
             }
+        }
+
+        private static CssColor GetAccentColor(StyledElement element)
+        {
+            return element.Style.AccentColor;
+        }
+
+        private static void PaintMeter(StyledElement element, LayoutBox box, IRenderTarget target)
+        {
+            RectF rect = box.ContentRect;
+
+            // Parse attributes
+            float min = ParseFloat(element.GetAttribute("min"), 0f);
+            float max = ParseFloat(element.GetAttribute("max"), 1f);
+            float value = ParseFloat(element.GetAttribute("value"), 0f);
+            float low = ParseFloat(element.GetAttribute("low"), min);
+            float high = ParseFloat(element.GetAttribute("high"), max);
+            float optimum = ParseFloat(element.GetAttribute("optimum"), (min + max) * 0.5f);
+
+            // Normalize value to 0-1 range
+            float range = max - min;
+            if (range <= 0) range = 1;
+            float fraction = (value - min) / range;
+            fraction = Math.Max(0f, Math.Min(1f, fraction));
+
+            // Determine color based on value relative to low/high/optimum
+            CssColor barColor;
+            CssColor accentColor = GetAccentColor(element);
+            if (accentColor.R != 0 || accentColor.G != 0 || accentColor.B != 0 || accentColor.A != 0)
+            {
+                barColor = accentColor;
+            }
+            else if (value < low)
+            {
+                // Below low threshold — use red/warning
+                barColor = optimum >= high
+                    ? new CssColor(220, 50, 50) // danger (optimum is high, value is low)
+                    : new CssColor(200, 180, 0); // caution
+            }
+            else if (value > high)
+            {
+                // Above high threshold
+                barColor = optimum <= low
+                    ? new CssColor(220, 50, 50) // danger
+                    : new CssColor(200, 180, 0); // caution
+            }
+            else
+            {
+                // In optimal range — green
+                barColor = new CssColor(50, 180, 50);
+            }
+
+            // Draw background track (gray)
+            var trackColor = new CssColor(220, 220, 220);
+            target.FillRect(rect, BrushInfo.Solid(trackColor));
+
+            // Draw filled bar
+            float barWidth = rect.Width * fraction;
+            if (barWidth > 0)
+            {
+                var barRect = new RectF(rect.X, rect.Y, barWidth, rect.Height);
+                target.FillRect(barRect, BrushInfo.Solid(barColor));
+            }
+
+            // Draw 1px border
+            target.StrokeRect(rect, new PenInfo(BorderColor, 1f));
+        }
+
+        private static void PaintProgress(StyledElement element, LayoutBox box, IRenderTarget target)
+        {
+            RectF rect = box.ContentRect;
+
+            // Parse attributes
+            float max = ParseFloat(element.GetAttribute("max"), 1f);
+            string? valueAttr = element.GetAttribute("value");
+
+            // Draw background track
+            var trackColor = new CssColor(220, 220, 220);
+            target.FillRect(rect, BrushInfo.Solid(trackColor));
+
+            if (valueAttr != null)
+            {
+                // Determinate progress bar
+                float value = ParseFloat(valueAttr, 0f);
+                float fraction = max > 0 ? value / max : 0f;
+                fraction = Math.Max(0f, Math.Min(1f, fraction));
+
+                // Determine bar color
+                CssColor barColor;
+                CssColor accentColor = GetAccentColor(element);
+                if (accentColor.R != 0 || accentColor.G != 0 || accentColor.B != 0 || accentColor.A != 0)
+                {
+                    barColor = accentColor;
+                }
+                else
+                {
+                    barColor = new CssColor(50, 120, 220); // Blue
+                }
+
+                float barWidth = rect.Width * fraction;
+                if (barWidth > 0)
+                {
+                    var barRect = new RectF(rect.X, rect.Y, barWidth, rect.Height);
+                    target.FillRect(barRect, BrushInfo.Solid(barColor));
+                }
+            }
+            else
+            {
+                // Indeterminate: draw striped pattern
+                CssColor stripeColor = new CssColor(50, 120, 220);
+                float stripeWidth = 20f;
+                float x = rect.X;
+                while (x < rect.X + rect.Width)
+                {
+                    float w = Math.Min(stripeWidth, rect.X + rect.Width - x);
+                    var stripeRect = new RectF(x, rect.Y, w, rect.Height);
+                    target.FillRect(stripeRect, BrushInfo.Solid(stripeColor));
+                    x += stripeWidth * 2; // skip one stripe width for gap
+                }
+            }
+
+            // Draw 1px border
+            target.StrokeRect(rect, new PenInfo(BorderColor, 1f));
+        }
+
+        private static void PaintVideoPlaceholder(StyledElement element, LayoutBox box, IRenderTarget target, ImageResolverDelegate? imageResolver)
+        {
+            RectF rect = box.ContentRect;
+
+            // Try to render poster image
+            string? poster = element.GetAttribute("poster");
+            if (poster != null && imageResolver != null)
+            {
+                ImageData? posterImage = imageResolver(poster);
+                if (posterImage != null)
+                {
+                    CssObjectFit objectFit = element.Style.ObjectFit;
+                    var (posX, posY) = ParseObjectPosition(element.Style);
+                    RectF destRect = ComputeObjectFitRect(rect, posterImage.Width, posterImage.Height, objectFit, posX, posY);
+                    target.DrawImage(posterImage, destRect);
+                    return;
+                }
+            }
+
+            // Fallback: gray placeholder with play button triangle
+            var bgColor = new CssColor(40, 40, 40);
+            target.FillRect(rect, BrushInfo.Solid(bgColor));
+
+            // Draw play triangle in center
+            float triSize = Math.Min(rect.Width, rect.Height) * 0.3f;
+            if (triSize > 5f)
+            {
+                float cx = rect.X + rect.Width * 0.5f;
+                float cy = rect.Y + rect.Height * 0.5f;
+
+                var path = new PathData();
+                path.MoveTo(cx - triSize * 0.4f, cy - triSize * 0.5f);
+                path.LineTo(cx + triSize * 0.5f, cy);
+                path.LineTo(cx - triSize * 0.4f, cy + triSize * 0.5f);
+                path.Close();
+
+                target.FillPath(path, BrushInfo.Solid(new CssColor(200, 200, 200)));
+            }
+        }
+
+        private static void PaintAudioPlaceholder(StyledElement element, LayoutBox box, IRenderTarget target)
+        {
+            RectF rect = box.ContentRect;
+
+            // Light gray background
+            var bgColor = new CssColor(240, 240, 240);
+            target.FillRect(rect, BrushInfo.Solid(bgColor));
+
+            // Border
+            target.StrokeRect(rect, new PenInfo(BorderColor, 1f));
+
+            // Draw play triangle on the left
+            float triSize = Math.Min(rect.Width * 0.15f, rect.Height * 0.6f);
+            if (triSize > 3f)
+            {
+                float tx = rect.X + rect.Height * 0.5f;
+                float ty = rect.Y + rect.Height * 0.5f;
+
+                var path = new PathData();
+                path.MoveTo(tx - triSize * 0.3f, ty - triSize * 0.5f);
+                path.LineTo(tx + triSize * 0.4f, ty);
+                path.LineTo(tx - triSize * 0.3f, ty + triSize * 0.5f);
+                path.Close();
+
+                target.FillPath(path, BrushInfo.Solid(new CssColor(80, 80, 80)));
+            }
+
+            // Draw a simple progress track line
+            float trackY = rect.Y + rect.Height * 0.5f;
+            float trackLeft = rect.X + rect.Height + 4f;
+            float trackRight = rect.X + rect.Width - 8f;
+            if (trackRight > trackLeft)
+            {
+                var trackPath = new PathData();
+                trackPath.MoveTo(trackLeft, trackY);
+                trackPath.LineTo(trackRight, trackY);
+                target.StrokePath(trackPath, new PenInfo(new CssColor(180, 180, 180), 2f));
+            }
+        }
+
+        private static void PaintIframePlaceholder(StyledElement element, LayoutBox box, IRenderTarget target)
+        {
+            RectF rect = box.ContentRect;
+
+            // White background
+            target.FillRect(rect, BrushInfo.Solid(CssColor.White));
+
+            // 1px border
+            target.StrokeRect(rect, new PenInfo(BorderColor, 1f));
+
+            // Show srcdoc content if available — just render as text
+            string? srcdoc = element.GetAttribute("srcdoc");
+            if (srcdoc != null && srcdoc.Length > 0)
+            {
+                // Strip HTML tags for simple text display
+                string text = StripHtmlTags(srcdoc).Trim();
+                if (text.Length > 0)
+                {
+                    target.PushClipRect(rect);
+                    float textX = rect.X + 4f;
+                    float textY = rect.Y + 4f;
+                    target.DrawText(text, textX, textY, new TextStyle
+                    {
+                        Font = new FontDescriptor("sans-serif", 400f),
+                        FontSize = 12f,
+                        Color = CssColor.Black
+                    });
+                    target.PopClip();
+                }
+            }
+            else
+            {
+                // No srcdoc: show URL or empty placeholder
+                string? src = element.GetAttribute("src");
+                if (src != null)
+                {
+                    target.PushClipRect(rect);
+                    target.DrawText(src, rect.X + 4f, rect.Y + 4f, new TextStyle
+                    {
+                        Font = new FontDescriptor("sans-serif", 400f),
+                        FontSize = 10f,
+                        Color = new CssColor(128, 128, 128)
+                    });
+                    target.PopClip();
+                }
+            }
+        }
+
+        private static string StripHtmlTags(string html)
+        {
+            var sb = new System.Text.StringBuilder(html.Length);
+            bool inTag = false;
+            for (int i = 0; i < html.Length; i++)
+            {
+                char c = html[i];
+                if (c == '<') { inTag = true; continue; }
+                if (c == '>') { inTag = false; continue; }
+                if (!inTag) sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
+        private static void PaintCanvasPlaceholder(StyledElement element, LayoutBox box, IRenderTarget target)
+        {
+            RectF rect = box.ContentRect;
+
+            // Canvas without JS: transparent/white background (per spec)
+            target.FillRect(rect, BrushInfo.Solid(CssColor.White));
+        }
+
+        private static float ParseFloat(string? value, float defaultValue)
+        {
+            if (value != null && float.TryParse(value, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out float result))
+            {
+                return result;
+            }
+            return defaultValue;
         }
     }
 

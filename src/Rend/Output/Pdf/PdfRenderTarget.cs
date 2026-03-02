@@ -102,6 +102,33 @@ namespace Rend.Output.Pdf
         }
 
         /// <inheritdoc />
+        public void ApplyFilter(Rendering.CssFilterEffect[] effects)
+        {
+            // PDF has limited filter support. Only apply opacity filter.
+            if (effects == null) return;
+            foreach (var effect in effects)
+            {
+                if (effect.Type == Rendering.CssFilterType.Opacity)
+                {
+                    SetOpacity(effect.Amount);
+                    return;
+                }
+            }
+        }
+
+        /// <inheritdoc />
+        public void BeginMask()
+        {
+            // PDF does not natively support gradient masks; graceful degradation.
+        }
+
+        /// <inheritdoc />
+        public void EndMask(Rendering.GradientInfo gradient, Core.Values.RectF bounds)
+        {
+            // PDF does not natively support gradient masks; graceful degradation.
+        }
+
+        /// <inheritdoc />
         public void SetBlendMode(Css.CssMixBlendMode blendMode)
         {
             if (blendMode == Css.CssMixBlendMode.Normal) return;

@@ -21,7 +21,15 @@ namespace Rend.Layout.Internal
             var style = styledElement.Style;
             float containerWidth = parent.ContentRect.Width;
             float containerHeight = parent.ContentRect.Height;
-            if (float.IsNaN(containerHeight)) containerHeight = 10000f;
+            // Container height may not be resolved yet (BFC sets it to 0 before LayoutChildren).
+            // Resolve from explicit CSS height so fr row tracks work correctly.
+            if (float.IsNaN(containerHeight) || containerHeight <= 0)
+            {
+                float explicitH = DimensionResolver.ResolveHeight(style, float.NaN, parent);
+                if (!float.IsNaN(explicitH) && explicitH > 0)
+                    containerHeight = explicitH;
+            }
+            if (float.IsNaN(containerHeight) || containerHeight <= 0) containerHeight = 10000f;
 
             float rowGap = float.IsNaN(style.RowGap) ? 0 : style.RowGap;
             float colGap = float.IsNaN(style.ColumnGap) ? 0 : style.ColumnGap;
@@ -371,6 +379,50 @@ namespace Rend.Layout.Internal
                     colGap, style.GetRefValue(PropertyId.GridAutoColumns), containerWidth);
             }
             float[] rowHeights = new float[finalRows];
+
+            // Resolve intrinsic (min-content / max-content) column tracks by measuring items.
+            // Sentinel values: -1 = min-content, -2 = max-content.
+            bool hasIntrinsicCols = false;
+            for (int c = 0; c < finalCols; c++)
+            {
+                if (colWidths[c] < 0) { hasIntrinsicCols = true; break; }
+            }
+            if (hasIntrinsicCols)
+            {
+                float[] intrinsicWidths = new float[finalCols];
+                for (int i = 0; i < items.Count; i++)
+                {
+                    var item = items[i];
+                    if (item.ColSpan != 1 || item.ColStart < 0 || item.ColStart >= finalCols)
+                        continue;
+                    if (colWidths[item.ColStart] >= 0)
+                        continue; // not an intrinsic track
+
+                    if (item.StyledElement == null) continue;
+
+                    bool isMinContent = colWidths[item.ColStart] == -1;
+                    float keyword = isMinContent ? SizingKeyword.MinContent : SizingKeyword.MaxContent;
+                    float measured = BlockFormattingContext.MeasureIntrinsicWidth(
+                        item.StyledElement, keyword, containerWidth, context);
+                    // Add horizontal box model spacing
+                    var tempBox = new LayoutBox(item.StyledElement, BoxType.Block);
+                    BoxModelCalculator.ApplyBoxModel(tempBox, item.StyledElement.Style, containerWidth);
+                    measured += tempBox.PaddingLeft + tempBox.PaddingRight
+                              + tempBox.BorderLeftWidth + tempBox.BorderRightWidth
+                              + tempBox.MarginLeft + tempBox.MarginRight;
+                    if (measured > intrinsicWidths[item.ColStart])
+                        intrinsicWidths[item.ColStart] = measured;
+                }
+
+                // Replace sentinels with measured widths
+                for (int c = 0; c < finalCols; c++)
+                {
+                    if (colWidths[c] < 0)
+                    {
+                        colWidths[c] = intrinsicWidths[c];
+                    }
+                }
+            }
 
             // First pass: layout each item to determine content size and row heights
             for (int i = 0; i < items.Count; i++)
@@ -923,6 +975,8 @@ namespace Rend.Layout.Internal
                 var parsed = ParseTrackValue(flatValues[i], containerSize);
                 sizes.Add(parsed);
                 minFloors[i] = GetMinmaxFloor(flatValues[i], containerSize);
+                if (parsed.value < 0)
+                    continue; // intrinsic sentinel — don't count toward fixed or fr
                 if (parsed.isFr)
                     totalFr += parsed.value;
                 else
@@ -937,6 +991,12 @@ namespace Rend.Layout.Internal
             var tracks = new float[sizes.Count];
             for (int i = 0; i < sizes.Count; i++)
             {
+                if (sizes[i].value < 0)
+                {
+                    // Preserve sentinel for intrinsic sizing (-1 = min-content, -2 = max-content)
+                    tracks[i] = sizes[i].value;
+                    continue;
+                }
                 float resolved = sizes[i].isFr ? sizes[i].value * frSize : sizes[i].value;
                 // Enforce minmax() minimum constraint
                 if (minFloors[i] > 0 && resolved < minFloors[i])
@@ -1033,9 +1093,9 @@ namespace Rend.Layout.Internal
                 if (kwVal.Keyword == "auto")
                     return (0, true); // auto acts like 1fr
                 if (kwVal.Keyword == "min-content")
-                    return (0, false);
+                    return (-1, false); // sentinel: resolved by content measurement
                 if (kwVal.Keyword == "max-content")
-                    return (0, true);
+                    return (-2, false); // sentinel: resolved by content measurement
             }
             if (val is CssFunctionValue fn)
             {

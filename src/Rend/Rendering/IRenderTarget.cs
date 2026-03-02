@@ -33,6 +33,28 @@ namespace Rend.Rendering
         /// <param name="opacity">The opacity value from 0 (fully transparent) to 1 (fully opaque).</param>
         void SetOpacity(float opacity);
 
+        /// <summary>
+        /// Applies a CSS filter effect list as a compositing layer.
+        /// Creates a SaveLayer with the combined image/color filters.
+        /// Must be balanced by a subsequent Restore() call.
+        /// </summary>
+        /// <param name="effects">The filter effects to apply.</param>
+        void ApplyFilter(CssFilterEffect[] effects);
+
+        /// <summary>
+        /// Begins a mask compositing layer. All subsequent drawing operations
+        /// are captured into an offscreen buffer until <see cref="EndMask"/> is called.
+        /// </summary>
+        void BeginMask();
+
+        /// <summary>
+        /// Ends the mask compositing layer by applying a gradient mask to the
+        /// captured content. The gradient's alpha channel is used to mask the content.
+        /// </summary>
+        /// <param name="gradient">The gradient to use as a mask.</param>
+        /// <param name="bounds">The bounds of the masked region.</param>
+        void EndMask(GradientInfo gradient, RectF bounds);
+
         /// <summary>Sets the current blend mode for subsequent drawing operations.</summary>
         /// <param name="blendMode">The CSS blend mode value.</param>
         void SetBlendMode(Css.CssMixBlendMode blendMode);

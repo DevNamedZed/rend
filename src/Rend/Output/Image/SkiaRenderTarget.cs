@@ -153,6 +153,235 @@ namespace Rend.Output.Image
         }
 
         /// <inheritdoc />
+        public void ApplyFilter(CssFilterEffect[] effects)
+        {
+            if (effects == null || effects.Length == 0) return;
+            EnsureCanvas();
+
+            // Build combined Skia image filter and color filter from the CSS filter effects.
+            SKImageFilter? imageFilter = null;
+            SKColorFilter? colorFilter = null;
+            float opacity = 1f;
+
+            foreach (var effect in effects)
+            {
+                switch (effect.Type)
+                {
+                    case CssFilterType.Blur:
+                        if (effect.Amount > 0)
+                        {
+                            var blur = SKImageFilter.CreateBlur(effect.Amount, effect.Amount, imageFilter);
+                            imageFilter?.Dispose();
+                            imageFilter = blur;
+                        }
+                        break;
+
+                    case CssFilterType.DropShadow:
+                    {
+                        var shadowColor = new SKColor(effect.Color.R, effect.Color.G, effect.Color.B, effect.Color.A);
+                        var shadow = SKImageFilter.CreateDropShadow(
+                            effect.OffsetX, effect.OffsetY, effect.Amount, effect.Amount, shadowColor, imageFilter);
+                        imageFilter?.Dispose();
+                        imageFilter = shadow;
+                        break;
+                    }
+
+                    case CssFilterType.Opacity:
+                        opacity *= Math.Max(0f, Math.Min(1f, effect.Amount));
+                        break;
+
+                    case CssFilterType.Grayscale:
+                    {
+                        float a = Math.Max(0f, Math.Min(1f, effect.Amount));
+                        float inv = 1f - a;
+                        var matrix = new float[]
+                        {
+                            0.2126f + 0.7874f * inv, 0.7152f - 0.7152f * inv, 0.0722f - 0.0722f * inv, 0, 0,
+                            0.2126f - 0.2126f * inv, 0.7152f + 0.2848f * inv, 0.0722f - 0.0722f * inv, 0, 0,
+                            0.2126f - 0.2126f * inv, 0.7152f - 0.7152f * inv, 0.0722f + 0.9278f * inv, 0, 0,
+                            0, 0, 0, 1, 0
+                        };
+                        colorFilter = CombineColorFilter(colorFilter, SKColorFilter.CreateColorMatrix(matrix));
+                        break;
+                    }
+
+                    case CssFilterType.Sepia:
+                    {
+                        float a = Math.Max(0f, Math.Min(1f, effect.Amount));
+                        float inv = 1f - a;
+                        var matrix = new float[]
+                        {
+                            0.393f + 0.607f * inv, 0.769f - 0.769f * inv, 0.189f - 0.189f * inv, 0, 0,
+                            0.349f - 0.349f * inv, 0.686f + 0.314f * inv, 0.168f - 0.168f * inv, 0, 0,
+                            0.272f - 0.272f * inv, 0.534f - 0.534f * inv, 0.131f + 0.869f * inv, 0, 0,
+                            0, 0, 0, 1, 0
+                        };
+                        colorFilter = CombineColorFilter(colorFilter, SKColorFilter.CreateColorMatrix(matrix));
+                        break;
+                    }
+
+                    case CssFilterType.Brightness:
+                    {
+                        float b = Math.Max(0f, effect.Amount);
+                        var matrix = new float[]
+                        {
+                            b, 0, 0, 0, 0,
+                            0, b, 0, 0, 0,
+                            0, 0, b, 0, 0,
+                            0, 0, 0, 1, 0
+                        };
+                        colorFilter = CombineColorFilter(colorFilter, SKColorFilter.CreateColorMatrix(matrix));
+                        break;
+                    }
+
+                    case CssFilterType.Contrast:
+                    {
+                        float c = Math.Max(0f, effect.Amount);
+                        float off = (1f - c) / 2f;
+                        var matrix = new float[]
+                        {
+                            c, 0, 0, 0, off,
+                            0, c, 0, 0, off,
+                            0, 0, c, 0, off,
+                            0, 0, 0, 1, 0
+                        };
+                        colorFilter = CombineColorFilter(colorFilter, SKColorFilter.CreateColorMatrix(matrix));
+                        break;
+                    }
+
+                    case CssFilterType.Saturate:
+                    {
+                        float s = Math.Max(0f, effect.Amount);
+                        float inv = 1f - s;
+                        var matrix = new float[]
+                        {
+                            0.2126f + 0.7874f * s, 0.7152f - 0.7152f * s, 0.0722f - 0.0722f * s, 0, 0,
+                            0.2126f - 0.2126f * s, 0.7152f + 0.2848f * s, 0.0722f - 0.0722f * s, 0, 0,
+                            0.2126f - 0.2126f * s, 0.7152f - 0.7152f * s, 0.0722f + 0.9278f * s, 0, 0,
+                            0, 0, 0, 1, 0
+                        };
+                        colorFilter = CombineColorFilter(colorFilter, SKColorFilter.CreateColorMatrix(matrix));
+                        break;
+                    }
+
+                    case CssFilterType.HueRotate:
+                    {
+                        float rad = effect.Amount * (float)(Math.PI / 180.0);
+                        float cos = (float)Math.Cos(rad);
+                        float sin = (float)Math.Sin(rad);
+                        var matrix = new float[]
+                        {
+                            0.213f + cos * 0.787f - sin * 0.213f, 0.715f - cos * 0.715f - sin * 0.715f, 0.072f - cos * 0.072f + sin * 0.928f, 0, 0,
+                            0.213f - cos * 0.213f + sin * 0.143f, 0.715f + cos * 0.285f + sin * 0.140f, 0.072f - cos * 0.072f - sin * 0.283f, 0, 0,
+                            0.213f - cos * 0.213f - sin * 0.787f, 0.715f - cos * 0.715f + sin * 0.715f, 0.072f + cos * 0.928f + sin * 0.072f, 0, 0,
+                            0, 0, 0, 1, 0
+                        };
+                        colorFilter = CombineColorFilter(colorFilter, SKColorFilter.CreateColorMatrix(matrix));
+                        break;
+                    }
+
+                    case CssFilterType.Invert:
+                    {
+                        float a = Math.Max(0f, Math.Min(1f, effect.Amount));
+                        float s = 1f - 2f * a;
+                        float off = a;
+                        var matrix = new float[]
+                        {
+                            s, 0, 0, 0, off,
+                            0, s, 0, 0, off,
+                            0, 0, s, 0, off,
+                            0, 0, 0, 1, 0
+                        };
+                        colorFilter = CombineColorFilter(colorFilter, SKColorFilter.CreateColorMatrix(matrix));
+                        break;
+                    }
+                }
+            }
+
+            // Apply opacity as alpha on the SaveLayer paint
+            byte alpha = (byte)(opacity * 255);
+
+            // Convert color filter to image filter if we have both
+            if (colorFilter != null)
+            {
+                var cfImageFilter = SKImageFilter.CreateColorFilter(colorFilter, imageFilter);
+                imageFilter?.Dispose();
+                colorFilter.Dispose();
+                imageFilter = cfImageFilter;
+            }
+
+            // Create SaveLayer with the combined filter
+            using (var paint = new SKPaint())
+            {
+                paint.Color = new SKColor(255, 255, 255, alpha);
+                if (imageFilter != null)
+                    paint.ImageFilter = imageFilter;
+                _currentCanvas!.SaveLayer(paint);
+            }
+
+            imageFilter?.Dispose();
+
+            // Prevent double-application of opacity from individual draw calls
+            _opacityStack.Push(_currentOpacity);
+            _currentOpacity = 1f;
+        }
+
+        private static SKColorFilter CombineColorFilter(SKColorFilter? existing, SKColorFilter newFilter)
+        {
+            if (existing == null) return newFilter;
+            var combined = SKColorFilter.CreateCompose(newFilter, existing);
+            existing.Dispose();
+            newFilter.Dispose();
+            return combined;
+        }
+
+        /// <inheritdoc />
+        public void BeginMask()
+        {
+            EnsureCanvas();
+            // Create an offscreen compositing layer that captures all subsequent drawing.
+            // EndMask will apply the gradient mask via DstIn blend mode.
+            _currentCanvas!.SaveLayer(new SKPaint());
+            _opacityStack.Push(_currentOpacity);
+            _currentOpacity = 1f;
+        }
+
+        /// <inheritdoc />
+        public void EndMask(Rendering.GradientInfo gradient, Core.Values.RectF bounds)
+        {
+            EnsureCanvas();
+
+            // Create the gradient shader from the mask gradient info.
+            var shader = Internal.SkiaGradientBuilder.CreateShader(gradient, bounds);
+            if (shader != null)
+            {
+                // Apply the gradient as an alpha mask using DstIn blend mode.
+                // DstIn keeps the destination (content) only where the source (mask) has alpha.
+                using (var maskPaint = new SKPaint())
+                {
+                    maskPaint.BlendMode = SKBlendMode.DstIn;
+                    _currentCanvas!.SaveLayer(maskPaint);
+
+                    using (var gradPaint = new SKPaint())
+                    {
+                        gradPaint.Shader = shader;
+                        _currentCanvas.DrawRect(ToSKRect(bounds), gradPaint);
+                    }
+
+                    _currentCanvas.Restore(); // Restore DstIn mask layer
+                }
+
+                shader.Dispose();
+            }
+
+            // Restore the content compositing layer, compositing it back to the canvas.
+            _currentCanvas!.Restore();
+
+            if (_opacityStack.Count > 0)
+                _currentOpacity = _opacityStack.Pop();
+        }
+
+        /// <inheritdoc />
         public void SetBlendMode(Css.CssMixBlendMode blendMode)
         {
             _currentBlendMode = MapBlendMode(blendMode);
@@ -358,6 +587,7 @@ namespace Rend.Output.Image
             try
             {
                 paint.IsAntialias = true;
+                paint.SubpixelText = true;
                 paint.Style = SKPaintStyle.Fill;
                 var tc = style.Color;
                 paint.Color = new SKColor(tc.R, tc.G, tc.B, (byte)(tc.A * _currentOpacity));
@@ -387,13 +617,11 @@ namespace Rend.Output.Image
         {
             EnsureCanvas();
 
-            // Fall back to DrawText with the original text, as positioning individual
-            // glyphs requires the SKFont API (SkiaSharp 2.88+ canvas.DrawGlyphs).
-            // Using DrawText with the original text provides acceptable results.
             var paint = _paintPool.Rent();
             try
             {
                 paint.IsAntialias = true;
+                paint.SubpixelText = true;
                 paint.Style = SKPaintStyle.Fill;
                 paint.Color = new SKColor(color.R, color.G, color.B, (byte)(color.A * _currentOpacity));
                 paint.TextSize = run.FontSize;

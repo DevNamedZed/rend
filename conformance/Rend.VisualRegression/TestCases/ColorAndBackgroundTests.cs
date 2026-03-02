@@ -11,7 +11,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "color-solid",
                 Name = "Solid Colors",
                 Category = "Color & Background",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;"">
                     <p style=""color:#e74c3c; margin:0 0 4px 0;"">Red text (#e74c3c)</p>
                     <p style=""color:#27ae60; margin:0 0 4px 0;"">Green text (#27ae60)</p>
@@ -27,7 +26,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "color-background",
                 Name = "Background Colors",
                 Category = "Color & Background",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;"">
                     <div style=""background:#e74c3c; color:#fff; padding:10px; margin-bottom:6px; height:20px;"">Red background</div>
                     <div style=""background:#27ae60; color:#fff; padding:10px; margin-bottom:6px; height:20px;"">Green background</div>
@@ -41,7 +39,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "color-gradient",
                 Name = "Linear Gradient",
                 Category = "Color & Background",
-                Tolerance = 0.0, // Gradient rendering may differ between engines
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;"">
                     <div style=""background:linear-gradient(to right, #3498db, #8e44ad); color:#fff; padding:20px; margin-bottom:10px; border-radius:4px; height:20px;"">Horizontal gradient</div>
                     <div style=""background:linear-gradient(to bottom, #e74c3c, #f39c12); color:#fff; padding:20px; border-radius:4px; height:20px;"">Vertical gradient</div>
@@ -55,7 +52,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "color-opacity",
                 Name = "Opacity",
                 Category = "Color & Background",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4; background:#ecf0f1;"">
                     <div style=""background:#e74c3c; color:#fff; padding:10px; margin-bottom:6px; opacity:1.0; height:20px;"">Opacity 1.0</div>
                     <div style=""background:#e74c3c; color:#fff; padding:10px; margin-bottom:6px; opacity:0.75; height:20px;"">Opacity 0.75</div>

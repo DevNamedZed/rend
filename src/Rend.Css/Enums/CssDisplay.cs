@@ -21,6 +21,10 @@ namespace Rend.Css
         TableFooterGroup,
         TableRowGroup,
         ListItem,
-        Contents
+        Contents,
+        Ruby,
+        RubyText,
+        RubyBase,
+        RubyTextContainer
     }
 }

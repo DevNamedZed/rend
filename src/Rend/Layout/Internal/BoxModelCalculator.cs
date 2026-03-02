@@ -33,6 +33,9 @@ namespace Rend.Layout.Internal
         private static float ResolveLength(float value, float containingBlockWidth)
         {
             if (float.IsNaN(value)) return 0;
+            // Negative values encode deferred percentages (e.g., -0.05 = 5% of containing block width)
+            if (value < 0 && value > -1.01f)
+                return Math.Max(0, -value * containingBlockWidth);
             return Math.Max(0, value);
         }
 

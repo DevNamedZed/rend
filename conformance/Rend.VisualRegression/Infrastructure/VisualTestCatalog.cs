@@ -61,6 +61,26 @@ namespace Rend.VisualRegression.Infrastructure
                 typeof(TestCases.AdditionalLayoutTests).TypeHandle);
             System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
                 typeof(TestCases.ExtendedTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.AdvancedTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.FormControlTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.SvgTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.InlineAndListTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.SemanticElementTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.RealWorldPatternTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.MultiColumnTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.ClipPathBorderImageTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.FilterTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.NewFeatureTests).TypeHandle);
         }
     }
 }

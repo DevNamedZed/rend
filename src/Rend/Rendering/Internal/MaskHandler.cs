@@ -1,3 +1,4 @@
+using Rend.Core.Values;
 using Rend.Css;
 using Rend.Css.Properties.Internal;
 using Rend.Layout;
@@ -5,41 +6,65 @@ using Rend.Layout;
 namespace Rend.Rendering.Internal
 {
     /// <summary>
-    /// Handles CSS mask/mask-image property. In static PDF/image output,
-    /// full mask compositing requires a compositor layer. This handler
-    /// provides graceful degradation: if the mask is a simple gradient
-    /// with uniform opacity, it applies that opacity. Complex masks
-    /// (images, non-uniform gradients) are noted but not applied.
+    /// Handles CSS mask/mask-image property by extracting gradient masks
+    /// and applying them via the render target's mask compositing layer.
     /// </summary>
     internal static class MaskHandler
     {
-        public static bool Apply(LayoutBox box, IRenderTarget target)
+        /// <summary>
+        /// Attempts to apply a CSS mask to the given box. If a gradient mask is found,
+        /// begins a mask compositing layer and returns the gradient info.
+        /// The caller must call <see cref="Restore"/> with the returned info when done painting.
+        /// </summary>
+        /// <returns>
+        /// A <see cref="MaskInfo"/> if a mask was applied, or null if no mask was needed.
+        /// </returns>
+        public static MaskInfo? Apply(LayoutBox box, IRenderTarget target)
         {
             if (box.StyledNode?.Style == null)
-                return false;
+                return null;
 
             var raw = box.StyledNode.Style.GetRefValue(PropertyId.MaskImage);
             if (raw == null)
-                return false;
+                return null;
 
-            // Check string value "none"
+            // Check "none" values
             if (raw is string s && s == "none")
-                return false;
+                return null;
 
             if (raw is CssKeywordValue kw && kw.Keyword == "none")
-                return false;
+                return null;
 
-            // For gradient masks, we could extract an average alpha.
-            // For now, graceful degradation: mask property is consumed
-            // by the cascade but complex masks aren't visually applied.
-            // This is consistent with how filter handles unsupported functions.
+            // Parse gradient mask
+            if (raw is CssFunctionValue fn)
+            {
+                RectF bounds = box.BorderRect;
+                var gradient = BackgroundPainter.ParseCssGradient(fn, bounds);
+                if (gradient != null)
+                {
+                    target.BeginMask();
+                    return new MaskInfo { Gradient = gradient, Bounds = bounds };
+                }
+            }
 
-            return false;
+            return null;
         }
 
-        public static void Restore(IRenderTarget target)
+        /// <summary>
+        /// Restores the mask compositing layer, applying the gradient mask to the content.
+        /// </summary>
+        public static void Restore(MaskInfo mask, IRenderTarget target)
         {
-            target.Restore();
+            target.EndMask(mask.Gradient, mask.Bounds);
         }
+    }
+
+    /// <summary>
+    /// Holds mask state between Apply and Restore calls.
+    /// </summary>
+    internal struct MaskInfo
+    {
+        public GradientInfo Gradient;
+        public RectF Bounds;
     }
 }

@@ -16,14 +16,21 @@ namespace Rend.Layout.Internal
         public static bool IsReplaced(StyledElement element)
         {
             string tag = element.TagName;
-            if (tag == "img" || tag == "svg" || tag == "video" ||
-                tag == "canvas" || tag == "iframe" || tag == "object" || tag == "embed")
+            if (tag == "img" || tag == "svg" || tag == "video" || tag == "audio" ||
+                tag == "canvas" || tag == "iframe" || tag == "object" || tag == "embed" ||
+                tag == "math")
             {
                 return true;
             }
 
             // Form controls are replaced (except <button>, which renders children)
             if (tag == "input" || tag == "select" || tag == "textarea")
+            {
+                return true;
+            }
+
+            // Meter and progress are replaced inline-block elements
+            if (tag == "meter" || tag == "progress")
             {
                 return true;
             }
@@ -75,6 +82,21 @@ namespace Rend.Layout.Internal
                 return 200f;
             }
 
+            if (tag == "meter" || tag == "progress")
+                return 80f; // Default width per WHATWG spec
+
+            if (tag == "video" || tag == "canvas")
+                return 300f; // Default 300x150 per HTML spec
+
+            if (tag == "audio")
+                return 300f; // Typical audio player width
+
+            if (tag == "iframe")
+                return 300f; // Default 300x150 per HTML spec
+
+            if (tag == "math")
+                return 0f; // Math elements size to content; will be measured during layout
+
             return 0f;
         }
 
@@ -113,6 +135,21 @@ namespace Rend.Layout.Internal
                 return 60f;
             }
 
+            if (tag == "meter" || tag == "progress")
+                return 16f; // Default height per WHATWG spec
+
+            if (tag == "video" || tag == "canvas")
+                return 150f; // Default 300x150 per HTML spec
+
+            if (tag == "audio")
+                return 32f; // Compact audio player height
+
+            if (tag == "iframe")
+                return 150f; // Default 300x150 per HTML spec
+
+            if (tag == "math")
+                return 0f; // Math elements size to content
+
             return 0f;
         }
 
@@ -135,6 +172,23 @@ namespace Rend.Layout.Internal
             float height = style.Height;
             float ratio = intrinsicHeight > 0 ? intrinsicWidth / intrinsicHeight : 1f;
 
+            // Form controls (input, select, textarea, meter, progress) do NOT have an
+            // intrinsic aspect ratio. When one dimension is specified and the other is
+            // auto, use the intrinsic value for the auto dimension, not the ratio.
+            bool isFormControl = box.StyledNode is StyledElement el &&
+                (el.TagName == "input" || el.TagName == "select" || el.TagName == "textarea"
+                 || el.TagName == "meter" || el.TagName == "progress");
+
+            // Resolve deferred percentage widths (encoded as negative fractions)
+            if (width < 0 && width > -1.01f)
+            {
+                width = -width * containingWidth;
+                if (style.BoxSizing == CssBoxSizing.BorderBox)
+                    width -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
+            }
+            if (height < 0 && height > -1.01f)
+                height = float.NaN; // percentage heights without containing block → auto
+
             if (float.IsNaN(width) && float.IsNaN(height))
             {
                 // Use intrinsic dimensions
@@ -143,13 +197,13 @@ namespace Rend.Layout.Internal
             }
             else if (float.IsNaN(width))
             {
-                // Height specified, derive width
-                width = height * ratio;
+                // Height specified, derive width from ratio (images) or use intrinsic (form controls)
+                width = isFormControl ? intrinsicWidth : height * ratio;
             }
             else if (float.IsNaN(height))
             {
-                // Width specified, derive height
-                height = ratio > 0 ? width / ratio : width;
+                // Width specified, derive height from ratio (images) or use intrinsic (form controls)
+                height = isFormControl ? intrinsicHeight : (ratio > 0 ? width / ratio : width);
             }
 
             // Apply min/max constraints
@@ -161,25 +215,25 @@ namespace Rend.Layout.Internal
             if (!float.IsNaN(maxW) && maxW > 0 && width > maxW)
             {
                 width = maxW;
-                if (float.IsNaN(style.Height))
+                if (float.IsNaN(style.Height) && !isFormControl)
                     height = ratio > 0 ? width / ratio : width;
             }
             if (!float.IsNaN(minW) && width < minW)
             {
                 width = minW;
-                if (float.IsNaN(style.Height))
+                if (float.IsNaN(style.Height) && !isFormControl)
                     height = ratio > 0 ? width / ratio : width;
             }
             if (!float.IsNaN(maxH) && maxH > 0 && height > maxH)
             {
                 height = maxH;
-                if (float.IsNaN(style.Width))
+                if (float.IsNaN(style.Width) && !isFormControl)
                     width = height * ratio;
             }
             if (!float.IsNaN(minH) && height < minH)
             {
                 height = minH;
-                if (float.IsNaN(style.Width))
+                if (float.IsNaN(style.Width) && !isFormControl)
                     width = height * ratio;
             }
 

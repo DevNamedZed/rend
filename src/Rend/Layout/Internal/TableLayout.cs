@@ -33,7 +33,7 @@ namespace Rend.Layout.Internal
             // Calculate column widths
             float[] colWidths;
             if (isFixed)
-                colWidths = CalculateFixedWidths(tableCtx, numCols, containerWidth);
+                colWidths = CalculateFixedWidths(tableCtx, numCols, ref containerWidth);
             else
                 colWidths = CalculateAutoWidths(tableCtx, numCols, containerWidth, context);
 
@@ -125,6 +125,16 @@ namespace Rend.Layout.Internal
                     // Skip columns occupied by colspan
                     c += effectiveColSpan - 1;
                 }
+
+                // Enforce explicit row height from CSS (e.g., <tr style="height:80px">)
+                float rowSpecHeight = row.StyledElement?.Style.Height ?? float.NaN;
+                if (!float.IsNaN(rowSpecHeight) && rowSpecHeight > 0)
+                {
+                    // Resolve deferred percentage height
+                    rowSpecHeight = DimensionResolver.ResolvePercentHeight(rowSpecHeight, float.NaN);
+                    if (!float.IsNaN(rowSpecHeight) && rowSpecHeight > rowHeights[r])
+                        rowHeights[r] = rowSpecHeight;
+                }
             }
 
             // Distribute rowspan cell heights across spanned rows
@@ -193,6 +203,78 @@ namespace Rend.Layout.Internal
                 }
             }
 
+            // Apply border collapsing BEFORE positioning so collapsed border widths
+            // are used when computing cell positions (avoids gaps from zeroed borders).
+            if (collapsed)
+            {
+                CollapseBorders(rowBoxes, numRows, numCols, occupied2, cellColumns);
+
+                // Recalculate cell content widths now that borders have been collapsed.
+                // The first pass subtracted original border widths; add back any that were zeroed.
+                for (int r = 0; r < numRows; r++)
+                {
+                    for (int ci = 0; ci < rowBoxes[r].Children.Count; ci++)
+                    {
+                        var cellBox = rowBoxes[r].Children[ci];
+                        int cellCol = cellColumns.ContainsKey(cellBox) ? cellColumns[cellBox] : 0;
+                        float cellWidth = colWidths[cellCol];
+                        int cs = 1;
+                        var cellEl = cellBox.StyledNode as StyledElement;
+                        if (cellEl != null)
+                        {
+                            // Find colspan from the table context
+                            var rowCtx = tableCtx.Rows[r];
+                            for (int cIdx = 0; cIdx < rowCtx.Cells.Count; cIdx++)
+                            {
+                                if (rowCtx.Cells[cIdx].StyledElement == cellEl)
+                                {
+                                    cs = Math.Min(rowCtx.Cells[cIdx].ColSpan, numCols - cellCol);
+                                    break;
+                                }
+                            }
+                        }
+                        for (int s = 1; s < cs; s++)
+                            cellWidth += colWidths[cellCol + s] + borderSpacingH;
+
+                        float newContentW = cellWidth - cellBox.PaddingLeft - cellBox.PaddingRight
+                                          - cellBox.BorderLeftWidth - cellBox.BorderRightWidth;
+                        newContentW = Math.Max(0, newContentW);
+                        cellBox.ContentRect = new RectF(cellBox.ContentRect.X, cellBox.ContentRect.Y,
+                                                         newContentW, cellBox.ContentRect.Height);
+                    }
+                }
+
+                // Recalculate row heights now that borders have been collapsed.
+                // The first pass used original border widths; collapsed borders
+                // reduce the total cell height and thus the row height.
+                var rowspanBoxes = new HashSet<LayoutBox>();
+                for (int s = 0; s < rowspanCells.Count; s++)
+                    rowspanBoxes.Add(rowspanCells[s].CellBox);
+
+                for (int r = 0; r < numRows; r++)
+                {
+                    float maxH = 0;
+                    for (int ci = 0; ci < rowBoxes[r].Children.Count; ci++)
+                    {
+                        var cellBox = rowBoxes[r].Children[ci];
+                        if (rowspanBoxes.Contains(cellBox)) continue;
+                        float h = cellBox.ContentRect.Height + cellBox.PaddingTop + cellBox.PaddingBottom
+                                 + cellBox.BorderTopWidth + cellBox.BorderBottomWidth;
+                        if (h > maxH) maxH = h;
+                    }
+                    // Enforce explicit row height from CSS
+                    var row = tableCtx.Rows[r];
+                    float rowSpecH = row.StyledElement?.Style.Height ?? float.NaN;
+                    if (!float.IsNaN(rowSpecH) && rowSpecH > 0)
+                    {
+                        rowSpecH = DimensionResolver.ResolvePercentHeight(rowSpecH, float.NaN);
+                        if (!float.IsNaN(rowSpecH) && rowSpecH > maxH)
+                            maxH = rowSpecH;
+                    }
+                    if (maxH > 0) rowHeights[r] = maxH;
+                }
+            }
+
             // Layout top captions (caption-side: top or default)
             float cursorY = parent.ContentRect.Y;
             for (int cap = 0; cap < tableCtx.Captions.Count; cap++)
@@ -230,12 +312,17 @@ namespace Rend.Layout.Internal
                             cellHeight += rowHeights[r + rs] + (rs > 0 ? borderSpacingV : 0);
                     }
 
-                    // Position the cell
+                    // Position the cell — content rect spans the full row height
+                    // so cell backgrounds fill the entire row.
                     float cellContentHeight = cellBox.ContentRect.Height;
+                    float fullCellContentH = cellHeight - cellBox.PaddingTop - cellBox.PaddingBottom
+                                           - cellBox.BorderTopWidth - cellBox.BorderBottomWidth;
+                    if (fullCellContentH < cellContentHeight) fullCellContentH = cellContentHeight;
+
                     cellBox.ContentRect = new RectF(
                         cellX + cellBox.MarginLeft + cellBox.BorderLeftWidth + cellBox.PaddingLeft,
                         rowYPositions[r] + cellBox.MarginTop + cellBox.BorderTopWidth + cellBox.PaddingTop,
-                        cellBox.ContentRect.Width, cellContentHeight);
+                        cellBox.ContentRect.Width, fullCellContentH);
 
                     // Reposition children from (0,0) to actual cell position
                     float dx = cellBox.ContentRect.X;
@@ -251,10 +338,9 @@ namespace Rend.Layout.Internal
                         }
                     }
 
-                    // Apply vertical-align
-                    float totalCellHeight = cellContentHeight + cellBox.PaddingTop + cellBox.PaddingBottom
-                                          + cellBox.BorderTopWidth + cellBox.BorderBottomWidth;
-                    float freeSpace = cellHeight - totalCellHeight;
+                    // Apply vertical-align: only offset children within the cell,
+                    // NOT the cell's ContentRect (background must span the full row).
+                    float freeSpace = fullCellContentH - cellContentHeight;
                     if (freeSpace > 0)
                     {
                         var valign = CssVerticalAlign.Baseline;
@@ -275,13 +361,14 @@ namespace Rend.Layout.Internal
 
                         if (offsetY > 0)
                         {
-                            cellBox.ContentRect = new RectF(
-                                cellBox.ContentRect.X,
-                                cellBox.ContentRect.Y + offsetY,
-                                cellBox.ContentRect.Width,
-                                cellBox.ContentRect.Height);
+                            // Only move children and line boxes, not the cell box itself
                             for (int cci = 0; cci < cellBox.Children.Count; cci++)
                                 OffsetBoxInPlace(cellBox.Children[cci], 0, offsetY);
+                            if (cellBox.LineBoxes != null)
+                            {
+                                for (int li = 0; li < cellBox.LineBoxes.Count; li++)
+                                    cellBox.LineBoxes[li].Y += offsetY;
+                            }
                         }
                     }
                 }
@@ -289,12 +376,6 @@ namespace Rend.Layout.Internal
                 rowBox.ContentRect = new RectF(parent.ContentRect.X, rowYPositions[r],
                                                containerWidth, rowHeights[r]);
                 parent.AddChild(rowBox);
-            }
-
-            // Apply border collapsing: zero out shared borders where neighbor has wider border
-            if (style.BorderCollapse == CssBorderCollapse.Collapse)
-            {
-                CollapseBorders(rowBoxes, numRows, numCols, occupied2, cellColumns);
             }
 
             // Layout bottom captions
@@ -513,12 +594,14 @@ namespace Rend.Layout.Internal
             return row;
         }
 
-        private static float[] CalculateFixedWidths(TableContext ctx, int numCols, float containerWidth)
+        private static float[] CalculateFixedWidths(TableContext ctx, int numCols, ref float containerWidth)
         {
             float[] widths = new float[numCols];
             float equalWidth = containerWidth / numCols;
 
-            // First row determines widths in fixed layout
+            // First row determines widths in fixed layout.
+            // CSS 2.1 §17.5.2.1: cell 'width' is the content width.
+            // Column slot width = content width + padding + borders.
             if (ctx.Rows.Count > 0)
             {
                 var firstRow = ctx.Rows[0];
@@ -526,8 +609,25 @@ namespace Rend.Layout.Internal
                 for (int c = 0; c < firstRow.Cells.Count && col < numCols; c++)
                 {
                     var cell = firstRow.Cells[c];
-                    float specWidth = cell.StyledElement?.Style.Width ?? float.NaN;
-                    float w = float.IsNaN(specWidth) ? equalWidth : specWidth;
+                    float specWidth = DimensionResolver.ResolvePercentWidth(
+                        cell.StyledElement?.Style.Width ?? float.NaN, containerWidth);
+
+                    float w;
+                    if (!float.IsNaN(specWidth) && specWidth > 0 && cell.StyledElement != null)
+                    {
+                        // Specified width is content width; add padding and border for column slot
+                        var cs = cell.StyledElement.Style;
+                        float padH = (float.IsNaN(cs.PaddingLeft) ? 0 : cs.PaddingLeft)
+                                   + (float.IsNaN(cs.PaddingRight) ? 0 : cs.PaddingRight);
+                        float borderH = (float.IsNaN(cs.BorderLeftWidth) ? 0 : cs.BorderLeftWidth)
+                                      + (float.IsNaN(cs.BorderRightWidth) ? 0 : cs.BorderRightWidth);
+                        w = specWidth + padH + borderH;
+                    }
+                    else
+                    {
+                        w = equalWidth;
+                    }
+
                     for (int s = 0; s < cell.ColSpan && col < numCols; s++)
                     {
                         widths[col] = w / cell.ColSpan;
@@ -537,6 +637,12 @@ namespace Rend.Layout.Internal
                 // Fill remaining
                 for (; col < numCols; col++)
                     widths[col] = equalWidth;
+
+                // If total column widths exceed container, expand the table (CSS 2.1 §17.5.2.1)
+                float total = 0;
+                for (int i = 0; i < numCols; i++) total += widths[i];
+                if (total > containerWidth)
+                    containerWidth = total;
             }
             else
             {
@@ -562,8 +668,9 @@ namespace Rend.Layout.Internal
                     var cell = ctx.Rows[r].Cells[c];
                     if (cell.StyledElement == null) { col += cell.ColSpan; continue; }
 
-                    // Check for specified width
-                    float specWidth = cell.StyledElement.Style.Width;
+                    // Check for specified width (resolve deferred percentage)
+                    float specWidth = DimensionResolver.ResolvePercentWidth(
+                        cell.StyledElement.Style.Width, containerWidth);
                     if (!float.IsNaN(specWidth) && specWidth > 0 && cell.ColSpan == 1)
                     {
                         if (specWidth > minWidths[col]) minWidths[col] = specWidth;
@@ -574,7 +681,7 @@ namespace Rend.Layout.Internal
 
                     // Measure min-content width (very narrow container)
                     float minW = MeasureCellWidth(cell.StyledElement, 1f, context);
-                    // Measure max-content width (very wide container)
+                    // Measure max-content width (wide container)
                     float maxW = MeasureCellWidth(cell.StyledElement, 10000f, context);
 
                     if (cell.ColSpan == 1)
@@ -646,7 +753,7 @@ namespace Rend.Layout.Internal
                                - box.BorderLeftWidth - box.BorderRightWidth;
             contentWidth = Math.Max(0, contentWidth);
             box.ContentRect = new RectF(0, 0, contentWidth, 0);
-            BlockFormattingContext.Layout(box, context);
+            BlockFormattingContext.LayoutChildren(box, context);
 
             // Measure actual content extent
             float maxRight = 0;
@@ -661,13 +768,29 @@ namespace Rend.Layout.Internal
             {
                 for (int i = 0; i < box.LineBoxes.Count; i++)
                 {
-                    float right = box.LineBoxes[i].X + box.LineBoxes[i].Width;
-                    if (right > maxRight) maxRight = right;
+                    var line = box.LineBoxes[i];
+                    // Use NaturalContentWidth which captures the pre-centering extent
+                    // including inline element padding/border/margin.
+                    float lineContentWidth = line.NaturalContentWidth;
+                    if (lineContentWidth <= 0 && line.Fragments.Count > 0)
+                    {
+                        // Fallback: measure from fragment positions
+                        float firstFragX = line.Fragments[0].X;
+                        float lastFragRight = firstFragX;
+                        for (int f = 0; f < line.Fragments.Count; f++)
+                        {
+                            float fragRight = line.Fragments[f].X + line.Fragments[f].Width;
+                            if (fragRight > lastFragRight) lastFragRight = fragRight;
+                        }
+                        lineContentWidth = lastFragRight - firstFragX;
+                    }
+                    if (lineContentWidth > maxRight) maxRight = lineContentWidth;
                 }
             }
 
-            return maxRight + box.PaddingLeft + box.PaddingRight
+            float result = maxRight + box.PaddingLeft + box.PaddingRight
                  + box.BorderLeftWidth + box.BorderRightWidth;
+            return result;
         }
 
         private static float CalculateAutoHeight(LayoutBox box)

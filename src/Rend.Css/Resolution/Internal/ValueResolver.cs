@@ -23,13 +23,13 @@ namespace Rend.Css.Resolution.Internal
             switch (prop.ValueType)
             {
                 case PropertyValueType.Length:
-                    // For height-axis percentage properties, defer resolution to layout
-                    // by encoding the percentage as a negative fraction (e.g., 50% → -0.5).
-                    // This is needed because percentage heights resolve against the containing
-                    // block height, which isn't known at CSS resolution time.
-                    if (value is CssPercentageValue hPct && IsHeightAxisProperty(prop.Id))
+                    // For percentage properties that resolve against the containing block
+                    // (not the viewport), defer resolution to layout time by encoding as
+                    // a negative fraction (e.g., 50% → -0.5). The layout engine resolves
+                    // these against the correct containing block dimension.
+                    if (value is CssPercentageValue pctDeferred && IsDeferredPercentageProperty(prop.Id))
                     {
-                        result = PropertyValue.FromLength(-hPct.Value / 100f);
+                        result = PropertyValue.FromLength(-pctDeferred.Value / 100f);
                         return true;
                     }
                     return TryResolveLength(value, ctx, out result);
@@ -57,9 +57,19 @@ namespace Rend.Css.Resolution.Internal
             }
         }
 
-        private static bool IsHeightAxisProperty(int id)
+        private static bool IsDeferredPercentageProperty(int id)
         {
-            return id == PropertyId.Height || id == PropertyId.MinHeight || id == PropertyId.MaxHeight;
+            // Height-axis: percentages resolve against containing block height
+            if (id == PropertyId.Height || id == PropertyId.MinHeight || id == PropertyId.MaxHeight)
+                return true;
+            // Width-axis: percentages resolve against containing block width (not viewport)
+            if (id == PropertyId.Width || id == PropertyId.MinWidth || id == PropertyId.MaxWidth)
+                return true;
+            // Padding: all sides resolve against containing block width per CSS spec
+            if (id == PropertyId.PaddingTop || id == PropertyId.PaddingRight
+                || id == PropertyId.PaddingBottom || id == PropertyId.PaddingLeft)
+                return true;
+            return false;
         }
 
         private static bool TryResolveLength(CssValue value, CssResolutionContext ctx, out PropertyValue result)
@@ -451,6 +461,36 @@ namespace Rend.Css.Resolution.Internal
                 case PropertyId.MaskMode:
                     return TryMapMaskMode(keyword, out result);
 
+                case PropertyId.TextWrap:
+                    return TryMapTextWrap(keyword, out result);
+
+                case PropertyId.ForcedColorAdjust:
+                    return TryMapForcedColorAdjust(keyword, out result);
+
+                case PropertyId.HangingPunctuation:
+                    return TryMapHangingPunctuation(keyword, out result);
+
+                case PropertyId.ContainerType:
+                    return TryMapContainerType(keyword, out result);
+
+                case PropertyId.FontVariantLigatures:
+                    return TryMapFontVariantLigatures(keyword, out result);
+
+                case PropertyId.FontVariantCaps:
+                    return TryMapFontVariantCaps(keyword, out result);
+
+                case PropertyId.FontVariantNumeric:
+                    return TryMapFontVariantNumeric(keyword, out result);
+
+                case PropertyId.FontVariantEastAsian:
+                    return TryMapFontVariantEastAsian(keyword, out result);
+
+                case PropertyId.RubyPosition:
+                    return TryMapRubyPosition(keyword, out result);
+
+                case PropertyId.RubyAlign:
+                    return TryMapRubyAlign(keyword, out result);
+
                 default:
                     // Generic keyword as int 0
                     result = PropertyValue.FromKeyword(0);
@@ -699,6 +739,10 @@ namespace Rend.Css.Resolution.Internal
                 case "table-row-group": result = PropertyValue.FromKeyword((int)CssDisplay.TableRowGroup); return true;
                 case "list-item": result = PropertyValue.FromKeyword((int)CssDisplay.ListItem); return true;
                 case "contents": result = PropertyValue.FromKeyword((int)CssDisplay.Contents); return true;
+                case "ruby": result = PropertyValue.FromKeyword((int)CssDisplay.Ruby); return true;
+                case "ruby-text": result = PropertyValue.FromKeyword((int)CssDisplay.RubyText); return true;
+                case "ruby-base": result = PropertyValue.FromKeyword((int)CssDisplay.RubyBase); return true;
+                case "ruby-text-container": result = PropertyValue.FromKeyword((int)CssDisplay.RubyTextContainer); return true;
                 default: return false;
             }
         }
@@ -1492,6 +1536,153 @@ namespace Rend.Css.Resolution.Internal
                 case "match-source": result = PropertyValue.FromKeyword((int)CssMaskMode.MatchSource); return true;
                 case "luminance": result = PropertyValue.FromKeyword((int)CssMaskMode.Luminance); return true;
                 case "alpha": result = PropertyValue.FromKeyword((int)CssMaskMode.Alpha); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapTextWrap(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "wrap": result = PropertyValue.FromKeyword((int)CssTextWrap.Wrap); return true;
+                case "nowrap": result = PropertyValue.FromKeyword((int)CssTextWrap.Nowrap); return true;
+                case "balance": result = PropertyValue.FromKeyword((int)CssTextWrap.Balance); return true;
+                case "pretty": result = PropertyValue.FromKeyword((int)CssTextWrap.Pretty); return true;
+                case "stable": result = PropertyValue.FromKeyword((int)CssTextWrap.Stable); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapForcedColorAdjust(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "auto": result = PropertyValue.FromKeyword((int)CssForcedColorAdjust.Auto); return true;
+                case "none": result = PropertyValue.FromKeyword((int)CssForcedColorAdjust.None); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapHangingPunctuation(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "none": result = PropertyValue.FromKeyword((int)CssHangingPunctuation.None); return true;
+                case "first": result = PropertyValue.FromKeyword((int)CssHangingPunctuation.First); return true;
+                case "last": result = PropertyValue.FromKeyword((int)CssHangingPunctuation.Last); return true;
+                case "force-end": result = PropertyValue.FromKeyword((int)CssHangingPunctuation.ForceEnd); return true;
+                case "allow-end": result = PropertyValue.FromKeyword((int)CssHangingPunctuation.AllowEnd); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapContainerType(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "normal": result = PropertyValue.FromKeyword((int)CssContainerType.Normal); return true;
+                case "size": result = PropertyValue.FromKeyword((int)CssContainerType.Size); return true;
+                case "inline-size": result = PropertyValue.FromKeyword((int)CssContainerType.InlineSize); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapFontVariantLigatures(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "normal": result = PropertyValue.FromKeyword((int)CssFontVariantLigatures.Normal); return true;
+                case "none": result = PropertyValue.FromKeyword((int)CssFontVariantLigatures.None); return true;
+                case "common-ligatures": result = PropertyValue.FromKeyword((int)CssFontVariantLigatures.CommonLigatures); return true;
+                case "no-common-ligatures": result = PropertyValue.FromKeyword((int)CssFontVariantLigatures.NoCommonLigatures); return true;
+                case "discretionary-ligatures": result = PropertyValue.FromKeyword((int)CssFontVariantLigatures.DiscretionaryLigatures); return true;
+                case "no-discretionary-ligatures": result = PropertyValue.FromKeyword((int)CssFontVariantLigatures.NoDiscretionaryLigatures); return true;
+                case "historical-ligatures": result = PropertyValue.FromKeyword((int)CssFontVariantLigatures.HistoricalLigatures); return true;
+                case "no-historical-ligatures": result = PropertyValue.FromKeyword((int)CssFontVariantLigatures.NoHistoricalLigatures); return true;
+                case "contextual": result = PropertyValue.FromKeyword((int)CssFontVariantLigatures.Contextual); return true;
+                case "no-contextual": result = PropertyValue.FromKeyword((int)CssFontVariantLigatures.NoContextual); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapFontVariantCaps(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "normal": result = PropertyValue.FromKeyword((int)CssFontVariantCaps.Normal); return true;
+                case "small-caps": result = PropertyValue.FromKeyword((int)CssFontVariantCaps.SmallCaps); return true;
+                case "all-small-caps": result = PropertyValue.FromKeyword((int)CssFontVariantCaps.AllSmallCaps); return true;
+                case "petite-caps": result = PropertyValue.FromKeyword((int)CssFontVariantCaps.PetiteCaps); return true;
+                case "all-petite-caps": result = PropertyValue.FromKeyword((int)CssFontVariantCaps.AllPetiteCaps); return true;
+                case "unicase": result = PropertyValue.FromKeyword((int)CssFontVariantCaps.Unicase); return true;
+                case "titling-caps": result = PropertyValue.FromKeyword((int)CssFontVariantCaps.TitlingCaps); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapFontVariantNumeric(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "normal": result = PropertyValue.FromKeyword((int)CssFontVariantNumeric.Normal); return true;
+                case "lining-nums": result = PropertyValue.FromKeyword((int)CssFontVariantNumeric.LiningNums); return true;
+                case "oldstyle-nums": result = PropertyValue.FromKeyword((int)CssFontVariantNumeric.OldstyleNums); return true;
+                case "proportional-nums": result = PropertyValue.FromKeyword((int)CssFontVariantNumeric.ProportionalNums); return true;
+                case "tabular-nums": result = PropertyValue.FromKeyword((int)CssFontVariantNumeric.TabularNums); return true;
+                case "diagonal-fractions": result = PropertyValue.FromKeyword((int)CssFontVariantNumeric.DiagonalFractions); return true;
+                case "stacked-fractions": result = PropertyValue.FromKeyword((int)CssFontVariantNumeric.StackedFractions); return true;
+                case "ordinal": result = PropertyValue.FromKeyword((int)CssFontVariantNumeric.Ordinal); return true;
+                case "slashed-zero": result = PropertyValue.FromKeyword((int)CssFontVariantNumeric.SlashedZero); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapFontVariantEastAsian(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "normal": result = PropertyValue.FromKeyword((int)CssFontVariantEastAsian.Normal); return true;
+                case "jis78": result = PropertyValue.FromKeyword((int)CssFontVariantEastAsian.Jis78); return true;
+                case "jis83": result = PropertyValue.FromKeyword((int)CssFontVariantEastAsian.Jis83); return true;
+                case "jis90": result = PropertyValue.FromKeyword((int)CssFontVariantEastAsian.Jis90); return true;
+                case "jis04": result = PropertyValue.FromKeyword((int)CssFontVariantEastAsian.Jis04); return true;
+                case "simplified": result = PropertyValue.FromKeyword((int)CssFontVariantEastAsian.Simplified); return true;
+                case "traditional": result = PropertyValue.FromKeyword((int)CssFontVariantEastAsian.Traditional); return true;
+                case "full-width": result = PropertyValue.FromKeyword((int)CssFontVariantEastAsian.FullWidth); return true;
+                case "proportional-width": result = PropertyValue.FromKeyword((int)CssFontVariantEastAsian.ProportionalWidth); return true;
+                case "ruby": result = PropertyValue.FromKeyword((int)CssFontVariantEastAsian.Ruby); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapRubyPosition(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "over": result = PropertyValue.FromKeyword((int)CssRubyPosition.Over); return true;
+                case "under": result = PropertyValue.FromKeyword((int)CssRubyPosition.Under); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapRubyAlign(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "space-around": result = PropertyValue.FromKeyword((int)CssRubyAlign.SpaceAround); return true;
+                case "center": result = PropertyValue.FromKeyword((int)CssRubyAlign.Center); return true;
+                case "space-between": result = PropertyValue.FromKeyword((int)CssRubyAlign.SpaceBetween); return true;
+                case "start": result = PropertyValue.FromKeyword((int)CssRubyAlign.Start); return true;
                 default: return false;
             }
         }

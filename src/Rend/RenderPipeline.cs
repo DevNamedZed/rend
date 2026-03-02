@@ -53,11 +53,13 @@ namespace Rend
             var selectorMatcher = new SelectorMatcherAdapter();
             var resolverOptions = new StyleResolverOptions
             {
-                MediaType = "print",
+                MediaType = _options.MediaType ?? (target is Output.Image.SkiaRenderTarget ? "screen" : "print"),
                 ViewportWidth = _options.PageSize.Width - _options.MarginLeft - _options.MarginRight,
                 ViewportHeight = _options.PageSize.Height - _options.MarginTop - _options.MarginBottom,
                 DefaultFontSize = _options.DefaultFontSize,
-                ApplyUserAgentStyles = true
+                ApplyUserAgentStyles = true,
+                PrefersColorSchemeDark = _options.PrefersColorSchemeDark,
+                PrefersReducedMotion = true
             };
             var styleResolver = new StyleResolver(selectorMatcher, resolverOptions);
 
@@ -74,7 +76,7 @@ namespace Rend
             styledTree.PageStyle.MarginLeft = _options.MarginLeft;
 
             // 7. Create text shaper
-            ITextShaper textShaper = new HarfBuzzTextShaper();
+            using var textShaper = new HarfBuzzTextShaper();
 
             // 8. Layout
             progress?.Report(new RenderProgress(50, RenderStage.Layout, "Computing layout"));

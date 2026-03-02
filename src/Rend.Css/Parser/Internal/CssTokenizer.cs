@@ -444,6 +444,18 @@ namespace Rend.Css.Parser.Internal
         {
             var name = ConsumeName();
 
+            // §4.3.7 Unicode-range: U+xxxx or u+xxxx
+            if ((name == "U" || name == "u") && _pos < _input.Length && _input[_pos] == '+')
+            {
+                int nextPos = _pos + 1;
+                if (nextPos < _input.Length && (IsHexDigit(_input[nextPos]) || _input[nextPos] == '?'))
+                {
+                    _pos++; // skip '+'
+                    ConsumeUnicodeRange(ref token);
+                    return;
+                }
+            }
+
             // Check for function: name followed by '('
             if (_pos < _input.Length && Peek() == '(')
             {
@@ -463,6 +475,54 @@ namespace Rend.Css.Parser.Internal
 
             token.Type = CssTokenType.Ident;
             token.Value = name;
+        }
+
+        /// <summary>
+        /// Consume a unicode-range token (CSS Syntax §4.3.7).
+        /// Called after "U+" or "u+" has been consumed. Produces an Ident token
+        /// with value like "U+0-7F", "U+0400-04FF", or "U+4??".
+        /// </summary>
+        private void ConsumeUnicodeRange(ref CssToken token)
+        {
+            _sb.Clear();
+            _sb.Append("U+");
+
+            // Consume up to 6 hex digits
+            int hexCount = 0;
+            while (_pos < _input.Length && hexCount < 6 && IsHexDigit(_input[_pos]))
+            {
+                _sb.Append(_input[_pos]);
+                _pos++;
+                hexCount++;
+            }
+
+            // Check for '?' wildcards (total hex digits + wildcards <= 6)
+            if (_pos < _input.Length && _input[_pos] == '?')
+            {
+                while (_pos < _input.Length && hexCount < 6 && _input[_pos] == '?')
+                {
+                    _sb.Append('?');
+                    _pos++;
+                    hexCount++;
+                }
+            }
+            // Check for range: '-' followed by hex digit
+            else if (_pos < _input.Length && _input[_pos] == '-' &&
+                     _pos + 1 < _input.Length && IsHexDigit(_input[_pos + 1]))
+            {
+                _sb.Append('-');
+                _pos++; // skip '-'
+                int endCount = 0;
+                while (_pos < _input.Length && endCount < 6 && IsHexDigit(_input[_pos]))
+                {
+                    _sb.Append(_input[_pos]);
+                    _pos++;
+                    endCount++;
+                }
+            }
+
+            token.Type = CssTokenType.Ident;
+            token.Value = _sb.ToString();
         }
 
         #endregion

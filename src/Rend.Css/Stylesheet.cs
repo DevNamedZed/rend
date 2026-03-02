@@ -26,7 +26,7 @@ namespace Rend.Css
     /// <summary>Kind discriminator for CSS rules.</summary>
     public enum CssRuleType : byte
     {
-        Style, Media, FontFace, Import, Page, Supports, Namespace, Keyframes, Layer
+        Style, Media, FontFace, Import, Page, Supports, Namespace, Keyframes, Layer, Container
     }
 
     /// <summary>
@@ -71,6 +71,26 @@ namespace Rend.Css
     }
 
     /// <summary>
+    /// A @container rule containing a container query condition and nested rules.
+    /// </summary>
+    public sealed class ContainerRule : CssRule
+    {
+        public override CssRuleType Type => CssRuleType.Container;
+
+        /// <summary>The raw container query text (e.g. "sidebar (min-width: 400px)").</summary>
+        public string ConditionText { get; }
+
+        /// <summary>Nested rules inside this @container block.</summary>
+        public IReadOnlyList<CssRule> Rules { get; }
+
+        internal ContainerRule(string conditionText, List<CssRule> rules)
+        {
+            ConditionText = conditionText;
+            Rules = rules;
+        }
+    }
+
+    /// <summary>
     /// A @font-face rule with declarations for font properties.
     /// </summary>
     public sealed class FontFaceRule : CssRule
@@ -78,6 +98,25 @@ namespace Rend.Css
         public override CssRuleType Type => CssRuleType.FontFace;
 
         public IReadOnlyList<CssDeclaration> Declarations { get; }
+
+        /// <summary>
+        /// Parsed unicode-range values from the unicode-range descriptor, if present.
+        /// Returns null if no unicode-range descriptor is specified.
+        /// </summary>
+        public IReadOnlyList<UnicodeRange>? UnicodeRanges
+        {
+            get
+            {
+                for (int i = 0; i < Declarations.Count; i++)
+                {
+                    if (Declarations[i].Property == "unicode-range")
+                    {
+                        return UnicodeRange.Parse(Declarations[i].Value.ToString());
+                    }
+                }
+                return null;
+            }
+        }
 
         internal FontFaceRule(List<CssDeclaration> declarations)
         {

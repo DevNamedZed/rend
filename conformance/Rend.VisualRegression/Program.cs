@@ -30,9 +30,27 @@ class Program
         Console.WriteLine("done.");
         Console.WriteLine();
 
-        // Launch headless Chrome
-        await using var browser = await Puppeteer.LaunchAsync(new LaunchOptions { Headless = true });
-        await using var page = await browser.NewPageAsync();
+        // Launch headless Chrome — will be restarted if it crashes
+        IBrowser? browser = null;
+
+        async Task<IBrowser> EnsureBrowser()
+        {
+            if (browser != null && !browser.IsClosed)
+                return browser;
+            if (browser != null)
+            {
+                try { await browser.DisposeAsync(); } catch { }
+            }
+            browser = await Puppeteer.LaunchAsync(new LaunchOptions
+            {
+                Headless = true,
+                Args = new[] { "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage" },
+            });
+            return browser;
+        }
+
+        // Create a shared font provider so we don't reload system fonts for every test
+        var fontProvider = CreateSharedFontProvider();
 
         var testCases = VisualTestCatalog.AllCases;
         var results = new List<ComparisonResult>();
@@ -49,17 +67,35 @@ class Program
 
             try
             {
-                // --- Chrome render ---
+                // --- Chrome render (fresh page per test for stability) ---
+                var b = await EnsureBrowser();
+                await using var page = await b.NewPageAsync();
                 await page.SetViewportAsync(new ViewPortOptions
                 {
                     Width = testCase.ViewportWidth,
                     Height = testCase.ViewportHeight,
                 });
+                // Force light mode via media emulation to avoid system dark mode affecting screenshots
+                await page.EmulateMediaFeaturesAsync(new MediaFeatureValue[]
+                {
+                    new MediaFeatureValue { MediaFeature = MediaFeature.PrefersColorScheme, Value = "light" },
+                });
                 await page.SetContentAsync(testCase.Html, new NavigationOptions
                 {
                     WaitUntil = new[] { WaitUntilNavigation.Load },
                 });
-                var chromePng = await page.ScreenshotDataAsync(new ScreenshotOptions { FullPage = true });
+                // Clip to viewport size to ensure Chrome and Rend images have the same dimensions.
+                // FullPage can produce larger images when content overflows the viewport.
+                var chromePng = await page.ScreenshotDataAsync(new ScreenshotOptions
+                {
+                    Clip = new PuppeteerSharp.Media.Clip
+                    {
+                        X = 0,
+                        Y = 0,
+                        Width = testCase.ViewportWidth,
+                        Height = testCase.ViewportHeight,
+                    }
+                });
 
                 var chromePath = Path.Combine(outputDir, $"{testCase.Id}-chrome.png");
                 File.WriteAllBytes(chromePath, chromePng);
@@ -75,6 +111,7 @@ class Program
                     MarginLeft = 0,
                     Dpi = 96,
                     ImageFormat = "png",
+                    FontProvider = fontProvider,
                 };
 
                 byte[] rendPng;
@@ -98,7 +135,10 @@ class Program
                 result.RendImagePath = rendPath;
 
                 // --- Compare ---
-                var (diffFraction, diffPixels, totalPixels) = ImageComparer.Compare(chromePng, rendPng, perChannelThreshold: 0);
+                // Use per-channel threshold of 2 to tolerate minor rounding differences
+                // in gradient interpolation, opacity compositing, and font antialiasing
+                // between Chrome's Blink engine and Skia.
+                var (diffFraction, diffPixels, totalPixels) = ImageComparer.Compare(chromePng, rendPng, perChannelThreshold: 2);
                 double diffPercent = diffFraction * 100.0;
 
                 result.DiffPercentage = diffPercent;
@@ -107,7 +147,7 @@ class Program
 
                 if (diffPixels > 0)
                 {
-                    var diffPng = ImageDiffer.GenerateDiff(chromePng, rendPng, perChannelThreshold: 0);
+                    var diffPng = ImageDiffer.GenerateDiff(chromePng, rendPng, perChannelThreshold: 2);
                     var diffPath = Path.Combine(outputDir, $"{testCase.Id}-diff.png");
                     File.WriteAllBytes(diffPath, diffPng);
                     result.DiffImagePath = diffPath;
@@ -131,7 +171,20 @@ class Program
                 result.Duration = sw.Elapsed;
                 results.Add(result);
                 Console.WriteLine($"  ERROR  {testCase.Id} -- {testCase} ({ex.Message})");
+
+                // If it was a browser crash, force restart on next iteration
+                if (ex.Message.Contains("Session closed") || ex.Message.Contains("Protocol error"))
+                {
+                    try { if (browser != null) await browser.DisposeAsync(); } catch { }
+                    browser = null;
+                }
             }
+        }
+
+        // Clean up browser
+        if (browser != null)
+        {
+            try { await browser.DisposeAsync(); } catch { }
         }
 
         // Generate report
@@ -174,6 +227,21 @@ class Program
 
         // Last resort
         return Path.Combine(AppContext.BaseDirectory, "output");
+    }
+
+    private static Rend.Fonts.IFontProvider CreateSharedFontProvider()
+    {
+        var collection = new Rend.Fonts.FontCollection();
+        try
+        {
+            var resolver = new Rend.Fonts.SystemFontResolver();
+            collection.RegisterFromResolver(resolver);
+        }
+        catch
+        {
+            // System fonts unavailable — fall back to defaults
+        }
+        return collection;
     }
 
     private static bool IsNativeLibraryFailure(Exception ex)

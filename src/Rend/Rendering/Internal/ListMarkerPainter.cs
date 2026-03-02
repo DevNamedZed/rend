@@ -14,7 +14,6 @@ namespace Rend.Rendering.Internal
     internal static class ListMarkerPainter
     {
         private const float MarkerOffset = 8f;
-        private const float BulletRadius = 3f;
 
         /// <summary>
         /// Paints the list marker for a list-item box. If list-style-image is set,
@@ -53,24 +52,29 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
+            // Chrome sizes bullets at ~0.3em diameter
+            float bulletRadius = fontSize * 0.15f;
+
             // Vertical center of the first line (approximate as top + fontSize * 0.5).
             float markerCenterY = contentRect.Y + fontSize * 0.5f;
+            // Outside: marker drawn to the left of content area.
+            // Inside: marker drawn at the start of content area (text is indented to make room).
             float markerX = isInside
-                ? contentRect.X + MarkerOffset
+                ? contentRect.X + bulletRadius + 2f
                 : contentRect.X - MarkerOffset;
 
             switch (listType)
             {
                 case CssListStyleType.Disc:
-                    PaintDisc(target, markerX, markerCenterY, color);
+                    PaintDisc(target, markerX, markerCenterY, bulletRadius, color);
                     break;
 
                 case CssListStyleType.Circle:
-                    PaintCircle(target, markerX, markerCenterY, color);
+                    PaintCircle(target, markerX, markerCenterY, bulletRadius, color);
                     break;
 
                 case CssListStyleType.Square:
-                    PaintSquare(target, markerX, markerCenterY, color);
+                    PaintSquare(target, markerX, markerCenterY, bulletRadius, color);
                     break;
 
                 default:
@@ -122,28 +126,28 @@ namespace Rend.Rendering.Internal
             return true;
         }
 
-        private static void PaintDisc(IRenderTarget target, float cx, float cy, CssColor color)
+        private static void PaintDisc(IRenderTarget target, float cx, float cy, float radius, CssColor color)
         {
             // Approximate a filled circle with a small rounded rectangle.
-            var rect = new RectF(cx - BulletRadius, cy - BulletRadius, BulletRadius * 2f, BulletRadius * 2f);
+            var rect = new RectF(cx - radius, cy - radius, radius * 2f, radius * 2f);
             var path = new PathData();
-            path.AddRoundedRectangle(rect, BulletRadius, BulletRadius, BulletRadius, BulletRadius);
+            path.AddRoundedRectangle(rect, radius, radius, radius, radius);
             target.FillPath(path, BrushInfo.Solid(color));
         }
 
-        private static void PaintCircle(IRenderTarget target, float cx, float cy, CssColor color)
+        private static void PaintCircle(IRenderTarget target, float cx, float cy, float radius, CssColor color)
         {
             // Approximate a stroked circle with a rounded rectangle outline.
-            var rect = new RectF(cx - BulletRadius, cy - BulletRadius, BulletRadius * 2f, BulletRadius * 2f);
+            var rect = new RectF(cx - radius, cy - radius, radius * 2f, radius * 2f);
             var path = new PathData();
-            path.AddRoundedRectangle(rect, BulletRadius, BulletRadius, BulletRadius, BulletRadius);
-            var pen = new PenInfo(color, 1f);
+            path.AddRoundedRectangle(rect, radius, radius, radius, radius);
+            var pen = new PenInfo(color, 0.8f);
             target.StrokePath(path, pen);
         }
 
-        private static void PaintSquare(IRenderTarget target, float cx, float cy, CssColor color)
+        private static void PaintSquare(IRenderTarget target, float cx, float cy, float radius, CssColor color)
         {
-            float size = BulletRadius * 1.6f;
+            float size = radius * 1.6f;
             var rect = new RectF(cx - size * 0.5f, cy - size * 0.5f, size, size);
             target.FillRect(rect, BrushInfo.Solid(color));
         }

@@ -279,7 +279,7 @@ namespace Rend.Css.Properties.Internal
             Register("backdrop-filter", PropertyId.BackdropFilter, false, PropertyValueType.Raw);
 
             // Mask
-            Register("mask-image", PropertyId.MaskImage, false, PropertyValueType.String);
+            Register("mask-image", PropertyId.MaskImage, false, PropertyValueType.Raw);
             Register("mask-size", PropertyId.MaskSize, false, PropertyValueType.Raw);
             Register("mask-position", PropertyId.MaskPosition, false, PropertyValueType.Raw);
             Register("mask-repeat", PropertyId.MaskRepeat, false, PropertyValueType.Keyword);
@@ -288,6 +288,41 @@ namespace Rend.Css.Properties.Internal
             // Writing Mode
             Register("writing-mode", PropertyId.WritingMode, true, PropertyValueType.Keyword);
             Register("text-orientation", PropertyId.TextOrientation, true, PropertyValueType.Keyword);
+
+            // Accent Color
+            Register("accent-color", PropertyId.AccentColor, true, PropertyValueType.Color);
+
+            // Text Wrap
+            Register("text-wrap", PropertyId.TextWrap, true, PropertyValueType.Keyword);
+
+            // Forced Color Adjust
+            Register("forced-color-adjust", PropertyId.ForcedColorAdjust, true, PropertyValueType.Keyword);
+
+            // Initial Letter (stored as Raw — value is "normal" or "<number> <integer>")
+            Register("initial-letter", PropertyId.InitialLetter, false, PropertyValueType.Raw);
+
+            // Hanging Punctuation
+            Register("hanging-punctuation", PropertyId.HangingPunctuation, true, PropertyValueType.Keyword);
+
+            // Container Queries
+            Register("container-type", PropertyId.ContainerType, false, PropertyValueType.Keyword);
+            Register("container-name", PropertyId.ContainerName, false, PropertyValueType.Raw);
+
+            // Font Variant Sub-properties
+            Register("font-variant-ligatures", PropertyId.FontVariantLigatures, true, PropertyValueType.Keyword);
+            Register("font-variant-caps", PropertyId.FontVariantCaps, true, PropertyValueType.Keyword);
+            Register("font-variant-numeric", PropertyId.FontVariantNumeric, true, PropertyValueType.Keyword);
+            Register("font-variant-east-asian", PropertyId.FontVariantEastAsian, true, PropertyValueType.Keyword);
+            Register("font-feature-settings", PropertyId.FontFeatureSettings, true, PropertyValueType.Raw);
+
+            // CSS Shapes
+            Register("shape-outside", PropertyId.ShapeOutside, false, PropertyValueType.Raw);
+            Register("shape-margin", PropertyId.ShapeMargin, false, PropertyValueType.Length);
+            Register("shape-image-threshold", PropertyId.ShapeImageThreshold, false, PropertyValueType.Number);
+
+            // Ruby
+            Register("ruby-position", PropertyId.RubyPosition, true, PropertyValueType.Keyword);
+            Register("ruby-align", PropertyId.RubyAlign, true, PropertyValueType.Keyword);
         }
 
         private static void Register(string name, int id, bool inherited, PropertyValueType valueType)

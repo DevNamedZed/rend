@@ -61,6 +61,14 @@ namespace Rend.Css.Conformance.Parsing
         [InlineData("div { display: none; }", "none")]
         [InlineData("div { display: inline-block; }", "inline-block")]
         [InlineData("div { display: table; }", "table")]
+        [InlineData("div { display: ruby; }", "ruby")]
+        [InlineData("div { display: ruby-text; }", "ruby-text")]
+        [InlineData("div { display: ruby-base; }", "ruby-base")]
+        [InlineData("div { display: ruby-text-container; }", "ruby-text-container")]
+        [InlineData("div { display: contents; }", "contents")]
+        [InlineData("div { display: list-item; }", "list-item")]
+        [InlineData("div { display: inline-flex; }", "inline-flex")]
+        [InlineData("div { display: inline-grid; }", "inline-grid")]
         public void Display_ParsesKeywords(string css, string expected)
         {
             var decl = GetDeclaration(css, "display");
@@ -413,6 +421,122 @@ namespace Rend.Css.Conformance.Parsing
             Assert.NotNull(oy);
             Assert.Equal("hidden", ox!.Value.ToString());
             Assert.Equal("hidden", oy!.Value.ToString());
+        }
+
+        #endregion
+
+        #region Ruby Properties
+
+        [Theory]
+        [InlineData("ruby { ruby-position: over; }", "ruby-position", "over")]
+        [InlineData("ruby { ruby-position: under; }", "ruby-position", "under")]
+        public void RubyPosition_ParsesKeywords(string css, string property, string expected)
+        {
+            var decl = GetDeclaration(css, property);
+            Assert.NotNull(decl);
+            Assert.Equal(expected, decl!.Value.ToString());
+        }
+
+        [Theory]
+        [InlineData("ruby { ruby-align: space-around; }", "ruby-align", "space-around")]
+        [InlineData("ruby { ruby-align: center; }", "ruby-align", "center")]
+        [InlineData("ruby { ruby-align: space-between; }", "ruby-align", "space-between")]
+        [InlineData("ruby { ruby-align: start; }", "ruby-align", "start")]
+        public void RubyAlign_ParsesKeywords(string css, string property, string expected)
+        {
+            var decl = GetDeclaration(css, property);
+            Assert.NotNull(decl);
+            Assert.Equal(expected, decl!.Value.ToString());
+        }
+
+        #endregion
+
+        #region Bidirectional Properties
+
+        [Theory]
+        [InlineData("div { direction: ltr; }", "direction", "ltr")]
+        [InlineData("div { direction: rtl; }", "direction", "rtl")]
+        public void Direction_ParsesKeywords(string css, string property, string expected)
+        {
+            var decl = GetDeclaration(css, property);
+            Assert.NotNull(decl);
+            Assert.Equal(expected, decl!.Value.ToString());
+        }
+
+        [Theory]
+        [InlineData("div { unicode-bidi: normal; }", "unicode-bidi", "normal")]
+        [InlineData("div { unicode-bidi: embed; }", "unicode-bidi", "embed")]
+        [InlineData("div { unicode-bidi: isolate; }", "unicode-bidi", "isolate")]
+        [InlineData("div { unicode-bidi: bidi-override; }", "unicode-bidi", "bidi-override")]
+        [InlineData("div { unicode-bidi: isolate-override; }", "unicode-bidi", "isolate-override")]
+        [InlineData("div { unicode-bidi: plaintext; }", "unicode-bidi", "plaintext")]
+        public void UnicodeBidi_ParsesKeywords(string css, string property, string expected)
+        {
+            var decl = GetDeclaration(css, property);
+            Assert.NotNull(decl);
+            Assert.Equal(expected, decl!.Value.ToString());
+        }
+
+        #endregion
+
+        #region Visibility
+
+        [Theory]
+        [InlineData("div { visibility: visible; }", "visible")]
+        [InlineData("div { visibility: hidden; }", "hidden")]
+        [InlineData("div { visibility: collapse; }", "collapse")]
+        public void Visibility_ParsesKeywords(string css, string expected)
+        {
+            var decl = GetDeclaration(css, "visibility");
+            Assert.NotNull(decl);
+            Assert.Equal(expected, decl!.Value.ToString());
+        }
+
+        #endregion
+
+        #region Object Fit
+
+        [Theory]
+        [InlineData("img { object-fit: fill; }", "fill")]
+        [InlineData("img { object-fit: contain; }", "contain")]
+        [InlineData("img { object-fit: cover; }", "cover")]
+        [InlineData("img { object-fit: none; }", "none")]
+        [InlineData("img { object-fit: scale-down; }", "scale-down")]
+        public void ObjectFit_ParsesKeywords(string css, string expected)
+        {
+            var decl = GetDeclaration(css, "object-fit");
+            Assert.NotNull(decl);
+            Assert.Equal(expected, decl!.Value.ToString());
+        }
+
+        #endregion
+
+        #region Accent Color
+
+        [Theory]
+        [InlineData("input { accent-color: auto; }", "auto")]
+        [InlineData("input { accent-color: red; }", "rgb(255, 0, 0)")]
+        [InlineData("input { accent-color: #ff0000; }", "rgb(255, 0, 0)")]
+        public void AccentColor_ParsesValues(string css, string expected)
+        {
+            var decl = GetDeclaration(css, "accent-color");
+            Assert.NotNull(decl);
+            Assert.Equal(expected, decl!.Value.ToString());
+        }
+
+        #endregion
+
+        #region Text Wrap
+
+        [Theory]
+        [InlineData("p { text-wrap: wrap; }", "wrap")]
+        [InlineData("p { text-wrap: nowrap; }", "nowrap")]
+        [InlineData("p { text-wrap: balance; }", "balance")]
+        public void TextWrap_ParsesKeywords(string css, string expected)
+        {
+            var decl = GetDeclaration(css, "text-wrap");
+            Assert.NotNull(decl);
+            Assert.Equal(expected, decl!.Value.ToString());
         }
 
         #endregion

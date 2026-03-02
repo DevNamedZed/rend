@@ -32,15 +32,24 @@ namespace Rend.Fonts
             if (candidates == null || candidates.Count == 0)
                 return null;
 
-            // Step 1: Filter by family name (case-insensitive).
-            var familyCandidates = FilterByFamily(requested.Family, candidates);
+            // CSS font-family may be a comma-separated list (e.g. "Arial, sans-serif").
+            // Try each family in order until one matches.
+            var families = ParseFontFamilyList(requested.Family);
 
-            // Step 1b: If no match, try generic CSS family name fallbacks.
-            if (familyCandidates.Count == 0 && GenericFamilyMap.TryGetValue(requested.Family, out var fallbacks))
+            List<FontEntry> familyCandidates = new List<FontEntry>();
+            foreach (var family in families)
             {
-                for (int f = 0; f < fallbacks.Length && familyCandidates.Count == 0; f++)
+                familyCandidates = FilterByFamily(family, candidates);
+                if (familyCandidates.Count > 0) break;
+
+                // Try generic CSS family name fallbacks for this family.
+                if (GenericFamilyMap.TryGetValue(family, out var fallbacks))
                 {
-                    familyCandidates = FilterByFamily(fallbacks[f], candidates);
+                    for (int f = 0; f < fallbacks.Length && familyCandidates.Count == 0; f++)
+                    {
+                        familyCandidates = FilterByFamily(fallbacks[f], candidates);
+                    }
+                    if (familyCandidates.Count > 0) break;
                 }
             }
 
@@ -59,6 +68,28 @@ namespace Rend.Fonts
 
             // Step 4: Match stretch (prefer closest).
             return MatchStretch(requested.Stretch, weightCandidates);
+        }
+
+        /// <summary>
+        /// Splits a CSS font-family value into individual family names.
+        /// Handles quoting (single/double) and trims whitespace.
+        /// </summary>
+        internal static string[] ParseFontFamilyList(string fontFamily)
+        {
+            if (string.IsNullOrEmpty(fontFamily))
+                return new[] { "serif" };
+
+            // Fast path: no commas → single family
+            if (fontFamily.IndexOf(',') < 0)
+                return new[] { fontFamily.Trim().Trim('"', '\'') };
+
+            var parts = fontFamily.Split(',');
+            var result = new string[parts.Length];
+            for (int i = 0; i < parts.Length; i++)
+            {
+                result[i] = parts[i].Trim().Trim('"', '\'');
+            }
+            return result;
         }
 
         private static List<FontEntry> FilterByFamily(string familyName, IReadOnlyList<FontEntry> candidates)
@@ -113,6 +144,23 @@ namespace Rend.Fonts
 
         private static List<FontEntry> MatchWeight(float requestedWeight, List<FontEntry> candidates)
         {
+            // Variable font check: if any candidate is a variable font whose wght axis
+            // covers the requested weight, prefer it (exact match via axis interpolation).
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                var axes = candidates[i].VariationAxes;
+                if (axes != null)
+                {
+                    for (int a = 0; a < axes.Count; a++)
+                    {
+                        if (axes[a].Tag == "wght" && axes[a].Contains(requestedWeight))
+                        {
+                            return new List<FontEntry> { candidates[i] };
+                        }
+                    }
+                }
+            }
+
             // Check for exact match first.
             var exact = new List<FontEntry>();
             float bestDelta = float.MaxValue;
@@ -237,6 +285,22 @@ namespace Rend.Fonts
         private static FontEntry? MatchStretch(float requestedStretch, List<FontEntry> candidates)
         {
             if (candidates.Count == 0) return null;
+
+            // Variable font check: prefer font with wdth axis covering the requested stretch.
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                var axes = candidates[i].VariationAxes;
+                if (axes != null)
+                {
+                    for (int a = 0; a < axes.Count; a++)
+                    {
+                        if (axes[a].Tag == "wdth" && axes[a].Contains(requestedStretch))
+                        {
+                            return candidates[i];
+                        }
+                    }
+                }
+            }
 
             FontEntry best = candidates[0];
             float bestDelta = Math.Abs(candidates[0].Descriptor.Stretch - requestedStretch);

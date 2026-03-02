@@ -141,9 +141,10 @@ namespace Rend.Css.Tests
         public void MaskShorthand_None()
         {
             var style = ResolveElement("div { mask: none; }");
-            // mask: none should set mask-image to none
+            // mask: none should set mask-image to none (stored as CssKeywordValue with Raw type)
             var raw = style.GetRefValue(Properties.Internal.PropertyId.MaskImage);
-            Assert.Equal("none", raw);
+            var kw = Assert.IsType<CssKeywordValue>(raw);
+            Assert.Equal("none", kw.Keyword);
         }
     }
 }

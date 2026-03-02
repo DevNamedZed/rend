@@ -348,7 +348,7 @@ namespace Rend.Rendering.Internal
         /// <summary>
         /// Parses a CSS gradient function (linear-gradient, radial-gradient) into a GradientInfo.
         /// </summary>
-        private static GradientInfo? ParseCssGradient(CssFunctionValue fn, RectF rect)
+        internal static GradientInfo? ParseCssGradient(CssFunctionValue fn, RectF rect)
         {
             if (fn.Name == "linear-gradient" || fn.Name == "-webkit-linear-gradient")
                 return ParseLinearGradient(fn, rect);
@@ -403,18 +403,168 @@ namespace Rend.Rendering.Internal
         {
             if (fn.Arguments.Count == 0) return null;
 
-            // Simplified: parse color stops, use center of rect as center
-            var stops = ParseColorStops(fn.Arguments, 0);
+            // Parse shape/size/position descriptor before color stops
+            bool isCircle = false;
+            float centerX = 0.5f; // fractional center (0-1)
+            float centerY = 0.5f;
+            int colorStartIdx = 0;
+            // 0 = farthest-corner (default), 1 = closest-side, 2 = farthest-side, 3 = closest-corner
+            int sizeKeyword = 0;
+
+            for (int i = 0; i < fn.Arguments.Count; i++)
+            {
+                var arg = fn.Arguments[i];
+                if (arg is CssKeywordValue kw)
+                {
+                    string k = kw.Keyword;
+                    if (k == "circle") { isCircle = true; colorStartIdx = i + 1; }
+                    else if (k == "ellipse") { colorStartIdx = i + 1; }
+                    else if (k == "closest-side") { sizeKeyword = 1; colorStartIdx = i + 1; }
+                    else if (k == "farthest-side") { sizeKeyword = 2; colorStartIdx = i + 1; }
+                    else if (k == "closest-corner") { sizeKeyword = 3; colorStartIdx = i + 1; }
+                    else if (k == "farthest-corner") { sizeKeyword = 0; colorStartIdx = i + 1; }
+                    else if (k == "at")
+                    {
+                        // Parse position
+                        int posCount = 0;
+                        for (int j = i + 1; j < fn.Arguments.Count && posCount < 2; j++)
+                        {
+                            var posArg = fn.Arguments[j];
+                            if (posArg is CssPercentageValue pctPos)
+                            {
+                                if (posCount == 0) centerX = pctPos.Value / 100f;
+                                else centerY = pctPos.Value / 100f;
+                                posCount++; colorStartIdx = j + 1;
+                            }
+                            else if (posArg is CssDimensionValue dimPos)
+                            {
+                                float px = ResolveLengthValue(dimPos);
+                                if (posCount == 0) centerX = rect.Width > 0 ? px / rect.Width : 0.5f;
+                                else centerY = rect.Height > 0 ? px / rect.Height : 0.5f;
+                                posCount++; colorStartIdx = j + 1;
+                            }
+                            else if (posArg is CssKeywordValue posKw)
+                            {
+                                switch (posKw.Keyword)
+                                {
+                                    case "left": centerX = 0; posCount++; colorStartIdx = j + 1; break;
+                                    case "right": centerX = 1; posCount++; colorStartIdx = j + 1; break;
+                                    case "top": centerY = 0; posCount++; colorStartIdx = j + 1; break;
+                                    case "bottom": centerY = 1; posCount++; colorStartIdx = j + 1; break;
+                                    case "center":
+                                        if (posCount == 0) centerX = 0.5f;
+                                        else centerY = 0.5f;
+                                        posCount++; colorStartIdx = j + 1; break;
+                                    default: goto donePos;
+                                }
+                            }
+                            else break;
+                        }
+                        donePos:
+                        i = colorStartIdx - 1;
+                    }
+                    else
+                    {
+                        // Not a gradient descriptor keyword — start of color stops
+                        break;
+                    }
+                }
+                else
+                {
+                    // Not a keyword — start of color stops
+                    colorStartIdx = i;
+                    break;
+                }
+            }
+
+            var stops = ParseColorStops(fn.Arguments, colorStartIdx);
             if (stops == null || stops.Length < 2) return null;
 
-            float cx = rect.X + rect.Width * 0.5f;
-            float cy = rect.Y + rect.Height * 0.5f;
-            float rx = rect.Width * 0.5f;
-            float ry = rect.Height * 0.5f;
+            // Compute radii based on shape and size keyword.
+            // Center in absolute coordinates.
+            float absCx = centerX * rect.Width;
+            float absCy = centerY * rect.Height;
+
+            // Distances from center to each side.
+            float dLeft = absCx;
+            float dRight = rect.Width - absCx;
+            float dTop = absCy;
+            float dBottom = rect.Height - absCy;
+
+            float rx, ry;
+            if (isCircle)
+            {
+                float r;
+                switch (sizeKeyword)
+                {
+                    case 1: // closest-side
+                        r = Math.Min(Math.Min(dLeft, dRight), Math.Min(dTop, dBottom));
+                        break;
+                    case 2: // farthest-side
+                        r = Math.Max(Math.Max(dLeft, dRight), Math.Max(dTop, dBottom));
+                        break;
+                    case 3: // closest-corner
+                    {
+                        float cLeft = Math.Min(dLeft, dRight);
+                        float cTop = Math.Min(dTop, dBottom);
+                        r = (float)Math.Sqrt(cLeft * cLeft + cTop * cTop);
+                        break;
+                    }
+                    default: // 0: farthest-corner (CSS default)
+                    {
+                        float fLeft = Math.Max(dLeft, dRight);
+                        float fTop = Math.Max(dTop, dBottom);
+                        r = (float)Math.Sqrt(fLeft * fLeft + fTop * fTop);
+                        break;
+                    }
+                }
+                rx = rect.Width > 0 ? r / rect.Width : 0.5f;
+                ry = rect.Height > 0 ? r / rect.Height : 0.5f;
+            }
+            else
+            {
+                // Ellipse: radii are proportional to box dimensions.
+                // For farthest-corner, ellipse must pass through the farthest corner
+                // while maintaining the aspect ratio (rx/ry = W/H when centered).
+                switch (sizeKeyword)
+                {
+                    case 1: // closest-side
+                        rx = rect.Width > 0 ? Math.Min(dLeft, dRight) / rect.Width : 0.5f;
+                        ry = rect.Height > 0 ? Math.Min(dTop, dBottom) / rect.Height : 0.5f;
+                        break;
+                    case 2: // farthest-side
+                        rx = rect.Width > 0 ? Math.Max(dLeft, dRight) / rect.Width : 0.5f;
+                        ry = rect.Height > 0 ? Math.Max(dTop, dBottom) / rect.Height : 0.5f;
+                        break;
+                    case 3: // closest-corner
+                    {
+                        float cDx = Math.Min(dLeft, dRight);
+                        float cDy = Math.Min(dTop, dBottom);
+                        float ratio = rect.Width > 0 && rect.Height > 0 ? rect.Width / rect.Height : 1f;
+                        // Ellipse: (cDx/erx)² + (cDy/ery)² = 1, erx/ery = ratio
+                        float ery = (float)Math.Sqrt(cDx * cDx / (ratio * ratio) + cDy * cDy);
+                        float erx = ery * ratio;
+                        rx = rect.Width > 0 ? erx / rect.Width : 0.5f;
+                        ry = rect.Height > 0 ? ery / rect.Height : 0.5f;
+                        break;
+                    }
+                    default: // 0: farthest-corner (CSS default)
+                    {
+                        float fDx = Math.Max(dLeft, dRight);
+                        float fDy = Math.Max(dTop, dBottom);
+                        float ratio2 = rect.Width > 0 && rect.Height > 0 ? rect.Width / rect.Height : 1f;
+                        float ery2 = (float)Math.Sqrt(fDx * fDx / (ratio2 * ratio2) + fDy * fDy);
+                        float erx2 = ery2 * ratio2;
+                        rx = rect.Width > 0 ? erx2 / rect.Width : 0.5f;
+                        ry = rect.Height > 0 ? ery2 / rect.Height : 0.5f;
+                        break;
+                    }
+                }
+            }
 
             return new GradientInfo(GradientType.Radial, stops)
             {
-                Center = new Core.Values.PointF(cx, cy),
+                Center = new Core.Values.PointF(centerX, centerY),
                 RadiusX = rx,
                 RadiusY = ry
             };

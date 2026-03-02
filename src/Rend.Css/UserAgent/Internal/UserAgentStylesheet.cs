@@ -82,6 +82,15 @@ code, kbd, samp, tt { font-family: monospace; }
 pre { white-space: pre; margin-top: 1em; margin-bottom: 1em; font-family: monospace; }
 mark { background-color: yellow; color: black; }
 abbr[title] { text-decoration: underline; }
+bdo { unicode-bidi: bidi-override; }
+bdi { unicode-bidi: isolate; }
+
+/* Ruby annotations */
+ruby { display: ruby; }
+rb { display: ruby-base; }
+rt { display: ruby-text; font-size: 0.5em; }
+rtc { display: ruby-text-container; }
+rp { display: none; }
 
 /* Links */
 a { color: #0000EE; text-decoration: underline; }
@@ -91,6 +100,20 @@ input, textarea, select, button {
     display: inline-block;
     font-family: inherit;
     font-size: inherit;
+}
+
+/* Button default styling — match Chrome's default appearance */
+button {
+    background-color: #efefef;
+    border: 1px solid #767676;
+    border-radius: 2px;
+    padding: 1px 6px;
+}
+
+/* Meter / Progress */
+meter, progress {
+    display: inline-block;
+    vertical-align: -0.2em;
 }
 
 /* Hidden */
@@ -132,6 +155,21 @@ fieldset {
 }
 
 legend { padding-left: 2px; padding-right: 2px; }
+
+/* Dialog */
+dialog {
+    display: block;
+    position: absolute;
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    border: solid;
+    padding: 1em;
+    background-color: white;
+    color: black;
+    width: fit-content;
+}
 
 /* Print defaults: prevent awkward page breaks */
 @media print {

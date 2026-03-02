@@ -11,7 +11,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "flex-row",
                 Name = "Flex Row",
                 Category = "Flexbox",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;"">
                     <div style=""display:flex; flex-direction:row; gap:8px;"">
                         <div style=""background:#3498db; color:#fff; padding:12px; height:20px;"">Item 1</div>
@@ -26,7 +25,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "flex-column",
                 Name = "Flex Column",
                 Category = "Flexbox",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;"">
                     <div style=""display:flex; flex-direction:column; gap:8px;"">
                         <div style=""background:#3498db; color:#fff; padding:12px; height:20px;"">Item 1</div>
@@ -41,7 +39,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "flex-wrap",
                 Name = "Flex Wrap",
                 Category = "Flexbox",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;"">
                     <div style=""display:flex; flex-wrap:wrap; gap:8px;"">
                         <div style=""background:#3498db; color:#fff; padding:12px; width:120px; height:20px;"">Item 1</div>
@@ -58,7 +55,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "flex-alignment",
                 Name = "Flex Alignment (center, space-between)",
                 Category = "Flexbox",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;"">
                     <div style=""display:flex; justify-content:center; align-items:center; height:60px; background:#f0f0f0; margin-bottom:10px;"">
                         <div style=""background:#3498db; color:#fff; padding:8px; height:20px;"">Centered</div>

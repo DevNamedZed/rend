@@ -18,7 +18,16 @@ namespace Rend.Layout.Internal
             float specifiedWidth = style.Width;
             float width;
 
-            if (float.IsNaN(specifiedWidth))
+            // Deferred percentage width (encoded as negative fraction, e.g. -0.5 = 50%)
+            if (specifiedWidth < 0 && specifiedWidth > -1.01f)
+            {
+                width = -specifiedWidth * containingBlockWidth;
+                if (style.BoxSizing == CssBoxSizing.BorderBox)
+                {
+                    width -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
+                }
+            }
+            else if (float.IsNaN(specifiedWidth))
             {
                 // auto: fill containing block minus margins/padding/border
                 width = containingBlockWidth - BoxModelCalculator.GetHorizontalSpacing(box);
@@ -39,13 +48,23 @@ namespace Rend.Layout.Internal
                 }
             }
 
-            // Apply min/max constraints
-            float minW = style.MinWidth;
-            float maxW = style.MaxWidth;
-            if (!SizingKeyword.IsSizingKeyword(minW)) width = ApplyMinMax(width, minW, float.NaN);
-            if (!SizingKeyword.IsSizingKeyword(maxW)) width = ApplyMinMax(width, float.NaN, maxW);
+            // Apply min/max constraints (resolve deferred percentages)
+            float minW = ResolvePercentWidth(style.MinWidth, containingBlockWidth);
+            float maxW = ResolvePercentWidth(style.MaxWidth, containingBlockWidth);
+            if (!SizingKeyword.IsSizingKeyword(style.MinWidth)) width = ApplyMinMax(width, minW, float.NaN);
+            if (!SizingKeyword.IsSizingKeyword(style.MaxWidth)) width = ApplyMinMax(width, float.NaN, maxW);
 
             return Math.Max(0, width);
+        }
+
+        /// <summary>
+        /// Resolve a width value that may be a deferred percentage (negative fraction).
+        /// </summary>
+        public static float ResolvePercentWidth(float value, float containingBlockWidth)
+        {
+            if (value < 0 && value > -1.01f)
+                return -value * containingBlockWidth;
+            return value;
         }
 
         /// <summary>

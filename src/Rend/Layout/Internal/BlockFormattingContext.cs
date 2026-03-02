@@ -150,6 +150,10 @@ namespace Rend.Layout.Internal
                 // Skip display:none
                 if (childStyle.Display == CssDisplay.None) continue;
 
+                // <dialog> without open attribute is hidden
+                if (childElement.TagName == "dialog" && childElement.GetAttribute("open") == null)
+                    continue;
+
                 // Absolutely/fixed positioned elements are out of normal flow.
                 // Still create the box and add as child (for positioning later),
                 // but don't advance cursorY or participate in margin collapsing.
@@ -201,6 +205,12 @@ namespace Rend.Layout.Internal
                     if (attrW != null && float.TryParse(attrW, out float aw)) intrinsicW = aw;
                     if (intrinsicW <= 0 && ReplacedElementLayout.IsFormControl(childElement))
                         intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(childElement);
+                    if (intrinsicW <= 0 && childElement.TagName == "math")
+                    {
+                        var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(
+                            childElement.Element, 16f);
+                        intrinsicW = mathSize.Width + 4f;
+                    }
                     contentWidth = intrinsicW > 0 ? intrinsicW : 300;
                 }
                 else if (SizingKeyword.IsSizingKeyword(childStyle.Width))
@@ -259,6 +269,12 @@ namespace Rend.Layout.Internal
                             if (intrinsicW <= 0) intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(childElement);
                             if (intrinsicH <= 0) intrinsicH = ReplacedElementLayout.GetFormControlIntrinsicHeight(childElement);
                         }
+                        if (childElement.TagName == "math" && (intrinsicW <= 0 || intrinsicH <= 0))
+                        {
+                            var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(childElement.Element, 16f);
+                            if (intrinsicW <= 0) intrinsicW = mathSize.Width + 4f;
+                            if (intrinsicH <= 0) intrinsicH = mathSize.Height;
+                        }
                         ReplacedElementLayout.ResolveDimensions(childBox, childStyle, containingWidth, intrinsicW, intrinsicH);
                         contentWidth = childBox.ContentRect.Width;
                         contentHeight = childBox.ContentRect.Height;
@@ -315,6 +331,12 @@ namespace Rend.Layout.Internal
                         {
                             if (intrinsicW <= 0) intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(childElement);
                             if (intrinsicH <= 0) intrinsicH = ReplacedElementLayout.GetFormControlIntrinsicHeight(childElement);
+                        }
+                        if (childElement.TagName == "math" && (intrinsicW <= 0 || intrinsicH <= 0))
+                        {
+                            var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(childElement.Element, 16f);
+                            if (intrinsicW <= 0) intrinsicW = mathSize.Width + 4f;
+                            if (intrinsicH <= 0) intrinsicH = mathSize.Height;
                         }
                         ReplacedElementLayout.ResolveDimensions(childBox, childStyle, containingWidth, intrinsicW, intrinsicH);
                         contentWidth = childBox.ContentRect.Width;
@@ -407,6 +429,10 @@ namespace Rend.Layout.Internal
                     boxType = BoxType.ListItem;
                     break;
                 case CssDisplay.Inline:
+                case CssDisplay.Ruby:
+                case CssDisplay.RubyText:
+                case CssDisplay.RubyBase:
+                case CssDisplay.RubyTextContainer:
                     boxType = BoxType.Inline;
                     break;
                 default:
@@ -475,8 +501,8 @@ namespace Rend.Layout.Internal
                     continue;
                 }
                 if (display == CssDisplay.Block || display == CssDisplay.Flex ||
-                    display == CssDisplay.InlineFlex || display == CssDisplay.Grid ||
-                    display == CssDisplay.InlineGrid || display == CssDisplay.Table ||
+                    display == CssDisplay.Grid ||
+                    display == CssDisplay.Table ||
                     display == CssDisplay.ListItem)
                     return true;
             }
@@ -496,9 +522,13 @@ namespace Rend.Layout.Internal
             }
 
             // Check children (from BlockFormattingContext)
+            // Absolutely/fixed positioned children do not contribute to auto height (CSS 2.1 §10.6.3)
             for (int i = 0; i < box.Children.Count; i++)
             {
                 var child = box.Children[i];
+                if (child.StyledNode is Style.StyledElement se &&
+                    (se.Style.Position == Css.CssPosition.Absolute || se.Style.Position == Css.CssPosition.Fixed))
+                    continue;
                 float childBottom = child.ContentRect.Y + child.ContentRect.Height
                                   + child.PaddingBottom + child.BorderBottomWidth + child.MarginBottom;
                 if (childBottom > bottom)
@@ -604,13 +634,21 @@ namespace Rend.Layout.Internal
             {
                 for (int i = 0; i < box.LineBoxes.Count; i++)
                 {
-                    float right = box.LineBoxes[i].X + box.LineBoxes[i].Width;
-                    if (right > maxRight) maxRight = right;
+                    var line = box.LineBoxes[i];
+                    // Measure actual content extent from fragments, not the available line width
+                    float lineRight = 0;
+                    for (int f = 0; f < line.Fragments.Count; f++)
+                    {
+                        float fragRight = line.Fragments[f].X + line.Fragments[f].Width;
+                        if (fragRight > lineRight) lineRight = fragRight;
+                    }
+                    if (lineRight > maxRight) maxRight = lineRight;
                 }
             }
 
-            float measured = maxRight + box.PaddingLeft + box.PaddingRight
-                           + box.BorderLeftWidth + box.BorderRightWidth;
+            // Return content width (not including parent's padding/border — the caller
+            // uses this as ContentRect.Width which is the content area).
+            float measured = maxRight;
 
             if (keyword == SizingKeyword.FitContent)
             {

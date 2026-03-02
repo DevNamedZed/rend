@@ -114,6 +114,9 @@ namespace Rend.Css.Parser.Internal
 
                 case "mask": return ExpandMask(value, important, output);
 
+                // Container shorthand: container-name / container-type
+                case "container": return ExpandContainer(value, important, output);
+
                 // Compatibility aliases
                 case "word-wrap": return Alias(value, important, output, "overflow-wrap");
 
@@ -189,6 +192,26 @@ namespace Rend.Css.Parser.Internal
         /// <summary>
         /// Expand the CSS `all` shorthand: resets all properties except direction and unicode-bidi.
         /// </summary>
+        private static bool ExpandContainer(CssValue value, bool important, List<CssDeclaration> output)
+        {
+            // container: <name> / <type>  or  container: <type>
+            var text = value.ToString().Trim();
+            int slashIdx = text.IndexOf('/');
+            if (slashIdx >= 0)
+            {
+                var namePart = text.Substring(0, slashIdx).Trim();
+                var typePart = text.Substring(slashIdx + 1).Trim();
+                output.Add(new CssDeclaration("container-name", new CssKeywordValue(namePart), important));
+                output.Add(new CssDeclaration("container-type", new CssKeywordValue(typePart), important));
+            }
+            else
+            {
+                // Single value = container-type
+                output.Add(new CssDeclaration("container-type", value, important));
+            }
+            return true;
+        }
+
         private static bool ExpandAll(CssValue value, bool important, List<CssDeclaration> output)
         {
             foreach (var prop in PropertyRegistry.GetAll())

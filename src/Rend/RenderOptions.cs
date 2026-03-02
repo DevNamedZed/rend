@@ -65,6 +65,15 @@ namespace Rend
         /// </summary>
         public string? FooterHtml { get; set; }
 
+        /// <summary>
+        /// CSS media type for style resolution ("screen" or "print"). Default: null.
+        /// When null, ToImage uses "screen" and ToPdf uses "print".
+        /// </summary>
+        public string? MediaType { get; set; }
+
+        /// <summary>Whether the user prefers a dark color scheme. Affects prefers-color-scheme media query.</summary>
+        public bool PrefersColorSchemeDark { get; set; }
+
         /// <summary>Progress reporter. If set, receives progress updates during rendering.</summary>
         public IProgress<RenderProgress>? Progress { get; set; }
 

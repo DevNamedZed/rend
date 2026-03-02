@@ -25,7 +25,11 @@ namespace Rend.Css
         {
             _matcher = matcher ?? throw new ArgumentNullException(nameof(matcher));
             _options = options ?? StyleResolverOptions.Default;
-            _mediaContext = new MediaContext(_options.ViewportWidth, _options.ViewportHeight, _options.MediaType);
+            _mediaContext = new MediaContext(_options.ViewportWidth, _options.ViewportHeight, _options.MediaType)
+            {
+                PrefersColorSchemeDark = _options.PrefersColorSchemeDark,
+                PrefersReducedMotion = _options.PrefersReducedMotion
+            };
         }
 
         /// <summary>
@@ -181,6 +185,15 @@ namespace Rend.Css
                         FilterRules(sr.Rules, output);
                     }
                     // else: skip this @supports block entirely
+                }
+                else if (rule is ContainerRule cr)
+                {
+                    // Evaluate container query against viewport dimensions as initial containing block.
+                    // In a single-pass static renderer, this is the best approximation.
+                    if (ContainerQueryEvaluator.Evaluate(cr.ConditionText, _mediaContext))
+                    {
+                        FilterRules(cr.Rules, output);
+                    }
                 }
                 else
                 {

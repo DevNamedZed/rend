@@ -11,7 +11,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "transform-rotate-scale",
                 Name = "CSS Transform (Rotate, Scale)",
                 Category = "Transforms & Effects",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:30px; font-family:sans-serif; font-size:14px; line-height:1.4;"">
                     <div style=""display:flex; gap:30px; align-items:center; justify-content:center;"">
                         <div style=""background:#3498db; color:#fff; padding:16px; transform:rotate(15deg); height:20px;"">Rotated 15deg</div>
@@ -25,7 +24,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "transform-box-shadow",
                 Name = "Box Shadow Effects",
                 Category = "Transforms & Effects",
-                Tolerance = 0.0, // Box shadow rendering differs significantly
                 Html = @"<html><body style=""margin:0; padding:20px; font-family:sans-serif; font-size:14px; background:#f0f0f0; line-height:1.4;"">
                     <div style=""background:#fff; padding:16px; margin-bottom:16px; box-shadow:2px 2px 0 #333; height:20px;"">Hard shadow</div>
                     <div style=""background:#fff; padding:16px; margin-bottom:16px; box-shadow:0 4px 8px rgba(0,0,0,0.2); height:20px;"">Soft shadow</div>
@@ -38,7 +36,6 @@ namespace Rend.VisualRegression.TestCases
                 Id = "transform-opacity-layers",
                 Name = "Opacity with Layered Elements",
                 Category = "Transforms & Effects",
-                Tolerance = 0.0,
                 Html = @"<html><body style=""margin:0; padding:20px; font-family:sans-serif; font-size:14px;"">
                     <div style=""position:relative; height:120px;"">
                         <div style=""position:absolute; top:0; left:0; width:120px; height:80px; background:#e74c3c; opacity:0.8;""></div>

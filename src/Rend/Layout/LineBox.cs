@@ -31,6 +31,9 @@ namespace Rend.Layout
         /// <summary>Whether this line box belongs to a vertical writing mode context.</summary>
         public bool IsVertical { get; set; }
 
+        /// <summary>Natural content width before text-align adjustment. Used for intrinsic sizing.</summary>
+        internal float NaturalContentWidth { get; set; }
+
         /// <summary>Fragments within this line.</summary>
         public IReadOnlyList<LineFragment> Fragments => _fragments;
 

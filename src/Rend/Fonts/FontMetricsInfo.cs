@@ -42,7 +42,11 @@ namespace Rend.Fonts
         public float GetLineHeight(float fontSize)
         {
             if (UnitsPerEm == 0) return fontSize;
-            return fontSize * (Ascent - Descent + LineGap) / UnitsPerEm;
+            float lh = fontSize * (Ascent - Descent + LineGap) / UnitsPerEm;
+            // CSS spec recommends normal line-height between 1.0 and 1.2.
+            // Enforce minimum of fontSize to prevent overly compact spacing
+            // when font metrics give a sub-1.0 ratio (common with OS/2 typo metrics).
+            return lh < fontSize ? fontSize : lh;
         }
 
         /// <summary>

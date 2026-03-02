@@ -241,8 +241,10 @@ namespace Rend.Rendering.Internal
             float midX2 = (outerX2 + innerX2) * 0.5f;
             float midY2 = (outerY2 + innerY2) * 0.5f;
 
+            // Chrome uses approximately 3x width for dash, 1.5x width for gap
             float dashLen = Math.Max(width * 3f, 1f);
-            float[] dashPattern = new[] { dashLen, dashLen };
+            float gapLen = Math.Max(width * 1.5f, 1f);
+            float[] dashPattern = new[] { dashLen, gapLen };
             var pen = new PenInfo(color, width, dashPattern);
 
             var path = new PathData();

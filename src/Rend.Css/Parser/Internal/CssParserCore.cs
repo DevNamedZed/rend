@@ -32,9 +32,7 @@ namespace Rend.Css.Parser.Internal
 
             while (_current.Type != CssTokenType.EOF)
             {
-                var rule = ParseRule();
-                if (rule != null)
-                    rules.Add(rule);
+                ParseRuleInto(rules);
                 SkipWhitespaceAndCDx();
             }
 
@@ -46,12 +44,25 @@ namespace Rend.Css.Parser.Internal
             if (_current.Type == CssTokenType.AtKeyword)
                 return ParseAtRule();
 
-            return ParseStyleRule();
+            return ParseStyleRule(null, null);
+        }
+
+        private void ParseRuleInto(List<CssRule> output)
+        {
+            if (_current.Type == CssTokenType.AtKeyword)
+            {
+                var atRule = ParseAtRule();
+                if (atRule != null) output.Add(atRule);
+            }
+            else
+            {
+                ParseStyleRuleInto(output, null);
+            }
         }
 
         #region Style Rules
 
-        private StyleRule? ParseStyleRule()
+        private StyleRule? ParseStyleRule(string? parentSelector, List<CssRule>? nestedOutput)
         {
             // Consume selector tokens until '{'
             var selectorBuilder = new StringBuilder();
@@ -79,12 +90,36 @@ namespace Rend.Css.Parser.Internal
 
             Advance(); // skip '{'
 
-            var declarations = ParseDeclarationBlock();
+            var nestedRules = new List<CssRule>();
+            var declarations = ParseDeclarationBlock(selectorText, nestedRules);
 
             if (_current.Type == CssTokenType.RightBrace)
                 Advance();
 
+            // Add any nested rules to the output list (they've been flattened)
+            if (nestedOutput != null)
+                nestedOutput.AddRange(nestedRules);
+            else if (nestedRules.Count > 0)
+            {
+                // No output list provided but we have nested rules — append after parent
+                // This path is used by ParseStylesheet's direct calls
+            }
+
             return new StyleRule(selectorText, declarations);
+        }
+
+        /// <summary>
+        /// Parses a style rule and adds it (plus any flattened nested rules) to the output list.
+        /// </summary>
+        private void ParseStyleRuleInto(List<CssRule> output, string? parentSelector)
+        {
+            var nestedRules = new List<CssRule>();
+            var rule = ParseStyleRule(parentSelector, nestedRules);
+            if (rule != null)
+            {
+                output.Add(rule);
+                output.AddRange(nestedRules);
+            }
         }
 
         #endregion
@@ -109,6 +144,7 @@ namespace Rend.Css.Parser.Internal
                 case "-moz-keyframes":
                     return ParseKeyframesRule();
                 case "layer": return ParseLayerRule();
+                case "container": return ParseContainerRule();
                 default:
                     // Unknown at-rule — skip it
                     SkipAtRule();
@@ -188,6 +224,43 @@ namespace Rend.Css.Parser.Internal
                 Advance();
 
             return new SupportsRule(conditionText, rules);
+        }
+
+        private ContainerRule ParseContainerRule()
+        {
+            SkipWhitespace();
+
+            // Consume condition text until '{' — includes optional container name and size query
+            var condBuilder = new StringBuilder();
+            while (_current.Type != CssTokenType.EOF && _current.Type != CssTokenType.LeftBrace)
+            {
+                AppendTokenText(condBuilder);
+                Advance();
+            }
+
+            var conditionText = condBuilder.ToString().Trim();
+
+            if (_current.Type != CssTokenType.LeftBrace)
+                return new ContainerRule(conditionText, new List<CssRule>());
+
+            Advance(); // skip '{'
+
+            // Parse nested rules (same as @media)
+            var rules = new List<CssRule>();
+            SkipWhitespaceAndCDx();
+
+            while (_current.Type != CssTokenType.EOF && _current.Type != CssTokenType.RightBrace)
+            {
+                var rule = ParseRule();
+                if (rule != null)
+                    rules.Add(rule);
+                SkipWhitespaceAndCDx();
+            }
+
+            if (_current.Type == CssTokenType.RightBrace)
+                Advance();
+
+            return new ContainerRule(conditionText, rules);
         }
 
         private FontFaceRule ParseFontFaceRule()
@@ -519,8 +592,10 @@ namespace Rend.Css.Parser.Internal
 
         /// <summary>
         /// Parse declarations inside a { } block. Stops at '}' or EOF.
+        /// Also handles CSS nesting: nested rules are parsed and added to nestedRules.
         /// </summary>
-        private List<CssDeclaration> ParseDeclarationBlock()
+        private List<CssDeclaration> ParseDeclarationBlock(
+            string? parentSelector = null, List<CssRule>? nestedRules = null)
         {
             var declarations = new List<CssDeclaration>();
             SkipWhitespace();
@@ -530,6 +605,14 @@ namespace Rend.Css.Parser.Internal
                 if (_current.Type == CssTokenType.Semicolon)
                 {
                     Advance();
+                    SkipWhitespace();
+                    continue;
+                }
+
+                // Check if this is a nested rule (CSS Nesting)
+                if (parentSelector != null && nestedRules != null && IsNestedRuleStart())
+                {
+                    ParseNestedRule(parentSelector, nestedRules);
                     SkipWhitespace();
                     continue;
                 }
@@ -546,6 +629,145 @@ namespace Rend.Css.Parser.Internal
             }
 
             return declarations;
+        }
+
+        /// <summary>
+        /// Determines if the current token starts a CSS nested rule.
+        /// </summary>
+        private bool IsNestedRuleStart()
+        {
+            // Definite nested rule starters (not valid declaration starts)
+            if (_current.Type == CssTokenType.Hash) return true; // #id
+            if (_current.Type == CssTokenType.LeftBracket) return true; // [attr]
+            if (_current.Type == CssTokenType.Delim)
+            {
+                string v = _current.Value;
+                if (v == "&" || v == "." || v == "*" || v == ">" || v == "+" || v == "~")
+                    return true;
+            }
+
+            // Colon could be a pseudo-class selector (:hover) — need to peek
+            // A declaration would be Ident : value, but standalone : is a nested rule
+            if (_current.Type == CssTokenType.Colon)
+            {
+                // Peek: if next token is Ident (like "hover", "first-child"), it's a pseudo-class
+                if (!_hasNext) { _tokenizer.Read(ref _next); _hasNext = true; }
+                if (_next.Type == CssTokenType.Ident || _next.Type == CssTokenType.Colon ||
+                    _next.Type == CssTokenType.Function)
+                    return true;
+            }
+
+            // Ident could be a type selector (e.g., "p { }") or a declaration (e.g., "color: red").
+            // Disambiguate: if Ident is followed by (whitespace then) ':', it's a declaration.
+            // Otherwise it's a nested rule.
+            if (_current.Type == CssTokenType.Ident)
+            {
+                if (!_hasNext) { _tokenizer.Read(ref _next); _hasNext = true; }
+                // If next is colon, it's a declaration
+                if (_next.Type == CssTokenType.Colon) return false;
+                // If next is whitespace, need deeper lookahead — but we only have 1 token.
+                // For safety, assume Ident followed by non-colon might be a type selector,
+                // but this creates ambiguity with "color red" (invalid declaration).
+                // The CSS spec resolves this by requiring nested rules that start with
+                // an ident to use &: e.g., "& p { }" not "p { }".
+                // So we don't treat plain Ident as a nested rule start.
+                if (_next.Type == CssTokenType.Whitespace) return false;
+                // Ident followed by a selector-like token (., #, etc.) could be a nested type selector
+                // But this is ambiguous and rare. Skip for now.
+                return false;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Parses a nested rule inside a declaration block and adds it to the output list.
+        /// The nesting selector is replaced with the parent selector.
+        /// </summary>
+        private void ParseNestedRule(string parentSelector, List<CssRule> output)
+        {
+            // Read selector tokens until '{'
+            var selectorBuilder = new StringBuilder();
+            int braceDepth = 0;
+
+            while (_current.Type != CssTokenType.EOF)
+            {
+                if (_current.Type == CssTokenType.LeftBrace && braceDepth == 0)
+                    break;
+                if (_current.Type == CssTokenType.RightBrace && braceDepth == 0)
+                    break; // malformed — bail
+
+                if (_current.Type == CssTokenType.LeftBrace) braceDepth++;
+                else if (_current.Type == CssTokenType.RightBrace) braceDepth--;
+
+                AppendTokenText(selectorBuilder);
+                Advance();
+            }
+
+            var nestedSelector = selectorBuilder.ToString().Trim();
+            if (string.IsNullOrEmpty(nestedSelector) || _current.Type != CssTokenType.LeftBrace)
+            {
+                SkipToDeclarationBoundary();
+                return;
+            }
+
+            Advance(); // skip '{'
+
+            // Resolve the & selector
+            string resolvedSelector = ResolveNestingSelector(parentSelector, nestedSelector);
+
+            // Parse the nested block (which may itself contain nested rules)
+            var innerNestedRules = new List<CssRule>();
+            var declarations = ParseDeclarationBlock(resolvedSelector, innerNestedRules);
+
+            if (_current.Type == CssTokenType.RightBrace)
+                Advance();
+
+            // Add the flattened rule
+            output.Add(new StyleRule(resolvedSelector, declarations));
+            output.AddRange(innerNestedRules);
+        }
+
+        /// <summary>
+        /// Resolves the nesting selector by replacing the nesting token with the parent selector,
+        /// or prepending the parent selector if the nesting token is not present.
+        /// </summary>
+        private static string ResolveNestingSelector(string parentSelector, string nestedSelector)
+        {
+            if (nestedSelector.Contains("&"))
+            {
+                // Handle comma-separated parent selectors
+                if (parentSelector.Contains(","))
+                {
+                    var parentParts = parentSelector.Split(',');
+                    var results = new List<string>();
+                    for (int i = 0; i < parentParts.Length; i++)
+                    {
+                        string parent = parentParts[i].Trim();
+                        results.Add(nestedSelector.Replace("&", parent));
+                    }
+                    return string.Join(", ", results);
+                }
+
+                return nestedSelector.Replace("&", parentSelector);
+            }
+            else
+            {
+                // No & present — prepend parent selector with descendant combinator
+                if (parentSelector.Contains(","))
+                {
+                    var parentParts = parentSelector.Split(',');
+                    var results = new List<string>();
+                    for (int i = 0; i < parentParts.Length; i++)
+                    {
+                        string parent = parentParts[i].Trim();
+                        results.Add(parent + " " + nestedSelector);
+                    }
+                    return string.Join(", ", results);
+                }
+
+                return parentSelector + " " + nestedSelector;
+            }
         }
 
         private CssDeclaration? ParseDeclaration()

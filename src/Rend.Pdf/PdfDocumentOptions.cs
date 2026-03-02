@@ -49,6 +49,19 @@ namespace Rend.Pdf
 
         /// <summary>Enable linearization for fast web view. Default: false.</summary>
         public bool Linearize { get; set; }
+
+        /// <summary>
+        /// Use cross-reference streams and object streams (PDF 1.5+) for smaller file size.
+        /// Requires Version >= Pdf15. Default: false.
+        /// </summary>
+        public bool UseObjectStreams { get; set; }
+
+        /// <summary>
+        /// Enable parallel page content stream generation. When true and the document has
+        /// multiple pages, content streams are built concurrently on multiple threads.
+        /// Default: false (single-threaded for deterministic output).
+        /// </summary>
+        public bool ParallelPageGeneration { get; set; }
     }
 
     /// <summary>PDF version identifiers.</summary>

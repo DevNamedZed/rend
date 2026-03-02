@@ -19,12 +19,14 @@ namespace Rend.Pdf
         private readonly Dictionary<string, PdfReference> _extGStates = new Dictionary<string, PdfReference>();
         private readonly Dictionary<string, PdfReference> _shadings = new Dictionary<string, PdfReference>();
         private readonly Dictionary<string, PdfReference> _colorSpaces = new Dictionary<string, PdfReference>();
+        private readonly Dictionary<string, PdfTilingPattern> _patterns = new Dictionary<string, PdfTilingPattern>();
         private readonly PdfObjectTable _objectTable;
         private readonly bool _compress;
         private readonly CompressionLevel _compressionLevel;
         private int _graphicsStateDepth;
         private bool _inTextObject;
         private int _shadingCounter;
+        private int _patternCounter;
 
         internal PdfContentStream(PdfObjectTable objectTable, bool compress, int bufferSize,
                                    CompressionLevel compressionLevel = CompressionLevel.Optimal)
@@ -41,6 +43,7 @@ namespace Rend.Pdf
         internal IReadOnlyDictionary<string, PdfReference> ExtGStates => _extGStates;
         internal IReadOnlyDictionary<string, PdfReference> Shadings => _shadings;
         internal IReadOnlyDictionary<string, PdfReference> ColorSpaces => _colorSpaces;
+        internal IReadOnlyDictionary<string, PdfTilingPattern> Patterns => _patterns;
 
         /// <summary>
         /// Build the content stream PDF object. Called internally during Save().
@@ -830,6 +833,81 @@ namespace Rend.Pdf
             funcDict[PdfName.N] = new PdfInteger(1);
 
             return _objectTable.Allocate(funcDict);
+        }
+
+        // ═══════════════════════════════════════════
+        // Optional Content Groups (Layers)
+        // ═══════════════════════════════════════════
+
+        private readonly Dictionary<string, PdfOptionalContentGroup> _ocgs = new Dictionary<string, PdfOptionalContentGroup>();
+        private int _ocgCounter;
+
+        internal IReadOnlyDictionary<string, PdfOptionalContentGroup> OCGs => _ocgs;
+
+        /// <summary>
+        /// Begin optional content — content drawn between this call and <see cref="EndLayer"/>
+        /// is associated with the given layer and can be toggled visible/hidden in PDF viewers.
+        /// </summary>
+        public void BeginLayer(PdfOptionalContentGroup layer)
+        {
+            if (layer == null) throw new System.ArgumentNullException(nameof(layer));
+            RegisterOCG(layer);
+            // BDC /OC /ResourceName — begin optional content with properties reference
+            _builder.BeginOptionalContent(layer.ResourceName);
+        }
+
+        /// <summary>End optional content sequence started by <see cref="BeginLayer"/>.</summary>
+        public void EndLayer()
+        {
+            _builder.EndMarkedContent();
+        }
+
+        private void RegisterOCG(PdfOptionalContentGroup layer)
+        {
+            if (string.IsNullOrEmpty(layer.ResourceName))
+            {
+                _ocgCounter++;
+                layer.ResourceName = "OC" + _ocgCounter;
+            }
+            if (!_ocgs.ContainsKey(layer.ResourceName))
+            {
+                _ocgs[layer.ResourceName] = layer;
+            }
+        }
+
+        // ═══════════════════════════════════════════
+        // Tiling Patterns
+        // ═══════════════════════════════════════════
+
+        /// <summary>Set the fill color to a tiling pattern.</summary>
+        public void SetFillPattern(PdfTilingPattern pattern)
+        {
+            if (pattern == null) throw new ArgumentNullException(nameof(pattern));
+            RegisterPattern(pattern);
+            _builder.SetFillColorSpace("Pattern");
+            _builder.SetFillPatternScn(pattern.ResourceName);
+        }
+
+        /// <summary>Set the stroke color to a tiling pattern.</summary>
+        public void SetStrokePattern(PdfTilingPattern pattern)
+        {
+            if (pattern == null) throw new ArgumentNullException(nameof(pattern));
+            RegisterPattern(pattern);
+            _builder.SetStrokeColorSpace("Pattern");
+            _builder.SetStrokePatternScn(pattern.ResourceName);
+        }
+
+        private void RegisterPattern(PdfTilingPattern pattern)
+        {
+            if (string.IsNullOrEmpty(pattern.ResourceName))
+            {
+                _patternCounter++;
+                pattern.ResourceName = "P" + _patternCounter;
+            }
+            if (!_patterns.ContainsKey(pattern.ResourceName))
+            {
+                _patterns[pattern.ResourceName] = pattern;
+            }
         }
 
         // ═══════════════════════════════════════════

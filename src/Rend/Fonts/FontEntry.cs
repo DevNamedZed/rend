@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Rend.Fonts
 {
@@ -25,6 +26,19 @@ namespace Rend.Fonts
         /// </summary>
         public float[]? GlyphWidths { get; }
 
+        /// <summary>
+        /// Gets the variation axes if this is a variable font, or null for static fonts.
+        /// </summary>
+        public IReadOnlyList<FontVariationAxis>? VariationAxes { get; internal set; }
+
+        /// <summary>
+        /// Gets the named instances (e.g., "Bold", "Light Condensed") if this is a variable font, or null.
+        /// </summary>
+        public IReadOnlyList<FontNamedInstance>? NamedInstances { get; internal set; }
+
+        /// <summary>Returns true if this is a variable font with one or more variation axes.</summary>
+        public bool IsVariableFont => VariationAxes != null && VariationAxes.Count > 0;
+
         private readonly Internal.OpenTypeFontData? _fontData;
 
         /// <summary>
@@ -46,6 +60,8 @@ namespace Rend.Fonts
             : this(descriptor, fontData, metrics, familyName, glyphWidths)
         {
             _fontData = parsedData;
+            VariationAxes = parsedData.VariationAxes;
+            NamedInstances = parsedData.NamedInstances;
         }
 
         /// <summary>

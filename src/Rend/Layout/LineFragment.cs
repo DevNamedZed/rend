@@ -46,5 +46,21 @@ namespace Rend.Layout
         /// When set, the painter uses this instead of the parent/inline element style.
         /// </summary>
         public ComputedStyle? StyleOverride { get; set; }
+
+        /// <summary>
+        /// Ruby annotation text to render above (or below) this base fragment.
+        /// Set when this fragment is part of a ruby container.
+        /// </summary>
+        public string? RubyText { get; set; }
+
+        /// <summary>
+        /// Style for the ruby annotation text.
+        /// </summary>
+        public ComputedStyle? RubyStyle { get; set; }
+
+        /// <summary>
+        /// Whether ruby text should be positioned below (under) instead of above (over).
+        /// </summary>
+        public bool RubyBelow { get; set; }
     }
 }

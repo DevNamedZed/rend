@@ -59,17 +59,24 @@ namespace Rend.Layout
             // Layout the tree
             BlockFormattingContext.Layout(rootBox, context);
 
-            // Apply positioning to all boxes
-            ApplyPositioningRecursive(rootBox, rootBox);
-
-            // Build stacking contexts (sets ZIndex and EstablishesStackingContext on boxes)
-            StackingContext.Build(rootBox);
-
-            // Calculate final root height
+            // Calculate root height BEFORE positioning so fixed/absolute elements
+            // can reference the containing block's actual dimensions.
             float rootHeight = CalculateAutoHeight(rootBox);
             rootBox.ContentRect = new RectF(
                 rootBox.ContentRect.X, rootBox.ContentRect.Y,
                 rootBox.ContentRect.Width, rootHeight);
+
+            // Create a viewport box for fixed-position elements.
+            // Fixed positioning resolves against the viewport (page), not the document.
+            var viewportBox = new LayoutBox(null, BoxType.Block);
+            viewportBox.ContentRect = new RectF(0, 0,
+                options.PageSize.Width, options.PageSize.Height);
+
+            // Apply positioning to all boxes
+            ApplyPositioningRecursive(rootBox, rootBox, viewportBox);
+
+            // Build stacking contexts (sets ZIndex and EstablishesStackingContext on boxes)
+            StackingContext.Build(rootBox);
 
             // Paginate
             List<LayoutPage> pages;
@@ -90,20 +97,21 @@ namespace Rend.Layout
             return new LayoutDocument(rootBox, pages);
         }
 
-        private static void ApplyPositioningRecursive(LayoutBox box, LayoutBox containingBlock, LayoutBox? rootBox = null)
+        private static void ApplyPositioningRecursive(LayoutBox box, LayoutBox containingBlock,
+            LayoutBox? viewportBox = null)
         {
-            var root = rootBox ?? box;
+            var viewport = viewportBox ?? box;
             var style = box.StyledNode?.Style;
             if (style != null && style.Position != CssPosition.Static)
             {
-                PositionedLayout.ApplyPositioning(box, containingBlock, root);
+                PositionedLayout.ApplyPositioning(box, containingBlock, viewport);
             }
 
             var newContaining = (style != null && style.Position != CssPosition.Static) ? box : containingBlock;
 
             for (int i = 0; i < box.Children.Count; i++)
             {
-                ApplyPositioningRecursive(box.Children[i], newContaining, root);
+                ApplyPositioningRecursive(box.Children[i], newContaining, viewport);
             }
         }
 

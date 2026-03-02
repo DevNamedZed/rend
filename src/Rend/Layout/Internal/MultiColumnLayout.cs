@@ -99,75 +99,142 @@ namespace Rend.Layout.Internal
             float columnHeight = Math.Max(targetHeight, contentHeight / columnCount);
             if (columnHeight < 1) columnHeight = contentHeight;
 
-            // Create column boxes
+            // Sequential content-aware fragmentation: assign children to columns
+            // based on accumulated height, breaking between elements.
             float startX = box.ContentRect.X;
             float startY = box.ContentRect.Y;
+            float contentOriginY = columnBox.ContentRect.Y;
 
+            // Build lists of children and line boxes assigned to each column
+            var colChildren = new List<LayoutBox>[columnCount];
+            var colLineBoxes = new List<LineBox>[columnCount];
+            for (int i = 0; i < columnCount; i++)
+            {
+                colChildren[i] = new List<LayoutBox>();
+                colLineBoxes[i] = new List<LineBox>();
+            }
+
+            // Assign block children to columns using content-aware fragmentation.
+            // When checking overflow, only count margin-top + border-box height (not margin-bottom)
+            // because trailing margin doesn't affect the visual bottom of the last item in a column.
+            int currentCol = 0;
+            float currentColHeight = 0;
+            foreach (var child in columnBox.Children)
+            {
+                float childVisualHeight = child.BorderRect.Height + child.MarginTop;
+                float childFullHeight = childVisualHeight + child.MarginBottom;
+
+                // Move to next column if this child would overflow and there's room
+                if (currentColHeight > 0 && currentColHeight + childVisualHeight > columnHeight
+                    && currentCol < columnCount - 1)
+                {
+                    currentCol++;
+                    currentColHeight = 0;
+                }
+
+                colChildren[currentCol].Add(child);
+                currentColHeight += childFullHeight;
+            }
+
+            // Assign line boxes to columns (for inline content)
+            if (columnBox.LineBoxes != null)
+            {
+                int lineCol = 0;
+                float lineColHeight = 0;
+                foreach (var line in columnBox.LineBoxes)
+                {
+                    float lineHeight = line.Height;
+                    if (lineColHeight > 0 && lineColHeight + lineHeight > columnHeight
+                        && lineCol < columnCount - 1)
+                    {
+                        lineCol++;
+                        lineColHeight = 0;
+                    }
+                    colLineBoxes[lineCol].Add(line);
+                    lineColHeight += lineHeight;
+                }
+            }
+
+            // Build column layout boxes — shift all children in each column by a uniform offset
+            // so the first child's margin-box-top aligns with startY, preserving relative spacing.
+            float tallestColumn = 0;
             for (int col = 0; col < columnCount; col++)
             {
                 float colX = startX + col * (columnWidth + columnGap);
-                float colStartY = col * columnHeight;
-                float colEndY = colStartY + columnHeight;
+                float xOffset = colX - columnBox.ContentRect.X;
 
-                // Create a column wrapper box
                 var colBox = new LayoutBox(null, BoxType.Block);
                 colBox.ContentRect = new RectF(colX, startY, columnWidth, columnHeight);
 
-                // Copy children that fall within this column's Y range
-                foreach (var child in columnBox.Children)
+                // Compute Y offset: shift first child's margin-box top to startY
+                float yOffset = 0;
+                if (colChildren[col].Count > 0)
                 {
-                    float childTop = child.BorderRect.Top - columnBox.ContentRect.Y;
-                    float childBottom = child.BorderRect.Bottom - columnBox.ContentRect.Y;
-
-                    if (childBottom > colStartY && childTop < colEndY)
-                    {
-                        // Offset child into column position
-                        float offsetY = startY - colStartY;
-                        var offsetChild = OffsetBox(child, colX - child.ContentRect.X + child.PaddingLeft + child.BorderLeftWidth, offsetY);
-                        colBox.AddChild(offsetChild);
-                    }
+                    var first = colChildren[col][0];
+                    float firstMarginBoxTop = first.ContentRect.Y - first.PaddingTop
+                                            - first.BorderTopWidth - first.MarginTop;
+                    yOffset = startY - firstMarginBoxTop;
                 }
 
-                // Copy line boxes that fall within this column
-                if (columnBox.LineBoxes != null)
+                float colBottom = startY;
+                foreach (var child in colChildren[col])
                 {
-                    var colLines = new List<LineBox>();
-                    foreach (var line in columnBox.LineBoxes)
-                    {
-                        float lineY = line.Y - columnBox.ContentRect.Y;
-                        if (lineY + line.Height > colStartY && lineY < colEndY)
-                        {
-                            var offsetLine = new LineBox
-                            {
-                                X = colX,
-                                Y = line.Y - colStartY + startY,
-                                Width = columnWidth,
-                                Height = line.Height,
-                                Baseline = line.Baseline
-                            };
+                    var offsetChild = OffsetBox(child, xOffset, yOffset);
+                    colBox.AddChild(offsetChild);
 
-                            foreach (var frag in line.Fragments)
+                    float childBottomY = offsetChild.ContentRect.Y + offsetChild.ContentRect.Height
+                                       + offsetChild.PaddingBottom + offsetChild.BorderBottomWidth
+                                       + offsetChild.MarginBottom;
+                    if (childBottomY > colBottom) colBottom = childBottomY;
+                }
+
+                // Handle line boxes similarly
+                if (colLineBoxes[col].Count > 0)
+                {
+                    float lineYOffset = 0;
+                    if (colLineBoxes[col].Count > 0)
+                    {
+                        lineYOffset = startY - colLineBoxes[col][0].Y;
+                    }
+
+                    var colLines = new List<LineBox>();
+                    foreach (var line in colLineBoxes[col])
+                    {
+                        var newLine = new LineBox
+                        {
+                            X = colX,
+                            Y = line.Y + lineYOffset,
+                            Width = columnWidth,
+                            Height = line.Height,
+                            Baseline = line.Baseline
+                        };
+                        foreach (var frag in line.Fragments)
+                        {
+                            newLine.AddFragment(new LineFragment
                             {
-                                var newFrag = new LineFragment
-                                {
-                                    X = frag.X - columnBox.ContentRect.X + colX,
-                                    Y = frag.Y,
-                                    Width = frag.Width,
-                                    Height = frag.Height,
-                                    Baseline = frag.Baseline,
-                                    Text = frag.Text,
-                                    ShapedRun = frag.ShapedRun,
-                                    Box = frag.Box,
-                                    InlineElement = frag.InlineElement,
-                                    StyleOverride = frag.StyleOverride
-                                };
-                                offsetLine.AddFragment(newFrag);
-                            }
-                            colLines.Add(offsetLine);
+                                X = frag.X,
+                                Y = frag.Y,
+                                Width = frag.Width,
+                                Height = frag.Height,
+                                Baseline = frag.Baseline,
+                                Text = frag.Text,
+                                ShapedRun = frag.ShapedRun,
+                                Box = frag.Box,
+                                InlineElement = frag.InlineElement,
+                                StyleOverride = frag.StyleOverride
+                            });
                         }
+                        colLines.Add(newLine);
+
+                        float lineBottom = line.Y + lineYOffset + line.Height;
+                        if (lineBottom > colBottom) colBottom = lineBottom;
                     }
                     colBox.LineBoxes = colLines;
                 }
+
+                float colActualHeight = colBottom - startY;
+                if (colActualHeight > tallestColumn)
+                    tallestColumn = colActualHeight;
 
                 box.AddChild(colBox);
 
@@ -190,7 +257,7 @@ namespace Rend.Layout.Internal
                                 {
                                     X = ruleX,
                                     Y = startY,
-                                    Height = columnHeight,
+                                    Height = tallestColumn > 0 ? tallestColumn : columnHeight,
                                     Width = ruleWidth,
                                     Style = ruleStyle,
                                     Color = ruleColor
@@ -201,10 +268,11 @@ namespace Rend.Layout.Internal
                 }
             }
 
-            // Set the box height to the column height
+            // Set the box height to the tallest column
+            float finalHeight = tallestColumn > 0 ? tallestColumn : columnHeight;
             box.ContentRect = new RectF(
                 box.ContentRect.X, box.ContentRect.Y,
-                box.ContentRect.Width, columnHeight);
+                box.ContentRect.Width, finalHeight);
         }
 
         /// <summary>
@@ -296,11 +364,15 @@ namespace Rend.Layout.Internal
             LayoutContext context, int columnCount, float columnWidth, float columnGap,
             float startX, float startY)
         {
-            // Create a wrapper element with just these children for BFC layout
+            // Create a wrapper element with ONLY the segment children for BFC layout.
+            // Using the parent element directly would lay out ALL children (including spanners
+            // and other segments), causing content duplication.
             var parentElement = parent.StyledNode as StyledElement;
             if (parentElement == null) return startY;
 
-            var tempBox = new LayoutBox(parentElement, BoxType.Block);
+            var segmentWrapper = new StyledElement(parentElement.Element, parentElement.Style,
+                new List<StyledNode>(children));
+            var tempBox = new LayoutBox(segmentWrapper, BoxType.Block);
             tempBox.ContentRect = new RectF(startX, startY, columnWidth, 0);
 
             // Lay out as block context to measure height
@@ -311,73 +383,62 @@ namespace Rend.Layout.Internal
 
             float targetHeight = Math.Max(totalHeight / columnCount, 1);
 
-            // Distribute content across columns
+            // Sequential content-aware fragmentation
+            var segColChildren = new List<LayoutBox>[columnCount];
+            for (int i = 0; i < columnCount; i++)
+                segColChildren[i] = new List<LayoutBox>();
+
+            int curCol = 0;
+            float curColH = 0;
+            foreach (var child in tempBox.Children)
+            {
+                float childVisH = child.BorderRect.Height + child.MarginTop;
+                float childFullH = childVisH + child.MarginBottom;
+                if (curColH > 0 && curColH + childVisH > targetHeight && curCol < columnCount - 1)
+                {
+                    curCol++;
+                    curColH = 0;
+                }
+                segColChildren[curCol].Add(child);
+                curColH += childFullH;
+            }
+
+            float tallest = 0;
             for (int col = 0; col < columnCount; col++)
             {
                 float colX = startX + col * (columnWidth + columnGap);
-                float colStartY = col * targetHeight;
-                float colEndY = colStartY + targetHeight;
+                float xOffset = colX - tempBox.ContentRect.X;
 
                 var colBox = new LayoutBox(null, BoxType.Block);
                 colBox.ContentRect = new RectF(colX, startY, columnWidth, targetHeight);
 
-                foreach (var child in tempBox.Children)
+                float yOffset = 0;
+                if (segColChildren[col].Count > 0)
                 {
-                    float childTop = child.BorderRect.Top - tempBox.ContentRect.Y;
-                    float childBottom = child.BorderRect.Bottom - tempBox.ContentRect.Y;
-
-                    if (childBottom > colStartY && childTop < colEndY)
-                    {
-                        float offsetY = startY - colStartY;
-                        var offsetChild = OffsetBox(child,
-                            colX - child.ContentRect.X + child.PaddingLeft + child.BorderLeftWidth,
-                            offsetY);
-                        colBox.AddChild(offsetChild);
-                    }
+                    var first = segColChildren[col][0];
+                    float firstMarginBoxTop = first.ContentRect.Y - first.PaddingTop
+                                            - first.BorderTopWidth - first.MarginTop;
+                    yOffset = startY - firstMarginBoxTop;
                 }
 
-                if (tempBox.LineBoxes != null)
+                float colBottom = startY;
+                foreach (var child in segColChildren[col])
                 {
-                    var colLines = new List<LineBox>();
-                    foreach (var line in tempBox.LineBoxes)
-                    {
-                        float lineY = line.Y - tempBox.ContentRect.Y;
-                        if (lineY + line.Height > colStartY && lineY < colEndY)
-                        {
-                            var newLine = new LineBox
-                            {
-                                X = colX,
-                                Y = line.Y - colStartY + startY,
-                                Width = columnWidth,
-                                Height = line.Height,
-                                Baseline = line.Baseline
-                            };
-                            foreach (var frag in line.Fragments)
-                            {
-                                newLine.AddFragment(new LineFragment
-                                {
-                                    X = frag.X - tempBox.ContentRect.X + colX,
-                                    Y = frag.Y,
-                                    Width = frag.Width,
-                                    Height = frag.Height,
-                                    Baseline = frag.Baseline,
-                                    Text = frag.Text,
-                                    ShapedRun = frag.ShapedRun,
-                                    Box = frag.Box,
-                                    InlineElement = frag.InlineElement,
-                                    StyleOverride = frag.StyleOverride
-                                });
-                            }
-                            colLines.Add(newLine);
-                        }
-                    }
-                    colBox.LineBoxes = colLines;
+                    var offsetChild = OffsetBox(child, xOffset, yOffset);
+                    colBox.AddChild(offsetChild);
+                    float childBottomY = offsetChild.ContentRect.Y + offsetChild.ContentRect.Height
+                                       + offsetChild.PaddingBottom + offsetChild.BorderBottomWidth
+                                       + offsetChild.MarginBottom;
+                    if (childBottomY > colBottom) colBottom = childBottomY;
                 }
+
+                float colH = colBottom - startY;
+                if (colH > tallest) tallest = colH;
 
                 parent.AddChild(colBox);
             }
 
-            return startY + targetHeight;
+            return startY + (tallest > 0 ? tallest : targetHeight);
         }
 
         private static int ResolveColumnCount(ComputedStyle style, float availableWidth, float gap)
@@ -508,7 +569,7 @@ namespace Rend.Layout.Internal
                     {
                         newLine.AddFragment(new LineFragment
                         {
-                            X = frag.X + offsetX,
+                            X = frag.X,
                             Y = frag.Y,
                             Width = frag.Width,
                             Height = frag.Height,

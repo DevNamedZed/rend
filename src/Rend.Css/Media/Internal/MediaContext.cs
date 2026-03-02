@@ -17,6 +17,18 @@ namespace Rend.Css.Media.Internal
         /// <summary>Orientation: "portrait" or "landscape".</summary>
         public string Orientation => Width >= Height ? "landscape" : "portrait";
 
+        /// <summary>Whether the user prefers a dark color scheme.</summary>
+        public bool PrefersColorSchemeDark { get; set; }
+
+        /// <summary>Whether the user prefers reduced motion (always true for static output).</summary>
+        public bool PrefersReducedMotion { get; set; } = true;
+
+        /// <summary>Whether the user prefers high contrast.</summary>
+        public bool PrefersContrast { get; set; }
+
+        /// <summary>Device resolution in DPI. Default: 96.</summary>
+        public float Resolution { get; set; } = 96f;
+
         public MediaContext(float width, float height, string mediaType = "screen")
         {
             Width = width;

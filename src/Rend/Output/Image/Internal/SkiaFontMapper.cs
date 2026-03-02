@@ -75,21 +75,28 @@ namespace Rend.Output.Image.Internal
                 : SKFontStyleSlant.Upright;
             var skStyle = new SKFontStyle(weight, SKFontStyleWidth.Normal, slant);
 
-            // Try the exact family name first.
-            var tf = SKTypeface.FromFamilyName(descriptor.Family, skStyle);
-            if (tf != null && !IsDefault(tf, descriptor.Family))
-                return tf;
-            tf?.Dispose();
+            // CSS font-family may be a comma-separated list.
+            // Parse and try each family in order.
+            var families = Fonts.FontMatchingAlgorithm.ParseFontFamilyList(descriptor.Family);
 
-            // Try generic CSS family name fallbacks.
-            if (GenericFamilyMap.TryGetValue(descriptor.Family, out var fallbacks))
+            foreach (var family in families)
             {
-                for (int i = 0; i < fallbacks.Length; i++)
+                // Try the exact family name first.
+                var tf = SKTypeface.FromFamilyName(family, skStyle);
+                if (tf != null && !IsDefault(tf, family))
+                    return tf;
+                tf?.Dispose();
+
+                // Try generic CSS family name fallbacks.
+                if (GenericFamilyMap.TryGetValue(family, out var fallbacks))
                 {
-                    tf = SKTypeface.FromFamilyName(fallbacks[i], skStyle);
-                    if (tf != null && !IsDefault(tf, fallbacks[i]))
-                        return tf;
-                    tf?.Dispose();
+                    for (int i = 0; i < fallbacks.Length; i++)
+                    {
+                        tf = SKTypeface.FromFamilyName(fallbacks[i], skStyle);
+                        if (tf != null && !IsDefault(tf, fallbacks[i]))
+                            return tf;
+                        tf?.Dispose();
+                    }
                 }
             }
 

@@ -305,6 +305,14 @@ namespace Rend.Pdf.Internal
         /// <summary>EMC — End marked content sequence.</summary>
         public void EndMarkedContent() => WriteOp("EMC\n");
 
+        /// <summary>/OC /ResourceName BDC — Begin optional content (layer).</summary>
+        public void BeginOptionalContent(string resourceName)
+        {
+            WriteOp("/OC /");
+            WriteAscii(resourceName);
+            WriteOp(" BDC\n");
+        }
+
         // ═══════════════════════════════════════════
         // Text Operators
         // ═══════════════════════════════════════════
@@ -477,6 +485,22 @@ namespace Rend.Pdf.Internal
         public void SetStrokeColorScn(float tint)
         {
             WriteFloat(tint);
+            WriteOp(" SCN\n");
+        }
+
+        /// <summary>scn /Name — Set fill color to a named pattern.</summary>
+        public void SetFillPatternScn(string patternName)
+        {
+            WriteByte((byte)'/');
+            WriteAscii(patternName);
+            WriteOp(" scn\n");
+        }
+
+        /// <summary>SCN /Name — Set stroke color to a named pattern.</summary>
+        public void SetStrokePatternScn(string patternName)
+        {
+            WriteByte((byte)'/');
+            WriteAscii(patternName);
             WriteOp(" SCN\n");
         }
 

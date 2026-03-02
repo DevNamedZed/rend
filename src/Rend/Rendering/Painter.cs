@@ -206,33 +206,33 @@ namespace Rend.Rendering
             // 2d. Apply CSS backdrop-filter (opacity only; other functions degrade gracefully).
             bool hasBackdropFilter = BackdropFilterHandler.Apply(box, target);
 
-            // 2e. Apply CSS mask (graceful degradation for complex masks).
-            bool hasMask = MaskHandler.Apply(box, target);
+            // 2e. Apply CSS mask.
+            var maskInfo = MaskHandler.Apply(box, target);
 
-            // 3. Apply overflow clipping.
-            bool hasClip = ClipHandler.Apply(box, target);
-
-            // 3b. Apply CSS clip-path.
+            // 2f. Apply CSS clip-path (clips entire visual output: background, borders, children).
             bool hasClipPath = ClipPathHandler.Apply(box, target);
 
             if (!skipBoxPainting)
             {
-                // 4. Paint box-shadow (behind everything).
+                // 3. Paint box-shadow (behind everything).
                 BoxShadowPainter.Paint(box, target);
 
-                // 5. Paint background (CSS 2.1 step 1: backgrounds).
+                // 4. Paint background (CSS 2.1 step 1: backgrounds).
                 BackgroundPainter.Paint(box, target, _imageResolver);
 
-                // 6. Paint borders (CSS 2.1 step 2: borders).
-                // border-image replaces normal borders when set.
+                // 5. Paint borders BEFORE overflow clipping so they remain visible.
+                // CSS spec: overflow clips the padding box content, not the border itself.
                 if (BorderImagePainter.HasBorderImage(box))
                     BorderImagePainter.Paint(box, target, _imageResolver);
                 else
                     BorderPainter.Paint(box, target);
 
-                // 6b. Paint outline (drawn outside the border edge, does not affect layout).
+                // 5b. Paint outline (drawn outside the border edge, does not affect layout).
                 OutlinePainter.Paint(box, target);
             }
+
+            // 6. Apply overflow clipping (after borders, before children).
+            bool hasClip = ClipHandler.Apply(box, target);
 
             if (!isHidden)
             {
@@ -260,22 +260,22 @@ namespace Rend.Rendering
                 }
             }
 
-            // 10. Restore clip-path.
-            if (hasClipPath)
-            {
-                ClipPathHandler.Restore(target);
-            }
-
-            // 10b. Restore overflow clipping.
+            // 10. Restore overflow clipping.
             if (hasClip)
             {
                 ClipHandler.Restore(target);
             }
 
-            // 10c. Restore mask.
-            if (hasMask)
+            // 10b. Restore clip-path (applied before box painting, restored after overflow clip).
+            if (hasClipPath)
             {
-                MaskHandler.Restore(target);
+                ClipPathHandler.Restore(target);
+            }
+
+            // 10c. Restore mask.
+            if (maskInfo != null)
+            {
+                MaskHandler.Restore(maskInfo.Value, target);
             }
 
             // 10d. Restore backdrop-filter.
@@ -347,6 +347,47 @@ namespace Rend.Rendering
         {
             IReadOnlyList<LineFragment> fragments = lineBox.Fragments;
 
+            // First pass: paint inline element backgrounds (behind text)
+            for (int i = 0; i < fragments.Count; i++)
+            {
+                LineFragment fragment = fragments[i];
+                if (fragment.InlineElement == null) continue;
+
+                var inlineStyle = fragment.InlineElement.Style;
+                if (inlineStyle.BackgroundColor.A <= 0) continue;
+
+                float fx = lineBox.X + fragment.X;
+                float fy = lineBox.Y + fragment.Y;
+
+                // Include inline padding in the background rectangle
+                float padL = float.IsNaN(inlineStyle.PaddingLeft) ? 0 : inlineStyle.PaddingLeft;
+                float padR = float.IsNaN(inlineStyle.PaddingRight) ? 0 : inlineStyle.PaddingRight;
+                float padT = float.IsNaN(inlineStyle.PaddingTop) ? 0 : inlineStyle.PaddingTop;
+                float padB = float.IsNaN(inlineStyle.PaddingBottom) ? 0 : inlineStyle.PaddingBottom;
+
+                var bgRect = new RectF(fx - padL, fy - padT,
+                                       fragment.Width + padL + padR,
+                                       fragment.Height + padT + padB);
+
+                float tlr = inlineStyle.BorderTopLeftRadius;
+                float trr = inlineStyle.BorderTopRightRadius;
+                float brr = inlineStyle.BorderBottomRightRadius;
+                float blr = inlineStyle.BorderBottomLeftRadius;
+                bool hasRadius = tlr > 0 || trr > 0 || brr > 0 || blr > 0;
+
+                if (hasRadius)
+                {
+                    var path = new PathData();
+                    path.AddRoundedRectangle(bgRect, tlr, trr, brr, blr);
+                    target.FillPath(path, BrushInfo.Solid(inlineStyle.BackgroundColor));
+                }
+                else
+                {
+                    target.FillRect(bgRect, BrushInfo.Solid(inlineStyle.BackgroundColor));
+                }
+            }
+
+            // Second pass: paint text on top of backgrounds
             for (int i = 0; i < fragments.Count; i++)
             {
                 LineFragment fragment = fragments[i];

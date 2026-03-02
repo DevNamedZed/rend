@@ -146,6 +146,17 @@ namespace Rend.Text
         }
 
         /// <summary>
+        /// Gets the typographic descent for the given font and size (positive value).
+        /// Returns fontSize * 0.2 as fallback if the font cannot be resolved.
+        /// </summary>
+        public float GetDescent(FontDescriptor font, float fontSize)
+        {
+            var metrics = _fontProvider.GetMetrics(font);
+            float d = metrics.GetDescent(fontSize);
+            return d > 0 ? d : fontSize * 0.2f;
+        }
+
+        /// <summary>
         /// Shapes the text using the resolved font and returns the full shaped run.
         /// </summary>
         /// <param name="text">The text to shape.</param>

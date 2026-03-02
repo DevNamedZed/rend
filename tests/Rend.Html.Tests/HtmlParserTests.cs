@@ -349,5 +349,109 @@ namespace Rend.Html.Tests
             var xs = doc.GetElementsByClassName("x");
             Assert.Equal(2, xs.Count);
         }
+
+        [Fact]
+        public void Parse_SvgWithSelfClosingChildren_CreatesCorrectDomTree()
+        {
+            var doc = HtmlParser.Parse(
+                @"<html><body>
+                    <svg width=""380"" height=""120"">
+                        <rect x=""10"" y=""10"" width=""80"" height=""80"" fill=""#3498db"" rx=""8""/>
+                        <circle cx=""160"" cy=""50"" r=""40"" fill=""#e74c3c""/>
+                        <ellipse cx=""260"" cy=""50"" rx=""50"" ry=""30"" fill=""#2ecc71""/>
+                        <line x1=""320"" y1=""10"" x2=""370"" y2=""100"" stroke=""#8e44ad"" stroke-width=""3""/>
+                    </svg>
+                </body></html>");
+
+            var body = doc.Body!;
+            // Find the SVG element
+            Element? svg = null;
+            var child = body.FirstChild;
+            while (child != null)
+            {
+                if (child is Element el && el.TagName == "svg")
+                {
+                    svg = el;
+                    break;
+                }
+                child = child.NextSibling;
+            }
+            Assert.NotNull(svg);
+            Assert.Equal("380", svg!.GetAttribute("width"));
+            Assert.Equal("120", svg!.GetAttribute("height"));
+
+            // Count SVG element children (should be 4: rect, circle, ellipse, line)
+            var elementChildren = new System.Collections.Generic.List<Element>();
+            var svgChild = svg.FirstChild;
+            while (svgChild != null)
+            {
+                if (svgChild is Element svgEl)
+                    elementChildren.Add(svgEl);
+                svgChild = svgChild.NextSibling;
+            }
+
+            // Output debug info
+            var tags = string.Join(", ", elementChildren.ConvertAll(e => e.TagName));
+            Assert.True(elementChildren.Count == 4,
+                $"Expected 4 SVG child elements (rect, circle, ellipse, line), got {elementChildren.Count}: [{tags}]");
+
+            Assert.Equal("rect", elementChildren[0].TagName);
+            Assert.Equal("10", elementChildren[0].GetAttribute("x"));
+            Assert.Equal("80", elementChildren[0].GetAttribute("width"));
+            Assert.Equal("#3498db", elementChildren[0].GetAttribute("fill"));
+
+            Assert.Equal("circle", elementChildren[1].TagName);
+            Assert.Equal("160", elementChildren[1].GetAttribute("cx"));
+            Assert.Equal("40", elementChildren[1].GetAttribute("r"));
+
+            Assert.Equal("ellipse", elementChildren[2].TagName);
+            Assert.Equal("260", elementChildren[2].GetAttribute("cx"));
+            Assert.Equal("50", elementChildren[2].GetAttribute("rx"));
+
+            Assert.Equal("line", elementChildren[3].TagName);
+            Assert.Equal("320", elementChildren[3].GetAttribute("x1"));
+            Assert.Equal("3", elementChildren[3].GetAttribute("stroke-width"));
+        }
+        [Fact]
+        public void Parse_ProgressElement_PreservesAttributes()
+        {
+            var doc = HtmlParser.Parse("<html><body><progress value=\"50\" max=\"100\"></progress></body></html>");
+            var body = doc.Body!;
+            Element? progress = null;
+            foreach (var child in body.ChildNodes)
+            {
+                if (child is Element e && e.TagName == "progress")
+                {
+                    progress = e;
+                    break;
+                }
+            }
+            Assert.NotNull(progress);
+            Assert.Equal("50", progress!.GetAttribute("value"));
+            Assert.Equal("100", progress.GetAttribute("max"));
+        }
+
+        [Fact]
+        public void Parse_MeterElement_PreservesAttributes()
+        {
+            var doc = HtmlParser.Parse("<html><body><meter value=\"0.7\" min=\"0\" max=\"1\" low=\"0.3\" high=\"0.7\" optimum=\"0.8\"></meter></body></html>");
+            var body = doc.Body!;
+            Element? meter = null;
+            foreach (var child in body.ChildNodes)
+            {
+                if (child is Element e && e.TagName == "meter")
+                {
+                    meter = e;
+                    break;
+                }
+            }
+            Assert.NotNull(meter);
+            Assert.Equal("0.7", meter!.GetAttribute("value"));
+            Assert.Equal("0", meter.GetAttribute("min"));
+            Assert.Equal("1", meter.GetAttribute("max"));
+            Assert.Equal("0.3", meter.GetAttribute("low"));
+            Assert.Equal("0.7", meter.GetAttribute("high"));
+            Assert.Equal("0.8", meter.GetAttribute("optimum"));
+        }
     }
 }

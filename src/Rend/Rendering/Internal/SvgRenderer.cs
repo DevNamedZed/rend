@@ -276,14 +276,39 @@ namespace Rend.Rendering.Internal
             float y = ParseAttrFloat(elem, "y", 0);
             float fontSize = ParseAttrFloat(elem, "font-size", 16f);
             string? fontFamily = elem.GetAttribute("font-family");
+            string? fontWeightAttr = elem.GetAttribute("font-weight");
+            string? fontStyleAttr = elem.GetAttribute("font-style");
 
             string text = elem.TextContent ?? "";
             if (string.IsNullOrEmpty(text)) return;
+
+            // Resolve font weight (default 400 = normal)
+            float fontWeight = 400f;
+            bool bold = false;
+            if (fontWeightAttr != null)
+            {
+                if (fontWeightAttr == "bold") { fontWeight = 700f; bold = true; }
+                else if (fontWeightAttr == "normal") { fontWeight = 400f; }
+                else if (TryParseFloat(fontWeightAttr, out float w)) { fontWeight = w; bold = w >= 600; }
+            }
+
+            // Resolve font style
+            var cssFontStyle = Css.CssFontStyle.Normal;
+            bool italic = false;
+            if (fontStyleAttr == "italic") { cssFontStyle = Css.CssFontStyle.Italic; italic = true; }
+            else if (fontStyleAttr == "oblique") { cssFontStyle = Css.CssFontStyle.Oblique; italic = true; }
+
+            // Build font descriptor (default to sans-serif if no family specified)
+            string family = fontFamily ?? "sans-serif";
+            var fontDesc = new Fonts.FontDescriptor(family, fontWeight, cssFontStyle);
 
             var style = new TextStyle
             {
                 FontSize = fontSize,
                 Color = WithAlpha(fill, fillOpacity),
+                Font = fontDesc,
+                Bold = bold,
+                Italic = italic,
             };
 
             target.DrawText(text, x, y, style);

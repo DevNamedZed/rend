@@ -104,7 +104,7 @@ namespace Rend.Layout.Internal
                 var box = new LayoutBox(childElement, BoxType.Block);
                 BoxModelCalculator.ApplyBoxModel(box, childElement.Style, containerWidth);
 
-                float baseSize = ResolveFlexBasis(childElement.Style, isColumn, containerWidth, box, childElement, context);
+                float baseSize = ResolveFlexBasis(childElement.Style, isColumn, containerWidth, containerHeight, box, childElement, context);
                 items.Add(new FlexItem
                 {
                     Box = box,
@@ -129,16 +129,19 @@ namespace Rend.Layout.Internal
             {
                 var item = items[i];
                 float itemMain = item.BaseSize + GetItemMainMargins(item, isColumn);
+                // Include the gap that would precede this item on the current line.
+                float neededMain = itemMain + (currentLine.Items.Count > 0 ? gap : 0);
 
-                if (isWrap && usedMain + itemMain > mainSize && currentLine.Items.Count > 0)
+                if (isWrap && usedMain + neededMain > mainSize && currentLine.Items.Count > 0)
                 {
                     lines.Add(currentLine);
                     currentLine = new FlexLine();
                     usedMain = 0;
+                    neededMain = itemMain; // first item on new line: no gap
                 }
 
                 currentLine.Items.Add(item);
-                usedMain += itemMain + (currentLine.Items.Count > 1 ? gap : 0);
+                usedMain += neededMain;
             }
             if (currentLine.Items.Count > 0)
                 lines.Add(currentLine);
@@ -284,6 +287,25 @@ namespace Rend.Layout.Internal
                     {
                         float specHeight = DimensionResolver.ResolveHeight(item.Style, containerHeight, box);
                         contentCross = float.IsNaN(specHeight) ? 0 : specHeight;
+
+                        // Pre-stretch: when item has auto height and will be stretched,
+                        // set cross size to the container's definite cross dimension BEFORE
+                        // calling LayoutChildren. This ensures nested column flex containers
+                        // receive the correct main-axis size instead of falling back to 10000f.
+                        if (contentCross <= 0 && !float.IsNaN(containerHeight) && containerHeight > 0)
+                        {
+                            var preAlign = item.Style.AlignSelf;
+                            if ((int)preAlign == 255) preAlign = style.AlignItems;
+                            if (preAlign == CssAlignItems.Stretch || (int)preAlign == 0)
+                            {
+                                contentCross = containerHeight
+                                    - box.PaddingTop - box.PaddingBottom
+                                    - box.BorderTopWidth - box.BorderBottomWidth
+                                    - box.MarginTop - box.MarginBottom;
+                                if (contentCross < 0) contentCross = 0;
+                            }
+                        }
+
                         box.ContentRect = new RectF(
                             mainCursor + box.MarginLeft + box.BorderLeftWidth + box.PaddingLeft,
                             crossCursor + box.MarginTop + box.BorderTopWidth + box.PaddingTop,
@@ -381,11 +403,12 @@ namespace Rend.Layout.Internal
                             // Stretch: expand cross dimension if auto, clamped to min/max
                             if (isColumn)
                             {
-                                if (float.IsNaN(item.Style.Width))
+                                float rawW = item.Style.Width;
+                                if (float.IsNaN(rawW))
                                 {
                                     float newWidth = box.ContentRect.Width + freeCross;
-                                    float minW = item.Style.MinWidth;
-                                    float maxW = item.Style.MaxWidth;
+                                    float minW = DimensionResolver.ResolvePercentWidth(item.Style.MinWidth, containerWidth);
+                                    float maxW = DimensionResolver.ResolvePercentWidth(item.Style.MaxWidth, containerWidth);
                                     if (!float.IsNaN(minW) && minW >= 0) newWidth = Math.Max(newWidth, minW);
                                     if (!float.IsNaN(maxW) && maxW >= 0) newWidth = Math.Min(newWidth, maxW);
                                     box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y,
@@ -394,11 +417,12 @@ namespace Rend.Layout.Internal
                             }
                             else
                             {
-                                if (float.IsNaN(item.Style.Height))
+                                float rawH = item.Style.Height;
+                                if (float.IsNaN(rawH))
                                 {
                                     float newHeight = box.ContentRect.Height + freeCross;
-                                    float minH = item.Style.MinHeight;
-                                    float maxH = item.Style.MaxHeight;
+                                    float minH = DimensionResolver.ResolvePercentHeight(item.Style.MinHeight, containerHeight);
+                                    float maxH = DimensionResolver.ResolvePercentHeight(item.Style.MaxHeight, containerHeight);
                                     if (!float.IsNaN(minH) && minH >= 0) newHeight = Math.Max(newHeight, minH);
                                     if (!float.IsNaN(maxH) && maxH >= 0) newHeight = Math.Min(newHeight, maxH);
                                     float oldHeight = box.ContentRect.Height;
@@ -517,16 +541,22 @@ namespace Rend.Layout.Internal
         }
 
         private static float ResolveFlexBasis(ComputedStyle style, bool isColumn, float containerWidth,
-            LayoutBox box, StyledElement element, LayoutContext context)
+            float containerHeight, LayoutBox box, StyledElement element, LayoutContext context)
         {
             float basis = style.FlexBasis;
             if (!float.IsNaN(basis) && basis >= 0)
                 return basis;
 
-            // Use width/height as fallback
+            // Use width/height as fallback (resolve deferred percentages)
             float size = isColumn ? style.Height : style.Width;
-            if (!float.IsNaN(size) && size >= 0)
-                return size;
+            if (!float.IsNaN(size))
+            {
+                // Resolve deferred percentage (negative fraction encoding)
+                if (size < 0 && size > -1.01f)
+                    size = -size * (isColumn ? containerHeight : containerWidth);
+                if (size >= 0)
+                    return size;
+            }
 
             // Auto: measure content size via trial layout
             var measureBox = new LayoutBox(element, BoxType.Block);
