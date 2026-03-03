@@ -122,6 +122,27 @@ namespace Rend.Output.Image
         }
 
         /// <inheritdoc />
+        public void ConcatTransform(Matrix3x2 transform)
+        {
+            EnsureCanvas();
+
+            var matrix = new SKMatrix
+            {
+                ScaleX = transform.M11,
+                SkewX = transform.M21,
+                TransX = transform.M31,
+                SkewY = transform.M12,
+                ScaleY = transform.M22,
+                TransY = transform.M32,
+                Persp0 = 0f,
+                Persp1 = 0f,
+                Persp2 = 1f
+            };
+
+            _currentCanvas!.Concat(ref matrix);
+        }
+
+        /// <inheritdoc />
         public void SetOpacity(float opacity)
         {
             opacity = Math.Max(0f, Math.Min(1f, opacity));

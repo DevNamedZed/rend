@@ -340,6 +340,7 @@ namespace Rend.Tests.Rendering
             {
                 Transforms.Add(transform);
             }
+            public void ConcatTransform(Matrix3x2 transform) { }
         }
     }
 }

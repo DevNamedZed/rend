@@ -200,6 +200,7 @@ namespace Rend.Tests.Rendering
             public void Save() { }
             public void Restore() { }
             public void SetTransform(Matrix3x2 transform) { }
+            public void ConcatTransform(Matrix3x2 transform) { }
             public void SetOpacity(float opacity) { }
             public void SetBlendMode(Rend.Css.CssMixBlendMode blendMode) { }
             public void SetImageRendering(Rend.Css.CssImageRendering rendering) { }

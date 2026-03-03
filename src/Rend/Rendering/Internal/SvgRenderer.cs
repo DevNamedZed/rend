@@ -103,7 +103,7 @@ namespace Rend.Rendering.Internal
             if (hasTransform)
             {
                 var matrix = ParseTransform(transformAttr!);
-                target.SetTransform(matrix);
+                target.ConcatTransform(matrix);
             }
 
             switch (tag)

@@ -236,7 +236,7 @@ namespace Rend.Css.Resolution.Internal
             {
                 if (kw.Keyword == "normal" || kw.Keyword == "auto")
                 {
-                    result = PropertyValue.FromNumber(-1.2f); // normal ≈ 1.2 multiplier
+                    result = PropertyValue.FromNumber(float.NaN); // normal = use font metrics
                     return true;
                 }
             }

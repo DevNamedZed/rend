@@ -76,6 +76,7 @@ namespace Rend.Layout.Internal
 
             // <fieldset>: track whether we have a <legend> for special positioning
             bool isFieldset = styledElement.TagName == "fieldset";
+            bool legendHandled = false;
 
             bool foundSummary = false;
 
@@ -161,7 +162,17 @@ namespace Rend.Layout.Internal
                 {
                     var posBox = CreateLayoutBox(childElement);
                     BoxModelCalculator.ApplyBoxModel(posBox, childStyle, containingWidth);
-                    float posWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, posBox);
+                    float posWidth;
+                    if (SizingKeyword.IsSizingKeyword(childStyle.Width))
+                    {
+                        // Intrinsic sizing keywords (fit-content, min-content, max-content):
+                        // measure content width, don't fill available space
+                        posWidth = MeasureIntrinsicWidth(childElement, childStyle.Width, containingWidth, context);
+                    }
+                    else
+                    {
+                        posWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, posBox);
+                    }
                     posBox.ContentRect = new RectF(parent.ContentRect.X, cursorY, posWidth, 0);
                     LayoutChildren(posBox, context);
                     float posHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, posBox);
@@ -370,12 +381,22 @@ namespace Rend.Layout.Internal
 
                     childBox.ContentRect = new RectF(x, y, contentWidth, contentHeight);
 
-                    // <legend> inside <fieldset>: shift up to center on the top border
-                    if (isFieldset && i == 0 && childElement.TagName == "legend")
+                    // <legend> inside <fieldset>: position on the top border, out of normal flow
+                    if (isFieldset && !legendHandled && childElement.TagName == "legend")
                     {
-                        float legendHeight = contentHeight + childBox.PaddingTop + childBox.PaddingBottom;
-                        float offsetUp = legendHeight * 0.5f;
-                        childBox.ContentRect = new RectF(x, y - offsetUp, contentWidth, contentHeight);
+                        legendHandled = true;
+                        float legendTotalH = contentHeight + childBox.PaddingTop + childBox.PaddingBottom;
+                        // Center the legend vertically on the fieldset's top border
+                        float borderCenterY = parent.BorderRect.Top + parent.BorderTopWidth * 0.5f;
+                        float legendNewY = borderCenterY - legendTotalH * 0.5f + childBox.PaddingTop;
+                        float deltaY = legendNewY - childBox.ContentRect.Y;
+                        childBox.ContentRect = new RectF(x, legendNewY, contentWidth, contentHeight);
+                        // Shift all descendant boxes by the same delta
+                        ShiftDescendants(childBox, deltaY);
+                        parent.AddChild(childBox);
+                        // Don't advance cursorY — the legend sits on the border, not in the flow
+                        prevMarginBottom = 0;
+                        continue;
                     }
 
                     parent.AddChild(childBox);
@@ -546,10 +567,11 @@ namespace Rend.Layout.Internal
             // Measure text
             float fontSize = textNode.Style.FontSize;
             float lineHeight = textNode.Style.LineHeight;
+            bool isNormalLineHeight = float.IsNaN(lineHeight) || lineHeight == 0;
             // Negative = unitless multiplier, positive = pixels, NaN = normal
             if (lineHeight < 0)
                 lineHeight = -lineHeight * fontSize;
-            else if (float.IsNaN(lineHeight) || lineHeight == 0)
+            else if (isNormalLineHeight)
                 lineHeight = fontSize * 1.2f;
 
             if (context.TextMeasurer != null)
@@ -559,6 +581,14 @@ namespace Rend.Layout.Internal
                     textNode.Style.FontWeight,
                     textNode.Style.FontStyle,
                     Fonts.FontDescriptor.StretchToPercentage(textNode.Style.FontStretch));
+
+                // Use actual font metrics for "normal" line-height
+                if (isNormalLineHeight)
+                {
+                    float metricsLineHeight = context.TextMeasurer.GetNormalLineHeight(fontDesc, fontSize);
+                    if (!float.IsNaN(metricsLineHeight) && metricsLineHeight > 0)
+                        lineHeight = metricsLineHeight;
+                }
 
                 var shaped = context.TextMeasurer.Shape(textNode.Text, fontDesc, fontSize);
                 box.ShapedRun = shaped;
@@ -660,6 +690,31 @@ namespace Rend.Layout.Internal
             }
 
             return measured;
+        }
+
+        /// <summary>
+        /// Shifts all descendant boxes and line boxes by a vertical delta.
+        /// Used when repositioning a box (e.g. fieldset legend) after its children have been laid out.
+        /// </summary>
+        private static void ShiftDescendants(LayoutBox box, float deltaY)
+        {
+            // Shift line boxes (inline content)
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    box.LineBoxes[i].Y += deltaY;
+                }
+            }
+
+            // Shift child layout boxes
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                var cr = child.ContentRect;
+                child.ContentRect = new RectF(cr.X, cr.Y + deltaY, cr.Width, cr.Height);
+                ShiftDescendants(child, deltaY);
+            }
         }
 
         /// <summary>

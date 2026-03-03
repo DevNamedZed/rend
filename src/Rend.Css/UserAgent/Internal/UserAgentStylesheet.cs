@@ -29,9 +29,12 @@ html, address, blockquote, body, dd, div, dl, dt,
 fieldset, form, frame, frameset, h1, h2, h3, h4, h5, h6,
 hr, noframes, ol, p, ul, center, dir, menu, pre,
 article, aside, details, dialog, figcaption, figure,
-footer, header, hgroup, main, nav, section, summary {
+footer, header, hgroup, main, nav, section {
     display: block;
 }
+
+/* Summary disclosure marker */
+summary { display: list-item; list-style-type: disc; list-style-position: inside; }
 
 /* Headings */
 h1 { font-size: 2em; font-weight: bold; margin-top: 0.67em; margin-bottom: 0.67em; }

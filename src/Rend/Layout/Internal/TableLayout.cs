@@ -209,8 +209,8 @@ namespace Rend.Layout.Internal
             {
                 CollapseBorders(rowBoxes, numRows, numCols, occupied2, cellColumns);
 
-                // Recalculate cell content widths now that borders have been collapsed.
-                // The first pass subtracted original border widths; add back any that were zeroed.
+                // Recalculate cell content widths now that borders have been collapsed,
+                // then re-layout children so they use the correct available width.
                 for (int r = 0; r < numRows; r++)
                 {
                     for (int ci = 0; ci < rowBoxes[r].Children.Count; ci++)
@@ -239,8 +239,14 @@ namespace Rend.Layout.Internal
                         float newContentW = cellWidth - cellBox.PaddingLeft - cellBox.PaddingRight
                                           - cellBox.BorderLeftWidth - cellBox.BorderRightWidth;
                         newContentW = Math.Max(0, newContentW);
-                        cellBox.ContentRect = new RectF(cellBox.ContentRect.X, cellBox.ContentRect.Y,
-                                                         newContentW, cellBox.ContentRect.Height);
+
+                        // Re-layout children with corrected content width
+                        cellBox.ClearChildren();
+                        cellBox.LineBoxes = null;
+                        cellBox.ContentRect = new RectF(0, 0, newContentW, 0);
+                        BlockFormattingContext.LayoutChildren(cellBox, context);
+                        float cellContentH = CalculateAutoHeight(cellBox);
+                        cellBox.ContentRect = new RectF(0, 0, newContentW, cellContentH);
                     }
                 }
 
@@ -404,6 +410,7 @@ namespace Rend.Layout.Internal
             }
 
             // Collapse adjacent horizontal borders: cell's right border vs right neighbor's left border
+            // Per CSS 2.1 §17.6.2, the collapsed border width is shared equally between cells.
             for (int r = 0; r < numRows; r++)
             {
                 for (int c = 0; c < numCols - 1; c++)
@@ -415,11 +422,12 @@ namespace Rend.Layout.Internal
 
                     var leftStyle = left.StyledNode?.Style;
                     var rightStyle = right.StyledNode?.Style;
-                    if (BorderWins(left.BorderRightWidth, leftStyle?.BorderRightStyle ?? CssBorderStyle.None,
-                                   right.BorderLeftWidth, rightStyle?.BorderLeftStyle ?? CssBorderStyle.None))
-                        right.BorderLeftWidth = 0;
-                    else
-                        left.BorderRightWidth = 0;
+                    float collapsedWidth = GetCollapsedBorderWidth(
+                        left.BorderRightWidth, leftStyle?.BorderRightStyle ?? CssBorderStyle.None,
+                        right.BorderLeftWidth, rightStyle?.BorderLeftStyle ?? CssBorderStyle.None);
+                    // Each cell gets half the collapsed border for layout purposes
+                    left.BorderRightWidth = collapsedWidth / 2f;
+                    right.BorderLeftWidth = collapsedWidth / 2f;
                 }
             }
 
@@ -435,13 +443,56 @@ namespace Rend.Layout.Internal
 
                     var topStyle = top.StyledNode?.Style;
                     var bottomStyle = bottom.StyledNode?.Style;
-                    if (BorderWins(top.BorderBottomWidth, topStyle?.BorderBottomStyle ?? CssBorderStyle.None,
-                                   bottom.BorderTopWidth, bottomStyle?.BorderTopStyle ?? CssBorderStyle.None))
-                        bottom.BorderTopWidth = 0;
-                    else
-                        top.BorderBottomWidth = 0;
+                    float collapsedWidth = GetCollapsedBorderWidth(
+                        top.BorderBottomWidth, topStyle?.BorderBottomStyle ?? CssBorderStyle.None,
+                        bottom.BorderTopWidth, bottomStyle?.BorderTopStyle ?? CssBorderStyle.None);
+                    // Each cell gets half the collapsed border for layout purposes
+                    top.BorderBottomWidth = collapsedWidth / 2f;
+                    bottom.BorderTopWidth = collapsedWidth / 2f;
                 }
             }
+
+            // Collapse outer edges: per CSS 2.1 §17.6.2, the outer border of the table
+            // participates in the collapse as well. For layout purposes, the outer cells
+            // get half the collapsed border width on their outer edges.
+            // Top row outer edge
+            for (int c = 0; c < numCols; c++)
+            {
+                var cell = cellGrid[0, c];
+                if (cell != null) cell.BorderTopWidth /= 2f;
+            }
+            // Bottom row outer edge
+            for (int c = 0; c < numCols; c++)
+            {
+                var cell = cellGrid[numRows - 1, c];
+                if (cell != null) cell.BorderBottomWidth /= 2f;
+            }
+            // Left column outer edge
+            for (int r = 0; r < numRows; r++)
+            {
+                var cell = cellGrid[r, 0];
+                if (cell != null) cell.BorderLeftWidth /= 2f;
+            }
+            // Right column outer edge
+            for (int r = 0; r < numRows; r++)
+            {
+                var cell = cellGrid[r, numCols - 1];
+                if (cell != null) cell.BorderRightWidth /= 2f;
+            }
+        }
+
+        /// <summary>
+        /// Computes the collapsed border width from two adjacent borders per CSS 2.1 §17.6.2.
+        /// Hidden suppresses the border. Otherwise the wider border wins.
+        /// </summary>
+        private static float GetCollapsedBorderWidth(float widthA, CssBorderStyle styleA,
+                                                     float widthB, CssBorderStyle styleB)
+        {
+            if (styleA == CssBorderStyle.Hidden || styleB == CssBorderStyle.Hidden)
+                return 0;
+            if (styleA == CssBorderStyle.None && styleB == CssBorderStyle.None)
+                return 0;
+            return Math.Max(widthA, widthB);
         }
 
         /// <summary>

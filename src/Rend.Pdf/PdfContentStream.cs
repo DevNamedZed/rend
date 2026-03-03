@@ -85,6 +85,10 @@ namespace Rend.Pdf
         public void SetTransform(float a, float b, float c, float d, float e, float f)
             => _builder.SetTransform(a, b, c, d, e, f);
 
+        /// <summary>Concatenate a transform with the current CTM (same as cm operator).</summary>
+        public void ConcatTransform(float a, float b, float c, float d, float e, float f)
+            => _builder.SetTransform(a, b, c, d, e, f);
+
         /// <summary>Translate the coordinate origin.</summary>
         public void Translate(float tx, float ty)
             => _builder.SetTransform(1, 0, 0, 1, tx, ty);

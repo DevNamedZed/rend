@@ -29,6 +29,10 @@ namespace Rend.Rendering
         /// <param name="transform">The 3x2 affine transformation matrix.</param>
         void SetTransform(Matrix3x2 transform);
 
+        /// <summary>Concatenates a transformation matrix with the current transform.</summary>
+        /// <param name="transform">The 3x2 affine transformation matrix to concatenate.</param>
+        void ConcatTransform(Matrix3x2 transform);
+
         /// <summary>Sets the current opacity level for subsequent drawing operations.</summary>
         /// <param name="opacity">The opacity value from 0 (fully transparent) to 1 (fully opaque).</param>
         void SetOpacity(float opacity);

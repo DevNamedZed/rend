@@ -613,7 +613,7 @@ namespace Rend.Rendering.Internal
             float fraction = (value - min) / range;
             fraction = Math.Max(0f, Math.Min(1f, fraction));
 
-            // Determine color based on value relative to low/high/optimum
+            // Determine color based on value relative to low/high/optimum (match Chrome defaults)
             CssColor barColor;
             CssColor accentColor = GetAccentColor(element);
             if (accentColor.R != 0 || accentColor.G != 0 || accentColor.B != 0 || accentColor.A != 0)
@@ -624,36 +624,48 @@ namespace Rend.Rendering.Internal
             {
                 // Below low threshold — use red/warning
                 barColor = optimum >= high
-                    ? new CssColor(220, 50, 50) // danger (optimum is high, value is low)
-                    : new CssColor(200, 180, 0); // caution
+                    ? new CssColor(200, 60, 60) // danger (optimum is high, value is low)
+                    : new CssColor(200, 150, 0); // caution (orange)
             }
             else if (value > high)
             {
                 // Above high threshold
                 barColor = optimum <= low
-                    ? new CssColor(220, 50, 50) // danger
-                    : new CssColor(200, 180, 0); // caution
+                    ? new CssColor(200, 60, 60) // danger
+                    : new CssColor(200, 150, 0); // caution (orange)
             }
             else
             {
-                // In optimal range — green
-                barColor = new CssColor(50, 180, 50);
+                // In optimal range — green (match Chrome's darker green)
+                barColor = new CssColor(60, 145, 60);
             }
 
-            // Draw background track (gray)
-            var trackColor = new CssColor(220, 220, 220);
-            target.FillRect(rect, BrushInfo.Solid(trackColor));
+            float radius = Math.Min(rect.Height * 0.25f, 4f);
 
-            // Draw filled bar
+            // Draw background track with rounded corners
+            var trackColor = new CssColor(220, 220, 220);
+            var trackPath = new PathData();
+            trackPath.AddRoundedRectangle(rect, radius, radius, radius, radius);
+            target.FillPath(trackPath, BrushInfo.Solid(trackColor));
+
+            // Draw filled bar with rounded corners
             float barWidth = rect.Width * fraction;
             if (barWidth > 0)
             {
                 var barRect = new RectF(rect.X, rect.Y, barWidth, rect.Height);
-                target.FillRect(barRect, BrushInfo.Solid(barColor));
+                float rTL = radius, rBL = radius;
+                float rTR = barWidth >= rect.Width - 1 ? radius : 0f;
+                float rBR = barWidth >= rect.Width - 1 ? radius : 0f;
+                var barPath = new PathData();
+                barPath.AddRoundedRectangle(barRect, rTL, rTR, rBR, rBL);
+                target.FillPath(barPath, BrushInfo.Solid(barColor));
             }
 
-            // Draw 1px border
-            target.StrokeRect(rect, new PenInfo(BorderColor, 1f));
+            // Draw subtle border with rounded corners
+            var borderColor = new CssColor(180, 180, 180);
+            var borderPath = new PathData();
+            borderPath.AddRoundedRectangle(rect, radius, radius, radius, radius);
+            target.StrokePath(borderPath, new PenInfo(borderColor, 0.5f));
         }
 
         private static void PaintProgress(StyledElement element, LayoutBox box, IRenderTarget target)
@@ -662,11 +674,31 @@ namespace Rend.Rendering.Internal
 
             // Parse attributes
             float max = ParseFloat(element.GetAttribute("max"), 1f);
+            // Check both via GetAttribute and the underlying Element to handle edge cases
             string? valueAttr = element.GetAttribute("value");
+            if (valueAttr == null)
+            {
+                // Fallback: check via Element directly in case of interning mismatch
+                var attrs = element.Element.Attributes;
+                for (int i = 0; i < attrs.Count; i++)
+                {
+                    var attr = attrs[i];
+                    if (string.Equals(attr.Name, "value", StringComparison.OrdinalIgnoreCase))
+                    {
+                        valueAttr = attr.Value;
+                        break;
+                    }
+                }
+            }
 
-            // Draw background track
-            var trackColor = new CssColor(220, 220, 220);
-            target.FillRect(rect, BrushInfo.Solid(trackColor));
+            float radius = Math.Min(rect.Height * 0.5f, 8f);
+            float inset = 1f; // Chrome insets the fill slightly within the track
+
+            // Draw background track with rounded corners
+            var trackColor = new CssColor(233, 233, 233);
+            var trackPath = new PathData();
+            trackPath.AddRoundedRectangle(rect, radius, radius, radius, radius);
+            target.FillPath(trackPath, BrushInfo.Solid(trackColor));
 
             if (valueAttr != null)
             {
@@ -684,33 +716,40 @@ namespace Rend.Rendering.Internal
                 }
                 else
                 {
-                    barColor = new CssColor(50, 120, 220); // Blue
+                    barColor = new CssColor(30, 120, 230); // Chrome-like blue
                 }
 
-                float barWidth = rect.Width * fraction;
+                float barWidth = (rect.Width - inset * 2) * fraction;
                 if (barWidth > 0)
                 {
-                    var barRect = new RectF(rect.X, rect.Y, barWidth, rect.Height);
-                    target.FillRect(barRect, BrushInfo.Solid(barColor));
+                    var barRect = new RectF(rect.X + inset, rect.Y + inset, barWidth, rect.Height - inset * 2);
+                    float innerR = Math.Max(0, radius - inset);
+                    float rTL = innerR, rBL = innerR;
+                    float rTR = fraction >= 0.99f ? innerR : 0f;
+                    float rBR = fraction >= 0.99f ? innerR : 0f;
+                    var barPath = new PathData();
+                    barPath.AddRoundedRectangle(barRect, rTL, rTR, rBR, rBL);
+                    target.FillPath(barPath, BrushInfo.Solid(barColor));
                 }
             }
             else
             {
-                // Indeterminate: draw striped pattern
-                CssColor stripeColor = new CssColor(50, 120, 220);
-                float stripeWidth = 20f;
-                float x = rect.X;
-                while (x < rect.X + rect.Width)
-                {
-                    float w = Math.Min(stripeWidth, rect.X + rect.Width - x);
-                    var stripeRect = new RectF(x, rect.Y, w, rect.Height);
-                    target.FillRect(stripeRect, BrushInfo.Solid(stripeColor));
-                    x += stripeWidth * 2; // skip one stripe width for gap
-                }
+                // Indeterminate: draw a single animated-style block (static snapshot)
+                CssColor stripeColor = new CssColor(30, 120, 230);
+                float blockWidth = rect.Width * 0.25f;
+                float blockX = rect.X + inset;
+                float innerR = Math.Max(0, radius - inset);
+                var blockRect = new RectF(blockX, rect.Y + inset, blockWidth, rect.Height - inset * 2);
+                var blockPath = new PathData();
+                blockPath.AddRoundedRectangle(blockRect, innerR, 0f, 0f, innerR);
+                target.FillPath(blockPath, BrushInfo.Solid(stripeColor));
             }
 
-            // Draw 1px border
-            target.StrokeRect(rect, new PenInfo(BorderColor, 1f));
+            // Draw subtle border with rounded corners
+            var borderColor = new CssColor(190, 190, 190);
+            var borderPath = new PathData();
+            borderPath.AddRoundedRectangle(rect, radius, radius, radius, radius);
+            target.StrokePath(borderPath, new PenInfo(borderColor, 0.5f));
         }
 
         private static void PaintVideoPlaceholder(StyledElement element, LayoutBox box, IRenderTarget target, ImageResolverDelegate? imageResolver)

@@ -5,6 +5,7 @@ using Rend.Css;
 using Rend.Css.Properties.Internal;
 using Rend.Fonts;
 using Rend.Layout;
+using Rend.Style;
 
 namespace Rend.Rendering.Internal
 {
@@ -34,6 +35,20 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
+            // Check for <summary> element — render disclosure triangle instead of normal marker
+            if (box.StyledNode is StyledElement styledEl && styledEl.TagName == "summary")
+            {
+                bool isOpen = false;
+                // Check if parent <details> has 'open' attribute
+                var parentEl = styledEl.Element.Parent as Rend.Html.Element;
+                if (parentEl != null && parentEl.TagName == "details")
+                {
+                    isOpen = parentEl.GetAttribute("open") != null;
+                }
+                PaintDisclosureTriangle(target, box, style, isOpen);
+                return;
+            }
+
             CssListStyleType listType = style.ListStyleType;
 
             RectF contentRect = box.ContentRect;
@@ -55,8 +70,18 @@ namespace Rend.Rendering.Internal
             // Chrome sizes bullets at ~0.3em diameter
             float bulletRadius = fontSize * 0.15f;
 
-            // Vertical center of the first line (approximate as top + fontSize * 0.5).
-            float markerCenterY = contentRect.Y + fontSize * 0.5f;
+            // Compute actual pixel line-height for the first line
+            float rawLh = style.LineHeight;
+            float pixelLineHeight;
+            if (rawLh < 0) // Negative = unitless multiplier (e.g., -1.4 for line-height: 1.4)
+                pixelLineHeight = Math.Abs(rawLh) * fontSize;
+            else if (rawLh == 0) // normal
+                pixelLineHeight = fontSize * 1.2f;
+            else
+                pixelLineHeight = rawLh; // Already in pixels
+
+            // Chrome centers list bullets vertically on the first line
+            float markerCenterY = contentRect.Y + pixelLineHeight * 0.5f;
             // Outside: marker drawn to the left of content area.
             // Inside: marker drawn at the start of content area (text is indented to make room).
             float markerX = isInside
@@ -169,7 +194,18 @@ namespace Rend.Rendering.Internal
                 Italic = fontStyle == CssFontStyle.Italic || fontStyle == CssFontStyle.Oblique
             };
 
-            float y = contentRect.Y + fontSize;
+            // Compute pixel line height for vertical centering
+            float rawLh = style.LineHeight;
+            float pixelLineHeight;
+            if (rawLh < 0) pixelLineHeight = Math.Abs(rawLh) * fontSize;
+            else if (rawLh == 0) pixelLineHeight = fontSize * 1.2f;
+            else pixelLineHeight = rawLh;
+
+            // Position at baseline using CSS half-leading model:
+            // halfLeading = (lineHeight - contentArea) / 2
+            // baseline Y = top + halfLeading + ascent
+            // With typical ascent ratio of 0.8:
+            float y = contentRect.Y + (pixelLineHeight - fontSize) / 2f + fontSize * 0.8f;
 
             if (isInside)
             {
@@ -263,6 +299,55 @@ namespace Rend.Rendering.Internal
             }
 
             return result.ToString();
+        }
+
+        /// <summary>
+        /// Paint a disclosure triangle for a &lt;summary&gt; element.
+        /// ▼ for open, ▶ for closed.
+        /// </summary>
+        private static void PaintDisclosureTriangle(IRenderTarget target, LayoutBox box,
+            ComputedStyle style, bool isOpen)
+        {
+            RectF contentRect = box.ContentRect;
+            CssColor color = style.Color;
+            float fontSize = style.FontSize;
+
+            // Triangle size: roughly 0.4em
+            float size = fontSize * 0.4f;
+
+            // Compute pixel line height for vertical centering
+            float rawLh = style.LineHeight;
+            float pixelLineHeight;
+            if (rawLh < 0) pixelLineHeight = Math.Abs(rawLh) * fontSize;
+            else if (rawLh == 0) pixelLineHeight = fontSize * 1.2f;
+            else pixelLineHeight = rawLh;
+
+            float centerY = contentRect.Y + pixelLineHeight * 0.5f;
+            float centerX = contentRect.X + size * 0.5f + 2f;
+
+            var path = new PathData();
+            if (isOpen)
+            {
+                // Downward pointing triangle ▼
+                float halfW = size * 0.5f;
+                float halfH = size * 0.45f;
+                path.MoveTo(centerX - halfW, centerY - halfH);
+                path.LineTo(centerX + halfW, centerY - halfH);
+                path.LineTo(centerX, centerY + halfH);
+                path.Close();
+            }
+            else
+            {
+                // Right pointing triangle ▶
+                float halfW = size * 0.45f;
+                float halfH = size * 0.5f;
+                path.MoveTo(centerX - halfW, centerY - halfH);
+                path.LineTo(centerX + halfW, centerY);
+                path.LineTo(centerX - halfW, centerY + halfH);
+                path.Close();
+            }
+
+            target.FillPath(path, BrushInfo.Solid(color));
         }
     }
 }

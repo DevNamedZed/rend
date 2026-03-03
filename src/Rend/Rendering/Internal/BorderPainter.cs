@@ -147,11 +147,9 @@ namespace Rend.Rendering.Internal
                 var child = box.Children[i];
                 if (child.StyledNode is StyledElement childElem && childElem.TagName == "legend")
                 {
-                    // The gap spans the legend's border box horizontally
-                    RectF legendBorder = child.BorderRect;
-                    float gapLeft = legendBorder.Left - child.PaddingLeft;
-                    float gapRight = legendBorder.Right + child.PaddingRight;
-                    return (gapLeft, gapRight);
+                    // The gap spans the legend's margin box horizontally
+                    RectF legendMargin = child.MarginRect;
+                    return (legendMargin.Left, legendMargin.Right);
                 }
             }
 

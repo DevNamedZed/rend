@@ -85,6 +85,10 @@ namespace Rend.Layout.Internal
                     specifiedHeight = -specifiedHeight * containingBlockHeight;
             }
 
+            // Sizing keywords (fit-content, min-content, max-content) → treat as auto for height
+            if (SizingKeyword.IsSizingKeyword(specifiedHeight))
+                specifiedHeight = float.NaN;
+
             if (float.IsNaN(specifiedHeight))
             {
                 // Check for aspect-ratio: if set and width is known, compute height from ratio.

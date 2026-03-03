@@ -156,10 +156,13 @@ namespace Rend.Layout.Internal
                 }
                 else if (child is StyledPseudoElement pseudo)
                 {
-                    // Pseudo-element: render as inline text with its own style
+                    // Pseudo-element: render as inline text with its own style.
+                    // Pass the pseudo's style as styleOverride so the painter uses
+                    // its color/font properties instead of falling through to the parent.
                     var pseudoText = new StyledText(pseudo.Content, pseudo.Style);
                     LayoutTextRun(pseudoText, context, ref cursorX, ref cursorY, startX,
-                                  containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
+                                  containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
+                                  styleOverride: pseudo.Style);
                 }
                 else
                 {
@@ -917,6 +920,23 @@ namespace Rend.Layout.Internal
                             lineTextStart = wordStart;
                             lineFragStartX = cursorX;
                             accumulatedWidth = 0;
+
+                            // Recompute candidateWidth for the new line — the old value
+                            // included text from the previous line (e.g. "underlined blue"
+                            // instead of just "blue") causing a desynchronized cursor.
+                            {
+                                string newLineCandidate = text.Substring(lineTextStart, end - lineTextStart);
+                                if (hasSoftHyphens) newLineCandidate = newLineCandidate.Replace("\u00AD", string.Empty);
+                                if (newLineCandidate.Length > 0)
+                                {
+                                    var nlShape = context.TextMeasurer!.Shape(newLineCandidate, fontDesc, fontSize);
+                                    candidateWidth = nlShape.TotalWidth + CalculateSpacingExtraRaw(newLineCandidate, letterSpacing, wordSpacing);
+                                }
+                                else
+                                {
+                                    candidateWidth = wordWidth;
+                                }
+                            }
                         }
                     }
 
@@ -1519,7 +1539,7 @@ namespace Rend.Layout.Internal
                     var pseudoText = new StyledText(pseudo.Content, pseudo.Style);
                     LayoutTextRun(pseudoText, context, ref cursorX, ref cursorY, startX,
                                   containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
-                                  inlineAncestor: element);
+                                  inlineAncestor: element, styleOverride: pseudo.Style);
                 }
                 else if (child is StyledElement childEl)
                 {

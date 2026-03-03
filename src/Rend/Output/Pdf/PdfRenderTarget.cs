@@ -94,6 +94,17 @@ namespace Rend.Output.Pdf
         }
 
         /// <inheritdoc />
+        public void ConcatTransform(Matrix3x2 transform)
+        {
+            EnsurePage();
+            // PDF cm operator concatenates with the current CTM
+            _currentPage!.Content.ConcatTransform(
+                transform.M11, transform.M12,
+                transform.M21, transform.M22,
+                transform.M31, transform.M32);
+        }
+
+        /// <inheritdoc />
         public void SetOpacity(float opacity)
         {
             EnsurePage();

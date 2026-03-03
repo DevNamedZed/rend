@@ -104,7 +104,16 @@ namespace Rend.Layout
             var style = box.StyledNode?.Style;
             if (style != null && style.Position != CssPosition.Static)
             {
+                float oldX = box.ContentRect.X;
+                float oldY = box.ContentRect.Y;
                 PositionedLayout.ApplyPositioning(box, containingBlock, viewport);
+                float dx = box.ContentRect.X - oldX;
+                float dy = box.ContentRect.Y - oldY;
+                // After repositioning, shift all descendants by the same delta
+                if (dx != 0 || dy != 0)
+                {
+                    ShiftDescendants(box, dx, dy);
+                }
             }
 
             var newContaining = (style != null && style.Position != CssPosition.Static) ? box : containingBlock;
@@ -112,6 +121,28 @@ namespace Rend.Layout
             for (int i = 0; i < box.Children.Count; i++)
             {
                 ApplyPositioningRecursive(box.Children[i], newContaining, viewport);
+            }
+        }
+
+        private static void ShiftDescendants(LayoutBox box, float dx, float dy)
+        {
+            // Shift line boxes (inline content)
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    box.LineBoxes[i].X += dx;
+                    box.LineBoxes[i].Y += dy;
+                }
+            }
+
+            // Shift child layout boxes
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                var cr = child.ContentRect;
+                child.ContentRect = new RectF(cr.X + dx, cr.Y + dy, cr.Width, cr.Height);
+                ShiftDescendants(child, dx, dy);
             }
         }
 
