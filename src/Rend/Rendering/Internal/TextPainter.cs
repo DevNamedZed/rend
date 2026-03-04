@@ -67,7 +67,8 @@ namespace Rend.Rendering.Internal
                         Bold = fontWeight >= 700f,
                         Italic = fontStyle == CssFontStyle.Italic || fontStyle == CssFontStyle.Oblique,
                         LetterSpacing = letterSpacing,
-                        WordSpacing = wordSpacing
+                        WordSpacing = wordSpacing,
+                        FontData = fragment.ShapedRun?.FontData
                     };
                     target.DrawText(text, drawX, drawY, textStyle);
                 }
@@ -200,7 +201,8 @@ namespace Rend.Rendering.Internal
                         Bold = fontWeight >= 700f,
                         Italic = fontStyle == CssFontStyle.Italic || fontStyle == CssFontStyle.Oblique,
                         LetterSpacing = letterSpacing,
-                        WordSpacing = wordSpacing
+                        WordSpacing = wordSpacing,
+                        FontData = fragment.ShapedRun?.FontData
                     };
                     target.DrawText(text, drawX, drawY, textStyle);
                 }

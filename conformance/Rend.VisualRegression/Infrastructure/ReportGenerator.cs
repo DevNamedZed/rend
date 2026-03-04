@@ -28,6 +28,7 @@ namespace Rend.VisualRegression.Infrastructure
         private static string BuildReport(IReadOnlyList<ComparisonResult> results)
         {
             int passCount = results.Count(r => r.Outcome == ComparisonOutcome.Pass);
+            int nearPassCount = results.Count(r => r.Outcome == ComparisonOutcome.NearPass);
             int failCount = results.Count(r => r.Outcome == ComparisonOutcome.Fail);
             int errorCount = results.Count(r => r.Outcome == ComparisonOutcome.Error);
             int totalCount = results.Count;
@@ -47,7 +48,7 @@ namespace Rend.VisualRegression.Infrastructure
                 {
                     Name = g.Key,
                     Total = g.Count(),
-                    Passed = g.Count(r => r.Outcome == ComparisonOutcome.Pass),
+                    Passed = g.Count(r => r.Outcome == ComparisonOutcome.Pass || r.Outcome == ComparisonOutcome.NearPass),
                     AvgDiff = g.Where(r => r.Outcome != ComparisonOutcome.Error)
                         .Select(r => r.DiffPercentage).DefaultIfEmpty(0).Average()
                 })
@@ -72,45 +73,33 @@ namespace Rend.VisualRegression.Infrastructure
             sb.AppendLine("<h1>Visual Regression: Chrome vs Rend</h1>");
             sb.AppendLine($"<p class=\"timestamp\">Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}</p>");
 
-            // Summary badges
-            sb.AppendLine("<div class=\"summary\">");
-            sb.AppendLine($"  <span class=\"badge badge-total\">{totalCount} Total</span>");
-            sb.AppendLine($"  <span class=\"badge badge-pass\">{passCount} Passed ({(totalCount > 0 ? 100.0 * passCount / totalCount : 0):F0}%)</span>");
-            sb.AppendLine($"  <span class=\"badge badge-fail\">{failCount} Failed</span>");
-            if (errorCount > 0)
-                sb.AppendLine($"  <span class=\"badge badge-error\">{errorCount} Errors</span>");
-            sb.AppendLine($"  <span class=\"badge badge-avg\">Avg: {avgDiff:F2}%</span>");
-            sb.AppendLine($"  <span class=\"badge badge-median\">Median: {medianDiff:F2}%</span>");
-            sb.AppendLine($"  <span class=\"badge badge-max\">Max: {maxDiff:F2}%</span>");
-            sb.AppendLine("</div>");
-
-            // Filter buttons + search
+            // Filter tags (clickable) + search + stats
             sb.AppendLine("<div class=\"toolbar\">");
             sb.AppendLine("<div class=\"filters\">");
-            sb.AppendLine("  <button class=\"filter-btn active\" data-filter=\"all\">All</button>");
-            sb.AppendLine("  <button class=\"filter-btn\" data-filter=\"fail\">Failures</button>");
-            sb.AppendLine("  <button class=\"filter-btn\" data-filter=\"pass\">Passed</button>");
+            sb.AppendLine($"  <button class=\"filter-btn filter-all active\" data-filter=\"all\">All <span class=\"filter-count\">{totalCount}</span></button>");
+            sb.AppendLine($"  <button class=\"filter-btn filter-pass\" data-filter=\"pass\">Passed <span class=\"filter-count\">{passCount}</span></button>");
+            if (nearPassCount > 0)
+                sb.AppendLine($"  <button class=\"filter-btn filter-nearpass\" data-filter=\"nearpass\">Near-Pass <span class=\"filter-count\">{nearPassCount}</span></button>");
+            sb.AppendLine($"  <button class=\"filter-btn filter-fail\" data-filter=\"fail\">Failed <span class=\"filter-count\">{failCount}</span></button>");
             if (errorCount > 0)
-                sb.AppendLine("  <button class=\"filter-btn\" data-filter=\"error\">Errors</button>");
+                sb.AppendLine($"  <button class=\"filter-btn filter-error\" data-filter=\"error\">Errors <span class=\"filter-count\">{errorCount}</span></button>");
             sb.AppendLine("</div>");
             sb.AppendLine("<div class=\"search-box\">");
             sb.AppendLine("  <input type=\"text\" id=\"search-input\" placeholder=\"Search tests...\" autocomplete=\"off\">");
             sb.AppendLine("</div>");
+            sb.AppendLine("<div class=\"category-picker\" id=\"category-picker\">");
+            sb.AppendLine("  <div class=\"category-tags\" id=\"category-tags\"></div>");
+            sb.AppendLine("  <input type=\"text\" id=\"category-input\" placeholder=\"Filter by category...\" autocomplete=\"off\">");
+            sb.AppendLine("  <div class=\"category-dropdown\" id=\"category-dropdown\">");
+            foreach (var cat in categories.OrderBy(c => c.Name))
+            {
+                sb.AppendLine($"    <div class=\"category-option\" data-category=\"{Escape(cat.Name.ToLower())}\">{Escape(cat.Name)} <span class=\"cat-count\">{cat.Passed}/{cat.Total}</span></div>");
+            }
+            sb.AppendLine("  </div>");
+            sb.AppendLine("</div>");
+            sb.AppendLine($"<div class=\"stats\">avg {avgDiff:F2}% &middot; median {medianDiff:F2}% &middot; max {maxDiff:F2}%</div>");
             sb.AppendLine("</div>");
             sb.AppendLine("</header>");
-
-            // Category breakdown bar
-            sb.AppendLine("<div class=\"category-bar\">");
-            sb.AppendLine("<div class=\"category-bar-inner\">");
-            foreach (var cat in categories)
-            {
-                string catClass = cat.AvgDiff < 0.01 ? "cat-perfect" : cat.AvgDiff < 1.0 ? "cat-good" : cat.AvgDiff < 5.0 ? "cat-warn" : "cat-bad";
-                sb.AppendLine($"  <span class=\"cat-chip {catClass}\" title=\"{Escape(cat.Name)}: {cat.Passed}/{cat.Total} passed, avg {cat.AvgDiff:F2}%\">");
-                sb.AppendLine($"    {Escape(cat.Name)} <small>{cat.Passed}/{cat.Total}</small>");
-                sb.AppendLine("  </span>");
-            }
-            sb.AppendLine("</div>");
-            sb.AppendLine("</div>");
 
             // Results table
             sb.AppendLine("<main>");
@@ -142,6 +131,7 @@ namespace Rend.VisualRegression.Infrastructure
                 string statusLabel = result.Outcome switch
                 {
                     ComparisonOutcome.Pass => "PASS",
+                    ComparisonOutcome.NearPass => "~PASS",
                     ComparisonOutcome.Fail => "FAIL",
                     ComparisonOutcome.Error => "ERROR",
                     _ => "UNKNOWN"
@@ -151,8 +141,9 @@ namespace Rend.VisualRegression.Infrastructure
                 {
                     ComparisonOutcome.Fail => 0,
                     ComparisonOutcome.Error => 1,
-                    ComparisonOutcome.Pass => 2,
-                    _ => 3
+                    ComparisonOutcome.NearPass => 2,
+                    ComparisonOutcome.Pass => 3,
+                    _ => 4
                 };
 
                 string diffColor = DiffColor(result.DiffPercentage);
@@ -207,6 +198,10 @@ namespace Rend.VisualRegression.Infrastructure
                 if (result.Outcome == ComparisonOutcome.Error)
                 {
                     sb.AppendLine($"  <td class=\"diff-cell\"><span class=\"diff-error\">{Escape(result.ErrorMessage ?? "Error")}</span></td>");
+                }
+                else if (result.Outcome == ComparisonOutcome.NearPass)
+                {
+                    sb.AppendLine($"  <td class=\"diff-cell\"><span class=\"diff-value\" style=\"color:{diffColor}\">{result.DiffPercentage:F2}%</span> <span class=\"diff-shift\">→ {result.ShiftTolerantDiffPercentage:F2}%</span></td>");
                 }
                 else
                 {
@@ -319,32 +314,9 @@ header h1 {
     margin-bottom: 12px;
 }
 
-.summary {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-}
-
-.badge {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 16px;
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.badge-total { background: #444; color: #fff; }
-.badge-pass { background: #27ae60; color: #fff; }
-.badge-fail { background: #e74c3c; color: #fff; }
-.badge-error { background: #e67e22; color: #fff; }
-.badge-avg { background: #2c3e50; color: #f39c12; border: 1px solid #f39c12; }
-.badge-median { background: #2c3e50; color: #3498db; border: 1px solid #3498db; }
-.badge-max { background: #2c3e50; color: #e74c3c; border: 1px solid #e74c3c; }
-
 .toolbar {
     display: flex;
-    gap: 16px;
+    gap: 12px;
     align-items: center;
     flex-wrap: wrap;
 }
@@ -356,25 +328,42 @@ header h1 {
 }
 
 .filter-btn {
-    padding: 5px 14px;
-    border: 1px solid rgba(255,255,255,0.25);
+    padding: 5px 12px;
+    border: 1px solid rgba(255,255,255,0.2);
     border-radius: 4px;
     background: transparent;
-    color: #aaa;
+    color: #999;
     cursor: pointer;
     font-size: 13px;
     transition: all 0.15s;
 }
 
-.filter-btn:hover {
+.filter-count {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0 5px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
     background: rgba(255,255,255,0.1);
-    color: #fff;
+    min-width: 18px;
+    text-align: center;
 }
 
-.filter-btn.active {
-    background: rgba(255,255,255,0.2);
-    color: #fff;
-    border-color: rgba(255,255,255,0.5);
+.filter-btn:hover { background: rgba(255,255,255,0.08); color: #ccc; }
+
+.filter-btn.active { color: #fff; border-color: rgba(255,255,255,0.4); }
+.filter-btn.filter-all.active { background: rgba(255,255,255,0.15); }
+.filter-btn.filter-pass.active { background: rgba(39,174,96,0.3); border-color: #27ae60; }
+.filter-btn.filter-nearpass.active { background: rgba(241,196,15,0.25); border-color: #f1c40f; color: #f1c40f; }
+.filter-btn.filter-fail.active { background: rgba(231,76,60,0.3); border-color: #e74c3c; }
+.filter-btn.filter-error.active { background: rgba(230,126,34,0.3); border-color: #e67e22; }
+
+.stats {
+    margin-left: auto;
+    font-size: 12px;
+    color: #777;
+    white-space: nowrap;
 }
 
 .search-box {
@@ -398,37 +387,112 @@ header h1 {
 .search-box input::placeholder { color: #777; }
 .search-box input:focus { border-color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.12); }
 
-/* Category breakdown bar */
-.category-bar {
-    background: #f0f2f5;
-    padding: 8px 32px;
-    border-bottom: 1px solid #ddd;
-    overflow-x: auto;
-}
-
-.category-bar-inner {
+/* Category tag-list picker */
+.category-picker {
+    position: relative;
     display: flex;
-    gap: 6px;
+    align-items: center;
     flex-wrap: wrap;
+    gap: 4px;
+    min-width: 180px;
+    max-width: 400px;
+    padding: 3px 6px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    background: rgba(255,255,255,0.06);
+    cursor: text;
 }
 
-.cat-chip {
+.category-picker:focus-within {
+    border-color: rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.1);
+}
+
+.category-tags {
+    display: contents;
+}
+
+.category-tag {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 3px 10px;
-    border-radius: 12px;
-    font-size: 12px;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
     font-weight: 500;
+    background: rgba(52,152,219,0.35);
+    color: #fff;
     white-space: nowrap;
-    cursor: default;
+    animation: tagIn 0.12s ease-out;
 }
 
-.cat-chip small { opacity: 0.7; font-weight: 400; }
-.cat-perfect { background: #d4edda; color: #155724; }
-.cat-good { background: #d1ecf1; color: #0c5460; }
-.cat-warn { background: #fff3cd; color: #856404; }
-.cat-bad { background: #f8d7da; color: #721c24; }
+@keyframes tagIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+.category-tag .tag-x {
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    opacity: 0.6;
+    margin-left: 2px;
+}
+
+.category-tag .tag-x:hover { opacity: 1; }
+
+#category-input {
+    flex: 1;
+    min-width: 80px;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #fff;
+    font-size: 12px;
+    padding: 3px 2px;
+}
+
+#category-input::placeholder { color: #777; }
+
+.category-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 2px;
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 200;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.category-dropdown.open { display: block; }
+
+.category-option {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: #ccc;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.category-option:hover, .category-option.highlighted {
+    background: rgba(52,152,219,0.3);
+    color: #fff;
+}
+
+.category-option.selected {
+    background: rgba(52,152,219,0.15);
+    color: #3498db;
+}
+
+.category-option .cat-count {
+    font-size: 11px;
+    opacity: 0.6;
+}
 
 main {
     padding: 16px 32px 32px;
@@ -504,6 +568,7 @@ tbody tr:hover {
 }
 
 .status-pass { background: #d4edda; color: #155724; }
+.status-nearpass { background: #fff3cd; color: #856404; }
 .status-fail { background: #f8d7da; color: #721c24; }
 .status-error { background: #fff3cd; color: #856404; }
 
@@ -532,7 +597,8 @@ tbody tr:hover {
     font-size: 12px;
 }
 
-.diff-cell { text-align: right; font-variant-numeric: tabular-nums; }
+.diff-cell { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.diff-shift { color: #27ae60; font-size: 11px; font-weight: 500; }
 .diff-value { font-weight: 600; font-size: 13px; }
 .diff-error { color: #e67e22; font-size: 12px; }
 .duration-cell { text-align: right; color: #888; font-variant-numeric: tabular-nums; }
@@ -686,6 +752,7 @@ document.querySelectorAll('th.sortable').forEach(function(th) {
 
 // ---- Filter functionality ----
 var activeFilter = 'all';
+var selectedCategories = [];
 
 function applyFilters() {
     var search = document.getElementById('search-input').value.toLowerCase();
@@ -696,7 +763,8 @@ function applyFilters() {
         var category = row.getAttribute('data-sort-category');
         var matchFilter = (activeFilter === 'all') || (status === activeFilter);
         var matchSearch = !search || name.indexOf(search) !== -1 || category.indexOf(search) !== -1;
-        if (matchFilter && matchSearch) {
+        var matchCategory = selectedCategories.length === 0 || selectedCategories.indexOf(category) !== -1;
+        if (matchFilter && matchSearch && matchCategory) {
             row.classList.remove('hidden');
             visible++;
         } else {
@@ -744,6 +812,98 @@ document.querySelectorAll('.filter-btn').forEach(function(btn) {
 document.getElementById('search-input').addEventListener('input', function() {
     applyFilters();
 });
+
+// ---- Category tag-list picker ----
+(function() {
+    var input = document.getElementById('category-input');
+    var dropdown = document.getElementById('category-dropdown');
+    var tagsEl = document.getElementById('category-tags');
+    var picker = document.getElementById('category-picker');
+    var options = Array.from(dropdown.querySelectorAll('.category-option'));
+    var highlighted = -1;
+
+    function renderTags() {
+        tagsEl.innerHTML = '';
+        selectedCategories.forEach(function(cat) {
+            var tag = document.createElement('span');
+            tag.className = 'category-tag';
+            tag.textContent = options.find(function(o) { return o.getAttribute('data-category') === cat; })?.textContent.split(' ')[0] || cat;
+            var x = document.createElement('span');
+            x.className = 'tag-x';
+            x.textContent = '\u00d7';
+            x.onclick = function(e) { e.stopPropagation(); removeCategory(cat); };
+            tag.appendChild(x);
+            tagsEl.appendChild(tag);
+        });
+        input.placeholder = selectedCategories.length ? '' : 'Filter by category...';
+    }
+
+    function removeCategory(cat) {
+        selectedCategories = selectedCategories.filter(function(c) { return c !== cat; });
+        syncOptions();
+        renderTags();
+        applyFilters();
+    }
+
+    function syncOptions() {
+        options.forEach(function(opt) {
+            var cat = opt.getAttribute('data-category');
+            opt.classList.toggle('selected', selectedCategories.indexOf(cat) !== -1);
+        });
+    }
+
+    function filterDropdown() {
+        var q = input.value.toLowerCase();
+        var anyVisible = false;
+        options.forEach(function(opt) {
+            var show = opt.getAttribute('data-category').indexOf(q) !== -1;
+            opt.style.display = show ? '' : 'none';
+            if (show) anyVisible = true;
+        });
+        highlighted = -1;
+    }
+
+    function openDropdown() { dropdown.classList.add('open'); filterDropdown(); }
+    function closeDropdown() { dropdown.classList.remove('open'); highlighted = -1; }
+
+    picker.addEventListener('click', function() { input.focus(); });
+    input.addEventListener('focus', openDropdown);
+    input.addEventListener('input', function() { openDropdown(); filterDropdown(); });
+
+    input.addEventListener('keydown', function(e) {
+        var visible = options.filter(function(o) { return o.style.display !== 'none'; });
+        if (e.key === 'ArrowDown') { e.preventDefault(); highlighted = Math.min(highlighted + 1, visible.length - 1); updateHighlight(visible); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); highlighted = Math.max(highlighted - 1, 0); updateHighlight(visible); }
+        else if (e.key === 'Enter') { e.preventDefault(); if (highlighted >= 0 && highlighted < visible.length) toggleOption(visible[highlighted]); }
+        else if (e.key === 'Escape') { closeDropdown(); input.blur(); }
+        else if (e.key === 'Backspace' && !input.value && selectedCategories.length) { removeCategory(selectedCategories[selectedCategories.length - 1]); }
+    });
+
+    function updateHighlight(visible) {
+        options.forEach(function(o) { o.classList.remove('highlighted'); });
+        if (highlighted >= 0 && highlighted < visible.length) visible[highlighted].classList.add('highlighted');
+    }
+
+    function toggleOption(opt) {
+        var cat = opt.getAttribute('data-category');
+        var idx = selectedCategories.indexOf(cat);
+        if (idx === -1) selectedCategories.push(cat);
+        else selectedCategories.splice(idx, 1);
+        syncOptions();
+        renderTags();
+        input.value = '';
+        filterDropdown();
+        applyFilters();
+    }
+
+    options.forEach(function(opt) {
+        opt.addEventListener('mousedown', function(e) { e.preventDefault(); toggleOption(opt); });
+    });
+
+    document.addEventListener('mousedown', function(e) {
+        if (!picker.contains(e.target)) closeDropdown();
+    });
+})();
 
 // ---- Lightbox (side-by-side) ----
 function openLightbox(img, event) {

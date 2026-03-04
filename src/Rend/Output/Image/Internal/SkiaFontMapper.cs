@@ -10,7 +10,7 @@ namespace Rend.Output.Image.Internal
     /// Maps <see cref="FontDescriptor"/> to <see cref="SKTypeface"/> instances,
     /// creating typefaces from raw font byte data when available.
     /// </summary>
-    internal sealed class SkiaFontMapper : IDisposable
+    public sealed class SkiaFontMapper : IDisposable
     {
         private readonly Dictionary<FontDescriptor, SKTypeface> _cache = new Dictionary<FontDescriptor, SKTypeface>();
         private bool _disposed;
@@ -21,7 +21,7 @@ namespace Rend.Output.Image.Internal
         /// <param name="descriptor">The font descriptor to resolve.</param>
         /// <param name="fontData">Raw font file bytes, or null to use the system default.</param>
         /// <returns>An SKTypeface for the font, or the default typeface if font data is unavailable.</returns>
-        internal SKTypeface GetOrCreate(FontDescriptor descriptor, byte[]? fontData)
+        public SKTypeface GetOrCreate(FontDescriptor descriptor, byte[]? fontData)
         {
             if (_cache.TryGetValue(descriptor, out var existing))
             {

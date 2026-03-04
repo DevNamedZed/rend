@@ -24,6 +24,14 @@ namespace Rend.VisualRegression.Infrastructure
                 return Array.Empty<byte>();
             }
 
+            return GenerateDiffDecoded(expectedBitmap, actualBitmap, perChannelThreshold);
+        }
+
+        /// <summary>
+        /// Generate a diff PNG from already-decoded bitmaps.
+        /// </summary>
+        internal static byte[] GenerateDiffDecoded(SKBitmap expectedBitmap, SKBitmap actualBitmap, int perChannelThreshold = 0)
+        {
             int width = Math.Max(expectedBitmap.Width, actualBitmap.Width);
             int height = Math.Max(expectedBitmap.Height, actualBitmap.Height);
 
@@ -38,7 +46,6 @@ namespace Rend.VisualRegression.Infrastructure
 
                     if (!inExpected || !inActual)
                     {
-                        // Out of bounds: magenta
                         diffBitmap.SetPixel(x, y, new SKColor(255, 0, 255, 255));
                     }
                     else
@@ -46,9 +53,8 @@ namespace Rend.VisualRegression.Infrastructure
                         var expectedPixel = expectedBitmap.GetPixel(x, y);
                         var actualPixel = actualBitmap.GetPixel(x, y);
 
-                        if (PixelsMatch(expectedPixel, actualPixel, perChannelThreshold))
+                        if (ImageComparer.PixelsMatch(expectedPixel, actualPixel, perChannelThreshold))
                         {
-                            // Matching: dim grayscale at 30% opacity
                             byte gray = (byte)((expectedPixel.Red * 0.299 +
                                                  expectedPixel.Green * 0.587 +
                                                  expectedPixel.Blue * 0.114));
@@ -57,7 +63,6 @@ namespace Rend.VisualRegression.Infrastructure
                         }
                         else
                         {
-                            // Different: bright red
                             diffBitmap.SetPixel(x, y, new SKColor(255, 0, 0, 255));
                         }
                     }
@@ -69,12 +74,68 @@ namespace Rend.VisualRegression.Infrastructure
             return data.ToArray();
         }
 
-        private static bool PixelsMatch(SKColor a, SKColor b, int threshold)
+        /// <summary>
+        /// Compare and optionally generate diff in a single decode pass.
+        /// Returns strict comparison, shift-tolerant comparison, and diff PNG.
+        /// </summary>
+        public static CompareAndDiffResult CompareAndDiff(
+            byte[] expectedPng, byte[] actualPng, int perChannelThreshold = 0)
         {
-            return Math.Abs(a.Red - b.Red) <= threshold &&
-                   Math.Abs(a.Green - b.Green) <= threshold &&
-                   Math.Abs(a.Blue - b.Blue) <= threshold &&
-                   Math.Abs(a.Alpha - b.Alpha) <= threshold;
+            using var expectedBitmap = SKBitmap.Decode(expectedPng);
+            using var actualBitmap = SKBitmap.Decode(actualPng);
+
+            if (expectedBitmap == null || actualBitmap == null)
+            {
+                return new CompareAndDiffResult(1.0, 1, 1.0, 1, 1, null);
+            }
+
+            // Strict comparison
+            var (_, strictDiff, totalPixels) = ImageComparer.CompareDecoded(
+                expectedBitmap, actualBitmap, perChannelThreshold);
+
+            // Shift-tolerant comparison (only if there are strict diffs)
+            int shiftDiff = 0;
+            if (strictDiff > 0)
+            {
+                var (_, sd, _) = ImageComparer.CompareWithShiftTolerance(
+                    expectedBitmap, actualBitmap, perChannelThreshold);
+                shiftDiff = sd;
+            }
+
+            double strictFraction = totalPixels > 0 ? (double)strictDiff / totalPixels : 0.0;
+            double shiftFraction = totalPixels > 0 ? (double)shiftDiff / totalPixels : 0.0;
+
+            byte[]? diffPng = null;
+            if (strictDiff > 0)
+            {
+                diffPng = GenerateDiffDecoded(expectedBitmap, actualBitmap, perChannelThreshold);
+            }
+
+            return new CompareAndDiffResult(strictFraction, strictDiff, shiftFraction, shiftDiff, totalPixels, diffPng);
+        }
+    }
+
+    /// <summary>
+    /// Result of a combined compare-and-diff operation.
+    /// </summary>
+    public readonly struct CompareAndDiffResult
+    {
+        public readonly double StrictDiffFraction;
+        public readonly int StrictDiffPixels;
+        public readonly double ShiftTolerantDiffFraction;
+        public readonly int ShiftTolerantDiffPixels;
+        public readonly int TotalPixels;
+        public readonly byte[]? DiffPng;
+
+        public CompareAndDiffResult(double strictFraction, int strictPixels,
+            double shiftFraction, int shiftPixels, int totalPixels, byte[]? diffPng)
+        {
+            StrictDiffFraction = strictFraction;
+            StrictDiffPixels = strictPixels;
+            ShiftTolerantDiffFraction = shiftFraction;
+            ShiftTolerantDiffPixels = shiftPixels;
+            TotalPixels = totalPixels;
+            DiffPng = diffPng;
         }
     }
 }

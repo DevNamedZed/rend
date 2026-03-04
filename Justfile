@@ -1,5 +1,9 @@
 dotnet := "~/.dotnet/dotnet"
 
+# List available recipes
+default:
+    @just --list
+
 # Build the entire solution
 build:
     {{dotnet}} build Rend.sln

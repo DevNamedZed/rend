@@ -25,7 +25,7 @@ namespace Rend.Text
 
             if (text.Length == 0)
             {
-                return new ShapedTextRun(Array.Empty<ShapedGlyph>(), text, fontSize);
+                return new ShapedTextRun(Array.Empty<ShapedGlyph>(), text, fontSize, fontData);
             }
 
             var cached = GetOrCreateFont(fontData, fontSize);
@@ -74,7 +74,7 @@ namespace Rend.Text
                     );
                 }
 
-                return new ShapedTextRun(glyphs, text, fontSize);
+                return new ShapedTextRun(glyphs, text, fontSize, fontData);
             }
         }
 

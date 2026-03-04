@@ -108,7 +108,7 @@ input, textarea, select, button {
 /* Button default styling — match Chrome's default appearance */
 button {
     background-color: #efefef;
-    border: 1px solid #767676;
+    border: 2px outset #767676;
     border-radius: 2px;
     padding: 1px 6px;
 }

@@ -296,7 +296,9 @@ namespace Rend.Fonts.Internal
             int typoDescender = ReadInt16(o + 70);
             int typoLineGap = ReadInt16(o + 72);
 
-            // Prefer OS/2 typo metrics.
+            // Use OS/2 sTypo metrics for line spacing. These metrics provide
+            // consistent cross-platform line heights and match what our HarfBuzz-based
+            // text shaper uses internally for vertical metrics.
             _ascent = typoAscender;
             _descent = typoDescender;
             _lineGap = typoLineGap;

@@ -75,8 +75,9 @@ namespace Rend
             styledTree.PageStyle.MarginBottom = _options.MarginBottom;
             styledTree.PageStyle.MarginLeft = _options.MarginLeft;
 
-            // 7. Create text shaper
-            using var textShaper = new HarfBuzzTextShaper();
+            // 7. Create or reuse text shaper
+            var ownedShaper = _options.TextShaper == null ? new HarfBuzzTextShaper() : null;
+            var textShaper = _options.TextShaper ?? ownedShaper!;
 
             // 8. Layout
             progress?.Report(new RenderProgress(50, RenderStage.Layout, "Computing layout"));
@@ -121,11 +122,19 @@ namespace Rend
 
             // 11. Finish and collect output
             progress?.Report(new RenderProgress(90, RenderStage.Finishing, "Generating output"));
-            using (var ms = new MemoryStream())
+            try
             {
-                target.Finish(ms);
-                progress?.Report(new RenderProgress(100, RenderStage.Finishing, "Complete"));
-                return new RenderResult(ms.ToArray(), layoutDoc.Pages.Count, GetFormat(target));
+                using (var ms = new MemoryStream())
+                {
+                    target.Finish(ms);
+                    progress?.Report(new RenderProgress(100, RenderStage.Finishing, "Complete"));
+                    return new RenderResult(ms.ToArray(), layoutDoc.Pages.Count, GetFormat(target));
+                }
+            }
+            finally
+            {
+                // Only dispose the shaper if we created it (not when caller provided a shared one)
+                ownedShaper?.Dispose();
             }
         }
 

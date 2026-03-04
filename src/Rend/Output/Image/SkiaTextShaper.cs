@@ -28,6 +28,8 @@ namespace Rend.Output.Image
             _measurePaint = new SKPaint
             {
                 IsAntialias = true,
+                SubpixelText = true,
+                HintingLevel = SKPaintHinting.Slight,
                 Style = SKPaintStyle.Fill
             };
         }
@@ -74,7 +76,7 @@ namespace Rend.Output.Image
                         g.XAdvance * scale, g.YAdvance,
                         g.XOffset * scale, g.YOffset);
                 }
-                return new ShapedTextRun(scaledGlyphs, text, fontSize);
+                return new ShapedTextRun(scaledGlyphs, text, fontSize, fontData);
             }
 
             return hbRun;
@@ -92,15 +94,10 @@ namespace Rend.Output.Image
             SKTypeface? tf = null;
             try
             {
-                // Load from data to discover the family name, then resolve by family
-                // name so the measurement typeface matches what SkiaRenderTarget uses
-                // for rendering (it resolves by family name, not from raw bytes).
+                // Load typeface directly from font data bytes to ensure measurement
+                // uses the exact same font as layout (HarfBuzz) and rendering.
                 using var skData = SKData.CreateCopy(fontData);
-                using var dataTf = SKTypeface.FromData(skData);
-                if (dataTf != null)
-                {
-                    tf = SKTypeface.FromFamilyName(dataTf.FamilyName, dataTf.FontStyle);
-                }
+                tf = SKTypeface.FromData(skData);
             }
             catch { }
 

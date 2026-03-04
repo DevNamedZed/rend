@@ -77,6 +77,20 @@ namespace Rend
         /// <summary>Progress reporter. If set, receives progress updates during rendering.</summary>
         public IProgress<RenderProgress>? Progress { get; set; }
 
+        /// <summary>
+        /// Optional shared text shaper. When set, the pipeline reuses this shaper
+        /// instead of creating a new one per render call. This avoids repeated
+        /// font data pinning and native memory allocation. The caller owns disposal.
+        /// </summary>
+        public Text.ITextShaper? TextShaper { get; set; }
+
+        /// <summary>
+        /// Optional shared Skia font mapper for image output. When set, SKTypeface
+        /// instances are cached and reused across renders, avoiding repeated native
+        /// memory copies of font data. The caller owns disposal.
+        /// </summary>
+        public Output.Image.Internal.SkiaFontMapper? FontMapper { get; set; }
+
         /// <summary>Default options.</summary>
         public static readonly RenderOptions Default = new RenderOptions();
     }

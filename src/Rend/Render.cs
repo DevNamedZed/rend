@@ -78,7 +78,7 @@ namespace Rend
                 Quality = options.ImageQuality
             };
 
-            using var target = new SkiaRenderTarget(skiaOptions);
+            using var target = new SkiaRenderTarget(skiaOptions, options.FontMapper);
             var pipeline = new RenderPipeline(options);
             var result = pipeline.Execute(html, target);
             return result.Data;

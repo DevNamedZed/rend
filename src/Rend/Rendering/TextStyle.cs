@@ -28,5 +28,8 @@ namespace Rend.Rendering
 
         /// <summary>Gets or sets the extra spacing between words in pixels (CSS word-spacing).</summary>
         public float WordSpacing { get; set; }
+
+        /// <summary>Gets or sets the raw font data bytes for exact font matching, or null to use OS font lookup.</summary>
+        public byte[]? FontData { get; set; }
     }
 }

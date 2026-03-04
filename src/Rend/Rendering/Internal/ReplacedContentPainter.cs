@@ -24,7 +24,7 @@ namespace Rend.Rendering.Internal
         private static readonly CssColor CheckmarkColor = new CssColor(0, 0, 0);            // black
         private static readonly CssColor ArrowColor = new CssColor(80, 80, 80);             // #505050
 
-        private const float FormFontSize = 11f;
+        private const float FormFontSize = 13f;  // Chrome default form font ≈13.333px
         private const float FormTextPadding = 3f;
         // Approximate ascent ratio for sans-serif fonts (baseline sits ~80% below top of em square)
         private const float FormFontAscent = FormFontSize * 0.8f;

@@ -61,7 +61,8 @@ namespace Rend.Rendering.Internal
                     FontSize = fontSize,
                     Color = shadowColor,
                     Bold = fontWeight >= 700f,
-                    Italic = fontStyle == CssFontStyle.Italic || fontStyle == CssFontStyle.Oblique
+                    Italic = fontStyle == CssFontStyle.Italic || fontStyle == CssFontStyle.Oblique,
+                    FontData = fragment.ShapedRun?.FontData
                 };
                 target.DrawText(text, shadowX, shadowY, textStyle);
             }

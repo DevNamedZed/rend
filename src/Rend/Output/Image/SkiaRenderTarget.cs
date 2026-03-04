@@ -17,7 +17,8 @@ namespace Rend.Output.Image
     public sealed class SkiaRenderTarget : IRenderTarget, IDisposable
     {
         private readonly SkiaRenderOptions _options;
-        private readonly SkiaFontMapper _fontMapper = new SkiaFontMapper();
+        private readonly SkiaFontMapper _fontMapper;
+        private readonly bool _ownsFontMapper;
         private readonly SkiaPaintPool _paintPool = new SkiaPaintPool();
         private readonly List<byte[]> _renderedPages = new List<byte[]>();
         private readonly Stack<float> _opacityStack = new Stack<float>();
@@ -34,10 +35,21 @@ namespace Rend.Output.Image
         /// Creates a new <see cref="SkiaRenderTarget"/> with the specified options.
         /// </summary>
         /// <param name="options">Rendering options, or null for defaults.</param>
-        public SkiaRenderTarget(SkiaRenderOptions? options = null)
+        /// <param name="fontMapper">Optional shared font mapper. If null, a new one is created and owned.</param>
+        public SkiaRenderTarget(SkiaRenderOptions? options = null, SkiaFontMapper? fontMapper = null)
         {
             _options = options ?? new SkiaRenderOptions();
             _dpiScale = _options.Dpi / 96f;
+            if (fontMapper != null)
+            {
+                _fontMapper = fontMapper;
+                _ownsFontMapper = false;
+            }
+            else
+            {
+                _fontMapper = new SkiaFontMapper();
+                _ownsFontMapper = true;
+            }
         }
 
         /// <inheritdoc />
@@ -604,17 +616,19 @@ namespace Rend.Output.Image
         public void DrawText(string text, float x, float y, TextStyle style)
         {
             EnsureCanvas();
+
             var paint = _paintPool.Rent();
             try
             {
                 paint.IsAntialias = true;
                 paint.SubpixelText = true;
+                paint.HintingLevel = SKPaintHinting.Slight;
                 paint.Style = SKPaintStyle.Fill;
                 var tc = style.Color;
                 paint.Color = new SKColor(tc.R, tc.G, tc.B, (byte)(tc.A * _currentOpacity));
                 paint.TextSize = style.FontSize;
 
-                SKTypeface typeface = _fontMapper.GetOrCreate(style.Font, null);
+                SKTypeface typeface = _fontMapper.GetOrCreate(style.Font, style.FontData);
                 paint.Typeface = typeface;
 
                 if (style.LetterSpacing != 0 || style.WordSpacing != 0)
@@ -643,11 +657,12 @@ namespace Rend.Output.Image
             {
                 paint.IsAntialias = true;
                 paint.SubpixelText = true;
+                paint.HintingLevel = SKPaintHinting.Slight;
                 paint.Style = SKPaintStyle.Fill;
                 paint.Color = new SKColor(color.R, color.G, color.B, (byte)(color.A * _currentOpacity));
                 paint.TextSize = run.FontSize;
 
-                SKTypeface typeface = _fontMapper.GetOrCreate(font, null);
+                SKTypeface typeface = _fontMapper.GetOrCreate(font, run.FontData);
                 paint.Typeface = typeface;
 
                 _currentCanvas!.DrawText(run.OriginalText, x, y, paint);
@@ -694,7 +709,8 @@ namespace Rend.Output.Image
             {
                 _disposed = true;
                 DisposeCurrentBitmap();
-                _fontMapper.Dispose();
+                if (_ownsFontMapper)
+                    _fontMapper.Dispose();
                 _paintPool.Dispose();
             }
         }
