@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Rend.Core.Values;
 using Rend.Css;
 using Rend.Css.Properties.Internal;
@@ -218,6 +219,26 @@ namespace Rend.Css.Tests
 
             Assert.Fail("Failed to resolve calc value");
             return 0;
+        }
+
+        [Fact]
+        public void BoxShadow_Inset_ParsesCorrectly()
+        {
+            // Parse "inset 0 2px 8px rgba(0,0,0,0.3)"
+            var parser = new Rend.Css.Parser.Internal.CssValueParser(
+                Tokenize("inset 0 2px 8px rgba(0,0,0,0.3)"), 100);
+            var value = parser.Parse();
+
+            // Should be a space-separated CssListValue
+            Assert.IsType<CssListValue>(value);
+            var list = (CssListValue)value;
+            Assert.Equal(' ', list.Separator);
+
+            // First value should be CssKeywordValue("inset")
+            Assert.True(list.Values.Count >= 2,
+                $"Expected at least 2 values, got {list.Values.Count}: {string.Join(", ", list.Values.Select(v => $"{v.GetType().Name}({v})"))}");
+            Assert.IsType<CssKeywordValue>(list.Values[0]);
+            Assert.Equal("inset", ((CssKeywordValue)list.Values[0]).Keyword);
         }
 
         private static Rend.Css.Parser.Internal.CssToken[] Tokenize(string text)

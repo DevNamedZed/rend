@@ -46,7 +46,7 @@ namespace Rend.Rendering.Internal
                 return false;
             }
 
-            Matrix3x2 matrix = BuildTransformMatrix(transformValue);
+            Matrix3x2 matrix = BuildTransformMatrix(transformValue, box.BorderRect);
             if (matrix == Matrix3x2.Identity)
             {
                 return false;
@@ -85,7 +85,7 @@ namespace Rend.Rendering.Internal
         /// <summary>
         /// Builds a Matrix3x2 from a CSS transform value (single function or space-separated list).
         /// </summary>
-        internal static Matrix3x2 BuildTransformMatrix(CssValue value)
+        internal static Matrix3x2 BuildTransformMatrix(CssValue value, RectF? refBox = null)
         {
             // Collect the transform functions
             var functions = new List<CssFunctionValue>();
@@ -115,14 +115,14 @@ namespace Rend.Rendering.Internal
             Matrix3x2 result = Matrix3x2.Identity;
             for (int i = 0; i < functions.Count; i++)
             {
-                Matrix3x2 m = ParseTransformFunction(functions[i]);
+                Matrix3x2 m = ParseTransformFunction(functions[i], refBox);
                 result = result * m;
             }
 
             return result;
         }
 
-        private static Matrix3x2 ParseTransformFunction(CssFunctionValue fn)
+        private static Matrix3x2 ParseTransformFunction(CssFunctionValue fn, RectF? refBox)
         {
             string name = fn.Name.ToLowerInvariant();
             var args = fn.Arguments;
@@ -131,20 +131,20 @@ namespace Rend.Rendering.Internal
             {
                 case "translate":
                 {
-                    float tx = args.Count > 0 ? ResolveLength(args[0]) : 0;
-                    float ty = args.Count > 1 ? ResolveLength(args[1]) : 0;
+                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0) : 0;
+                    float ty = args.Count > 1 ? ResolveLengthOrPercent(args[1], refBox?.Height ?? 0) : 0;
                     return Matrix3x2.CreateTranslation(tx, ty);
                 }
 
                 case "translatex":
                 {
-                    float tx = args.Count > 0 ? ResolveLength(args[0]) : 0;
+                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0) : 0;
                     return Matrix3x2.CreateTranslation(tx, 0);
                 }
 
                 case "translatey":
                 {
-                    float ty = args.Count > 0 ? ResolveLength(args[0]) : 0;
+                    float ty = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Height ?? 0) : 0;
                     return Matrix3x2.CreateTranslation(0, ty);
                 }
 
@@ -297,7 +297,7 @@ namespace Rend.Rendering.Internal
             }
         }
 
-        private static float ResolveLength(CssValue value)
+        private static float ResolveLengthOrPercent(CssValue value, float referenceSize)
         {
             if (value is CssDimensionValue dim)
             {
@@ -309,9 +309,14 @@ namespace Rend.Rendering.Internal
             }
             if (value is CssPercentageValue pct)
             {
-                return pct.Value; // percentage — caller should handle
+                return pct.Value * referenceSize / 100f;
             }
             return 0;
+        }
+
+        private static float ResolveLength(CssValue value)
+        {
+            return ResolveLengthOrPercent(value, 0);
         }
 
         private static float ResolveLengthValue(CssDimensionValue dim)

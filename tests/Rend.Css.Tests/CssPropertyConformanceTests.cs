@@ -667,11 +667,11 @@ namespace Rend.Css.Tests
         #region LineHeight
 
         [Fact]
-        public void LineHeight_Default_Is1Point2()
+        public void LineHeight_Default_IsNormal()
         {
             var style = ResolveElement("");
-            // Unitless multipliers stored as negative (negative × fontSize at use time)
-            Assert.Equal(-1.2f, style.LineHeight, 0.01f);
+            // CSS initial value for line-height is "normal" (stored as NaN)
+            Assert.True(float.IsNaN(style.LineHeight));
         }
 
         [Fact]

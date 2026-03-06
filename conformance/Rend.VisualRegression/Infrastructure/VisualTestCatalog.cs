@@ -81,6 +81,36 @@ namespace Rend.VisualRegression.Infrastructure
                 typeof(TestCases.FilterTests).TypeHandle);
             System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
                 typeof(TestCases.NewFeatureTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.TableAdvancedTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.WhitespaceTextTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.LayoutEdgeCaseTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.RealWorldPatternAdvancedTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.VisualEffectTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.BoxLayoutTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.FlexboxAdvancedTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.GridAdvancedTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.PositioningAdvancedTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.ColorPatternTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.UIComponentTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.OverflowClipTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.ShadowAndEffectTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.ResponsivePatternTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.PixelPerfectTests).TypeHandle);
         }
     }
 }

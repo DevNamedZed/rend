@@ -214,11 +214,14 @@ namespace Rend.Rendering
 
             if (!skipBoxPainting)
             {
-                // 3. Paint box-shadow (behind everything).
-                BoxShadowPainter.Paint(box, target);
+                // 3. Paint outer box-shadow (behind background per CSS spec).
+                BoxShadowPainter.PaintOuter(box, target);
 
                 // 4. Paint background (CSS 2.1 step 1: backgrounds).
                 BackgroundPainter.Paint(box, target, _imageResolver);
+
+                // 4b. Paint inset box-shadow (on top of background, below borders per CSS spec).
+                BoxShadowPainter.PaintInset(box, target);
 
                 // 5. Paint borders BEFORE overflow clipping so they remain visible.
                 // CSS spec: overflow clips the padding box content, not the border itself.
@@ -365,9 +368,10 @@ namespace Rend.Rendering
                 float padT = float.IsNaN(inlineStyle.PaddingTop) ? 0 : inlineStyle.PaddingTop;
                 float padB = float.IsNaN(inlineStyle.PaddingBottom) ? 0 : inlineStyle.PaddingBottom;
 
+                // Use content area height (ascent+descent) for inline backgrounds per CSS 2.1 §14.2
                 var bgRect = new RectF(fx - padL, fy - padT,
                                        fragment.Width + padL + padR,
-                                       fragment.Height + padT + padB);
+                                       fragment.ContentHeight + padT + padB);
 
                 float tlr = inlineStyle.BorderTopLeftRadius;
                 float trr = inlineStyle.BorderTopRightRadius;

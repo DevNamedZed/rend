@@ -42,6 +42,10 @@ namespace Rend.Layout.Internal
         private static float ResolveMargin(float value, float containingBlockWidth)
         {
             if (float.IsNaN(value)) return 0; // auto margins handled separately
+            // Deferred percentage encoding: small negative fractions in (-1.01, 0) represent percentages.
+            // CSS 2.1 §8.3: All percentage margins resolve against the containing block width.
+            if (value < 0 && value > -1.01f)
+                return -value * containingBlockWidth;
             return value;
         }
 

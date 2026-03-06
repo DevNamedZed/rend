@@ -16,6 +16,14 @@ namespace Rend.Css.Parser.Internal
         /// </summary>
         public static bool TryExpand(string property, CssValue value, bool important, List<CssDeclaration> output)
         {
+            // If the value contains var(), we can't expand the shorthand at parse time
+            // because we don't know the resolved value yet. Pass it through to all
+            // relevant longhand properties and let var() substitution happen later.
+            if (ContainsVar(value))
+            {
+                return TryExpandVarShorthand(property, value, important, output);
+            }
+
             switch (property)
             {
                 case "margin": return ExpandBox(value, important, output, "margin-top", "margin-right", "margin-bottom", "margin-left");
@@ -1061,6 +1069,74 @@ namespace Rend.Css.Parser.Internal
                 output.Add(new CssDeclaration("mask-mode", modeVal, important));
 
             return true;
+        }
+
+        #endregion
+
+        #region Var() Passthrough
+
+        /// <summary>
+        /// Returns true if the value is or contains a var() function.
+        /// </summary>
+        private static bool ContainsVar(CssValue value)
+        {
+            if (value is CssFunctionValue fn)
+            {
+                if (fn.Name == "var") return true;
+                for (int i = 0; i < fn.Arguments.Count; i++)
+                    if (ContainsVar(fn.Arguments[i])) return true;
+                return false;
+            }
+            if (value is CssListValue list)
+            {
+                for (int i = 0; i < list.Values.Count; i++)
+                    if (ContainsVar(list.Values[i]))
+                        return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Shorthand longhand mappings for var() passthrough. When a shorthand value
+        /// contains var(), we pass the whole value to each longhand so that var()
+        /// substitution during style resolution will produce the correct value.
+        /// </summary>
+        private static readonly Dictionary<string, string[]> ShorthandLonghands = new()
+        {
+            ["margin"] = new[] { "margin-top", "margin-right", "margin-bottom", "margin-left" },
+            ["padding"] = new[] { "padding-top", "padding-right", "padding-bottom", "padding-left" },
+            ["border"] = new[] { "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+                                 "border-top-style", "border-right-style", "border-bottom-style", "border-left-style",
+                                 "border-top-color", "border-right-color", "border-bottom-color", "border-left-color" },
+            ["border-width"] = new[] { "border-top-width", "border-right-width", "border-bottom-width", "border-left-width" },
+            ["border-style"] = new[] { "border-top-style", "border-right-style", "border-bottom-style", "border-left-style" },
+            ["border-color"] = new[] { "border-top-color", "border-right-color", "border-bottom-color", "border-left-color" },
+            ["border-radius"] = new[] { "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius" },
+            ["background"] = new[] { "background-color" },
+            ["font"] = new[] { "font-size", "font-family" },
+            ["flex"] = new[] { "flex-grow", "flex-shrink", "flex-basis" },
+            ["outline"] = new[] { "outline-width", "outline-style", "outline-color" },
+            ["gap"] = new[] { "row-gap", "column-gap" },
+            ["inset"] = new[] { "top", "right", "bottom", "left" },
+            ["overflow"] = new[] { "overflow-x", "overflow-y" },
+            ["text-decoration"] = new[] { "text-decoration-line", "text-decoration-color", "text-decoration-style" },
+            ["border-top"] = new[] { "border-top-width", "border-top-style", "border-top-color" },
+            ["border-right"] = new[] { "border-right-width", "border-right-style", "border-right-color" },
+            ["border-bottom"] = new[] { "border-bottom-width", "border-bottom-style", "border-bottom-color" },
+            ["border-left"] = new[] { "border-left-width", "border-left-style", "border-left-color" },
+        };
+
+        private static bool TryExpandVarShorthand(string property, CssValue value, bool important, List<CssDeclaration> output)
+        {
+            if (ShorthandLonghands.TryGetValue(property, out var longhands))
+            {
+                foreach (var lh in longhands)
+                    output.Add(new CssDeclaration(lh, value, important));
+                return true;
+            }
+
+            // Not a known shorthand — return false to let it be treated as a longhand
+            return false;
         }
 
         #endregion

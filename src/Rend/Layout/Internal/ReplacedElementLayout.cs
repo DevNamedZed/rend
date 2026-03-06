@@ -118,14 +118,14 @@ namespace Rend.Layout.Internal
                     case "submit":
                     case "button":
                     case "reset":
-                        return 20f;
+                        return 21f;
                     default:
-                        return 20f;
+                        return 21f;
                 }
             }
 
             if (tag == "select")
-                return 20f;
+                return 21f;
 
             if (tag == "textarea")
             {

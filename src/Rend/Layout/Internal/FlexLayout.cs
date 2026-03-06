@@ -546,6 +546,9 @@ namespace Rend.Layout.Internal
             float basis = style.FlexBasis;
             if (!float.IsNaN(basis) && basis >= 0)
                 return basis;
+            // Resolve deferred percentage flex-basis against the flex container's main size
+            if (!float.IsNaN(basis) && basis < 0 && basis > -1.01f)
+                return -basis * (isColumn ? containerHeight : containerWidth);
 
             // Use width/height as fallback (resolve deferred percentages)
             float size = isColumn ? style.Height : style.Width;
@@ -636,16 +639,17 @@ namespace Rend.Layout.Internal
                     return (freeSpace, defaultGap);
                 case CssJustifyContent.SpaceBetween:
                     if (itemCount <= 1) return (0, defaultGap);
-                    return (0, freeSpace / (itemCount - 1));
+                    // freeSpace already has defaultGap subtracted, so add it back per gap slot
+                    return (0, defaultGap + freeSpace / (itemCount - 1));
                 case CssJustifyContent.SpaceAround:
                 {
                     float perItem = freeSpace / itemCount;
-                    return (perItem / 2, perItem);
+                    return (perItem / 2, defaultGap + perItem);
                 }
                 case CssJustifyContent.SpaceEvenly:
                 {
                     float slot = freeSpace / (itemCount + 1);
-                    return (slot, slot);
+                    return (slot, defaultGap + slot);
                 }
                 default:
                     return (0, defaultGap);

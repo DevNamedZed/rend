@@ -33,7 +33,7 @@ namespace Rend.Rendering.Internal
             }
 
             float drawX = lineX + fragment.X;
-            float drawY = lineY + fragment.Y + fragment.Baseline;
+            float drawY = (float)Math.Floor(lineY + fragment.Y + fragment.Baseline);
 
             // Paint text shadows before main text.
             TextShadowPainter.Paint(fragment, drawX, drawY, target, style);

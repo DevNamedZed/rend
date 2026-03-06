@@ -177,7 +177,7 @@ namespace Rend.Output.Pdf
         }
 
         /// <inheritdoc />
-        public void SetMaskBlur(float sigma)
+        public void SetMaskBlur(float sigma, bool inner = false)
         {
             // PDF does not support mask blur directly; box shadows degrade gracefully
         }
@@ -241,7 +241,10 @@ namespace Rend.Output.Pdf
 
             SetFillFromBrush(brush, content);
             WritePath(path, content);
-            content.Fill();
+            if (path.FillType == Rendering.PathFillType.EvenOdd)
+                content.FillEvenOdd();
+            else
+                content.Fill();
         }
 
         /// <inheritdoc />

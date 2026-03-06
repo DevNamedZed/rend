@@ -28,9 +28,18 @@ namespace Rend.Css.UserAgent.Internal
 html, address, blockquote, body, dd, div, dl, dt,
 fieldset, form, frame, frameset, h1, h2, h3, h4, h5, h6,
 hr, noframes, ol, p, ul, center, dir, menu, pre,
-article, aside, details, dialog, figcaption, figure,
+article, aside, details, dialog, figcaption,
 footer, header, hgroup, main, nav, section {
     display: block;
+}
+
+/* Figure */
+figure {
+    display: block;
+    margin-top: 1em;
+    margin-bottom: 1em;
+    margin-left: 40px;
+    margin-right: 40px;
 }
 
 /* Summary disclosure marker */
@@ -53,6 +62,11 @@ ol { margin-top: 1em; margin-bottom: 1em; padding-left: 40px; }
 ul { list-style-type: disc; }
 ol { list-style-type: decimal; }
 li { display: list-item; }
+/* Nested list markers per Chromium UA defaults */
+ul ul, ol ul, menu ul, dir ul { list-style-type: circle; }
+ul ul ul, ol ul ul, ul ol ul, ol ol ul { list-style-type: square; }
+/* Remove margins on nested lists */
+ul ul, ul ol, ol ul, ol ol { margin-top: 0; margin-bottom: 0; }
 
 /* Definition lists */
 dl { margin-top: 1em; margin-bottom: 1em; }

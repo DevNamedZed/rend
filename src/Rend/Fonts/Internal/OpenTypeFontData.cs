@@ -33,6 +33,10 @@ namespace Rend.Fonts.Internal
         private bool _isItalic;
         private int _capHeight;
         private int _xHeight;
+
+        // OS/2 Win metrics (used by Chrome for line height when USE_TYPO_METRICS is not set)
+        private int _winAscent;
+        private int _winDescent; // stored as positive value
         private int _numberOfHMetrics;
 
         // hmtx advance widths (in font design units).
@@ -123,7 +127,8 @@ namespace Rend.Fonts.Internal
         /// </summary>
         public FontMetricsInfo BuildMetrics()
         {
-            return new FontMetricsInfo(_ascent, _descent, _lineGap, _unitsPerEm, _capHeight, _xHeight);
+            return new FontMetricsInfo(_ascent, _descent, _lineGap, _unitsPerEm, _capHeight, _xHeight,
+                _winAscent, _winDescent);
         }
 
         /// <summary>
@@ -285,23 +290,22 @@ namespace Rend.Fonts.Internal
             // offset 4: usWeightClass (uint16)
             _weight = ReadUInt16(o + 4);
 
-            // offset 62: fsSelection (uint16) - bit 0 = italic
+            // offset 62: fsSelection (uint16) - bit 0 = italic, bit 7 = USE_TYPO_METRICS
             ushort fsSelection = ReadUInt16(o + 62);
             _isItalic = (fsSelection & 0x0001) != 0;
 
-            // offset 68: sTypoAscender (int16)
-            // offset 70: sTypoDescender (int16)
-            // offset 72: sTypoLineGap (int16)
-            int typoAscender = ReadInt16(o + 68);
-            int typoDescender = ReadInt16(o + 70);
-            int typoLineGap = ReadInt16(o + 72);
+            // Font metrics for layout: We use hhea metrics (set in ParseHheaTable) as our
+            // primary ascent/descent for baseline positioning. Skia uses hhea metrics for
+            // text positioning, so using the same metrics ensures our layout matches Skia's rendering.
 
-            // Use OS/2 sTypo metrics for line spacing. These metrics provide
-            // consistent cross-platform line heights and match what our HarfBuzz-based
-            // text shaper uses internally for vertical metrics.
-            _ascent = typoAscender;
-            _descent = typoDescender;
-            _lineGap = typoLineGap;
+            // OS/2 usWinAscent (offset 74, uint16) and usWinDescent (offset 76, uint16)
+            // are used by Chrome for line height when USE_TYPO_METRICS (fsSelection bit 7) is NOT set.
+            bool useTypoMetrics = (fsSelection & 0x0080) != 0;
+            if (o + 78 <= _data.Length)
+            {
+                _winAscent = ReadUInt16(o + 74);
+                _winDescent = ReadUInt16(o + 76); // unsigned — always positive
+            }
 
             // sCapHeight at offset 88, sxHeight at offset 86 (OS/2 version >= 2).
             ushort version = ReadUInt16(o);

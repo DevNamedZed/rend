@@ -531,9 +531,11 @@ namespace Rend.Rendering.Internal
                         if (vals.Length >= 3)
                         {
                             // rotate(angle, cx, cy) — rotate around a point
-                            result = Matrix3x2.CreateTranslation(-vals[1], -vals[2]) * result;
-                            result = Matrix3x2.CreateRotation(vals[0] * (float)(Math.PI / 180.0)) * result;
+                            // Prepend order: T(cx,cy) first, then R, then T(-cx,-cy)
+                            // so point * result = point * T(-cx,-cy) * R(angle) * T(cx,cy)
                             result = Matrix3x2.CreateTranslation(vals[1], vals[2]) * result;
+                            result = Matrix3x2.CreateRotation(vals[0] * (float)(Math.PI / 180.0)) * result;
+                            result = Matrix3x2.CreateTranslation(-vals[1], -vals[2]) * result;
                         }
                         else if (vals.Length >= 1)
                         {

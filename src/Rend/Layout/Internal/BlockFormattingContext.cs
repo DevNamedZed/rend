@@ -79,6 +79,7 @@ namespace Rend.Layout.Internal
             bool legendHandled = false;
 
             bool foundSummary = false;
+            bool isFirstInFlowChild = true;
 
             for (int i = 0; i < effectiveChildren.Count; i++)
             {
@@ -242,7 +243,9 @@ namespace Rend.Layout.Internal
                 // Margin collapsing
                 float marginTop = childBox.MarginTop;
                 float collapsedMargin;
-                if (i == 0 && MarginCollapsing.ShouldCollapseWithFirstChild(parent))
+                bool wasFirstInFlow = isFirstInFlowChild;
+                isFirstInFlowChild = false;
+                if (wasFirstInFlow && MarginCollapsing.ShouldCollapseWithFirstChild(parent))
                 {
                     collapsedMargin = MarginCollapsing.Collapse(parent.MarginTop, marginTop);
                     parent.MarginTop = collapsedMargin;
@@ -292,6 +295,11 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
+                        // Pre-resolve height for vertical mode too
+                        float preHeightV = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox);
+                        if (!float.IsNaN(preHeightV) && preHeightV > 0)
+                            childBox.ContentRect = new RectF(x, y, contentWidth, preHeightV);
+
                         LayoutChildren(childBox, context);
                         contentHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox);
                         if (float.IsNaN(contentHeight))
@@ -355,8 +363,41 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
+                        // Pre-resolve the child's height if definite so nested percentage children
+                        // can resolve against it during LayoutChildren.
+                        float preHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox);
+                        if (!float.IsNaN(preHeight) && preHeight > 0)
+                            childBox.ContentRect = new RectF(childBox.ContentRect.X, y, contentWidth, preHeight);
+
                         // Layout children recursively
+                        float marginTopBefore = childBox.MarginTop;
                         LayoutChildren(childBox, context);
+
+                        // If LayoutChildren updated MarginTop (first-child collapsing),
+                        // recompute position with the new margin.
+                        if (childBox.MarginTop != marginTopBefore)
+                        {
+                            float newMarginTop = childBox.MarginTop;
+                            float newCollapsedMargin;
+                            if (wasFirstInFlow && MarginCollapsing.ShouldCollapseWithFirstChild(parent))
+                            {
+                                newCollapsedMargin = MarginCollapsing.Collapse(parent.MarginTop, newMarginTop);
+                                parent.MarginTop = newCollapsedMargin;
+                                newCollapsedMargin = 0;
+                            }
+                            else
+                            {
+                                newCollapsedMargin = MarginCollapsing.Collapse(prevMarginBottom, newMarginTop);
+                            }
+                            y = cursorY + newCollapsedMargin + childBox.BorderTopWidth + childBox.PaddingTop;
+                            // Shift all children by the delta
+                            float deltaY = y - childBox.ContentRect.Y;
+                            if (Math.Abs(deltaY) > 0.01f)
+                            {
+                                childBox.ContentRect = new RectF(x, y, contentWidth, 0);
+                                ShiftDescendants(childBox, deltaY);
+                            }
+                        }
 
                         // Resolve content height
                         contentHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox);
@@ -379,7 +420,34 @@ namespace Rend.Layout.Internal
                         }
                     }
 
-                    childBox.ContentRect = new RectF(x, y, contentWidth, contentHeight);
+                    // For auto-width tables, LayoutChildren (TableLayout) may shrink-wrap
+                    // the content rect. Preserve that width instead of overwriting.
+                    float finalWidth = contentWidth;
+                    if (childStyle.Display == CssDisplay.Table && float.IsNaN(childStyle.Width)
+                        && childBox.ContentRect.Width < contentWidth)
+                    {
+                        finalWidth = childBox.ContentRect.Width;
+                    }
+                    childBox.ContentRect = new RectF(x, y, finalWidth, contentHeight);
+
+                    // Margin collapse through: empty elements (no height, padding, or border)
+                    // have their top and bottom margins collapse into a single margin.
+                    // CSS 2.1 §8.3.1: the element takes no space; its combined margin
+                    // participates in adjacent collapsing.
+                    if (contentHeight == 0
+                        && childBox.PaddingTop == 0 && childBox.PaddingBottom == 0
+                        && childBox.BorderTopWidth == 0 && childBox.BorderBottomWidth == 0
+                        && !isReplaced
+                        && childBox.Children.Count == 0)
+                    {
+                        // Collapse the element's bottom margin with the already-collapsed top margin
+                        float throughMargin = MarginCollapsing.Collapse(collapsedMargin, childBox.MarginBottom);
+                        // This combined margin becomes the prevMarginBottom for the next sibling
+                        prevMarginBottom = throughMargin;
+                        // Don't advance cursorY — the element is effectively invisible
+                        parent.AddChild(childBox);
+                        continue;
+                    }
 
                     // <legend> inside <fieldset>: position on the top border, out of normal flow
                     if (isFieldset && !legendHandled && childElement.TagName == "legend")

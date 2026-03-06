@@ -69,7 +69,8 @@ namespace Rend.Rendering
 
         /// <summary>Sets a Gaussian blur mask for subsequent fill operations (used for box-shadow).</summary>
         /// <param name="sigma">The blur sigma in pixels. 0 clears the blur.</param>
-        void SetMaskBlur(float sigma);
+        /// <param name="inner">If true, use inner blur style (blur only inside the shape boundary).</param>
+        void SetMaskBlur(float sigma, bool inner = false);
 
         /// <summary>Pushes a rectangular clipping region onto the clip stack.</summary>
         /// <param name="rect">The clipping rectangle.</param>

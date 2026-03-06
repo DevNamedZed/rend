@@ -29,7 +29,10 @@ namespace Rend.Layout.Internal
                 if (!float.IsNaN(explicitH) && explicitH > 0)
                     containerHeight = explicitH;
             }
-            if (float.IsNaN(containerHeight) || containerHeight <= 0) containerHeight = 10000f;
+            if (float.IsNaN(containerHeight) || containerHeight <= 0)
+            {
+                containerHeight = 0f; // fr rows will resolve to 0; content sizing handles them
+            }
 
             float rowGap = float.IsNaN(style.RowGap) ? 0 : style.RowGap;
             float colGap = float.IsNaN(style.ColumnGap) ? 0 : style.ColumnGap;
@@ -209,9 +212,16 @@ namespace Rend.Layout.Internal
             // If no explicit columns, determine from item count
             if (explicitCols == 0 && !HasAnyExplicitPlacement(items))
             {
-                if (flowColumn)
+                if (explicitRows > 0)
                 {
-                    gridRows = Math.Max(1, explicitRows > 0 ? explicitRows : (int)Math.Ceiling(Math.Sqrt(items.Count)));
+                    // Explicit rows but no explicit columns: default to 1 column,
+                    // items fill rows sequentially (standard CSS Grid behavior).
+                    gridRows = explicitRows;
+                    gridCols = Math.Max(1, (int)Math.Ceiling((float)items.Count / gridRows));
+                }
+                else if (flowColumn)
+                {
+                    gridRows = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(items.Count)));
                     gridCols = (int)Math.Ceiling((float)items.Count / gridRows);
                 }
                 else
@@ -300,11 +310,14 @@ namespace Rend.Layout.Internal
                 if (flowColumn)
                 {
                     // Column-major auto-placement
-                    // Wrap at gridRows boundary (explicit or inferred row count)
+                    // Wrap at gridRows boundary (explicit or inferred row count).
+                    // Limit row start so spanning items don't create implicit rows;
+                    // they must wrap to the next column instead (CSS Grid Level 1 §8.5).
+                    int rowLimit = gridRows - item.RowSpan + 1;
                     for (int c = autoCol; !found; c++)
                     {
                         int startRow = (c == autoCol) ? autoRow : 0;
-                        for (int r = startRow; r < gridRows; r++)
+                        for (int r = startRow; r < rowLimit; r++)
                         {
                             EnsureGridSize(ref occupied, ref maxRow, ref maxCol,
                                 r + item.RowSpan, c + item.ColSpan);
@@ -326,11 +339,14 @@ namespace Rend.Layout.Internal
                 else
                 {
                     // Row-major auto-placement (default)
-                    // Wrap at gridCols boundary (explicit or inferred column count)
+                    // Wrap at gridCols boundary (explicit or inferred column count).
+                    // Limit column start so spanning items don't create implicit columns;
+                    // they must wrap to the next row instead (CSS Grid Level 1 §8.5).
+                    int colLimit = gridCols - item.ColSpan + 1;
                     for (int r = autoRow; !found; r++)
                     {
                         int startCol = (r == autoRow) ? autoCol : 0;
-                        for (int c = startCol; c < gridCols; c++)
+                        for (int c = startCol; c < colLimit; c++)
                         {
                             EnsureGridSize(ref occupied, ref maxRow, ref maxCol,
                                 r + item.RowSpan, c + item.ColSpan);
@@ -557,35 +573,128 @@ namespace Rend.Layout.Internal
                 }
             }
 
+            // Distribute extra container height to row tracks when the grid has
+            // an explicit height and align-content is stretch (default) or normal.
+            // For other align-content values (center, end, etc.), the tracks keep their
+            // natural size and are offset instead.
+            if (containerHeight > 0 && finalRows > 0)
+            {
+                var alignContent = style.AlignContent;
+                bool stretchRows = alignContent == CssAlignItems.Stretch
+                                || alignContent == CssAlignItems.Normal;
+                if (stretchRows)
+                {
+                    float totalRowH = 0;
+                    for (int r = 0; r < finalRows; r++)
+                        totalRowH += rowHeights[r];
+                    totalRowH += (finalRows - 1) * rowGap;
+
+                    float extraH = containerHeight - totalRowH;
+                    if (extraH > 1f)
+                    {
+                        float perRow = extraH / finalRows;
+                        for (int r = 0; r < finalRows; r++)
+                            rowHeights[r] += perRow;
+                    }
+                }
+            }
+
             // Read container-level alignment defaults
             CssAlignItems containerAlignItems = style.AlignItems;
             CssAlignItems containerJustifyItems = style.JustifyItems;
+
+            // Compute justify-content offset and gap adjustment (horizontal track alignment)
+            float justifyContentOffset = 0;
+            float effectiveColGap = colGap;
+            {
+                float totalColW = 0;
+                for (int c = 0; c < finalCols; c++)
+                    totalColW += colWidths[c];
+                totalColW += Math.Max(0, finalCols - 1) * colGap;
+                float freeInline = containerWidth - totalColW;
+                if (freeInline > 1f)
+                {
+                    var jc = style.JustifyContent;
+                    if (jc == CssJustifyContent.Center)
+                        justifyContentOffset = freeInline / 2f;
+                    else if (jc == CssJustifyContent.FlexEnd || jc == CssJustifyContent.End)
+                        justifyContentOffset = freeInline;
+                    else if (jc == CssJustifyContent.SpaceBetween && finalCols > 1)
+                        effectiveColGap = colGap + freeInline / (finalCols - 1);
+                    else if (jc == CssJustifyContent.SpaceAround && finalCols > 0)
+                    {
+                        float perCol = freeInline / finalCols;
+                        justifyContentOffset = perCol / 2f;
+                        effectiveColGap = colGap + perCol;
+                    }
+                    else if (jc == CssJustifyContent.SpaceEvenly && finalCols > 0)
+                    {
+                        float slot = freeInline / (finalCols + 1);
+                        justifyContentOffset = slot;
+                        effectiveColGap = colGap + slot;
+                    }
+                }
+            }
+
+            // Compute align-content offset and gap adjustment (vertical track alignment)
+            float alignContentOffset = 0;
+            float effectiveRowGap = rowGap;
+            if (containerHeight > 0)
+            {
+                float totalRowH = 0;
+                for (int r = 0; r < finalRows; r++)
+                    totalRowH += rowHeights[r];
+                totalRowH += Math.Max(0, finalRows - 1) * rowGap;
+                float freeBlock = containerHeight - totalRowH;
+                if (freeBlock > 1f)
+                {
+                    var ac = style.AlignContent;
+                    if (ac == CssAlignItems.Center)
+                        alignContentOffset = freeBlock / 2f;
+                    else if (ac == CssAlignItems.End || ac == CssAlignItems.FlexEnd)
+                        alignContentOffset = freeBlock;
+                    else if (ac == CssAlignItems.SpaceBetween && finalRows > 1)
+                        effectiveRowGap = rowGap + freeBlock / (finalRows - 1);
+                    else if (ac == CssAlignItems.SpaceAround && finalRows > 0)
+                    {
+                        float perRow = freeBlock / finalRows;
+                        alignContentOffset = perRow / 2f;
+                        effectiveRowGap = rowGap + perRow;
+                    }
+                    else if (ac == CssAlignItems.SpaceEvenly && finalRows > 0)
+                    {
+                        float slot = freeBlock / (finalRows + 1);
+                        alignContentOffset = slot;
+                        effectiveRowGap = rowGap + slot;
+                    }
+                }
+            }
 
             // Second pass: position items
             for (int i = 0; i < items.Count; i++)
             {
                 var item = items[i];
 
-                float x = parent.ContentRect.X;
+                float x = parent.ContentRect.X + justifyContentOffset;
                 for (int c = 0; c < item.ColStart && c < finalCols; c++)
-                    x += colWidths[c] + colGap;
+                    x += colWidths[c] + effectiveColGap;
 
-                float y = parent.ContentRect.Y;
+                float y = parent.ContentRect.Y + alignContentOffset;
                 for (int r = 0; r < item.RowStart && r < finalRows; r++)
-                    y += rowHeights[r] + rowGap;
+                    y += rowHeights[r] + effectiveRowGap;
 
                 // For spanning items, calculate the actual cell area
                 float spanWidth = 0;
                 for (int c = item.ColStart; c < item.ColStart + item.ColSpan && c < finalCols; c++)
                     spanWidth += colWidths[c];
                 if (item.ColSpan > 1)
-                    spanWidth += (item.ColSpan - 1) * colGap;
+                    spanWidth += (item.ColSpan - 1) * effectiveColGap;
 
                 float spanHeight = 0;
                 for (int r = item.RowStart; r < item.RowStart + item.RowSpan && r < finalRows; r++)
                     spanHeight += rowHeights[r];
                 if (item.RowSpan > 1)
-                    spanHeight += (item.RowSpan - 1) * rowGap;
+                    spanHeight += (item.RowSpan - 1) * effectiveRowGap;
 
                 float finalWidth = item.ContentWidth;
                 float finalHeight = item.ContentHeight;

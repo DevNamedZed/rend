@@ -35,7 +35,7 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < _leftFloats.Count; i++)
             {
                 var f = _leftFloats[i];
-                if (y < f.Bottom && y + height > f.Y)
+                if (y < f.Bottom && y + height >= f.Y)
                     edge = Math.Max(edge, f.Right);
             }
             return edge;
@@ -50,7 +50,7 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < _rightFloats.Count; i++)
             {
                 var f = _rightFloats[i];
-                if (y < f.Bottom && y + height > f.Y)
+                if (y < f.Bottom && y + height >= f.Y)
                     edge = Math.Min(edge, f.Left);
             }
             return edge;

@@ -74,15 +74,44 @@ namespace Rend.Output.Image.Internal
         {
             float cx = bounds.X + gradient.Center.X * bounds.Width;
             float cy = bounds.Y + gradient.Center.Y * bounds.Height;
-            float radius = Math.Max(gradient.RadiusX * bounds.Width, gradient.RadiusY * bounds.Height);
+            float rx = gradient.RadiusX * bounds.Width;
+            float ry = gradient.RadiusY * bounds.Height;
 
-            if (radius <= 0f)
+            if (rx <= 0f && ry <= 0f)
             {
-                radius = Math.Max(bounds.Width, bounds.Height) / 2f;
+                rx = bounds.Width / 2f;
+                ry = bounds.Height / 2f;
+            }
+
+            // For elliptical gradients, create a circular gradient using the larger radius
+            // and scale the other axis via a local matrix transform.
+            float radius = Math.Max(rx, ry);
+            if (radius <= 0f) radius = 1f;
+
+            if (Math.Abs(rx - ry) < 0.5f)
+            {
+                // Nearly circular — no scaling needed
+                return SKShader.CreateRadialGradient(
+                    new SKPoint(cx, cy), radius, colors, positions, SKShaderTileMode.Clamp);
+            }
+
+            // Scale the shorter axis to create an ellipse
+            var matrix = SKMatrix.Identity;
+            if (rx < ry)
+            {
+                // Scale X axis: map circle of radius ry to ellipse with rx horizontal
+                float scaleX = rx / ry;
+                matrix = SKMatrix.CreateScale(scaleX, 1f, cx, cy);
+            }
+            else
+            {
+                // Scale Y axis: map circle of radius rx to ellipse with ry vertical
+                float scaleY = ry / rx;
+                matrix = SKMatrix.CreateScale(1f, scaleY, cx, cy);
             }
 
             return SKShader.CreateRadialGradient(
-                new SKPoint(cx, cy), radius, colors, positions, SKShaderTileMode.Clamp);
+                new SKPoint(cx, cy), radius, colors, positions, SKShaderTileMode.Clamp, matrix);
         }
 
         private static SKShader CreateSweepShader(GradientInfo gradient, RectF bounds,

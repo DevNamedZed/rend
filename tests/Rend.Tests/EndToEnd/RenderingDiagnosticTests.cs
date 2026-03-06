@@ -1108,6 +1108,36 @@ namespace Rend.Tests.EndToEnd
             Assert.True(pdf.Length > 200);
         }
 
+        [Fact]
+        public void BoxShadow_Inset_RendersPixels()
+        {
+            // Render inset shadow to image and verify dark pixels appear at edges
+            var html = @"<html><body style='margin:0; padding:20px; background:white;'>
+                <div style='width:150px;height:60px;background:#ecf0f1;box-shadow:inset 0 2px 8px rgba(0,0,0,0.3);'></div>
+            </body></html>";
+            var png = Render.ToImage(html, new RenderOptions
+            {
+                PageSize = new SizeF(400, 300),
+                MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
+                Dpi = 96, ImageFormat = "png"
+            });
+            using var bitmap = SkiaSharp.SKBitmap.Decode(png);
+
+            // Check top edge of the div (y=20..25) for darkened pixels from inset shadow.
+            // The background is #ecf0f1 (236,240,241). Shadow should darken these pixels.
+            int darkPixels = 0;
+            for (int x = 25; x < 165; x++)
+            {
+                var pixel = bitmap.GetPixel(x, 22); // near top edge inside div
+                // If R or G < 230, it's been darkened by the shadow
+                if (pixel.Red < 230 || pixel.Green < 230)
+                    darkPixels++;
+            }
+            _output.WriteLine($"Dark pixels at top edge: {darkPixels}/140");
+            // With a working inset shadow, we expect many dark pixels from the shadow blur
+            Assert.True(darkPixels > 20, $"Expected inset shadow to darken top edge, got {darkPixels} dark pixels");
+        }
+
         // ═══════════════════════════════════════════
         // Multi-Column Tests
         // ═══════════════════════════════════════════
@@ -1444,6 +1474,70 @@ namespace Rend.Tests.EndToEnd
                     MarginTop = 100, MarginRight = 100, MarginBottom = 100, MarginLeft = 100
                 });
             Assert.True(pdf.Length > 100);
+        }
+
+        [Fact]
+        public void FontMetrics_CompareOursVsSkia()
+        {
+            // Compare our font metrics against Skia's for diagnostic purposes
+            var collection = new Rend.Fonts.FontCollection();
+            try
+            {
+                var resolver = new Rend.Fonts.SystemFontResolver();
+                collection.RegisterFromResolver(resolver);
+            }
+            catch { }
+
+            float fontSize = 16f;
+            var families = new[] { "sans-serif", "serif", "monospace" };
+
+            foreach (var family in families)
+            {
+                var desc = new Rend.Fonts.FontDescriptor(family, 400,
+                    Rend.Css.CssFontStyle.Normal, 100);
+                var ourMetrics = collection.GetMetrics(desc);
+
+                // Get font data to create Skia typeface from same font
+                byte[]? fontData = null;
+                var entry = collection.ResolveFont(desc);
+                if (entry != null)
+                {
+                    fontData = entry.FontData;
+                    _output.WriteLine($"  Resolved to: {entry.FamilyName} (weight={entry.Descriptor.Weight}, style={entry.Descriptor.Style})");
+                }
+
+                SkiaSharp.SKTypeface typeface;
+                if (fontData != null && fontData.Length > 0)
+                {
+                    using var skData = SkiaSharp.SKData.CreateCopy(fontData);
+                    typeface = SkiaSharp.SKTypeface.FromData(skData) ?? SkiaSharp.SKTypeface.Default;
+                }
+                else
+                {
+                    typeface = SkiaSharp.SKTypeface.Default;
+                }
+
+                using var paint = new SkiaSharp.SKPaint();
+                paint.TextSize = fontSize;
+                paint.Typeface = typeface;
+                var skMetrics = paint.FontMetrics;
+
+                float ourAscent = ourMetrics.GetAscent(fontSize);
+                float ourDescent = ourMetrics.GetDescent(fontSize);
+                float ourLineHeight = ourMetrics.GetLineHeight(fontSize);
+                float skiaAscent = -skMetrics.Ascent; // Skia uses negative for ascent
+                float skiaDescent = skMetrics.Descent;
+                float skiaLeading = skMetrics.Leading;
+                float skiaLineHeight = skiaAscent + skiaDescent + skiaLeading;
+
+                _output.WriteLine($"Family: {family} -> Skia: {typeface.FamilyName}");
+                _output.WriteLine($"  Our:  ascent={ourAscent:F4} descent={ourDescent:F4} lineHeight={ourLineHeight:F4} (units: A={ourMetrics.Ascent} D={ourMetrics.Descent} G={ourMetrics.LineGap} Em={ourMetrics.UnitsPerEm})");
+                _output.WriteLine($"  Skia: ascent={skiaAscent:F4} descent={skiaDescent:F4} leading={skiaLeading:F4} lineHeight={skiaLineHeight:F4}");
+                _output.WriteLine($"  Diff: ascent={ourAscent - skiaAscent:F4} descent={ourDescent - skiaDescent:F4} lineHeight={ourLineHeight - skiaLineHeight:F4}");
+                _output.WriteLine("");
+
+                typeface.Dispose();
+            }
         }
     }
 }

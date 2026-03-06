@@ -13,7 +13,7 @@ namespace Rend.VisualRegression;
 
 class Program
 {
-    static async Task<int> Main()
+    static async Task<int> Main(string[] args)
     {
         Console.WriteLine("Visual Regression: Chrome vs Rend");
         Console.WriteLine();
@@ -23,12 +23,63 @@ class Program
         if (!Directory.Exists(outputDir))
             Directory.CreateDirectory(outputDir);
 
-        // Download Chromium if needed
-        Console.Write("Downloading Chromium... ");
-        var browserFetcher = new BrowserFetcher();
-        await browserFetcher.DownloadAsync();
-        Console.WriteLine("done.");
+        // Download Chrome 116 to match SkiaSharp 2.88.9's bundled Skia m116.
+        // This ensures glyph rasterization uses the same Skia version on both sides.
+        // Chrome 116 predates chrome-headless-shell, so we download the regular chrome binary.
+        const string chromeBuildId = "116.0.5845.96";
+        var chromeDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Chrome", $"Win64-{chromeBuildId}");
+        var chromeExePath = Path.Combine(chromeDir, "chrome-win64", "chrome.exe");
+        if (!File.Exists(chromeExePath))
+        {
+            Console.Write($"Downloading Chrome {chromeBuildId}... ");
+            Directory.CreateDirectory(chromeDir);
+            var zipUrl = $"https://storage.googleapis.com/chrome-for-testing-public/{chromeBuildId}/win64/chrome-win64.zip";
+            var zipPath = Path.Combine(chromeDir, "chrome-win64.zip");
+            using (var httpClient = new System.Net.Http.HttpClient())
+            {
+                var response = await httpClient.GetAsync(zipUrl);
+                response.EnsureSuccessStatusCode();
+                using var fs = File.Create(zipPath);
+                await response.Content.CopyToAsync(fs);
+            }
+            System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, chromeDir);
+            File.Delete(zipPath);
+            Console.WriteLine("done.");
+        }
+        else
+        {
+            Console.WriteLine($"Using Chrome {chromeBuildId}");
+        }
         Console.WriteLine();
+
+        // Run text diagnostic if requested
+        if (args.Length > 0 && args[0] == "--text-diag")
+        {
+            var diagBrowser = await Puppeteer.LaunchAsync(new LaunchOptions
+            {
+                Headless = true,
+                ExecutablePath = chromeExePath,
+                Args = new[] { "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage" },
+            });
+            await TextDiagnostic.Run(diagBrowser);
+            await diagBrowser.DisposeAsync();
+            return 0;
+        }
+
+        // Run font render settings diagnostic
+        if (args.Length > 0 && args[0] == "--font-diag")
+        {
+            var diagBrowser = await Puppeteer.LaunchAsync(new LaunchOptions
+            {
+                Headless = true,
+                ExecutablePath = chromeExePath,
+                Args = new[] { "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
+                    "--disable-lcd-text", "--font-render-hinting=none" },
+            });
+            await FontRenderDiag.Run(diagBrowser);
+            await diagBrowser.DisposeAsync();
+            return 0;
+        }
 
         // Launch headless Chrome — will be restarted if it crashes
         IBrowser? browser = null;
@@ -44,7 +95,14 @@ class Program
             browser = await Puppeteer.LaunchAsync(new LaunchOptions
             {
                 Headless = true,
-                Args = new[] { "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage" },
+                ExecutablePath = chromeExePath,
+                Args = new[] {
+                    "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
+                    // Disable ClearType/LCD subpixel AA so Chrome uses grayscale AA.
+                    // This matches Skia's off-screen rendering which doesn't know
+                    // the display's physical pixel geometry.
+                    "--disable-lcd-text",
+                },
             });
             return browser;
         }
@@ -54,8 +112,11 @@ class Program
         // memory for every test. Without sharing, 237 renders × ~5 fonts × ~1MB each
         // = massive native memory churn.
         var fontProvider = CreateSharedFontProvider();
-        using var textShaper = new Rend.Text.HarfBuzzTextShaper();
         using var fontMapper = new Rend.Output.Image.Internal.SkiaFontMapper();
+        // Use SkiaTextShaper for image rendering: Skia's text measurement matches
+        // Chrome's exactly (via DirectWrite), while HarfBuzz's OpenType backend
+        // produces slightly different advances (~0.005px/glyph, ~0.1px/line).
+        using var textShaper = new Rend.Output.Image.SkiaTextShaper(fontMapper);
 
         var testCases = VisualTestCatalog.AllCases;
         var results = new List<ComparisonResult>();
@@ -220,9 +281,15 @@ class Program
         var reportPath = Path.Combine(outputDir, "report.html");
         ReportGenerator.Generate(results, reportPath);
 
-        // Summary
-        double avgDiff = results.Where(r => r.Outcome != ComparisonOutcome.Error)
+        // Summary — use shift-tolerant diff when available (better reflects layout correctness
+        // vs strict pixel comparison which is noisy from 1px text baseline differences)
+        double avgStrict = results.Where(r => r.Outcome != ComparisonOutcome.Error)
             .Select(r => r.DiffPercentage)
+            .DefaultIfEmpty(0)
+            .Average();
+        double avgShiftTolerant = results.Where(r => r.Outcome != ComparisonOutcome.Error)
+            .Select(r => r.ShiftTolerantDiffPercentage <= r.DiffPercentage
+                ? r.ShiftTolerantDiffPercentage : r.DiffPercentage)
             .DefaultIfEmpty(0)
             .Average();
 
@@ -231,7 +298,7 @@ class Program
         int failCount = results.Count(r => r.Outcome == ComparisonOutcome.Fail);
         int errorCount = results.Count(r => r.Outcome == ComparisonOutcome.Error);
 
-        Console.WriteLine($"Results: {results.Count} tests, {passCount} passed, {nearPassCount} near-pass (~1px off), {failCount} failed, {errorCount} errors, avg diff {avgDiff:F2}%");
+        Console.WriteLine($"Results: {results.Count} tests, {passCount} passed, {nearPassCount} near-pass (~1px off), {failCount} failed, {errorCount} errors, avg diff {avgStrict:F2}% (shift-tolerant: {avgShiftTolerant:F2}%)");
         Console.WriteLine($"Report: {reportPath}");
 
         // NearPass tests don't count as failures (they're 1px shift issues to investigate later)
@@ -262,6 +329,22 @@ class Program
     private static Rend.Fonts.IFontProvider CreateSharedFontProvider()
     {
         var collection = new Rend.Fonts.FontCollection();
+
+        // On WSL2, prefer Windows fonts first so Rend uses the same fonts as Chrome
+        // (which runs on Windows via PuppeteerSharp). This ensures matching metrics.
+        string winFontsPath = "/mnt/c/Windows/Fonts";
+        if (System.IO.Directory.Exists(winFontsPath))
+        {
+            try
+            {
+                collection.RegisterFontDirectory(winFontsPath);
+            }
+            catch
+            {
+                // Windows fonts unavailable
+            }
+        }
+
         try
         {
             var resolver = new Rend.Fonts.SystemFontResolver();
@@ -271,6 +354,7 @@ class Program
         {
             // System fonts unavailable — fall back to defaults
         }
+
         return collection;
     }
 

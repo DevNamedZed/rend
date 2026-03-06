@@ -389,7 +389,7 @@ namespace Rend.Rendering.Internal
                         }
                         else break;
                     }
-                    angle = DirectionToAngle(direction.Trim());
+                    angle = DirectionToAngle(direction.Trim(), rect.Width, rect.Height);
                 }
             }
 
@@ -663,7 +663,7 @@ namespace Rend.Rendering.Internal
             };
         }
 
-        private static float DirectionToAngle(string direction)
+        private static float DirectionToAngle(string direction, float boxWidth, float boxHeight)
         {
             switch (direction)
             {
@@ -671,14 +671,27 @@ namespace Rend.Rendering.Internal
                 case "right": return 90;
                 case "bottom": return 180;
                 case "left": return 270;
-                case "top right": return 45;
-                case "right top": return 45;
-                case "bottom right": return 135;
-                case "right bottom": return 135;
-                case "bottom left": return 225;
-                case "left bottom": return 225;
-                case "top left": return 315;
-                case "left top": return 315;
+                // Corner directions: CSS spec requires the gradient line angle to depend
+                // on the box dimensions so that the gradient line endpoints touch the corners.
+                // angle = atan2(dx, -dy) where (dx, dy) is the direction toward the target corner.
+                case "top right":
+                case "right top":
+                    return (float)(Math.Atan2(boxWidth, boxHeight) * (180.0 / Math.PI));
+                case "bottom right":
+                case "right bottom":
+                    return (float)(Math.Atan2(boxWidth, -boxHeight) * (180.0 / Math.PI));
+                case "bottom left":
+                case "left bottom":
+                {
+                    float a = (float)(Math.Atan2(-boxWidth, -boxHeight) * (180.0 / Math.PI));
+                    return a < 0 ? a + 360f : a;
+                }
+                case "top left":
+                case "left top":
+                {
+                    float a = (float)(Math.Atan2(-boxWidth, boxHeight) * (180.0 / Math.PI));
+                    return a < 0 ? a + 360f : a;
+                }
                 default: return 180;
             }
         }

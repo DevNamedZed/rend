@@ -70,6 +70,15 @@ namespace Rend.Layout.Internal
                 return;
             }
 
+            // Second pass: layout content constrained to column width
+            var columnBox = CreateTempBox(box, styledElement, columnWidth);
+            if (HasBlockChildren(styledElement))
+                BlockFormattingContext.Layout(columnBox, context);
+            else
+                InlineFormattingContext.Layout(columnBox, context);
+
+            float contentHeight = CalculateContentHeight(columnBox);
+
             // Calculate target column height
             float targetHeight;
             if (style.ColumnFill == CssColumnFill.Auto)
@@ -80,23 +89,12 @@ namespace Rend.Layout.Internal
             }
             else
             {
-                // Balance: distribute evenly
-                targetHeight = Math.Max(totalHeight / columnCount, style.FontSize * 2);
+                // Balance: binary search for the minimum column height that fits all
+                // content into the available number of columns
+                targetHeight = BinarySearchColumnHeight(columnBox, columnCount, contentHeight);
             }
 
-            // Second pass: layout content constrained to column width
-            var columnBox = CreateTempBox(box, styledElement, columnWidth);
-            if (HasBlockChildren(styledElement))
-                BlockFormattingContext.Layout(columnBox, context);
-            else
-                InlineFormattingContext.Layout(columnBox, context);
-
-            float contentHeight = CalculateContentHeight(columnBox);
-
-            // Distribute content across columns
-            // For simplicity, we treat the column layout as a single tall column
-            // and clip/translate children into column positions
-            float columnHeight = Math.Max(targetHeight, contentHeight / columnCount);
+            float columnHeight = targetHeight;
             if (columnHeight < 1) columnHeight = contentHeight;
 
             // Sequential content-aware fragmentation: assign children to columns
@@ -439,6 +437,74 @@ namespace Rend.Layout.Internal
             }
 
             return startY + (tallest > 0 ? tallest : targetHeight);
+        }
+
+        /// <summary>
+        /// Binary search for the minimum column height that allows all content
+        /// (block children and/or line boxes) to fit within the given number of columns.
+        /// </summary>
+        private static float BinarySearchColumnHeight(LayoutBox columnBox, int columnCount, float contentHeight)
+        {
+            if (contentHeight <= 0 || columnCount <= 1)
+                return contentHeight;
+
+            // Collect item heights for fragmentation simulation
+            var itemHeights = new List<float>();
+            foreach (var child in columnBox.Children)
+            {
+                float h = child.BorderRect.Height + child.MarginTop + child.MarginBottom;
+                itemHeights.Add(Math.Max(h, 0));
+            }
+            if (columnBox.LineBoxes != null)
+            {
+                foreach (var line in columnBox.LineBoxes)
+                    itemHeights.Add(line.Height);
+            }
+
+            if (itemHeights.Count == 0)
+                return contentHeight;
+
+            // Find the tallest single item (minimum possible column height)
+            float maxItem = 0;
+            for (int i = 0; i < itemHeights.Count; i++)
+                if (itemHeights[i] > maxItem) maxItem = itemHeights[i];
+
+            float lo = maxItem;
+            float hi = contentHeight;
+
+            // Binary search: find minimum height where items fit in columnCount columns
+            for (int iter = 0; iter < 20 && hi - lo > 0.5f; iter++)
+            {
+                float mid = (lo + hi) * 0.5f;
+                if (FitsInColumns(itemHeights, columnCount, mid))
+                    hi = mid;
+                else
+                    lo = mid;
+            }
+
+            // Add a small epsilon to avoid edge-case rounding issues
+            return hi + 0.5f;
+        }
+
+        /// <summary>
+        /// Check if items fit within the given number of columns at the specified height.
+        /// </summary>
+        private static bool FitsInColumns(List<float> itemHeights, int columnCount, float columnHeight)
+        {
+            int col = 0;
+            float currentHeight = 0;
+            for (int i = 0; i < itemHeights.Count; i++)
+            {
+                float h = itemHeights[i];
+                if (currentHeight > 0 && currentHeight + h > columnHeight)
+                {
+                    col++;
+                    if (col >= columnCount) return false;
+                    currentHeight = 0;
+                }
+                currentHeight += h;
+            }
+            return true;
         }
 
         private static int ResolveColumnCount(ComputedStyle style, float availableWidth, float gap)

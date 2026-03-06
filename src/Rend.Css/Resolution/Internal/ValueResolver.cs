@@ -69,6 +69,15 @@ namespace Rend.Css.Resolution.Internal
             if (id == PropertyId.PaddingTop || id == PropertyId.PaddingRight
                 || id == PropertyId.PaddingBottom || id == PropertyId.PaddingLeft)
                 return true;
+            // Positioning: top/bottom % → containing block height, left/right % → containing block width
+            if (id == PropertyId.Top || id == PropertyId.Bottom)
+                return true;
+            if (id == PropertyId.Left || id == PropertyId.Right)
+                return true;
+            // Margins: all sides resolve against containing block width per CSS 2.1 §8.3
+            if (id == PropertyId.MarginTop || id == PropertyId.MarginRight
+                || id == PropertyId.MarginBottom || id == PropertyId.MarginLeft)
+                return true;
             return false;
         }
 

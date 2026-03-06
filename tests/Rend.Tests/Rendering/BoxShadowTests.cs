@@ -134,8 +134,8 @@ namespace Rend.Tests.Rendering
 
             BoxShadowPainter.Paint(box, target);
 
-            // Inset shadows render edge strips (up to 4 sides)
-            Assert.True(target.FilledRects.Count > 0);
+            // Inset shadows render a frame path (border rect with inner hole)
+            Assert.True(target.FilledPaths.Count > 0);
         }
 
         [Fact]
@@ -344,7 +344,7 @@ namespace Rend.Tests.Rendering
             public void SetBlendMode(Rend.Css.CssMixBlendMode blendMode) { }
             public void SetImageRendering(Rend.Css.CssImageRendering rendering) { }
             public void ApplyFilter(CssFilterEffect[] effects) { }
-            public void SetMaskBlur(float sigma) { if (sigma > 0) MaskBlurSet = true; }
+            public void SetMaskBlur(float sigma, bool inner = false) { if (sigma > 0) MaskBlurSet = true; }
             public void BeginMask() { }
             public void EndMask(GradientInfo gradient, RectF bounds) { }
             public void PushClipRect(RectF rect) { }

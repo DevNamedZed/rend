@@ -40,10 +40,13 @@ namespace Rend.Layout.Internal
         {
             float dx = 0, dy = 0;
 
-            float top = style.Top;
-            float left = style.Left;
-            float bottom = style.Bottom;
-            float right = style.Right;
+            // For relative positioning, percentage top/bottom resolve against containing block height,
+            // left/right against containing block width. We don't have the CB here, so resolve
+            // deferred percentages against 0 (treat as auto) — percentages are rare for relative.
+            float top = ResolvePositionValue(style.Top, 0);
+            float left = ResolvePositionValue(style.Left, 0);
+            float bottom = ResolvePositionValue(style.Bottom, 0);
+            float right = ResolvePositionValue(style.Right, 0);
 
             if (!float.IsNaN(top)) dy = top;
             else if (!float.IsNaN(bottom)) dy = -bottom;
@@ -65,10 +68,10 @@ namespace Rend.Layout.Internal
         {
             var cb = containingBlock.PaddingRect;
 
-            float top = style.Top;
-            float left = style.Left;
-            float bottom = style.Bottom;
-            float right = style.Right;
+            float top = ResolvePositionValue(style.Top, cb.Height);
+            float left = ResolvePositionValue(style.Left, cb.Width);
+            float bottom = ResolvePositionValue(style.Bottom, cb.Height);
+            float right = ResolvePositionValue(style.Right, cb.Width);
 
             float x = box.ContentRect.X;
             float y = box.ContentRect.Y;
@@ -176,6 +179,20 @@ namespace Rend.Layout.Internal
             // Fixed positioning is similar to absolute but relative to viewport
             // For PDF/image output, treat as absolute relative to page
             ApplyAbsolute(box, style, containingBlock);
+        }
+        /// <summary>
+        /// Resolves a position value (top/right/bottom/left) that may be a deferred percentage.
+        /// Deferred percentages are encoded as negative fractions in [-1.01, 0).
+        /// </summary>
+        private static float ResolvePositionValue(float value, float containingDimension)
+        {
+            if (float.IsNaN(value)) return float.NaN;
+            // Deferred percentage encoding: small negative value = percentage fraction
+            // e.g., -0.5 = 50%, -1.0 = 100%. Range: (-1.01, 0)
+            // Values below -1.01 are legitimate negative pixel values (e.g., top: -20px)
+            if (value < 0 && value > -1.01f)
+                return -value * containingDimension;
+            return value;
         }
     }
 }

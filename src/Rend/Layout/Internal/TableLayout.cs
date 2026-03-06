@@ -35,7 +35,8 @@ namespace Rend.Layout.Internal
             if (isFixed)
                 colWidths = CalculateFixedWidths(tableCtx, numCols, ref containerWidth);
             else
-                colWidths = CalculateAutoWidths(tableCtx, numCols, containerWidth, context);
+                colWidths = CalculateAutoWidths(tableCtx, numCols, containerWidth, context,
+                    hasExplicitWidth: !float.IsNaN(style.Width));
 
             // Layout cells — use CSS border-spacing (defaults to 0 if collapsed)
             bool collapsed = style.BorderCollapse == CssBorderCollapse.Collapse;
@@ -98,10 +99,28 @@ namespace Rend.Layout.Internal
                     cellBox.ContentRect = new RectF(0, 0, contentWidth, 0);
                     BlockFormattingContext.LayoutChildren(cellBox, context);
                     float cellContentHeight = CalculateAutoHeight(cellBox);
+
+                    // Respect explicit height on the cell (e.g. <td style="height:30px">)
+                    if (cell.StyledElement != null)
+                    {
+                        float explicitH = cell.StyledElement.Style.Height;
+                        if (!float.IsNaN(explicitH) && explicitH > 0)
+                        {
+                            // Explicit height is for the border-box in table cells
+                            float explicitContentH = explicitH - cellBox.PaddingTop - cellBox.PaddingBottom
+                                                    - cellBox.BorderTopWidth - cellBox.BorderBottomWidth;
+                            if (explicitContentH > cellContentHeight)
+                                cellContentHeight = explicitContentH;
+                        }
+                    }
+
+                    // Truncate to 1/64th pixel precision (matching Chrome's LayoutUnit).
+                    cellContentHeight = (int)(cellContentHeight * 64f) / 64f;
                     cellBox.ContentRect = new RectF(0, 0, contentWidth, cellContentHeight);
 
                     float totalCellHeight = cellContentHeight + cellBox.PaddingTop + cellBox.PaddingBottom
                                           + cellBox.BorderTopWidth + cellBox.BorderBottomWidth;
+                    totalCellHeight = (int)(totalCellHeight * 64f) / 64f;
 
                     if (effectiveRowSpan == 1)
                     {
@@ -168,9 +187,9 @@ namespace Rend.Layout.Internal
                 }
             }
 
-            // Build column X positions
+            // Build column X positions (border-spacing applies before first column too)
             float[] colXPositions = new float[numCols];
-            float cx = parent.ContentRect.X;
+            float cx = parent.ContentRect.X + borderSpacingH;
             for (int c = 0; c < numCols; c++)
             {
                 colXPositions[c] = cx;
@@ -245,7 +264,22 @@ namespace Rend.Layout.Internal
                         cellBox.LineBoxes = null;
                         cellBox.ContentRect = new RectF(0, 0, newContentW, 0);
                         BlockFormattingContext.LayoutChildren(cellBox, context);
-                        float cellContentH = CalculateAutoHeight(cellBox);
+                        float cellContentH = (int)(CalculateAutoHeight(cellBox) * 64f) / 64f;
+
+                        // Respect explicit height on the cell
+                        var cellStyledEl = cellBox.StyledNode as StyledElement;
+                        if (cellStyledEl != null)
+                        {
+                            float explicitH = cellStyledEl.Style.Height;
+                            if (!float.IsNaN(explicitH) && explicitH > 0)
+                            {
+                                float explicitContentH = explicitH - cellBox.PaddingTop - cellBox.PaddingBottom
+                                                        - cellBox.BorderTopWidth - cellBox.BorderBottomWidth;
+                                if (explicitContentH > cellContentH)
+                                    cellContentH = explicitContentH;
+                            }
+                        }
+
                         cellBox.ContentRect = new RectF(0, 0, newContentW, cellContentH);
                     }
                 }
@@ -291,11 +325,14 @@ namespace Rend.Layout.Internal
             }
 
             // Second pass: position cells with final Y coordinates
+            // border-spacing applies before the first row too
+            cursorY += borderSpacingV;
             float[] rowYPositions = new float[numRows];
             for (int r = 0; r < numRows; r++)
             {
                 rowYPositions[r] = cursorY;
                 cursorY += rowHeights[r] + borderSpacingV;
+
             }
 
             for (int r = 0; r < numRows; r++)
@@ -390,6 +427,21 @@ namespace Rend.Layout.Internal
                 var captionEl = tableCtx.Captions[cap];
                 if (captionEl.Style.CaptionSide != CssCaptionSide.Bottom) continue;
                 cursorY = LayoutCaption(captionEl, parent, context, containerWidth, cursorY);
+            }
+
+            // For auto-width tables, shrink-wrap the parent to actual content width
+            if (float.IsNaN(style.Width))
+            {
+                float totalColWidth = 0;
+                for (int i = 0; i < numCols; i++)
+                    totalColWidth += colWidths[i];
+                float actualWidth = totalColWidth + (numCols + 1) * borderSpacingH;
+                if (actualWidth < containerWidth)
+                {
+                    parent.ContentRect = new RectF(
+                        parent.ContentRect.X, parent.ContentRect.Y,
+                        actualWidth, parent.ContentRect.Height);
+                }
             }
         }
 
@@ -705,7 +757,7 @@ namespace Rend.Layout.Internal
         }
 
         private static float[] CalculateAutoWidths(TableContext ctx, int numCols, float containerWidth,
-                                                    LayoutContext context)
+                                                    LayoutContext context, bool hasExplicitWidth = false)
         {
             float[] minWidths = new float[numCols];
             float[] maxWidths = new float[numCols];
@@ -770,10 +822,19 @@ namespace Rend.Layout.Internal
 
             if (totalMax <= containerWidth)
             {
-                // All columns fit at max-content width; distribute remaining space proportionally
-                float extra = containerWidth - totalMax;
-                for (int i = 0; i < numCols; i++)
-                    widths[i] = maxWidths[i] + (totalMax > 0 ? extra * (maxWidths[i] / totalMax) : extra / numCols);
+                if (hasExplicitWidth)
+                {
+                    // Table has explicit width: distribute remaining space proportionally
+                    float extra = containerWidth - totalMax;
+                    for (int i = 0; i < numCols; i++)
+                        widths[i] = maxWidths[i] + (totalMax > 0 ? extra * (maxWidths[i] / totalMax) : extra / numCols);
+                }
+                else
+                {
+                    // Table width is auto: use max-content widths (don't stretch)
+                    for (int i = 0; i < numCols; i++)
+                        widths[i] = maxWidths[i];
+                }
             }
             else if (totalMin >= containerWidth)
             {

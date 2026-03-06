@@ -18,8 +18,8 @@ namespace Rend.Layout.Internal
             float specifiedWidth = style.Width;
             float width;
 
-            // Deferred percentage width (encoded as negative fraction, e.g. -0.5 = 50%)
-            if (specifiedWidth < 0 && specifiedWidth > -1.01f)
+            // Deferred percentage width (encoded as negative fraction, e.g. -0.5 = 50%, -1.5 = 150%)
+            if (specifiedWidth < 0 && !float.IsNaN(specifiedWidth))
             {
                 width = -specifiedWidth * containingBlockWidth;
                 if (style.BoxSizing == CssBoxSizing.BorderBox)
@@ -62,7 +62,7 @@ namespace Rend.Layout.Internal
         /// </summary>
         public static float ResolvePercentWidth(float value, float containingBlockWidth)
         {
-            if (value < 0 && value > -1.01f)
+            if (value < 0 && !float.IsNaN(value))
                 return -value * containingBlockWidth;
             return value;
         }
@@ -77,7 +77,7 @@ namespace Rend.Layout.Internal
 
             // Negative values encode deferred percentage heights (e.g., -0.5 = 50%).
             // Resolve against the containing block height, or treat as auto if unknown.
-            if (specifiedHeight < 0 && specifiedHeight > -1.01f)
+            if (specifiedHeight < 0 && !float.IsNaN(specifiedHeight))
             {
                 if (float.IsNaN(containingBlockHeight) || containingBlockHeight <= 0)
                     specifiedHeight = float.NaN; // treat as auto
@@ -131,7 +131,7 @@ namespace Rend.Layout.Internal
 
         private static float ResolveMinMaxH(float value, float containingBlockHeight)
         {
-            if (value < 0 && value > -1.01f)
+            if (value < 0 && !float.IsNaN(value))
             {
                 if (float.IsNaN(containingBlockHeight) || containingBlockHeight <= 0)
                     return float.NaN;

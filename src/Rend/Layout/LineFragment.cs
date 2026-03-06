@@ -19,8 +19,11 @@ namespace Rend.Layout
         /// <summary>Width of this fragment.</summary>
         public float Width { get; set; }
 
-        /// <summary>Height of this fragment.</summary>
+        /// <summary>Height of this fragment (line-height).</summary>
         public float Height { get; set; }
+
+        /// <summary>Content area height (ascent + descent, without leading). Used for inline backgrounds.</summary>
+        public float ContentHeight { get; set; }
 
         /// <summary>Baseline offset from top.</summary>
         public float Baseline { get; set; }

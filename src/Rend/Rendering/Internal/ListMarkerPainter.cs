@@ -14,7 +14,16 @@ namespace Rend.Rendering.Internal
     /// </summary>
     internal static class ListMarkerPainter
     {
-        private const float MarkerOffset = 8f;
+        /// <summary>
+        /// Chrome's default marker offset is based on the UA stylesheet's
+        /// padding-inline-start (40px) minus typical text width. We approximate
+        /// with a font-size-proportional value that better matches Chrome.
+        /// </summary>
+        private static float GetMarkerOffset(float fontSize)
+        {
+            // Chrome positions outside markers roughly 0.5em from the content edge
+            return fontSize * 0.5f;
+        }
 
         /// <summary>
         /// Paints the list marker for a list-item box. If list-style-image is set,
@@ -73,10 +82,10 @@ namespace Rend.Rendering.Internal
             // Compute actual pixel line-height for the first line
             float rawLh = style.LineHeight;
             float pixelLineHeight;
-            if (rawLh < 0) // Negative = unitless multiplier (e.g., -1.4 for line-height: 1.4)
-                pixelLineHeight = Math.Abs(rawLh) * fontSize;
-            else if (rawLh == 0) // normal
+            if (float.IsNaN(rawLh) || rawLh == 0) // NaN = normal (font metrics), 0 = legacy normal
                 pixelLineHeight = fontSize * 1.2f;
+            else if (rawLh < 0) // Negative = unitless multiplier (e.g., -1.4 for line-height: 1.4)
+                pixelLineHeight = Math.Abs(rawLh) * fontSize;
             else
                 pixelLineHeight = rawLh; // Already in pixels
 
@@ -86,7 +95,7 @@ namespace Rend.Rendering.Internal
             // Inside: marker drawn at the start of content area (text is indented to make room).
             float markerX = isInside
                 ? contentRect.X + bulletRadius + 2f
-                : contentRect.X - MarkerOffset;
+                : contentRect.X - GetMarkerOffset(fontSize);
 
             switch (listType)
             {
@@ -197,8 +206,8 @@ namespace Rend.Rendering.Internal
             // Compute pixel line height for vertical centering
             float rawLh = style.LineHeight;
             float pixelLineHeight;
-            if (rawLh < 0) pixelLineHeight = Math.Abs(rawLh) * fontSize;
-            else if (rawLh == 0) pixelLineHeight = fontSize * 1.2f;
+            if (float.IsNaN(rawLh) || rawLh == 0) pixelLineHeight = fontSize * 1.2f;
+            else if (rawLh < 0) pixelLineHeight = Math.Abs(rawLh) * fontSize;
             else pixelLineHeight = rawLh;
 
             // Position at baseline using CSS half-leading model:
@@ -318,8 +327,8 @@ namespace Rend.Rendering.Internal
             // Compute pixel line height for vertical centering
             float rawLh = style.LineHeight;
             float pixelLineHeight;
-            if (rawLh < 0) pixelLineHeight = Math.Abs(rawLh) * fontSize;
-            else if (rawLh == 0) pixelLineHeight = fontSize * 1.2f;
+            if (float.IsNaN(rawLh) || rawLh == 0) pixelLineHeight = fontSize * 1.2f;
+            else if (rawLh < 0) pixelLineHeight = Math.Abs(rawLh) * fontSize;
             else pixelLineHeight = rawLh;
 
             float centerY = contentRect.Y + pixelLineHeight * 0.5f;

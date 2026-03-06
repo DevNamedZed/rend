@@ -9,14 +9,37 @@ namespace Rend.Rendering.Internal
 {
     /// <summary>
     /// Paints CSS box-shadow effects. Supports offset, spread, and color.
-    /// Blur is approximated by rendering multiple translucent layers.
+    /// Blur is rendered via Gaussian mask blur on the render target.
     /// </summary>
     internal static class BoxShadowPainter
     {
         /// <summary>
-        /// Paints box-shadow for the given box onto the render target.
+        /// Paints outer (non-inset) box-shadows for the given box.
+        /// Called BEFORE painting the background per CSS painting order.
+        /// </summary>
+        public static void PaintOuter(LayoutBox box, IRenderTarget target)
+        {
+            PaintShadows(box, target, inset: false);
+        }
+
+        /// <summary>
+        /// Paints inset box-shadows for the given box.
+        /// Called AFTER painting the background per CSS painting order.
+        /// </summary>
+        public static void PaintInset(LayoutBox box, IRenderTarget target)
+        {
+            PaintShadows(box, target, inset: true);
+        }
+
+        /// <summary>
+        /// Paints all box-shadows (both outer and inset). Legacy entry point.
         /// </summary>
         public static void Paint(LayoutBox box, IRenderTarget target)
+        {
+            PaintShadows(box, target, inset: null);
+        }
+
+        private static void PaintShadows(LayoutBox box, IRenderTarget target, bool? inset)
         {
             ComputedStyle? style = box.StyledNode?.Style;
             if (style == null)
@@ -49,6 +72,12 @@ namespace Rend.Rendering.Internal
             for (int i = shadows.Count - 1; i >= 0; i--)
             {
                 var shadow = shadows[i];
+
+                // Filter by inset/outer if specified
+                if (inset.HasValue && shadow.Inset != inset.Value)
+                {
+                    continue;
+                }
 
                 if (shadow.Inset)
                 {
@@ -111,8 +140,7 @@ namespace Rend.Rendering.Internal
         private static void PaintInsetShadow(BoxShadowLayer shadow, RectF borderRect,
             bool hasRadius, float tlr, float trr, float brr, float blr, IRenderTarget target)
         {
-            // Inset shadow: render inside the border box.
-            // The shadow is drawn as a filled region clipped to the border rect.
+            // Inset shadow: render inside the border box, ON TOP of the background.
             // The shadow area is the border rect contracted by spread, then offset.
             float innerX = borderRect.X + shadow.Spread + shadow.OffsetX;
             float innerY = borderRect.Y + shadow.Spread + shadow.OffsetY;
@@ -154,65 +182,35 @@ namespace Rend.Rendering.Internal
                 target.PushClipRect(borderRect);
             }
 
+            // Draw a frame path (large outer rect with inner rect hole) using EvenOdd fill.
+            // The outer boundary is inflated well beyond the clip rect so its blur edges
+            // are invisible — only the inner boundary's blur (extending into the box center)
+            // is visible. This matches Chrome's inset shadow rendering approach.
             if (shadow.Blur > 0)
             {
-                // Use mask blur for inset shadows: draw edge strips with blur applied
                 float sigma = shadow.Blur / 2f;
                 target.SetMaskBlur(sigma);
-                PaintInsetStrips(target, borderRect, innerRect, shadow.Color);
-                target.SetMaskBlur(0);
             }
-            else
+
+            // Inflate outer boundary by 3*blur so the outer edge blur is fully clipped away
+            float inflate = shadow.Blur > 0 ? shadow.Blur * 3f : 0f;
+            var outerRect = new RectF(
+                borderRect.X - inflate, borderRect.Y - inflate,
+                borderRect.Width + inflate * 2, borderRect.Height + inflate * 2);
+
+            var framePath = new PathData();
+            framePath.AddRectangle(outerRect);
+            framePath.AddRectangle(innerRect);
+            framePath.FillType = PathFillType.EvenOdd;
+            target.FillPath(framePath, BrushInfo.Solid(shadow.Color));
+
+            if (shadow.Blur > 0)
             {
-                // Sharp inset shadow — draw the 4 edge strips
-                PaintInsetStrips(target, borderRect, innerRect, shadow.Color);
+                target.SetMaskBlur(0);
             }
 
             target.PopClip();
             target.Restore();
-        }
-
-        private static void PaintInsetStrips(IRenderTarget target, RectF outer, RectF inner, CssColor color)
-        {
-            var brush = BrushInfo.Solid(color);
-
-            // Top strip
-            if (inner.Y > outer.Y)
-            {
-                target.FillRect(new RectF(outer.X, outer.Y, outer.Width, inner.Y - outer.Y), brush);
-            }
-
-            // Bottom strip
-            float innerBottom = inner.Y + inner.Height;
-            float outerBottom = outer.Y + outer.Height;
-            if (innerBottom < outerBottom)
-            {
-                target.FillRect(new RectF(outer.X, innerBottom, outer.Width, outerBottom - innerBottom), brush);
-            }
-
-            // Left strip (between top and bottom strips)
-            if (inner.X > outer.X)
-            {
-                float stripTop = System.Math.Max(outer.Y, inner.Y);
-                float stripBottom = System.Math.Min(outerBottom, innerBottom);
-                if (stripBottom > stripTop)
-                {
-                    target.FillRect(new RectF(outer.X, stripTop, inner.X - outer.X, stripBottom - stripTop), brush);
-                }
-            }
-
-            // Right strip (between top and bottom strips)
-            float innerRight = inner.X + inner.Width;
-            float outerRight = outer.X + outer.Width;
-            if (innerRight < outerRight)
-            {
-                float stripTop = System.Math.Max(outer.Y, inner.Y);
-                float stripBottom = System.Math.Min(outerBottom, innerBottom);
-                if (stripBottom > stripTop)
-                {
-                    target.FillRect(new RectF(innerRight, stripTop, outerRight - innerRight, stripBottom - stripTop), brush);
-                }
-            }
         }
 
         /// <summary>

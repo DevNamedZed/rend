@@ -27,7 +27,7 @@ namespace Rend.Output.Image
         private SKCanvas? _currentCanvas;
         private float _currentOpacity = 1f;
         private SKBlendMode _currentBlendMode = SKBlendMode.SrcOver;
-        private SKFilterQuality _currentFilterQuality = SKFilterQuality.Medium;
+        private bool _pixelatedRendering;
         private float _dpiScale;
         private bool _disposed;
 
@@ -75,7 +75,7 @@ namespace Rend.Output.Image
 
             _currentOpacity = 1f;
             _currentBlendMode = SKBlendMode.SrcOver;
-            _currentFilterQuality = SKFilterQuality.Medium;
+            _pixelatedRendering = false;
         }
 
         /// <inheritdoc />
@@ -151,7 +151,7 @@ namespace Rend.Output.Image
                 Persp2 = 1f
             };
 
-            _currentCanvas!.Concat(ref matrix);
+            _currentCanvas!.Concat(matrix);
         }
 
         /// <inheritdoc />
@@ -450,10 +450,10 @@ namespace Rend.Output.Image
             {
                 case Css.CssImageRendering.Pixelated:
                 case Css.CssImageRendering.CrispEdges:
-                    _currentFilterQuality = SKFilterQuality.None;
+                    _pixelatedRendering = true;
                     break;
                 default:
-                    _currentFilterQuality = SKFilterQuality.Medium;
+                    _pixelatedRendering = false;
                     break;
             }
         }
@@ -461,7 +461,7 @@ namespace Rend.Output.Image
         private float _maskBlurSigma;
 
         /// <inheritdoc />
-        public void SetMaskBlur(float sigma)
+        public void SetMaskBlur(float sigma, bool inner = false)
         {
             _maskBlurSigma = sigma;
         }
@@ -597,12 +597,14 @@ namespace Rend.Output.Image
                     var paint = _paintPool.Rent();
                     try
                     {
-                        paint.IsAntialias = _currentFilterQuality != SKFilterQuality.None;
-                        paint.FilterQuality = _currentFilterQuality;
+                        paint.IsAntialias = !_pixelatedRendering;
                         paint.Color = new SKColor(255, 255, 255, (byte)(_currentOpacity * 255));
 
+                        var sampling = _pixelatedRendering
+                            ? new SKSamplingOptions(SKFilterMode.Nearest)
+                            : new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
                         var sourceRect = new SKRect(0, 0, skImage.Width, skImage.Height);
-                        _currentCanvas!.DrawImage(skImage, sourceRect, ToSKRect(destRect), paint);
+                        _currentCanvas!.DrawImage(skImage, sourceRect, ToSKRect(destRect), sampling, paint);
                     }
                     finally
                     {
@@ -621,24 +623,21 @@ namespace Rend.Output.Image
             try
             {
                 paint.IsAntialias = true;
-                paint.SubpixelText = true;
-                paint.HintingLevel = SKPaintHinting.Slight;
                 paint.Style = SKPaintStyle.Fill;
                 var tc = style.Color;
                 paint.Color = new SKColor(tc.R, tc.G, tc.B, (byte)(tc.A * _currentOpacity));
-                paint.TextSize = style.FontSize;
 
                 SKTypeface typeface = _fontMapper.GetOrCreate(style.Font, style.FontData);
-                paint.Typeface = typeface;
+                using var skFont = new SKFont(typeface, style.FontSize);
+                skFont.Subpixel = true;
 
                 if (style.LetterSpacing != 0 || style.WordSpacing != 0)
                 {
-                    // Draw characters individually with adjusted positions
-                    DrawTextWithSpacing(text, x, y, paint, style.LetterSpacing, style.WordSpacing);
+                    DrawTextWithSpacing(text, x, y, skFont, paint, style.LetterSpacing, style.WordSpacing);
                 }
                 else
                 {
-                    _currentCanvas!.DrawText(text, x, y, paint);
+                    _currentCanvas!.DrawText(text, x, y, SKTextAlign.Left, skFont, paint);
                 }
             }
             finally
@@ -656,16 +655,52 @@ namespace Rend.Output.Image
             try
             {
                 paint.IsAntialias = true;
-                paint.SubpixelText = true;
-                paint.HintingLevel = SKPaintHinting.Slight;
                 paint.Style = SKPaintStyle.Fill;
                 paint.Color = new SKColor(color.R, color.G, color.B, (byte)(color.A * _currentOpacity));
-                paint.TextSize = run.FontSize;
 
                 SKTypeface typeface = _fontMapper.GetOrCreate(font, run.FontData);
-                paint.Typeface = typeface;
 
-                _currentCanvas!.DrawText(run.OriginalText, x, y, paint);
+                // Use HarfBuzz glyph positions directly so rendering matches layout measurements.
+                var glyphs = run.Glyphs;
+                if (glyphs != null && glyphs.Length > 0)
+                {
+                    using var skFont = new SKFont(typeface, run.FontSize);
+                    skFont.Subpixel = true;
+                    skFont.Edging = SKFontEdging.SubpixelAntialias;
+                    skFont.EmbeddedBitmaps = true;
+
+                    var glyphIds = new ushort[glyphs.Length];
+                    var positions = new SKPoint[glyphs.Length];
+                    float cx = 0;
+                    for (int i = 0; i < glyphs.Length; i++)
+                    {
+                        glyphIds[i] = (ushort)glyphs[i].GlyphId;
+                        positions[i] = new SKPoint(cx + glyphs[i].XOffset, -glyphs[i].YOffset);
+                        cx += glyphs[i].XAdvance;
+                    }
+
+                    using var builder = new SKTextBlobBuilder();
+                    var buffer = builder.AllocatePositionedRun(skFont, glyphs.Length);
+                    buffer.SetGlyphs(glyphIds);
+                    buffer.SetPositions(positions);
+                    using var blob = builder.Build();
+                    if (blob != null)
+                    {
+                        _currentCanvas!.DrawText(blob, x, y, paint);
+                    }
+                    else
+                    {
+                        using var fallbackFont = new SKFont(typeface, run.FontSize);
+                        fallbackFont.Subpixel = true;
+                        _currentCanvas!.DrawText(run.OriginalText, x, y, SKTextAlign.Left, fallbackFont, paint);
+                    }
+                }
+                else
+                {
+                    using var skFont = new SKFont(typeface, run.FontSize);
+                    skFont.Subpixel = true;
+                    _currentCanvas!.DrawText(run.OriginalText, x, y, SKTextAlign.Left, skFont, paint);
+                }
             }
             finally
             {
@@ -850,7 +885,7 @@ namespace Rend.Output.Image
             return new SKColor(color.R, color.G, color.B, color.A);
         }
 
-        private void DrawTextWithSpacing(string text, float x, float y, SKPaint paint,
+        private void DrawTextWithSpacing(string text, float x, float y, SKFont font, SKPaint paint,
                                            float letterSpacing, float wordSpacing)
         {
             float cursorX = x;
@@ -858,8 +893,8 @@ namespace Rend.Output.Image
             {
                 char ch = text[i];
                 string s = ch.ToString();
-                _currentCanvas!.DrawText(s, cursorX, y, paint);
-                float advance = paint.MeasureText(s);
+                _currentCanvas!.DrawText(s, cursorX, y, SKTextAlign.Left, font, paint);
+                float advance = font.MeasureText(s);
                 cursorX += advance;
 
                 if (i < text.Length - 1)

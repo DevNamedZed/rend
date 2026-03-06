@@ -42,6 +42,9 @@ namespace Rend.Output.Image.Internal
                 }
             }
 
+            if (path.FillType == PathFillType.EvenOdd)
+                skPath.FillType = SKPathFillType.EvenOdd;
+
             return skPath;
         }
     }

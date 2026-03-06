@@ -59,6 +59,24 @@ namespace Rend.Layout
             // Layout the tree
             BlockFormattingContext.Layout(rootBox, context);
 
+            // After layout, the root box may have accumulated collapsed margins
+            // from descendants (e.g., body > div { margin: 20px } with no padding/border barriers).
+            // Apply the root's margin as a position offset so the content starts at the right place.
+            if (rootBox.MarginTop > 0 || rootBox.MarginLeft > 0)
+            {
+                float dx = rootBox.MarginLeft;
+                float dy = rootBox.MarginTop;
+                if (dx > 0 || dy > 0)
+                {
+                    rootBox.ContentRect = new RectF(
+                        rootBox.ContentRect.X + dx,
+                        rootBox.ContentRect.Y + dy,
+                        rootBox.ContentRect.Width,
+                        rootBox.ContentRect.Height);
+                    ShiftDescendants(rootBox, dx, dy);
+                }
+            }
+
             // Calculate root height BEFORE positioning so fixed/absolute elements
             // can reference the containing block's actual dimensions.
             float rootHeight = CalculateAutoHeight(rootBox);

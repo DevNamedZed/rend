@@ -5,11 +5,27 @@ using Rend.Core.Values;
 namespace Rend.Rendering
 {
     /// <summary>
+    /// Specifies the fill rule for a path.
+    /// </summary>
+    public enum PathFillType
+    {
+        /// <summary>Non-zero winding fill rule (default).</summary>
+        Winding,
+        /// <summary>Even-odd fill rule (used for paths with holes).</summary>
+        EvenOdd
+    }
+
+    /// <summary>
     /// Builds and stores a sequence of path segments for drawing operations.
     /// </summary>
     public sealed class PathData
     {
         private readonly List<PathSegment> _segments = new List<PathSegment>();
+
+        /// <summary>
+        /// Gets or sets the fill type for this path.
+        /// </summary>
+        public PathFillType FillType { get; set; } = PathFillType.Winding;
 
         /// <summary>
         /// Moves the current point to the specified location without drawing.

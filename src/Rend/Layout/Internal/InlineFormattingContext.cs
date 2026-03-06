@@ -135,24 +135,24 @@ namespace Rend.Layout.Internal
 
                                 // Layout the first letter with ::first-letter style
                                 var firstLetterText = new StyledText(firstLetter, styledElement.FirstLetterStyle!);
-                                LayoutTextRun(firstLetterText, context, ref cursorX, ref cursorY, startX,
-                                              containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
+                                LayoutTextRun(firstLetterText, context, ref cursorX, ref cursorY, ref startX,
+                                              ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
                                               styleOverride: styledElement.FirstLetterStyle);
 
                                 // Layout the remainder with normal style
                                 if (remainder.Length > 0)
                                 {
                                     var remainderText = new StyledText(remainder, textNode.Style);
-                                    LayoutTextRun(remainderText, context, ref cursorX, ref cursorY, startX,
-                                                  containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
+                                    LayoutTextRun(remainderText, context, ref cursorX, ref cursorY, ref startX,
+                                                  ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
                                 }
                                 continue;
                             }
                         }
                     }
 
-                    LayoutTextRun(textNode, context, ref cursorX, ref cursorY, startX,
-                                  containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
+                    LayoutTextRun(textNode, context, ref cursorX, ref cursorY, ref startX,
+                                  ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
                 }
                 else if (child is StyledPseudoElement pseudo)
                 {
@@ -160,8 +160,8 @@ namespace Rend.Layout.Internal
                     // Pass the pseudo's style as styleOverride so the painter uses
                     // its color/font properties instead of falling through to the parent.
                     var pseudoText = new StyledText(pseudo.Content, pseudo.Style);
-                    LayoutTextRun(pseudoText, context, ref cursorX, ref cursorY, startX,
-                                  containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
+                    LayoutTextRun(pseudoText, context, ref cursorX, ref cursorY, ref startX,
+                                  ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
                                   styleOverride: pseudo.Style);
                 }
                 else
@@ -172,16 +172,16 @@ namespace Rend.Layout.Internal
                     // display:contents — unwrap children into inline context
                     if (childElement.Style.Display == CssDisplay.Contents)
                     {
-                        LayoutInlineElement(childElement, context, ref cursorX, ref cursorY, startX,
-                                           containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
+                        LayoutInlineElement(childElement, context, ref cursorX, ref cursorY, ref startX,
+                                           ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
                         continue;
                     }
 
                     // Handle <br> as a forced line break
                     if (childElement.TagName == "br")
                     {
-                        StartNewLine(parent, ref cursorX, ref cursorY, startX, containingWidth,
-                                     ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline);
+                        StartNewLine(parent, ref cursorX, ref cursorY, ref startX, ref containingWidth,
+                                     ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, context);
                         continue;
                     }
 
@@ -190,8 +190,8 @@ namespace Rend.Layout.Internal
                     {
                         if (cursorX > startX + containingWidth)
                         {
-                            StartNewLine(parent, ref cursorX, ref cursorY, startX, containingWidth,
-                                         ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline);
+                            StartNewLine(parent, ref cursorX, ref cursorY, ref startX, ref containingWidth,
+                                         ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, context);
                         }
                         continue;
                     }
@@ -199,8 +199,8 @@ namespace Rend.Layout.Internal
                     // Ruby container: render base text with annotation above/below
                     if (childElement.Style.Display == CssDisplay.Ruby)
                     {
-                        LayoutRubyContainer(childElement, context, ref cursorX, ref cursorY, startX,
-                                           containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
+                        LayoutRubyContainer(childElement, context, ref cursorX, ref cursorY, ref startX,
+                                           ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
                         continue;
                     }
 
@@ -209,8 +209,8 @@ namespace Rend.Layout.Internal
                         childElement.Style.Display == CssDisplay.RubyBase ||
                         childElement.Style.Display == CssDisplay.RubyTextContainer)
                     {
-                        LayoutInlineElement(childElement, context, ref cursorX, ref cursorY, startX,
-                                           containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
+                        LayoutInlineElement(childElement, context, ref cursorX, ref cursorY, ref startX,
+                                           ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
                         continue;
                     }
 
@@ -225,8 +225,8 @@ namespace Rend.Layout.Internal
                     else
                     {
                         // Inline element: process as text-like
-                        LayoutInlineElement(childElement, context, ref cursorX, ref cursorY, startX,
-                                           containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
+                        LayoutInlineElement(childElement, context, ref cursorX, ref cursorY, ref startX,
+                                           ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
                     }
                 }
             }
@@ -566,7 +566,7 @@ namespace Rend.Layout.Internal
 
         private static void LayoutTextRun(
             StyledText textNode, LayoutContext context,
-            ref float cursorX, ref float cursorY, float startX, float containingWidth,
+            ref float cursorX, ref float cursorY, ref float startX, ref float containingWidth,
             ref LineBox currentLine, List<LineBox> lineBoxes,
             ref float maxLineHeight, ref float lineBaseline, LayoutBox parent,
             StyledElement? inlineAncestor = null, ComputedStyle? styleOverride = null)
@@ -621,7 +621,7 @@ namespace Rend.Layout.Internal
                     if (segments[seg].Length > 0)
                     {
                         var segText = new StyledText(segments[seg], style);
-                        LayoutTextRunSegment(segText, context, ref cursorX, ref cursorY, startX, containingWidth,
+                        LayoutTextRunSegment(segText, context, ref cursorX, ref cursorY, ref startX, ref containingWidth,
                                              ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
                                              inlineAncestor, styleOverride);
                     }
@@ -629,8 +629,8 @@ namespace Rend.Layout.Internal
                     // Force a line break after each segment except the last
                     if (seg < segments.Length - 1)
                     {
-                        StartNewLine(parent, ref cursorX, ref cursorY, startX, containingWidth,
-                                     ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline);
+                        StartNewLine(parent, ref cursorX, ref cursorY, ref startX, ref containingWidth,
+                                     ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, context);
                     }
                 }
                 return;
@@ -638,7 +638,7 @@ namespace Rend.Layout.Internal
 
             // Create a processed text node (whitespace collapsed, text-transform applied)
             var processedNode = new StyledText(text, style);
-            LayoutTextRunSegment(processedNode, context, ref cursorX, ref cursorY, startX, containingWidth,
+            LayoutTextRunSegment(processedNode, context, ref cursorX, ref cursorY, ref startX, ref containingWidth,
                                  ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
                                  inlineAncestor, styleOverride);
         }
@@ -648,7 +648,7 @@ namespace Rend.Layout.Internal
         /// </summary>
         private static void LayoutTextRunSegment(
             StyledText textNode, LayoutContext context,
-            ref float cursorX, ref float cursorY, float startX, float containingWidth,
+            ref float cursorX, ref float cursorY, ref float startX, ref float containingWidth,
             ref LineBox currentLine, List<LineBox> lineBoxes,
             ref float maxLineHeight, ref float lineBaseline, LayoutBox parent,
             StyledElement? inlineAncestor = null, ComputedStyle? styleOverride = null)
@@ -739,15 +739,15 @@ namespace Rend.Layout.Internal
                 if (cursorX + adjustedWidth <= startX + containingWidth || noWrap)
                 {
                     // Fits on current line (or no-wrap mode)
-                    AddTextFragment(currentLine, displayText, shaped, cursorX, adjustedWidth, lineHeight, ascent, inlineAncestor, styleOverride);
+                    AddTextFragment(currentLine, displayText, shaped, cursorX, adjustedWidth, lineHeight, ascent, inlineAncestor, styleOverride, contentArea);
                     cursorX += adjustedWidth;
                     UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, lineHeight, ascent);
                 }
                 else
                 {
                     // Need to wrap: split text at word boundaries
-                    WrapText(text, fontDesc, fontSize, context, ref cursorX, ref cursorY, startX,
-                             containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
+                    WrapText(text, fontDesc, fontSize, context, ref cursorX, ref cursorY, ref startX,
+                             ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
                              lineHeight, ascent, parent, inlineAncestor, style.LetterSpacing, style.WordSpacing,
                              style.WordBreak, style.OverflowWrap, style.Hyphens);
                 }
@@ -779,6 +779,7 @@ namespace Rend.Layout.Internal
                         X = cursorX - currentLine.X,
                         Width = textWidth,
                         Height = lineHeight,
+                        ContentHeight = fontSize,
                         Baseline = ascent,
                         Text = text,
                         InlineElement = inlineAncestor,
@@ -794,7 +795,7 @@ namespace Rend.Layout.Internal
         private static void WrapText(
             string text, FontDescriptor fontDesc, float fontSize,
             LayoutContext context,
-            ref float cursorX, ref float cursorY, float startX, float containingWidth,
+            ref float cursorX, ref float cursorY, ref float startX, ref float containingWidth,
             ref LineBox currentLine, List<LineBox> lineBoxes,
             ref float maxLineHeight, ref float lineBaseline,
             float lineHeight, float ascent, LayoutBox parent,
@@ -806,8 +807,8 @@ namespace Rend.Layout.Internal
             // For break-all, every character boundary is a break opportunity
             if (wordBreak == CssWordBreak.BreakAll)
             {
-                WrapTextBreakAll(text, fontDesc, fontSize, context, ref cursorX, ref cursorY, startX,
-                                 containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
+                WrapTextBreakAll(text, fontDesc, fontSize, context, ref cursorX, ref cursorY, ref startX,
+                                 ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
                                  lineHeight, ascent, parent, inlineAncestor, letterSpacing, wordSpacing);
                 return;
             }
@@ -891,7 +892,7 @@ namespace Rend.Layout.Internal
                             }
 
                             wordHandled = TryAutoHyphenate(displayWord, fontDesc, fontSize, context,
-                                ref cursorX, ref cursorY, startX, containingWidth,
+                                ref cursorX, ref cursorY, ref startX, ref containingWidth,
                                 ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
                                 lineHeight, ascent, parent, inlineAncestor, letterSpacing, wordSpacing);
                             if (wordHandled)
@@ -914,8 +915,8 @@ namespace Rend.Layout.Internal
                             }
 
                             // Start new line
-                            StartNewLine(parent, ref cursorX, ref cursorY, startX, containingWidth,
-                                         ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline);
+                            StartNewLine(parent, ref cursorX, ref cursorY, ref startX, ref containingWidth,
+                                         ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, context);
 
                             lineTextStart = wordStart;
                             lineFragStartX = cursorX;
@@ -949,8 +950,8 @@ namespace Rend.Layout.Internal
                         if (allowCharBreak &&
                             lineFragStartX + candidateWidth > startX + containingWidth && currentLine.Fragments.Count == 0 && accumulatedWidth == 0)
                         {
-                            WrapTextBreakAll(displayWord, fontDesc, fontSize, context, ref cursorX, ref cursorY, startX,
-                                             containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
+                            WrapTextBreakAll(displayWord, fontDesc, fontSize, context, ref cursorX, ref cursorY, ref startX,
+                                             ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
                                              lineHeight, ascent, parent, inlineAncestor, letterSpacing, wordSpacing);
                             lineTextStart = end;
                             lineFragStartX = cursorX;
@@ -1010,7 +1011,7 @@ namespace Rend.Layout.Internal
         private static bool TryAutoHyphenate(
             string word, FontDescriptor fontDesc, float fontSize,
             LayoutContext context,
-            ref float cursorX, ref float cursorY, float startX, float containingWidth,
+            ref float cursorX, ref float cursorY, ref float startX, ref float containingWidth,
             ref LineBox currentLine, List<LineBox> lineBoxes,
             ref float maxLineHeight, ref float lineBaseline,
             float lineHeight, float ascent, LayoutBox parent,
@@ -1070,8 +1071,8 @@ namespace Rend.Layout.Internal
             UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, lineHeight, ascent);
 
             // Start a new line for the remainder
-            StartNewLine(parent, ref cursorX, ref cursorY, startX, containingWidth,
-                         ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline);
+            StartNewLine(parent, ref cursorX, ref cursorY, ref startX, ref containingWidth,
+                         ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, context);
 
             // Place the remainder on the new line
             string secondPart = word.Substring(bestSplit);
@@ -1090,7 +1091,7 @@ namespace Rend.Layout.Internal
         private static void WrapTextBreakAll(
             string text, FontDescriptor fontDesc, float fontSize,
             LayoutContext context,
-            ref float cursorX, ref float cursorY, float startX, float containingWidth,
+            ref float cursorX, ref float cursorY, ref float startX, ref float containingWidth,
             ref LineBox currentLine, List<LineBox> lineBoxes,
             ref float maxLineHeight, ref float lineBaseline,
             float lineHeight, float ascent, LayoutBox parent,
@@ -1122,8 +1123,8 @@ namespace Rend.Layout.Internal
                         FlushBreakAllBatch(text, batchStart, i, fontDesc, fontSize, context,
                             batchX, batchWidth, lineHeight, ascent, currentLine, inlineAncestor);
                     }
-                    StartNewLine(parent, ref cursorX, ref cursorY, startX, containingWidth,
-                                 ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline);
+                    StartNewLine(parent, ref cursorX, ref cursorY, ref startX, ref containingWidth,
+                                 ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, context);
                     batchStart = i;
                     batchWidth = 0;
                     batchX = cursorX;
@@ -1155,9 +1156,10 @@ namespace Rend.Layout.Internal
         }
 
         private static void StartNewLine(LayoutBox parent, ref float cursorX, ref float cursorY,
-            float startX, float containingWidth,
+            ref float startX, ref float containingWidth,
             ref LineBox currentLine, List<LineBox> lineBoxes,
-            ref float maxLineHeight, ref float lineBaseline)
+            ref float maxLineHeight, ref float lineBaseline,
+            LayoutContext? context = null)
         {
             var parentStyle = parent.StyledNode as StyledElement;
             var align = parentStyle?.Style.TextAlign ?? CssTextAlign.Left;
@@ -1165,6 +1167,19 @@ namespace Rend.Layout.Internal
             FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, align, CssTextAlign.Auto, dir);
             lineBoxes.Add(currentLine);
             cursorY += maxLineHeight;
+
+            // Re-query float context for the new line's Y position
+            var floatCtx = context?.FloatContext;
+            if (floatCtx != null)
+            {
+                float baseX = parent.ContentRect.X;
+                float baseWidth = parent.ContentRect.Width;
+                float leftEdge = floatCtx.GetLeftEdge(cursorY, 0);
+                float rightEdge = floatCtx.GetRightEdge(cursorY, 0);
+                startX = Math.Max(baseX, leftEdge);
+                containingWidth = rightEdge - startX;
+            }
+
             currentLine = new LineBox { X = startX, Y = cursorY, Width = containingWidth };
             cursorX = startX;
             maxLineHeight = 0;
@@ -1379,7 +1394,7 @@ namespace Rend.Layout.Internal
         /// </summary>
         private static void LayoutRubyContainer(
             StyledElement rubyElement, LayoutContext context,
-            ref float cursorX, ref float cursorY, float startX, float containingWidth,
+            ref float cursorX, ref float cursorY, ref float startX, ref float containingWidth,
             ref LineBox currentLine, List<LineBox> lineBoxes,
             ref float maxLineHeight, ref float lineBaseline, LayoutBox parent)
         {
@@ -1443,8 +1458,8 @@ namespace Rend.Layout.Internal
 
             // Lay out the base text as a normal text run using the ruby container's style
             var baseTextNode = new StyledText(baseText, rubyElement.Style);
-            LayoutTextRun(baseTextNode, context, ref cursorX, ref cursorY, startX,
-                          containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
+            LayoutTextRun(baseTextNode, context, ref cursorX, ref cursorY, ref startX,
+                          ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
 
             // Attach ruby annotation to the first base fragment that was just added
             if (!string.IsNullOrEmpty(annotationText))
@@ -1510,7 +1525,7 @@ namespace Rend.Layout.Internal
 
         private static void LayoutInlineElement(
             StyledElement element, LayoutContext context,
-            ref float cursorX, ref float cursorY, float startX, float containingWidth,
+            ref float cursorX, ref float cursorY, ref float startX, ref float containingWidth,
             ref LineBox currentLine, List<LineBox> lineBoxes,
             ref float maxLineHeight, ref float lineBaseline, LayoutBox parent)
         {
@@ -1521,7 +1536,8 @@ namespace Rend.Layout.Internal
             // Inline box model: advance cursor for left padding/border/margin
             var inlineStyle = element.Style;
             float inlineML = float.IsNaN(inlineStyle.MarginLeft) ? 0 : inlineStyle.MarginLeft;
-            float inlineBL = float.IsNaN(inlineStyle.BorderLeftWidth) ? 0 : inlineStyle.BorderLeftWidth;
+            float inlineBL = inlineStyle.BorderLeftStyle != CssBorderStyle.None
+                ? (float.IsNaN(inlineStyle.BorderLeftWidth) ? 0 : inlineStyle.BorderLeftWidth) : 0;
             float inlinePL = float.IsNaN(inlineStyle.PaddingLeft) ? 0 : inlineStyle.PaddingLeft;
             cursorX += inlineML + inlineBL + inlinePL;
 
@@ -1530,15 +1546,15 @@ namespace Rend.Layout.Internal
                 var child = element.Children[i];
                 if (child.IsText)
                 {
-                    LayoutTextRun((StyledText)child, context, ref cursorX, ref cursorY, startX,
-                                  containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
+                    LayoutTextRun((StyledText)child, context, ref cursorX, ref cursorY, ref startX,
+                                  ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
                                   inlineAncestor: element);
                 }
                 else if (child is StyledPseudoElement pseudo)
                 {
                     var pseudoText = new StyledText(pseudo.Content, pseudo.Style);
-                    LayoutTextRun(pseudoText, context, ref cursorX, ref cursorY, startX,
-                                  containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
+                    LayoutTextRun(pseudoText, context, ref cursorX, ref cursorY, ref startX,
+                                  ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
                                   inlineAncestor: element, styleOverride: pseudo.Style);
                 }
                 else if (child is StyledElement childEl)
@@ -1555,28 +1571,31 @@ namespace Rend.Layout.Internal
                     else
                     {
                         // Recurse for nested inline elements (<span><strong>text</strong></span>)
-                        LayoutInlineElement(childEl, context, ref cursorX, ref cursorY, startX,
-                                           containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
+                        LayoutInlineElement(childEl, context, ref cursorX, ref cursorY, ref startX,
+                                           ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
                     }
                 }
             }
 
             // Inline box model: advance cursor for right padding/border/margin
             float inlinePR = float.IsNaN(inlineStyle.PaddingRight) ? 0 : inlineStyle.PaddingRight;
-            float inlineBR = float.IsNaN(inlineStyle.BorderRightWidth) ? 0 : inlineStyle.BorderRightWidth;
+            float inlineBR = inlineStyle.BorderRightStyle != CssBorderStyle.None
+                ? (float.IsNaN(inlineStyle.BorderRightWidth) ? 0 : inlineStyle.BorderRightWidth) : 0;
             float inlineMR = float.IsNaN(inlineStyle.MarginRight) ? 0 : inlineStyle.MarginRight;
             cursorX += inlinePR + inlineBR + inlineMR;
         }
 
         private static void AddTextFragment(LineBox line, string text, ShapedTextRun? shaped,
                                               float x, float width, float height, float baseline,
-                                              StyledElement? inlineAncestor = null, ComputedStyle? styleOverride = null)
+                                              StyledElement? inlineAncestor = null, ComputedStyle? styleOverride = null,
+                                              float contentHeight = 0)
         {
             var fragment = new LineFragment
             {
                 X = x - line.X,
                 Width = width,
                 Height = height,
+                ContentHeight = contentHeight > 0 ? contentHeight : height,
                 Baseline = baseline,
                 Text = text,
                 ShapedRun = shaped,
@@ -1596,7 +1615,11 @@ namespace Rend.Layout.Internal
         private static void FinalizeLineBox(LineBox line, float height, float baseline, CssTextAlign textAlign,
             CssTextAlign textAlignLast = CssTextAlign.Auto, CssDirection direction = CssDirection.Ltr)
         {
-            line.Height = height > 0 ? height : 16f; // minimum line height
+            float h = height > 0 ? height : 16f;
+            // Chrome uses LayoutUnit internally (1/64th pixel precision, truncated).
+            // Match that instead of rounding to integer pixels, which causes
+            // accumulating errors across multiple lines/rows.
+            line.Height = (float)((int)(h * 64f)) / 64f;
             line.Baseline = baseline;
 
             // Apply vertical-align to each fragment
@@ -1647,7 +1670,7 @@ namespace Rend.Layout.Internal
                 {
                     var ils = frag.InlineElement.Style;
                     fragRight += (float.IsNaN(ils.PaddingRight) ? 0 : ils.PaddingRight)
-                               + (float.IsNaN(ils.BorderRightWidth) ? 0 : ils.BorderRightWidth)
+                               + (ils.BorderRightStyle != CssBorderStyle.None && !float.IsNaN(ils.BorderRightWidth) ? ils.BorderRightWidth : 0)
                                + (float.IsNaN(ils.MarginRight) ? 0 : ils.MarginRight);
                 }
                 contentWidth = Math.Max(contentWidth, fragRight);
