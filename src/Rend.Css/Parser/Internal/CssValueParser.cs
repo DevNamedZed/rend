@@ -29,31 +29,51 @@ namespace Rend.Css.Parser.Internal
         {
             SkipWhitespace();
 
-            var values = new List<CssValue>();
-            char lastSep = ' ';
+            var commaGroups = new List<CssValue>();
+            var currentGroup = new List<CssValue>();
+            bool hasComma = false;
 
             while (_pos < _count && _tokens[_pos].Type != CssTokenType.EOF)
             {
                 var val = ParseSingleValue();
                 if (val == null) break;
-                values.Add(val);
+                currentGroup.Add(val);
 
                 SkipWhitespace();
 
                 // Check for comma separator
                 if (_pos < _count && _tokens[_pos].Type == CssTokenType.Comma)
                 {
-                    lastSep = ',';
+                    hasComma = true;
+                    // Flush current space-separated group
+                    commaGroups.Add(GroupValues(currentGroup, ' '));
+                    currentGroup.Clear();
                     _pos++;
                     SkipWhitespace();
                 }
             }
 
-            if (values.Count == 0)
-                return new CssKeywordValue("");
-            if (values.Count == 1)
-                return values[0];
-            return new CssListValue(values, lastSep);
+            if (hasComma)
+            {
+                // Flush last group
+                if (currentGroup.Count > 0)
+                    commaGroups.Add(GroupValues(currentGroup, ' '));
+                if (commaGroups.Count == 0) return new CssKeywordValue("");
+                if (commaGroups.Count == 1) return commaGroups[0];
+                return new CssListValue(commaGroups, ',');
+            }
+
+            // No commas — return space-separated list
+            if (currentGroup.Count == 0) return new CssKeywordValue("");
+            if (currentGroup.Count == 1) return currentGroup[0];
+            return new CssListValue(currentGroup, ' ');
+        }
+
+        private static CssValue GroupValues(List<CssValue> values, char sep)
+        {
+            if (values.Count == 0) return new CssKeywordValue("");
+            if (values.Count == 1) return values[0];
+            return new CssListValue(new List<CssValue>(values), sep);
         }
 
         /// <summary>

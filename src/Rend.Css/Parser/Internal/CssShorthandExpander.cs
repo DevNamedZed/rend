@@ -994,7 +994,7 @@ namespace Rend.Css.Parser.Internal
             for (int i = 0; i < parts.Count; i++)
             {
                 var p = parts[i];
-                if (p is CssUrlValue || (p is CssFunctionValue fn && (fn.Name == "linear-gradient" || fn.Name == "radial-gradient")))
+                if (p is CssUrlValue || (p is CssFunctionValue fn && (fn.Name == "linear-gradient" || fn.Name == "radial-gradient" || fn.Name == "conic-gradient")))
                 {
                     source = p;
                 }

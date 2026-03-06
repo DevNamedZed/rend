@@ -56,7 +56,7 @@ namespace Rend.Layout.Internal
                     case "submit":
                     case "button":
                     case "reset":
-                        // Auto width based on value text: estimate ~7px per character
+                        // Chrome: 13.333px sans-serif, ~6px avg char width + 12px padding + 4px border
                         string? value = element.GetAttribute("value");
                         if (string.IsNullOrEmpty(value))
                         {
@@ -64,15 +64,16 @@ namespace Rend.Layout.Internal
                                   : inputType == "reset" ? "Reset"
                                   : "Button";
                         }
-                        return Math.Max(40f, value!.Length * 7f + 20f);
+                        return Math.Max(40f, value!.Length * 6.1f + 16f);
                     default:
                         // text, password, email, url, search, tel, number, etc.
-                        return 200f;
+                        // Chrome: size=20 chars * ~6.7px avg char width + 4px border + 2px padding ≈ 140px
+                        return 140f;
                 }
             }
 
             if (tag == "select")
-                return 200f;
+                return 140f;
 
             if (tag == "textarea")
             {

@@ -284,6 +284,7 @@ namespace Rend.Layout.Internal
             float startX = box.ContentRect.X;
             float cursorY = box.ContentRect.Y;
             float availableWidth = box.ContentRect.Width;
+            float prevMarginBottom = 0; // trailing margin for collapsing
 
             // Collect segments: groups of non-spanning children, separated by spanning elements
             var currentSegment = new List<StyledNode>();
@@ -304,8 +305,10 @@ namespace Rend.Layout.Internal
                     // Layout the accumulated segment as multi-column
                     if (currentSegment.Count > 0)
                     {
+                        float segTrailingMargin;
                         cursorY = LayoutSegmentAsColumns(box, currentSegment, context,
-                            columnCount, columnWidth, columnGap, startX, cursorY);
+                            columnCount, columnWidth, columnGap, startX, cursorY, out segTrailingMargin);
+                        prevMarginBottom = segTrailingMargin;
                         currentSegment.Clear();
                     }
 
@@ -314,8 +317,10 @@ namespace Rend.Layout.Internal
                     var spanBox = new LayoutBox(spanEl, BoxType.Block);
                     BoxModelCalculator.ApplyBoxModel(spanBox, spanEl.Style, availableWidth);
                     float spanWidth = DimensionResolver.ResolveWidth(spanEl.Style, availableWidth, spanBox);
+                    // Collapse margins between previous segment/spanner and this spanner
+                    float collapsedMargin = MarginCollapsing.Collapse(prevMarginBottom, spanBox.MarginTop);
                     float spanX = startX + spanBox.MarginLeft + spanBox.BorderLeftWidth + spanBox.PaddingLeft;
-                    float spanY = cursorY + spanBox.MarginTop + spanBox.BorderTopWidth + spanBox.PaddingTop;
+                    float spanY = cursorY + collapsedMargin + spanBox.BorderTopWidth + spanBox.PaddingTop;
                     spanBox.ContentRect = new RectF(spanX, spanY, spanWidth, 0);
 
                     // Layout the spanner's children
@@ -335,7 +340,8 @@ namespace Rend.Layout.Internal
                     spanBox.ContentRect = new RectF(spanX, spanY, spanWidth, spanHeight);
                     box.AddChild(spanBox);
 
-                    cursorY = spanY + spanHeight + spanBox.PaddingBottom + spanBox.BorderBottomWidth + spanBox.MarginBottom;
+                    cursorY = spanY + spanHeight + spanBox.PaddingBottom + spanBox.BorderBottomWidth;
+                    prevMarginBottom = spanBox.MarginBottom;
                 }
                 else
                 {
@@ -346,8 +352,11 @@ namespace Rend.Layout.Internal
             // Layout any remaining segment
             if (currentSegment.Count > 0)
             {
+                // Collapse the previous element's trailing margin with the segment start
+                cursorY += prevMarginBottom;
+                float trailingMargin;
                 cursorY = LayoutSegmentAsColumns(box, currentSegment, context,
-                    columnCount, columnWidth, columnGap, startX, cursorY);
+                    columnCount, columnWidth, columnGap, startX, cursorY, out trailingMargin);
             }
 
             box.ContentRect = new RectF(
@@ -360,8 +369,9 @@ namespace Rend.Layout.Internal
         /// </summary>
         private static float LayoutSegmentAsColumns(LayoutBox parent, List<StyledNode> children,
             LayoutContext context, int columnCount, float columnWidth, float columnGap,
-            float startX, float startY)
+            float startX, float startY, out float trailingMargin)
         {
+            trailingMargin = 0;
             // Create a wrapper element with ONLY the segment children for BFC layout.
             // Using the parent element directly would lay out ALL children (including spanners
             // and other segments), causing content duplication.
@@ -402,6 +412,7 @@ namespace Rend.Layout.Internal
             }
 
             float tallest = 0;
+            float tallestColTrailingMargin = 0;
             for (int col = 0; col < columnCount; col++)
             {
                 float colX = startX + col * (columnWidth + columnGap);
@@ -420,23 +431,36 @@ namespace Rend.Layout.Internal
                 }
 
                 float colBottom = startY;
+                float lastChildMarginBottom = 0;
                 foreach (var child in segColChildren[col])
                 {
                     var offsetChild = OffsetBox(child, xOffset, yOffset);
                     colBox.AddChild(offsetChild);
-                    float childBottomY = offsetChild.ContentRect.Y + offsetChild.ContentRect.Height
-                                       + offsetChild.PaddingBottom + offsetChild.BorderBottomWidth
-                                       + offsetChild.MarginBottom;
-                    if (childBottomY > colBottom) colBottom = childBottomY;
+                    // Compute bottom WITHOUT margin-bottom (visual bottom only)
+                    float childVisualBottom = offsetChild.ContentRect.Y + offsetChild.ContentRect.Height
+                                            + offsetChild.PaddingBottom + offsetChild.BorderBottomWidth;
+                    float childFullBottom = childVisualBottom + offsetChild.MarginBottom;
+                    if (childFullBottom > colBottom)
+                    {
+                        colBottom = childFullBottom;
+                        lastChildMarginBottom = offsetChild.MarginBottom;
+                    }
                 }
 
                 float colH = colBottom - startY;
-                if (colH > tallest) tallest = colH;
+                if (colH > tallest)
+                {
+                    tallest = colH;
+                    tallestColTrailingMargin = lastChildMarginBottom;
+                }
 
                 parent.AddChild(colBox);
             }
 
-            return startY + (tallest > 0 ? tallest : targetHeight);
+            // Exclude trailing margin from height — it will be collapsed with the next element
+            trailingMargin = tallestColTrailingMargin;
+            float segmentHeight = tallest - tallestColTrailingMargin;
+            return startY + (segmentHeight > 0 ? segmentHeight : targetHeight);
         }
 
         /// <summary>

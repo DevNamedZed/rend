@@ -108,6 +108,12 @@ namespace Rend.Rendering
         /// <param name="destRect">The destination rectangle.</param>
         void DrawImage(ImageData image, RectF destRect);
 
+        /// <summary>Measures the advance width of a text string without drawing it.</summary>
+        /// <param name="text">The text to measure.</param>
+        /// <param name="style">The text style to apply.</param>
+        /// <returns>The advance width in pixels, or -1 if measurement is not supported.</returns>
+        float MeasureText(string text, TextStyle style);
+
         /// <summary>Draws a text string at the specified position using the given style.</summary>
         /// <param name="text">The text to draw.</param>
         /// <param name="x">The X coordinate of the text origin.</param>

@@ -32,6 +32,17 @@ namespace Rend.Css.Resolution.Internal
                         result = PropertyValue.FromLength(-pctDeferred.Value / 100f);
                         return true;
                     }
+                    // Defer calc() expressions that contain percentages for properties
+                    // that resolve against the containing block (not the viewport).
+                    // Store the raw CssFunctionValue in refResult and use a sentinel float.
+                    if (value is CssFunctionValue calcFn && calcFn.Name == "calc"
+                        && IsDeferredPercentageProperty(prop.Id)
+                        && CalcContainsPercentage(calcFn.Arguments))
+                    {
+                        result = PropertyValue.FromLength(float.NegativeInfinity);
+                        refResult = calcFn;
+                        return true;
+                    }
                     return TryResolveLength(value, ctx, out result);
 
                 case PropertyValueType.Color:
@@ -718,6 +729,30 @@ namespace Rend.Css.Resolution.Internal
             }
 
             return 0;
+        }
+
+        /// <summary>
+        /// Returns true if the calc arguments contain a percentage value.
+        /// </summary>
+        private static bool CalcContainsPercentage(IReadOnlyList<CssValue> args)
+        {
+            for (int i = 0; i < args.Count; i++)
+            {
+                if (args[i] is CssPercentageValue) return true;
+                if (args[i] is CssFunctionValue fn && CalcContainsPercentage(fn.Arguments)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Evaluates a deferred calc() expression at layout time with the correct
+        /// containing block width as the percentage base.
+        /// </summary>
+        public static float EvaluateDeferredCalc(CssFunctionValue calcFn, float containingBlockWidth)
+        {
+            // Create a minimal resolution context with the correct percent base
+            var ctx = new CssResolutionContext(16f, 16f, containingBlockWidth, 0, containingBlockWidth);
+            return EvaluateCalc(calcFn.Arguments, ctx);
         }
 
         #endregion

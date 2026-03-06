@@ -58,6 +58,33 @@ namespace Rend.Rendering.Internal
             float outerRight = borderRect.Right;
             float outerBottom = borderRect.Bottom;
 
+            // In border-collapse mode, layout stores half-widths for positioning.
+            // Expand outward and double widths so the full collapsed border is painted
+            // centered on the grid line between cells.
+            // Snap grid lines to integer pixel boundaries for crisp borders (matching Chrome).
+            if (box.CollapsedBorderCell)
+            {
+                // Grid lines are at the current borderRect edges (before expansion).
+                // Each border should start at Floor(gridLine) and span the full border width.
+                float gridTop = outerTop;
+                float gridBottom = outerBottom;
+                float gridLeft = outerLeft;
+                float gridRight = outerRight;
+
+                topW *= 2f;
+                rightW *= 2f;
+                bottomW *= 2f;
+                leftW *= 2f;
+
+                // Snap: border starts at Floor(gridLine), extends inward by borderWidth.
+                // Top/left borders grow downward/rightward from Floor(gridLine).
+                // Bottom/right borders grow downward/rightward from Floor(gridLine).
+                outerTop = (float)Math.Floor(gridTop);
+                outerLeft = (float)Math.Floor(gridLeft);
+                outerRight = (float)Math.Floor(gridRight) + rightW;
+                outerBottom = (float)Math.Floor(gridBottom) + bottomW;
+            }
+
             float innerLeft = outerLeft + leftW;
             float innerTop = outerTop + topW;
             float innerRight = outerRight - rightW;
@@ -214,7 +241,7 @@ namespace Rend.Rendering.Internal
             }
         }
 
-        private static void FillTrapezoid(
+        internal static void FillTrapezoid(
             IRenderTarget target, CssColor color,
             float x1, float y1, float x2, float y2,
             float x3, float y3, float x4, float y4)
@@ -228,20 +255,55 @@ namespace Rend.Rendering.Internal
             target.FillPath(path, BrushInfo.Solid(color));
         }
 
+        /// <summary>
+        /// Chrome's SelectBestDashGap: adjusts gap to distribute dashes evenly along the path.
+        /// </summary>
+        private static float SelectBestDashGap(float strokeLength, float dashLength, float gapLength)
+        {
+            float availableLength = strokeLength + gapLength; // open path
+            float minNumDashes = (float)Math.Floor(availableLength / (dashLength + gapLength));
+            float maxNumDashes = minNumDashes + 1;
+            float minNumGaps = minNumDashes - 1;
+            float maxNumGaps = maxNumDashes - 1;
+            if (minNumGaps <= 0) return gapLength;
+            float minGap = (strokeLength - minNumDashes * dashLength) / minNumGaps;
+            float maxGap = maxNumGaps > 0 ? (strokeLength - maxNumDashes * dashLength) / maxNumGaps : -1;
+            return (maxGap <= 0) || (Math.Abs(minGap - gapLength) < Math.Abs(maxGap - gapLength))
+                ? minGap
+                : maxGap;
+        }
+
         private static void StrokeDashed(
             IRenderTarget target, CssColor color, float width,
             float outerX1, float outerY1, float outerX2, float outerY2,
             float innerX1, float innerY1, float innerX2, float innerY2)
         {
-            // Draw as a line through the midpoint of the border side with a dash pattern.
             float midX1 = (outerX1 + innerX1) * 0.5f;
             float midY1 = (outerY1 + innerY1) * 0.5f;
             float midX2 = (outerX2 + innerX2) * 0.5f;
             float midY2 = (outerY2 + innerY2) * 0.5f;
 
-            // Chrome uses approximately 3x width for both dash and gap
-            float dashLen = Math.Max(width * 3f, 1f);
-            float gapLen = Math.Max(width * 3f, 1f);
+            // Chrome's StyledStrokeData: thickness >= 3 → dash=2*w, gap=1*w; < 3 → dash=3*w, gap=2*w
+            float dashLen, gapLen;
+            if (width >= 3f)
+            {
+                dashLen = width * 2f;
+                gapLen = width * 1f;
+            }
+            else
+            {
+                dashLen = width * 3f;
+                gapLen = width * 2f;
+            }
+            dashLen = Math.Max(dashLen, 1f);
+            gapLen = Math.Max(gapLen, 1f);
+
+            // Adjust gap to distribute dashes evenly (Chrome's SelectBestDashGap)
+            float dx = midX2 - midX1, dy = midY2 - midY1;
+            float strokeLength = (float)Math.Sqrt(dx * dx + dy * dy);
+            if (strokeLength > 0)
+                gapLen = Math.Max(SelectBestDashGap(strokeLength, dashLen, gapLen), 1f);
+
             float[] dashPattern = new[] { dashLen, gapLen };
             var pen = new PenInfo(color, width, dashPattern);
 
@@ -256,14 +318,21 @@ namespace Rend.Rendering.Internal
             float outerX1, float outerY1, float outerX2, float outerY2,
             float innerX1, float innerY1, float innerX2, float innerY2)
         {
-            // Draw as a line through the midpoint with dot pattern (width, width).
             float midX1 = (outerX1 + innerX1) * 0.5f;
             float midY1 = (outerY1 + innerY1) * 0.5f;
             float midX2 = (outerX2 + innerX2) * 0.5f;
             float midY2 = (outerY2 + innerY2) * 0.5f;
 
+            // Chrome: dash=width, gap adjusted via SelectBestDashGap
             float dotLen = Math.Max(width, 1f);
-            float[] dashPattern = new[] { dotLen, dotLen };
+            float gapLen = dotLen;
+
+            float dx = midX2 - midX1, dy = midY2 - midY1;
+            float strokeLength = (float)Math.Sqrt(dx * dx + dy * dy);
+            if (strokeLength > 0)
+                gapLen = Math.Max(SelectBestDashGap(strokeLength, dotLen, gapLen), 1f);
+
+            float[] dashPattern = new[] { dotLen, gapLen };
             var pen = new PenInfo(color, width, dashPattern);
 
             var path = new PathData();
@@ -364,21 +433,36 @@ namespace Rend.Rendering.Internal
             FillTrapezoid(target, sideColor, outerX1, outerY1, outerX2, outerY2, innerX2, innerY2, innerX1, innerY1);
         }
 
-        private static CssColor DarkenColor(CssColor c)
+        // Chrome's Color::Dark() — darken based on max component brightness
+        // Source: third_party/blink/renderer/platform/graphics/color.cc
+        internal static CssColor DarkenColor(CssColor c)
         {
+            float r = c.R / 255f, g = c.G / 255f, b = c.B / 255f;
+            float v = Math.Max(r, Math.Max(g, b));
+            if (v == 0f)
+                return new CssColor(64, 64, 64, c.A); // 0.25 * 256 ≈ 64
+            float multiplier = Math.Max(0f, (v - 0.33f) / v);
+            const float scale = 255.998f; // nextafterf(256.0f, 0.0f)
             return new CssColor(
-                (byte)(c.R * 2 / 3),
-                (byte)(c.G * 2 / 3),
-                (byte)(c.B * 2 / 3),
+                (byte)(r * multiplier * scale),
+                (byte)(g * multiplier * scale),
+                (byte)(b * multiplier * scale),
                 c.A);
         }
 
-        private static CssColor LightenColor(CssColor c)
+        // Chrome's Color::Light() — lighten based on max component brightness
+        internal static CssColor LightenColor(CssColor c)
         {
+            float r = c.R / 255f, g = c.G / 255f, b = c.B / 255f;
+            float v = Math.Max(r, Math.Max(g, b));
+            if (v == 0f)
+                return new CssColor(64, 64, 64, c.A);
+            float multiplier = Math.Min(1f, (v + 0.33f) / v);
+            const float scale = 255.998f;
             return new CssColor(
-                (byte)Math.Min(255, c.R + (255 - c.R) / 3),
-                (byte)Math.Min(255, c.G + (255 - c.G) / 3),
-                (byte)Math.Min(255, c.B + (255 - c.B) / 3),
+                (byte)(r * multiplier * scale),
+                (byte)(g * multiplier * scale),
+                (byte)(b * multiplier * scale),
                 c.A);
         }
 

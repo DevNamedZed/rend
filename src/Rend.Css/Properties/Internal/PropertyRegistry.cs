@@ -266,7 +266,7 @@ namespace Rend.Css.Properties.Internal
             Register("clip-path", PropertyId.ClipPath, false, PropertyValueType.Raw);
 
             // Border Image
-            Register("border-image-source", PropertyId.BorderImageSource, false, PropertyValueType.String);
+            Register("border-image-source", PropertyId.BorderImageSource, false, PropertyValueType.Raw);
             Register("border-image-slice", PropertyId.BorderImageSlice, false, PropertyValueType.Raw);
             Register("border-image-width", PropertyId.BorderImageWidth, false, PropertyValueType.Raw);
             Register("border-image-outset", PropertyId.BorderImageOutset, false, PropertyValueType.Raw);

@@ -3,6 +3,7 @@ using Rend.Core.Values;
 using Rend.Css;
 using Rend.Fonts;
 using Rend.Layout;
+using Rend.Text;
 
 namespace Rend.Rendering.Internal
 {
@@ -12,6 +13,7 @@ namespace Rend.Rendering.Internal
     /// </summary>
     internal static class TextPainter
     {
+        internal static bool _debugText = false;
         /// <summary>
         /// Paints a single line fragment onto the render target.
         /// </summary>
@@ -33,7 +35,10 @@ namespace Rend.Rendering.Internal
             }
 
             float drawX = lineX + fragment.X;
-            float drawY = (float)Math.Floor(lineY + fragment.Y + fragment.Baseline);
+            float rawY = lineY + fragment.Y + fragment.Baseline;
+            float drawY = (float)Math.Floor(rawY);
+            if (_debugText && fragment.Text != null && fragment.Text.Length > 0)
+                Console.WriteLine($"[TEXT] \"{fragment.Text.Substring(0, Math.Min(20, fragment.Text.Length))}\" drawX={drawX:F2} drawY={drawY} lineX={lineX:F2} lineY={lineY:F4} fragX={fragment.X:F2} fragY={fragment.Y:F4} baseline={fragment.Baseline:F4} rawY={rawY:F4}");
 
             // Paint text shadows before main text.
             TextShadowPainter.Paint(fragment, drawX, drawY, target, style);
@@ -45,17 +50,19 @@ namespace Rend.Rendering.Internal
             float fontWeight = style.FontWeight;
             float letterSpacing = style.LetterSpacing;
             float wordSpacing = style.WordSpacing;
-            bool hasSpacing = letterSpacing != 0 || wordSpacing != 0;
 
-            if (fragment.ShapedRun != null && !hasSpacing)
+            if (fragment.ShapedRun != null)
             {
                 float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
                 var fontDesc = new FontDescriptor(fontFamily, fontWeight, fontStyle, stretch);
-                target.DrawGlyphs(fragment.ShapedRun, drawX, drawY, color, fontDesc);
+                var run = fragment.ShapedRun;
+                if (letterSpacing != 0 || wordSpacing != 0)
+                    run = ApplySpacingToRun(run, letterSpacing, wordSpacing);
+                target.DrawGlyphs(run, drawX, drawY, color, fontDesc);
             }
             else
             {
-                string? text = fragment.ShapedRun?.OriginalText ?? fragment.Text;
+                string? text = fragment.Text;
                 if (text != null)
                 {
                     float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
@@ -68,7 +75,7 @@ namespace Rend.Rendering.Internal
                         Italic = fontStyle == CssFontStyle.Italic || fontStyle == CssFontStyle.Oblique,
                         LetterSpacing = letterSpacing,
                         WordSpacing = wordSpacing,
-                        FontData = fragment.ShapedRun?.FontData
+                        FontData = null
                     };
                     target.DrawText(text, drawX, drawY, textStyle);
                 }
@@ -179,17 +186,19 @@ namespace Rend.Rendering.Internal
             float fontWeight = style.FontWeight;
             float letterSpacing = style.LetterSpacing;
             float wordSpacing = style.WordSpacing;
-            bool hasSpacing = letterSpacing != 0 || wordSpacing != 0;
 
-            if (fragment.ShapedRun != null && !hasSpacing)
+            if (fragment.ShapedRun != null)
             {
                 float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
                 var fontDesc = new FontDescriptor(fontFamily, fontWeight, fontStyle, stretch);
-                target.DrawGlyphs(fragment.ShapedRun, drawX, drawY, color, fontDesc);
+                var run = fragment.ShapedRun;
+                if (letterSpacing != 0 || wordSpacing != 0)
+                    run = ApplySpacingToRun(run, letterSpacing, wordSpacing);
+                target.DrawGlyphs(run, drawX, drawY, color, fontDesc);
             }
             else
             {
-                string? text = fragment.ShapedRun?.OriginalText ?? fragment.Text;
+                string? text = fragment.Text;
                 if (text != null)
                 {
                     float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
@@ -202,7 +211,7 @@ namespace Rend.Rendering.Internal
                         Italic = fontStyle == CssFontStyle.Italic || fontStyle == CssFontStyle.Oblique,
                         LetterSpacing = letterSpacing,
                         WordSpacing = wordSpacing,
-                        FontData = fragment.ShapedRun?.FontData
+                        FontData = null
                     };
                     target.DrawText(text, drawX, drawY, textStyle);
                 }
@@ -214,6 +223,45 @@ namespace Rend.Rendering.Internal
             // TODO: text-orientation: mixed — classify each character as CJK (upright) or
             // Latin/other (sideways 90deg). Currently all text is rotated sideways.
             // TODO: text-orientation: upright — draw each character upright with wider spacing.
+        }
+
+        /// <summary>
+        /// Creates a new ShapedTextRun with letter-spacing and word-spacing applied to glyph advances.
+        /// This preserves HarfBuzz shaping quality instead of falling back to character-by-character rendering.
+        /// </summary>
+        private static ShapedTextRun ApplySpacingToRun(ShapedTextRun run, float letterSpacing, float wordSpacing)
+        {
+            var srcGlyphs = run.Glyphs;
+            if (srcGlyphs.Length == 0) return run;
+
+            var text = run.OriginalText;
+            var newGlyphs = new ShapedGlyph[srcGlyphs.Length];
+
+            for (int i = 0; i < srcGlyphs.Length; i++)
+            {
+                float extraAdvance = 0;
+
+                // Letter-spacing: add to every glyph's advance (Chrome applies to all, including last)
+                extraAdvance += letterSpacing;
+
+                // Word-spacing: add extra advance for space characters
+                if (wordSpacing != 0)
+                {
+                    uint cluster = srcGlyphs[i].Cluster;
+                    if (cluster < text.Length && text[(int)cluster] == ' ')
+                        extraAdvance += wordSpacing;
+                }
+
+                newGlyphs[i] = new ShapedGlyph(
+                    srcGlyphs[i].GlyphId,
+                    srcGlyphs[i].Cluster,
+                    srcGlyphs[i].XAdvance + extraAdvance,
+                    srcGlyphs[i].YAdvance,
+                    srcGlyphs[i].XOffset,
+                    srcGlyphs[i].YOffset);
+            }
+
+            return new ShapedTextRun(newGlyphs, text, run.FontSize, run.FontData);
         }
 
         private static void PaintDecorations(LineFragment fragment, float lineX, float lineY,

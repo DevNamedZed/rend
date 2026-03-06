@@ -133,11 +133,113 @@ namespace Rend.Layout.Internal
                                 string firstLetter = trimmed.Substring(0, endIdx);
                                 string remainder = trimmed.Substring(endIdx);
 
-                                // Layout the first letter with ::first-letter style
-                                var firstLetterText = new StyledText(firstLetter, styledElement.FirstLetterStyle!);
-                                LayoutTextRun(firstLetterText, context, ref cursorX, ref cursorY, ref startX,
-                                              ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
-                                              styleOverride: styledElement.FirstLetterStyle);
+                                var flStyle = styledElement.FirstLetterStyle!;
+
+                                // Check if ::first-letter is floated (common drop-cap pattern)
+                                if (flStyle.Float != CssFloat.None && floatCtx != null && context.TextMeasurer != null)
+                                {
+                                    // Build font descriptor for the first-letter style
+                                    var flFontDesc = new Fonts.FontDescriptor(
+                                        flStyle.FontFamily ?? "serif",
+                                        flStyle.FontWeight,
+                                        flStyle.FontStyle,
+                                        Fonts.FontDescriptor.StretchToPercentage(flStyle.FontStretch));
+                                    float flFontSize = flStyle.FontSize;
+                                    float flLineHeight = flStyle.LineHeight;
+                                    bool flNormalLH = float.IsNaN(flLineHeight) || flLineHeight == 0;
+                                    if (flLineHeight < 0) flLineHeight = -flLineHeight * flFontSize;
+                                    else if (flNormalLH) flLineHeight = flFontSize * 1.2f;
+                                    if (flNormalLH)
+                                    {
+                                        float mlh = context.TextMeasurer.GetNormalLineHeight(flFontDesc, flFontSize);
+                                        if (!float.IsNaN(mlh) && mlh > 0) flLineHeight = mlh;
+                                    }
+                                    float flAscent = context.TextMeasurer.GetAscent(flFontDesc, flFontSize);
+                                    float flDescent = context.TextMeasurer.GetDescent(flFontDesc, flFontSize);
+                                    float flContentArea = flAscent + flDescent;
+                                    float flBaseline = flAscent + (flLineHeight - flContentArea) / 2f;
+
+                                    var flShaped = context.TextMeasurer.Shape(firstLetter, flFontDesc, flFontSize);
+                                    float flTextWidth = flShaped.TotalWidth;
+
+                                    // Box model from first-letter style
+                                    float flMarginLeft = float.IsNaN(flStyle.MarginLeft) ? 0 : flStyle.MarginLeft;
+                                    float flMarginRight = float.IsNaN(flStyle.MarginRight) ? 0 : flStyle.MarginRight;
+                                    float flMarginTop = float.IsNaN(flStyle.MarginTop) ? 0 : flStyle.MarginTop;
+                                    float flMarginBottom = float.IsNaN(flStyle.MarginBottom) ? 0 : flStyle.MarginBottom;
+                                    float flPadLeft = flStyle.PaddingLeft;
+                                    float flPadRight = flStyle.PaddingRight;
+                                    float flPadTop = flStyle.PaddingTop;
+                                    float flPadBottom = flStyle.PaddingBottom;
+
+                                    float flContentW = flTextWidth + flPadLeft + flPadRight;
+                                    float flContentH = flLineHeight;
+                                    float flTotalW = flContentW + flMarginLeft + flMarginRight;
+                                    float flTotalH = flContentH + flPadTop + flPadBottom + flMarginTop + flMarginBottom;
+
+                                    // Create a float box
+                                    var flBox = new LayoutBox(styledElement, BoxType.Block);
+                                    flBox.MarginLeft = flMarginLeft;
+                                    flBox.MarginRight = flMarginRight;
+                                    flBox.MarginTop = flMarginTop;
+                                    flBox.MarginBottom = flMarginBottom;
+                                    flBox.PaddingLeft = flPadLeft;
+                                    flBox.PaddingRight = flPadRight;
+                                    flBox.PaddingTop = flPadTop;
+                                    flBox.PaddingBottom = flPadBottom;
+
+                                    float flY = cursorY;
+                                    float flX;
+                                    if (flStyle.Float == CssFloat.Left)
+                                    {
+                                        flX = floatCtx.GetLeftEdge(flY, flTotalH) + flMarginLeft;
+                                        floatCtx.AddLeftFloat(new Core.Values.RectF(flX - flMarginLeft, flY, flTotalW, flTotalH));
+                                    }
+                                    else
+                                    {
+                                        flX = floatCtx.GetRightEdge(flY, flTotalH) - flTotalW + flMarginLeft;
+                                        floatCtx.AddRightFloat(new Core.Values.RectF(flX - flMarginLeft, flY, flTotalW, flTotalH));
+                                    }
+
+                                    flBox.ContentRect = new Core.Values.RectF(
+                                        flX + flPadLeft, flY + flMarginTop + flPadTop,
+                                        flTextWidth, flContentH);
+
+                                    // Add a line box with the letter fragment for painting
+                                    var flLine = new LineBox { X = flBox.ContentRect.X, Y = flBox.ContentRect.Y, Width = flTextWidth };
+                                    flLine.AddFragment(new LineFragment
+                                    {
+                                        X = 0,
+                                        Width = flTextWidth,
+                                        Height = flLineHeight,
+                                        ContentHeight = flContentArea,
+                                        Baseline = flBaseline,
+                                        Text = firstLetter,
+                                        ShapedRun = flShaped,
+                                        StyleOverride = flStyle
+                                    });
+                                    flLine.Height = flLineHeight;
+                                    flLine.Baseline = flBaseline;
+                                    flBox.LineBoxes = new List<LineBox> { flLine };
+                                    parent.AddChild(flBox);
+
+                                    // Adjust inline cursor for float exclusion
+                                    float newLeft = floatCtx.GetLeftEdge(cursorY, 0);
+                                    float newRight = floatCtx.GetRightEdge(cursorY, 0);
+                                    if (newLeft > startX) startX = newLeft;
+                                    containingWidth = newRight - startX;
+                                    cursorX = startX;
+                                    currentLine.X = startX;
+                                    currentLine.Width = containingWidth;
+                                }
+                                else
+                                {
+                                    // Non-floated first letter: layout inline
+                                    var firstLetterText = new StyledText(firstLetter, flStyle);
+                                    LayoutTextRun(firstLetterText, context, ref cursorX, ref cursorY, ref startX,
+                                                  ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
+                                                  styleOverride: flStyle);
+                                }
 
                                 // Layout the remainder with normal style
                                 if (remainder.Length > 0)
@@ -258,7 +360,7 @@ namespace Rend.Layout.Internal
                  styledElement.Style.OverflowX == CssOverflow.Scroll ||
                  styledElement.Style.OverflowX == CssOverflow.Auto))
             {
-                ApplyEllipsis(lineBoxes, startX, containingWidth, context);
+                ApplyEllipsis(lineBoxes, startX, containingWidth, context, styledElement.Style);
             }
 
             // Apply text-wrap: balance — equalize line widths for short blocks (≤ 6 lines)
@@ -1832,7 +1934,7 @@ namespace Rend.Layout.Internal
         }
 
         private static void ApplyEllipsis(List<LineBox> lineBoxes, float startX, float containingWidth,
-            LayoutContext context)
+            LayoutContext context, ComputedStyle containerStyle)
         {
             const string ellipsis = "\u2026"; // "…"
 
@@ -1855,14 +1957,18 @@ namespace Rend.Layout.Internal
 
                 if (!overflows) continue;
 
-                // Measure the ellipsis width using the first fragment's font
+                // Measure the ellipsis width using the container's font properties
                 float ellipsisWidth = 0;
-                if (context.TextMeasurer != null && line.Fragments.Count > 0)
+                if (context.TextMeasurer != null)
                 {
-                    var firstTextFrag = line.Fragments[0];
-                    var fragStyle = firstTextFrag.StyleOverride
-                                 ?? firstTextFrag.InlineElement?.Style;
-                    float fontSize = fragStyle?.FontSize ?? (firstTextFrag.Height / 1.2f);
+                    // Use container style for font info; fall back to first fragment's style
+                    ComputedStyle? fragStyle = containerStyle;
+                    if (fragStyle == null && line.Fragments.Count > 0)
+                    {
+                        var firstTextFrag = line.Fragments[0];
+                        fragStyle = firstTextFrag.StyleOverride ?? firstTextFrag.InlineElement?.Style;
+                    }
+                    float fontSize = fragStyle?.FontSize ?? 14f;
                     var fontDesc = fragStyle != null
                         ? new FontDescriptor(
                             fragStyle.FontFamily ?? "serif",
@@ -1899,7 +2005,8 @@ namespace Rend.Layout.Internal
                 if (cutFrag.Text != null)
                 {
                     float availableWidth = cutoff - cutFrag.X;
-                    string truncated = TruncateText(cutFrag.Text, availableWidth, cutFrag.Width);
+
+                    string truncated = TruncateTextShaped(cutFrag.Text, availableWidth, cutFrag.Width, cutFrag.ShapedRun);
                     cutFrag.Text = truncated + ellipsis;
                     cutFrag.Width = availableWidth + ellipsisWidth;
                     cutFrag.ShapedRun = null; // invalidate shaped data since text changed
@@ -1909,20 +2016,40 @@ namespace Rend.Layout.Internal
             }
         }
 
-        private static string TruncateText(string text, float availableWidth, float totalWidth)
+        private static string TruncateTextShaped(string text, float availableWidth, float totalWidth,
+            Text.ShapedTextRun? shapedRun)
         {
             if (totalWidth <= 0 || text.Length == 0) return "";
 
-            // Use proportional estimation: accumulate width per character
-            // based on the ratio of available width to total width
+            // If we have a shaped run, use per-glyph advances for accurate truncation.
+            // The shaped run may cover more text than this fragment if the fragment
+            // was split; in that case, scale the available width proportionally.
+            if (shapedRun?.Glyphs != null && shapedRun.Glyphs.Length > 0)
+            {
+                // If the shaped run's total width differs from the fragment width,
+                // scale availableWidth to match the shaped coordinate space
+                float scale = shapedRun.TotalWidth > 0 ? totalWidth / shapedRun.TotalWidth : 1f;
+                float scaledAvailable = scale > 0 ? availableWidth / scale : availableWidth;
+
+                float accumulated = 0;
+                int charCount = 0;
+                for (int i = 0; i < shapedRun.Glyphs.Length; i++)
+                {
+                    var glyph = shapedRun.Glyphs[i];
+                    if (accumulated + glyph.XAdvance > scaledAvailable + 0.5f)
+                        break;
+                    accumulated += glyph.XAdvance;
+                    charCount = (int)glyph.Cluster + 1;
+                }
+                charCount = Math.Min(charCount, text.Length);
+                return text.Substring(0, charCount);
+            }
+
+            // Fallback: proportional estimation
             float ratio = availableWidth / totalWidth;
             int estimatedChars = (int)(text.Length * ratio);
-
-            // Clamp and try to include partial characters by rounding up
             estimatedChars = Math.Max(0, Math.Min(estimatedChars, text.Length));
 
-            // Binary search refinement: check if one more char fits
-            // (accounts for narrow chars like 'i', 'l', 't' vs wide chars like 'W', 'M')
             while (estimatedChars < text.Length)
             {
                 float nextRatio = (estimatedChars + 1.0f) / text.Length;
@@ -1942,9 +2069,10 @@ namespace Rend.Layout.Internal
         private static float CalculateSpacingExtraRaw(string text, float letterSpacing, float wordSpacing)
         {
             float extra = 0;
-            if (letterSpacing != 0 && text.Length > 1)
+            if (letterSpacing != 0 && text.Length > 0)
             {
-                extra += letterSpacing * (text.Length - 1);
+                // Chrome applies letter-spacing to every character including the last
+                extra += letterSpacing * text.Length;
             }
             if (wordSpacing != 0)
             {

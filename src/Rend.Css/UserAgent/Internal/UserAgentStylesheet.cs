@@ -142,13 +142,15 @@ noscript, area, param, source, track, base {
 /* HR */
 hr {
     display: block;
+    overflow: hidden;
     margin-top: 0.5em;
     margin-bottom: 0.5em;
     margin-left: auto;
     margin-right: auto;
     border-top-style: inset;
     border-top-width: 1px;
-    border-top-color: #808080;
+    border-bottom-style: inset;
+    border-bottom-width: 1px;
 }
 
 /* Image */

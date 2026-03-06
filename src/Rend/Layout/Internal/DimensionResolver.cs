@@ -1,6 +1,7 @@
 using System;
 using Rend.Css;
 using Rend.Css.Properties.Internal;
+using Rend.Css.Resolution.Internal;
 
 namespace Rend.Layout.Internal
 {
@@ -18,8 +19,17 @@ namespace Rend.Layout.Internal
             float specifiedWidth = style.Width;
             float width;
 
+            // Deferred calc() with percentage — resolve at layout time
+            if (float.IsNegativeInfinity(specifiedWidth))
+            {
+                width = ResolveDeferredCalc(style, PropertyId.Width, containingBlockWidth);
+                if (style.BoxSizing == CssBoxSizing.BorderBox)
+                {
+                    width -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
+                }
+            }
             // Deferred percentage width (encoded as negative fraction, e.g. -0.5 = 50%, -1.5 = 150%)
-            if (specifiedWidth < 0 && !float.IsNaN(specifiedWidth))
+            else if (specifiedWidth < 0 && !float.IsNaN(specifiedWidth))
             {
                 width = -specifiedWidth * containingBlockWidth;
                 if (style.BoxSizing == CssBoxSizing.BorderBox)
@@ -62,6 +72,8 @@ namespace Rend.Layout.Internal
         /// </summary>
         public static float ResolvePercentWidth(float value, float containingBlockWidth)
         {
+            if (float.IsNegativeInfinity(value))
+                return value; // deferred calc — needs style context, handle at call site
             if (value < 0 && !float.IsNaN(value))
                 return -value * containingBlockWidth;
             return value;
@@ -75,9 +87,14 @@ namespace Rend.Layout.Internal
         {
             float specifiedHeight = style.Height;
 
+            // Deferred calc() with percentage
+            if (float.IsNegativeInfinity(specifiedHeight))
+            {
+                specifiedHeight = ResolveDeferredCalc(style, PropertyId.Height, containingBlockHeight);
+            }
             // Negative values encode deferred percentage heights (e.g., -0.5 = 50%).
             // Resolve against the containing block height, or treat as auto if unknown.
-            if (specifiedHeight < 0 && !float.IsNaN(specifiedHeight))
+            else if (specifiedHeight < 0 && !float.IsNaN(specifiedHeight))
             {
                 if (float.IsNaN(containingBlockHeight) || containingBlockHeight <= 0)
                     specifiedHeight = float.NaN; // treat as auto
@@ -212,6 +229,21 @@ namespace Rend.Layout.Internal
             if (!float.IsNaN(max) && max >= 0)
                 value = Math.Min(value, max);
             return value;
+        }
+
+        /// <summary>
+        /// Evaluates a deferred calc() expression stored in the style's ref values.
+        /// Used when calc() contains percentages that must resolve at layout time.
+        /// </summary>
+        private static float ResolveDeferredCalc(ComputedStyle style, int propertyId, float containingBlockDimension)
+        {
+            var refVal = style.GetRefValue(propertyId);
+            if (refVal is CssFunctionValue calcFn)
+            {
+                return ValueResolver.EvaluateDeferredCalc(calcFn, containingBlockDimension);
+            }
+            // Fallback: treat as 0
+            return 0;
         }
     }
 }

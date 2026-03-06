@@ -2,6 +2,13 @@ using Rend.Core.Values;
 
 namespace Rend.Rendering
 {
+    public enum StrokeCap
+    {
+        Butt,
+        Round,
+        Square
+    }
+
     /// <summary>
     /// Describes a stroke operation with color, width, and optional dash pattern.
     /// </summary>
@@ -19,19 +26,16 @@ namespace Rend.Rendering
         /// <summary>Gets the offset into the dash pattern at which the stroke begins.</summary>
         public float DashOffset { get; }
 
-        /// <summary>
-        /// Creates a new <see cref="PenInfo"/>.
-        /// </summary>
-        /// <param name="color">The stroke color.</param>
-        /// <param name="width">The stroke width in pixels.</param>
-        /// <param name="dashPattern">Optional dash pattern array, or null for solid.</param>
-        /// <param name="dashOffset">The offset into the dash pattern.</param>
-        public PenInfo(CssColor color, float width, float[]? dashPattern = null, float dashOffset = 0f)
+        /// <summary>Gets the stroke cap style.</summary>
+        public StrokeCap Cap { get; }
+
+        public PenInfo(CssColor color, float width, float[]? dashPattern = null, float dashOffset = 0f, StrokeCap cap = StrokeCap.Butt)
         {
             Color = color;
             Width = width;
             DashPattern = dashPattern;
             DashOffset = dashOffset;
+            Cap = cap;
         }
     }
 }

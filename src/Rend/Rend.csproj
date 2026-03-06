@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Rend.Tests" />
+    <InternalsVisibleTo Include="Rend.VisualRegression" />
   </ItemGroup>
 
   <ItemGroup>

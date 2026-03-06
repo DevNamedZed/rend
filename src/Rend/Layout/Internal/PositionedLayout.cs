@@ -73,6 +73,7 @@ namespace Rend.Layout.Internal
             float bottom = ResolvePositionValue(style.Bottom, cb.Height);
             float right = ResolvePositionValue(style.Right, cb.Width);
 
+
             float x = box.ContentRect.X;
             float y = box.ContentRect.Y;
             float w = box.ContentRect.Width;

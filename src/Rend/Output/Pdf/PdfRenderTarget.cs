@@ -269,6 +269,9 @@ namespace Rend.Output.Pdf
         }
 
         /// <inheritdoc />
+        public float MeasureText(string text, TextStyle style) => -1f;
+
+        /// <inheritdoc />
         public void DrawText(string text, float x, float y, TextStyle style)
         {
             EnsurePage();

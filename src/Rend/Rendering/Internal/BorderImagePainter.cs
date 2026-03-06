@@ -77,11 +77,6 @@ namespace Rend.Rendering.Internal
         private static void PaintGradientBorder(IRenderTarget target, CssFunctionValue fn,
             RectF area, float top, float right, float bottom, float left)
         {
-            // Paint the border area as a filled gradient clipped to just the border regions
-            // (border rect minus padding rect)
-            var outerPath = new PathData();
-            outerPath.AddRectangle(area);
-
             var innerRect = new RectF(
                 area.X + left,
                 area.Y + top,
@@ -104,11 +99,20 @@ namespace Rend.Rendering.Internal
             borderPath.LineTo(innerRect.X + innerRect.Width, innerRect.Y);
             borderPath.Close();
 
-            // For now, use the first and last colors of the gradient as a solid fill
-            CssColor? color = ExtractFirstGradientColor(fn);
-            if (color.HasValue)
+            // Parse the gradient function into a GradientInfo for proper gradient rendering
+            var gradient = BackgroundPainter.ParseCssGradient(fn, area);
+            if (gradient != null)
             {
-                target.FillPath(borderPath, BrushInfo.Solid(color.Value));
+                target.FillPath(borderPath, BrushInfo.FromGradient(gradient));
+            }
+            else
+            {
+                // Fallback: use the first gradient color as solid fill
+                CssColor? color = ExtractFirstGradientColor(fn);
+                if (color.HasValue)
+                {
+                    target.FillPath(borderPath, BrushInfo.Solid(color.Value));
+                }
             }
         }
 

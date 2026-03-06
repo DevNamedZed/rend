@@ -52,6 +52,14 @@ class Program
         }
         Console.WriteLine();
 
+        // Run color sampler if requested
+        if (args.Length > 0 && args[0] == "--color-sample")
+        {
+            ColorSampler.Run();
+            return 0;
+        }
+
+
         // Run text diagnostic if requested
         if (args.Length > 0 && args[0] == "--text-diag")
         {
@@ -62,6 +70,20 @@ class Program
                 Args = new[] { "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage" },
             });
             await TextDiagnostic.Run(diagBrowser);
+            await diagBrowser.DisposeAsync();
+            return 0;
+        }
+
+        // Run table border-collapse diagnostic
+        if (args.Length > 0 && args[0] == "--table-diag")
+        {
+            var diagBrowser = await Puppeteer.LaunchAsync(new LaunchOptions
+            {
+                Headless = true,
+                ExecutablePath = chromeExePath,
+                Args = new[] { "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage" },
+            });
+            await TableDiagnostic.Run(diagBrowser);
             await diagBrowser.DisposeAsync();
             return 0;
         }
@@ -146,7 +168,12 @@ class Program
                 {
                     new MediaFeatureValue { MediaFeature = MediaFeature.PrefersColorScheme, Value = "light" },
                 });
-                await page.SetContentAsync(testCase.Html, new NavigationOptions
+                // Ensure standards mode (DOCTYPE) so Chrome matches our renderer's behavior.
+                var html = testCase.Html;
+                if (!html.TrimStart().StartsWith("<!DOCTYPE", StringComparison.OrdinalIgnoreCase))
+                    html = "<!DOCTYPE html>" + html;
+
+                await page.SetContentAsync(html, new NavigationOptions
                 {
                     WaitUntil = new[] { WaitUntilNavigation.Load },
                 });
@@ -185,7 +212,7 @@ class Program
                 byte[] rendPng;
                 try
                 {
-                    rendPng = Render.ToImage(testCase.Html, renderOptions);
+                    rendPng = Render.ToImage(html, renderOptions);
                 }
                 catch (Exception ex) when (IsNativeLibraryFailure(ex))
                 {
@@ -223,18 +250,10 @@ class Program
                     result.DiffImagePath = diffPath;
                 }
 
-                // Determine outcome:
-                // - Pass: strict diff within tolerance
-                // - NearPass: strict diff exceeds tolerance BUT shift-tolerant diff is within tolerance
-                //   (the differences are explained by 1px positional shifts)
-                // - Fail: shift-tolerant diff also exceeds tolerance (real rendering bugs)
+                // Determine outcome: strict pixel match only
                 if (diffPercent <= testCase.Tolerance)
                 {
                     result.Outcome = ComparisonOutcome.Pass;
-                }
-                else if (shiftDiffPercent <= testCase.Tolerance)
-                {
-                    result.Outcome = ComparisonOutcome.NearPass;
                 }
                 else
                 {
@@ -245,12 +264,7 @@ class Program
                 result.Duration = sw.Elapsed;
                 results.Add(result);
 
-                // Show both strict and shift-tolerant diff; flag NearPass with ~
-                string flag = result.Outcome == ComparisonOutcome.NearPass ? "~" : " ";
-                if (diffPercent != shiftDiffPercent && shiftDiffPercent < diffPercent)
-                    Console.WriteLine($" {flag}{diffPercent,5:F2}% → {shiftDiffPercent,5:F2}%  {testCase.Id} -- {testCase}");
-                else
-                    Console.WriteLine($" {flag}{diffPercent,6:F2}%  {testCase.Id} -- {testCase}");
+                Console.WriteLine($"  {diffPercent,6:F2}%  {testCase.Id} -- {testCase}");
             }
             catch (Exception ex)
             {
@@ -281,27 +295,18 @@ class Program
         var reportPath = Path.Combine(outputDir, "report.html");
         ReportGenerator.Generate(results, reportPath);
 
-        // Summary — use shift-tolerant diff when available (better reflects layout correctness
-        // vs strict pixel comparison which is noisy from 1px text baseline differences)
-        double avgStrict = results.Where(r => r.Outcome != ComparisonOutcome.Error)
+        double avgDiff = results.Where(r => r.Outcome != ComparisonOutcome.Error)
             .Select(r => r.DiffPercentage)
-            .DefaultIfEmpty(0)
-            .Average();
-        double avgShiftTolerant = results.Where(r => r.Outcome != ComparisonOutcome.Error)
-            .Select(r => r.ShiftTolerantDiffPercentage <= r.DiffPercentage
-                ? r.ShiftTolerantDiffPercentage : r.DiffPercentage)
             .DefaultIfEmpty(0)
             .Average();
 
         int passCount = results.Count(r => r.Outcome == ComparisonOutcome.Pass);
-        int nearPassCount = results.Count(r => r.Outcome == ComparisonOutcome.NearPass);
         int failCount = results.Count(r => r.Outcome == ComparisonOutcome.Fail);
         int errorCount = results.Count(r => r.Outcome == ComparisonOutcome.Error);
 
-        Console.WriteLine($"Results: {results.Count} tests, {passCount} passed, {nearPassCount} near-pass (~1px off), {failCount} failed, {errorCount} errors, avg diff {avgStrict:F2}% (shift-tolerant: {avgShiftTolerant:F2}%)");
+        Console.WriteLine($"Results: {results.Count} tests, {passCount} passed, {failCount} failed, {errorCount} errors, avg diff {avgDiff:F2}%");
         Console.WriteLine($"Report: {reportPath}");
 
-        // NearPass tests don't count as failures (they're 1px shift issues to investigate later)
         return failCount > 0 || errorCount > 0 ? 1 : 0;
     }
 

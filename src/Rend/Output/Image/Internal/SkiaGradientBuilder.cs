@@ -122,12 +122,80 @@ namespace Rend.Output.Image.Internal
 
             // CSS conic: 0deg = top (12 o'clock), clockwise
             // Skia sweep: 0deg = right (3 o'clock), clockwise
-            // Offset: skia = css - 90
-            float startAngle = gradient.Angle - 90f;
-            float endAngle = startAngle + 360f;
+            // Skia's CreateSweepGradient with startAngle/endAngle has a bug where
+            // negative startAngle causes the sub-zero range to clamp instead of interpolate.
+            // Workaround: remap CSS stop positions into Skia's default [0°,360°] sweep
+            // with proper wrapping at the boundary.
+            float offset = (gradient.Angle - 90f) / 360f;
+            // Normalize offset to [0, 1)
+            offset = offset - (float)Math.Floor(offset);
+
+            if (Math.Abs(offset) < 0.001f || Math.Abs(offset - 1f) < 0.001f)
+            {
+                // No rotation needed — use default sweep
+                return SKShader.CreateSweepGradient(
+                    new SKPoint(cx, cy), colors, positions);
+            }
+
+            // Remap positions: newPos = (cssPos + offset) mod 1.0
+            // This wraps around, so we need to split at the boundary and add interpolated stops.
+            var remapped = new System.Collections.Generic.List<(SKColor color, float pos)>();
+
+            for (int i = 0; i < colors.Length; i++)
+            {
+                float newPos = positions[i] + offset;
+                if (newPos >= 1f) newPos -= 1f;
+                remapped.Add((colors[i], newPos));
+            }
+
+            // Find the wrap point: where a stop crosses the 1.0 boundary.
+            // For each pair of adjacent CSS stops where one remaps to > 1 and next to < 1,
+            // we need to add interpolated boundary stops at 0.0 and 1.0.
+            var finalStops = new System.Collections.Generic.List<(SKColor color, float pos)>();
+
+            for (int i = 0; i < colors.Length - 1; i++)
+            {
+                float p0 = positions[i] + offset;
+                float p1 = positions[i + 1] + offset;
+
+                if (p0 < 1f && p1 >= 1f)
+                {
+                    // This segment crosses the wrap boundary
+                    float t = (1f - p0) / (p1 - p0);
+                    SKColor boundaryColor = LerpColor(colors[i], colors[i + 1], t);
+                    // Add stop just before the wrap
+                    finalStops.Add((boundaryColor, 1f));
+                    // Add stop just after the wrap (position 0)
+                    finalStops.Add((boundaryColor, 0f));
+                }
+            }
+
+            // Add all remapped stops
+            for (int i = 0; i < remapped.Count; i++)
+                finalStops.Add(remapped[i]);
+
+            // Sort by position
+            finalStops.Sort((a, b) => a.pos.CompareTo(b.pos));
+
+            var finalColors = new SKColor[finalStops.Count];
+            var finalPositions = new float[finalStops.Count];
+            for (int i = 0; i < finalStops.Count; i++)
+            {
+                finalColors[i] = finalStops[i].color;
+                finalPositions[i] = finalStops[i].pos;
+            }
 
             return SKShader.CreateSweepGradient(
-                new SKPoint(cx, cy), colors, positions, SKShaderTileMode.Clamp, startAngle, endAngle);
+                new SKPoint(cx, cy), finalColors, finalPositions);
+        }
+
+        private static SKColor LerpColor(SKColor a, SKColor b, float t)
+        {
+            return new SKColor(
+                (byte)(a.Red + (b.Red - a.Red) * t),
+                (byte)(a.Green + (b.Green - a.Green) * t),
+                (byte)(a.Blue + (b.Blue - a.Blue) * t),
+                (byte)(a.Alpha + (b.Alpha - a.Alpha) * t));
         }
     }
 }

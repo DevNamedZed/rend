@@ -615,6 +615,15 @@ namespace Rend.Output.Image
         }
 
         /// <inheritdoc />
+        /// <inheritdoc />
+        public float MeasureText(string text, TextStyle style)
+        {
+            SKTypeface typeface = _fontMapper.GetOrCreate(style.Font, style.FontData);
+            using var skFont = new SKFont(typeface, style.FontSize);
+            skFont.Subpixel = true;
+            return skFont.MeasureText(text);
+        }
+
         public void DrawText(string text, float x, float y, TextStyle style)
         {
             EnsureCanvas();
@@ -838,6 +847,12 @@ namespace Rend.Output.Image
             paint.BlendMode = _currentBlendMode;
             paint.Color = new SKColor(pen.Color.R, pen.Color.G, pen.Color.B, (byte)(pen.Color.A * _currentOpacity));
             paint.StrokeWidth = pen.Width;
+            paint.StrokeCap = pen.Cap switch
+            {
+                StrokeCap.Round => SKStrokeCap.Round,
+                StrokeCap.Square => SKStrokeCap.Square,
+                _ => SKStrokeCap.Butt,
+            };
 
             if (pen.DashPattern != null && pen.DashPattern.Length > 0)
             {
@@ -897,8 +912,7 @@ namespace Rend.Output.Image
                 float advance = font.MeasureText(s);
                 cursorX += advance;
 
-                if (i < text.Length - 1)
-                    cursorX += letterSpacing;
+                cursorX += letterSpacing;
                 if (ch == ' ')
                     cursorX += wordSpacing;
             }

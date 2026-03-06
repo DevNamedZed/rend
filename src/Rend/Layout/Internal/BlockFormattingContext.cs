@@ -174,7 +174,12 @@ namespace Rend.Layout.Internal
                     {
                         posWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, posBox);
                     }
-                    posBox.ContentRect = new RectF(parent.ContentRect.X, cursorY, posWidth, 0);
+                    // Static position Y: where the element's content edge would be in normal flow.
+                    // Include the collapsed margin gap from the previous sibling, plus
+                    // the element's own border and padding (since this is the content rect Y).
+                    float staticY = cursorY + MarginCollapsing.Collapse(prevMarginBottom, posBox.MarginTop)
+                                  + posBox.BorderTopWidth + posBox.PaddingTop;
+                    posBox.ContentRect = new RectF(parent.ContentRect.X, staticY, posWidth, 0);
                     LayoutChildren(posBox, context);
                     float posHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, posBox);
                     if (float.IsNaN(posHeight)) posHeight = CalculateAutoHeight(posBox);
@@ -191,13 +196,6 @@ namespace Rend.Layout.Internal
                     FloatLayout.PlaceFloat(floatBox, floatCtx, parent, context);
                     parent.AddChild(floatBox);
                     continue;
-                }
-
-                // Apply clear property
-                if (childStyle.Clear != CssClear.None)
-                {
-                    float clearY = floatCtx.GetClearY(childStyle.Clear);
-                    if (clearY > cursorY) cursorY = clearY;
                 }
 
                 var childBox = CreateLayoutBox(childElement);
@@ -245,7 +243,36 @@ namespace Rend.Layout.Internal
                 float collapsedMargin;
                 bool wasFirstInFlow = isFirstInFlowChild;
                 isFirstInFlowChild = false;
-                if (wasFirstInFlow && MarginCollapsing.ShouldCollapseWithFirstChild(parent))
+
+                // Apply clear property (CSS 2.1 §9.5.2)
+                // Must be after marginTop is known to compute hypothetical border position.
+                bool hasClearance = false;
+                if (childStyle.Clear != CssClear.None)
+                {
+                    float clearY = floatCtx.GetClearY(childStyle.Clear);
+                    // Compute hypothetical collapsed margin (as if clear:none)
+                    float hypotheticalMargin;
+                    if (wasFirstInFlow && MarginCollapsing.ShouldCollapseWithFirstChild(parent))
+                        hypotheticalMargin = 0;
+                    else
+                        hypotheticalMargin = MarginCollapsing.Collapse(prevMarginBottom, marginTop);
+                    float hypotheticalBorderEdge = cursorY + hypotheticalMargin;
+                    if (clearY > hypotheticalBorderEdge)
+                    {
+                        // Clearance needed: place border edge at clearY
+                        cursorY = clearY;
+                        hasClearance = true;
+                    }
+                }
+
+                if (hasClearance)
+                {
+                    // CSS 2.1 §9.5.2: clearance positions the border edge at the
+                    // float bottom. The margin-top is above the clearance, so we
+                    // set collapsedMargin=0 — cursorY already equals clearY.
+                    collapsedMargin = 0;
+                }
+                else if (wasFirstInFlow && MarginCollapsing.ShouldCollapseWithFirstChild(parent))
                 {
                     collapsedMargin = MarginCollapsing.Collapse(parent.MarginTop, marginTop);
                     parent.MarginTop = collapsedMargin;
@@ -449,20 +476,22 @@ namespace Rend.Layout.Internal
                         continue;
                     }
 
-                    // <legend> inside <fieldset>: position on the top border, out of normal flow
+                    // <legend> inside <fieldset>: position at fieldset border-box top
                     if (isFieldset && !legendHandled && childElement.TagName == "legend")
                     {
                         legendHandled = true;
-                        float legendTotalH = contentHeight + childBox.PaddingTop + childBox.PaddingBottom;
-                        // Center the legend vertically on the fieldset's top border
-                        float borderCenterY = parent.BorderRect.Top + parent.BorderTopWidth * 0.5f;
-                        float legendNewY = borderCenterY - legendTotalH * 0.5f + childBox.PaddingTop;
-                        float deltaY = legendNewY - childBox.ContentRect.Y;
-                        childBox.ContentRect = new RectF(x, legendNewY, contentWidth, contentHeight);
-                        // Shift all descendant boxes by the same delta
+                        float legendBorderBoxH = childBox.BorderTopWidth + childBox.PaddingTop
+                            + contentHeight + childBox.PaddingBottom + childBox.BorderBottomWidth;
+                        // Chrome positions the legend's top edge at the fieldset's border-box top
+                        float legendContentY = parent.BorderRect.Top + childBox.BorderTopWidth + childBox.PaddingTop;
+                        float deltaY = legendContentY - childBox.ContentRect.Y;
+                        childBox.ContentRect = new RectF(x, legendContentY, contentWidth, contentHeight);
                         ShiftDescendants(childBox, deltaY);
                         parent.AddChild(childBox);
-                        // Don't advance cursorY — the legend sits on the border, not in the flow
+                        // Content after legend starts at max(legendBottom, borderInnerTop) + paddingTop
+                        float legendBottom = parent.BorderRect.Top + legendBorderBoxH;
+                        float borderInnerTop = parent.BorderRect.Top + parent.BorderTopWidth;
+                        cursorY = Math.Max(legendBottom, borderInnerTop) + parent.PaddingTop;
                         prevMarginBottom = 0;
                         continue;
                     }

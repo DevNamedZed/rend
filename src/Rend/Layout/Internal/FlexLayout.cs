@@ -161,43 +161,105 @@ namespace Rend.Layout.Internal
                 for (int i = 0; i < line.Items.Count; i++)
                     totalBase += line.Items[i].BaseSize + GetItemMainMargins(line.Items[i], isColumn);
 
-                float freeSpace = mainSize - totalBase - totalGaps;
-                float totalGrow = 0, totalShrink = 0;
-                for (int i = 0; i < line.Items.Count; i++)
-                {
-                    totalGrow += line.Items[i].FlexGrow;
-                    totalShrink += line.Items[i].FlexShrink;
-                }
+                // CSS Flexbox spec §9.7: Resolve flexible lengths with freeze-redistribute loop.
+                float initialFreeSpace = mainSize - totalBase - totalGaps;
+                bool isGrowing = initialFreeSpace > 0;
+                var frozen = new bool[line.Items.Count];
 
-                // Resolve sizes
+                // Phase 1: Freeze inflexible items (grow=0 when growing, shrink=0 when shrinking)
+                // and clamp them to min/max. Do NOT freeze flexible items even if base violates min/max.
                 for (int i = 0; i < line.Items.Count; i++)
                 {
                     var item = line.Items[i];
-                    float resolved = item.BaseSize;
+                    item.ResolvedMainSize = item.BaseSize;
 
-                    if (freeSpace > 0 && totalGrow > 0)
-                        resolved += freeSpace * (item.FlexGrow / totalGrow);
-                    else if (freeSpace < 0 && totalShrink > 0)
-                        resolved += freeSpace * (item.FlexShrink / totalShrink);
-
-                    resolved = Math.Max(0, resolved);
-
-                    // Apply min/max constraints on the main axis
-                    if (item.Style != null)
+                    if ((isGrowing && item.FlexGrow == 0) || (!isGrowing && item.FlexShrink == 0))
                     {
-                        float minMain = isColumn ? item.Style.MinHeight : item.Style.MinWidth;
-                        float maxMain = isColumn ? item.Style.MaxHeight : item.Style.MaxWidth;
-                        if (!float.IsNaN(minMain) && minMain > 0 && resolved < minMain)
-                            resolved = minMain;
-                        if (!float.IsNaN(maxMain) && maxMain > 0 && resolved > maxMain)
-                            resolved = maxMain;
+                        frozen[i] = true;
+                        // Clamp inflexible items to min/max
+                        if (item.Style != null)
+                        {
+                            float minMain = GetFlexItemMinMain(item, isColumn);
+                            float maxMain = isColumn ? item.Style.MaxHeight : item.Style.MaxWidth;
+                            if (minMain > 0 && item.ResolvedMainSize < minMain)
+                                item.ResolvedMainSize = minMain;
+                            if (!float.IsNaN(maxMain) && maxMain > 0 && item.ResolvedMainSize > maxMain)
+                                item.ResolvedMainSize = maxMain;
+                        }
                     }
 
-                    // visibility: collapse → zero main size, still affects cross size
                     if (item.Style != null && item.Style.Visibility == CssVisibility.Collapse)
-                        resolved = 0;
+                    {
+                        item.ResolvedMainSize = 0;
+                        frozen[i] = true;
+                    }
+                }
 
-                    item.ResolvedMainSize = resolved;
+                // Phase 2: Iteratively distribute free space among unfrozen items
+                for (int iteration = 0; iteration < line.Items.Count + 1; iteration++)
+                {
+                    float frozenSpace = totalGaps;
+                    float unfrozenBaseTotal = 0;
+                    float activeTotalGrow = 0;
+                    float totalScaledShrink = 0; // CSS spec: sum(flex-shrink * base-size)
+                    for (int i = 0; i < line.Items.Count; i++)
+                    {
+                        frozenSpace += GetItemMainMargins(line.Items[i], isColumn);
+                        if (frozen[i])
+                        {
+                            frozenSpace += line.Items[i].ResolvedMainSize;
+                        }
+                        else
+                        {
+                            unfrozenBaseTotal += line.Items[i].BaseSize;
+                            activeTotalGrow += line.Items[i].FlexGrow;
+                            totalScaledShrink += line.Items[i].FlexShrink * line.Items[i].BaseSize;
+                        }
+                    }
+
+                    float remainingSpace = mainSize - frozenSpace - unfrozenBaseTotal;
+                    bool anyNewlyFrozen = false;
+
+                    for (int i = 0; i < line.Items.Count; i++)
+                    {
+                        if (frozen[i]) continue;
+                        var item = line.Items[i];
+                        float resolved = item.BaseSize;
+
+                        if (remainingSpace > 0 && activeTotalGrow > 0)
+                            resolved += remainingSpace * (item.FlexGrow / activeTotalGrow);
+                        else if (remainingSpace < 0 && totalScaledShrink > 0)
+                        {
+                            // CSS spec §9.7: scaled flex shrink factor = flex-shrink * base-size
+                            float scaledShrink = item.FlexShrink * item.BaseSize;
+                            resolved += remainingSpace * (scaledShrink / totalScaledShrink);
+                        }
+
+                        resolved = Math.Max(0, resolved);
+
+                        // Check min/max — freeze if clamped
+                        if (item.Style != null)
+                        {
+                            float minMain = GetFlexItemMinMain(item, isColumn);
+                            float maxMain = isColumn ? item.Style.MaxHeight : item.Style.MaxWidth;
+                            if (minMain > 0 && resolved < minMain)
+                            {
+                                resolved = minMain;
+                                frozen[i] = true;
+                                anyNewlyFrozen = true;
+                            }
+                            if (!float.IsNaN(maxMain) && maxMain > 0 && resolved > maxMain)
+                            {
+                                resolved = maxMain;
+                                frozen[i] = true;
+                                anyNewlyFrozen = true;
+                            }
+                        }
+
+                        item.ResolvedMainSize = resolved;
+                    }
+
+                    if (!anyNewlyFrozen) break;
                 }
 
                 // Distribute auto margins on the main axis (overrides justify-content)
@@ -260,9 +322,13 @@ namespace Rend.Layout.Internal
                         effectiveJustify = CssJustifyContent.FlexStart;
                 }
 
+                float finalTotalGrow = 0;
+                for (int i = 0; i < line.Items.Count; i++)
+                    finalTotalGrow += line.Items[i].FlexGrow;
+
                 var (startOffset, justifyGap) = hasAutoMargins
                     ? (0f, gap)
-                    : ApplyJustifyContent(effectiveJustify, freeSpace, line.Items.Count, totalGrow > 0, gap);
+                    : ApplyJustifyContent(effectiveJustify, resolvedFreeSpace, line.Items.Count, finalTotalGrow > 0, gap);
                 mainCursor += startOffset;
 
                 float maxCross = 0;
@@ -379,6 +445,38 @@ namespace Rend.Layout.Internal
 
                     float freeCross = maxCross - itemCross;
                     if (freeCross <= 0) continue;
+
+                    // Auto margins on the cross axis absorb free space (override align-items/align-self)
+                    bool hasAutoMarginCross = false;
+                    if (isColumn)
+                    {
+                        bool autoLeft = float.IsNaN(item.Style.MarginLeft);
+                        bool autoRight = float.IsNaN(item.Style.MarginRight);
+                        if (autoLeft || autoRight)
+                        {
+                            hasAutoMarginCross = true;
+                            float perMargin = (autoLeft && autoRight) ? freeCross / 2 : freeCross;
+                            float offset = autoLeft ? perMargin : 0;
+                            box.ContentRect = new Core.Values.RectF(
+                                box.ContentRect.X + offset, box.ContentRect.Y,
+                                box.ContentRect.Width, box.ContentRect.Height);
+                        }
+                    }
+                    else
+                    {
+                        bool autoTop = float.IsNaN(item.Style.MarginTop);
+                        bool autoBottom = float.IsNaN(item.Style.MarginBottom);
+                        if (autoTop || autoBottom)
+                        {
+                            hasAutoMarginCross = true;
+                            float perMargin = (autoTop && autoBottom) ? freeCross / 2 : freeCross;
+                            float offset = autoTop ? perMargin : 0;
+                            box.ContentRect = new Core.Values.RectF(
+                                box.ContentRect.X, box.ContentRect.Y + offset,
+                                box.ContentRect.Width, box.ContentRect.Height);
+                        }
+                    }
+                    if (hasAutoMarginCross) continue;
 
                     float crossOffset = 0;
                     switch (align)
@@ -550,10 +648,21 @@ namespace Rend.Layout.Internal
             if (!float.IsNaN(basis) && basis < 0 && basis > -1.01f)
                 return -basis * (isColumn ? containerHeight : containerWidth);
 
-            // Use width/height as fallback (resolve deferred percentages)
+            // Use width/height as fallback (resolve deferred percentages and calc)
             float size = isColumn ? style.Height : style.Width;
             if (!float.IsNaN(size))
             {
+                // Deferred calc() with percentage
+                if (float.IsNegativeInfinity(size))
+                {
+                    int propId = isColumn
+                        ? Css.Properties.Internal.PropertyId.Height
+                        : Css.Properties.Internal.PropertyId.Width;
+                    float cbDim = isColumn ? containerHeight : containerWidth;
+                    var refVal = style.GetRefValue(propId);
+                    if (refVal is CssFunctionValue calcFn)
+                        return Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(calcFn, cbDim);
+                }
                 // Resolve deferred percentage (negative fraction encoding)
                 if (size < 0 && size > -1.01f)
                     size = -size * (isColumn ? containerHeight : containerWidth);
@@ -613,6 +722,21 @@ namespace Rend.Layout.Internal
                 }
             }
             return maxRight;
+        }
+
+        /// <summary>
+        /// Returns the effective min-main-size for a flex item.
+        /// Uses the explicit min-width/min-height if set, otherwise 0.
+        /// CSS spec §4.5: min-width:auto = min(content_min, specified_size),
+        /// but computing content_min is expensive; 0 is a safe approximation
+        /// that allows normal shrinking while still respecting explicit minimums.
+        /// </summary>
+        private static float GetFlexItemMinMain(FlexItem item, bool isColumn)
+        {
+            float explicitMin = isColumn ? item.Style.MinHeight : item.Style.MinWidth;
+            if (!float.IsNaN(explicitMin) && explicitMin > 0)
+                return explicitMin;
+            return 0;
         }
 
         private static float GetItemMainMargins(FlexItem item, bool isColumn)

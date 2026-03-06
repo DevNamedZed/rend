@@ -157,6 +157,7 @@ namespace Rend.Output.Image
                     cached.SkFont.Dispose();
                     cached.SkFont = new SKFont(cached.Typeface, fontSize);
                     cached.SkFont.Subpixel = true;
+                    cached.SkFont.LinearMetrics = true;
                 }
                 return cached;
             }
@@ -196,8 +197,9 @@ namespace Rend.Output.Image
 
                 skFont = new SKFont(typeface, fontSize);
                 skFont.Subpixel = true;
-                // Chrome's InitSkiaFont() does NOT set hinting — uses Skia default (Normal)
-                // Do NOT set hinting explicitly to match Chrome's behavior.
+                skFont.LinearMetrics = true;
+                // Chrome's InitSkiaFont() sets both setSubpixel(true) and setLinearMetrics(true).
+                // LinearMetrics prevents Skia from rounding advances at the font level.
 
                 var entry = new CachedShapingFont(handle, blob, face, parentFont, hbFont, typeface, skFont, fontScale);
                 _fontCache[key] = entry;

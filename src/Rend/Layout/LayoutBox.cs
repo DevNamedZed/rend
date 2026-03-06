@@ -96,6 +96,12 @@ namespace Rend.Layout
 
         /// <summary>Column rules to paint between multi-column columns.</summary>
         internal List<ColumnRuleInfo>? ColumnRules { get; set; }
+
+        /// <summary>
+        /// When true, this cell is in a border-collapse table. Border widths store the
+        /// layout half-widths; the painter should double them for rendering.
+        /// </summary>
+        internal bool CollapsedBorderCell { get; set; }
     }
 
     /// <summary>

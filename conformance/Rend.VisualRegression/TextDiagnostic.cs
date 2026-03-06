@@ -146,6 +146,15 @@ static class TextDiagnostic
         Console.WriteLine($"    'Hello World' @16px: {w16:F4}");
         Console.WriteLine($"    'Test 14px...' @14px: {w14:F4}");
 
+        // Measure table-striped specific words
+        Console.WriteLine($"\n  Table word widths (14px sans-serif):");
+        string[] tableWords = { "Item", "Qty", "Price", "Widget", "10", "$5.00", "Gadget", "5", "$12.50", "Doohickey", "20", "$2.75", "Thingamajig", "8", "$8.00" };
+        foreach (var word in tableWords)
+            Console.WriteLine($"    normal:{word} = {measurer.MeasureWidth(word, sansDesc, 14):F4}");
+        var boldDesc = new FontDescriptor("sans-serif", 700, Rend.Css.CssFontStyle.Normal);
+        foreach (var word in new[] { "Item", "Qty", "Price" })
+            Console.WriteLine($"    bold:{word} = {measurer.MeasureWidth(word, boldDesc, 14):F4}");
+
         // Normal line height vs GetNormalLineHeight
         float normalLH = measurer.GetNormalLineHeight(sansDesc, 16);
         Console.WriteLine($"    GetNormalLineHeight(16): {normalLH:F4}");
@@ -286,6 +295,72 @@ static class TextDiagnostic
         }");
         Console.WriteLine("Chrome table-striped cells:");
         foreach (var kvp in stripedMetrics)
+            Console.WriteLine($"  {kvp.Key}: {System.Text.Json.JsonSerializer.Serialize(kvp.Value)}");
+
+        // --- HR diagnostic ---
+        Console.WriteLine("\n--- HR Diagnostic ---");
+        string hrHtml = @"<!DOCTYPE html><html><body style='margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;'>
+            <p id='p1' style='margin:0 0 4px;'>Content above</p>
+            <hr id='hr1'>
+            <p id='p2' style='margin:4px 0;'>Between rules</p>
+            <hr id='hr2' style='border:none; border-top:2px solid #e74c3c;'>
+            <p id='p3' style='margin:4px 0 0;'>Content below</p>
+        </body></html>";
+        await using var pagehr = await browser.NewPageAsync();
+        await pagehr.SetViewportAsync(new ViewPortOptions { Width = 400, Height = 300 });
+        await pagehr.SetContentAsync(hrHtml, new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.Load } });
+        var hrMetrics = await pagehr.EvaluateFunctionAsync<Dictionary<string, object>>(@"() => {
+            const r = {};
+            for (const id of ['p1','hr1','p2','hr2','p3']) {
+                const el = document.getElementById(id);
+                if (!el) continue;
+                const rect = el.getBoundingClientRect();
+                const cs = getComputedStyle(el);
+                r[id] = {
+                    top: rect.top, left: rect.left, width: rect.width, height: rect.height,
+                    marginTop: cs.marginTop, marginBottom: cs.marginBottom,
+                    borderTopWidth: cs.borderTopWidth, borderTopStyle: cs.borderTopStyle,
+                    borderTopColor: cs.borderTopColor,
+                    borderBottomWidth: cs.borderBottomWidth, borderBottomStyle: cs.borderBottomStyle
+                };
+            }
+            return r;
+        }");
+        Console.WriteLine("Chrome HR positions:");
+        foreach (var kvp in hrMetrics)
+            Console.WriteLine($"  {kvp.Key}: {System.Text.Json.JsonSerializer.Serialize(kvp.Value)}");
+
+        // --- Fieldset / Legend diagnostic ---
+        Console.WriteLine("\n--- Fieldset / Legend Diagnostic ---");
+        string fieldsetHtml = @"<!DOCTYPE html><html><body style='margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;'>
+            <fieldset id='fs' style='border:2px groove #ccc; padding:10px; margin:0;'>
+                <legend id='lg' style='padding:0 4px;'>Personal Info</legend>
+                <div id='d1' style='margin-bottom:6px;'>Name: John Doe</div>
+                <div id='d2'>Email: john@example.com</div>
+            </fieldset>
+        </body></html>";
+        await using var pagefs = await browser.NewPageAsync();
+        await pagefs.SetViewportAsync(new ViewPortOptions { Width = 400, Height = 300 });
+        await pagefs.SetContentAsync(fieldsetHtml, new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.Load } });
+        var fsMetrics = await pagefs.EvaluateFunctionAsync<Dictionary<string, object>>(@"() => {
+            const r = {};
+            for (const id of ['fs','lg','d1','d2']) {
+                const el = document.getElementById(id);
+                if (!el) continue;
+                const rect = el.getBoundingClientRect();
+                const cs = getComputedStyle(el);
+                r[id] = {
+                    top: rect.top, left: rect.left, width: rect.width, height: rect.height,
+                    paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom,
+                    borderTopWidth: cs.borderTopWidth, borderBottomWidth: cs.borderBottomWidth,
+                    marginTop: cs.marginTop, marginBottom: cs.marginBottom,
+                    fontSize: cs.fontSize, lineHeight: cs.lineHeight
+                };
+            }
+            return r;
+        }");
+        Console.WriteLine("Chrome fieldset positions:");
+        foreach (var kvp in fsMetrics)
             Console.WriteLine($"  {kvp.Key}: {System.Text.Json.JsonSerializer.Serialize(kvp.Value)}");
 
         Console.WriteLine("\n=== END DIAGNOSTIC ===");
