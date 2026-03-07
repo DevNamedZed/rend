@@ -17,6 +17,31 @@ namespace Rend.Output.Image.Internal
         internal static SKPath Convert(PathData path)
         {
             var skPath = new SKPath();
+
+            // Use native Skia rounded rect when available — matches Chrome's SkRRect exactly
+            // (uses conic sections instead of cubic bezier approximation).
+            var rr = path.RoundedRect;
+            if (rr != null)
+            {
+                var rect = new SKRect(rr.Rect.X, rr.Rect.Y,
+                                      rr.Rect.X + rr.Rect.Width, rr.Rect.Y + rr.Rect.Height);
+                var radii = new SKPoint[]
+                {
+                    new SKPoint(rr.TlRx, rr.TlRy),
+                    new SKPoint(rr.TrRx, rr.TrRy),
+                    new SKPoint(rr.BrRx, rr.BrRy),
+                    new SKPoint(rr.BlRx, rr.BlRy),
+                };
+                var skRRect = new SKRoundRect();
+                skRRect.SetRectRadii(rect, radii);
+                skPath.AddRoundRect(skRRect);
+
+                if (path.FillType == PathFillType.EvenOdd)
+                    skPath.FillType = SKPathFillType.EvenOdd;
+
+                return skPath;
+            }
+
             IReadOnlyList<PathSegment> segments = path.GetSegments();
 
             for (int i = 0; i < segments.Count; i++)

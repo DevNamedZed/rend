@@ -171,10 +171,8 @@ namespace Rend.Html.Parser.Internal
         {
             if (token.Type == HtmlTokenType.Character)
             {
-                // Insert text data character by character into the tree
-                string data = token.Data ?? "";
-                for (int ci = 0; ci < data.Length; ci++)
-                    InsertCharacter(data[ci]);
+                // Insert character into the tree
+                InsertCharacter(token.Character);
                 return;
             }
 

@@ -88,7 +88,7 @@ namespace Rend.Layout.Internal
             float undistributable = totalSpacing + preCollapseOuterLeft + preCollapseOuterRight;
             float colAvailWidth = containerWidth - undistributable;
             if (isFixed)
-                colWidths = CalculateFixedWidths(tableCtx, numCols, ref colAvailWidth);
+                colWidths = CalculateFixedWidths(tableCtx, numCols, ref colAvailWidth, collapsed);
             else
                 colWidths = CalculateAutoWidths(tableCtx, numCols, colAvailWidth, context,
                     hasExplicitWidth: !float.IsNaN(style.Width), collapsed: collapsed);
@@ -293,7 +293,7 @@ namespace Rend.Layout.Internal
             float collapseOuterLeft = 0, collapseOuterRight = 0;
             if (collapsed)
             {
-                CollapseBorders(rowBoxes, numRows, numCols, occupied2, cellColumns,
+                CollapseBorders(rowBoxes, numRows, numCols, occupied2, cellColumns, tableCtx,
                     out collapseOuterTop, out collapseOuterBottom,
                     out collapseOuterLeft, out collapseOuterRight);
 
@@ -389,7 +389,7 @@ namespace Rend.Layout.Internal
                         if (rowspanBoxes.Contains(cellBox)) continue;
                         float h = cellBox.ContentRect.Height + cellBox.PaddingTop + cellBox.PaddingBottom
                                  + cellBox.BorderTopWidth + cellBox.BorderBottomWidth;
-                        if (ci == 0 && _debugTable) Console.WriteLine($"[TABLE] Row {r}: contentH={cellBox.ContentRect.Height} padT={cellBox.PaddingTop} padB={cellBox.PaddingBottom} borT={cellBox.BorderTopWidth} borB={cellBox.BorderBottomWidth} totalH={h}");
+                        if (_debugTable) Console.WriteLine($"[TABLE] Row {r} Cell {ci}: contentH={cellBox.ContentRect.Height} padT={cellBox.PaddingTop} padB={cellBox.PaddingBottom} borT={cellBox.BorderTopWidth} borB={cellBox.BorderBottomWidth} totalH={h}");
                         if (h > maxH) maxH = h;
                     }
                     // Enforce explicit row height from CSS
@@ -402,6 +402,7 @@ namespace Rend.Layout.Internal
                             maxH = rowSpecH;
                     }
                     if (maxH > 0) rowHeights[r] = maxH;
+                    if (_debugTable) Console.WriteLine($"[TABLE] Row {r} final height after collapse recalc: {rowHeights[r]}");
                 }
             }
 
@@ -526,6 +527,13 @@ namespace Rend.Layout.Internal
                 cursorY = LayoutCaption(captionEl, parent, context, containerWidth, cursorY);
             }
 
+            // Set computed table height (includes trailing border-spacing and outer border halves
+            // which CalculateAutoHeight would miss since they're beyond the last row box).
+            float tableContentHeight = cursorY - parent.ContentRect.Y;
+            parent.ContentRect = new RectF(
+                parent.ContentRect.X, parent.ContentRect.Y,
+                parent.ContentRect.Width, tableContentHeight);
+
             // For auto-width tables, shrink-wrap the parent to actual content width
             if (float.IsNaN(style.Width))
             {
@@ -545,20 +553,40 @@ namespace Rend.Layout.Internal
 
         private static void CollapseBorders(LayoutBox[] rowBoxes, int numRows, int numCols,
             bool[,] occupied, Dictionary<LayoutBox, int> cellColumns,
+            TableContext tableCtx,
             out float outerHalfTop, out float outerHalfBottom,
             out float outerHalfLeft, out float outerHalfRight)
         {
-            // Build a grid mapping (row, col) -> cellBox for quick adjacency lookups
+            // Build a grid mapping (row, col) -> cellBox for quick adjacency lookups.
+            // For colspan/rowspan cells, fill ALL spanned grid positions so that
+            // vertical/horizontal border collapse lookups find the correct neighbor.
             var cellGrid = new LayoutBox[numRows, numCols];
-            for (int r = 0; r < numRows; r++)
             {
-                var rowBox = rowBoxes[r];
-                for (int ci = 0; ci < rowBox.Children.Count; ci++)
+                var occ3 = new bool[numRows, numCols];
+                for (int r = 0; r < numRows; r++)
                 {
-                    var cellBox = rowBox.Children[ci];
-                    int col = cellColumns.ContainsKey(cellBox) ? cellColumns[cellBox] : 0;
-                    cellGrid[r, col] = cellBox;
-                    cellBox.CollapsedBorderCell = true;
+                    var rowCtx = tableCtx.Rows[r];
+                    var rowBox = rowBoxes[r];
+                    int childIdx = 0;
+                    for (int c = 0; c < numCols && childIdx < rowCtx.Cells.Count; c++)
+                    {
+                        if (occ3[r, c]) continue;
+                        var cellCtx = rowCtx.Cells[childIdx];
+                        var cellBox = childIdx < rowBox.Children.Count ? rowBox.Children[childIdx] : null;
+                        childIdx++;
+                        if (cellBox == null) continue;
+                        cellBox.CollapsedBorderCell = true;
+
+                        int cs = Math.Min(cellCtx.ColSpan, numCols - c);
+                        int rs = Math.Min(cellCtx.RowSpan, numRows - r);
+                        for (int sr = 0; sr < rs; sr++)
+                            for (int sc = 0; sc < cs; sc++)
+                            {
+                                occ3[r + sr, c + sc] = true;
+                                cellGrid[r + sr, c + sc] = cellBox;
+                            }
+                        c += cs - 1;
+                    }
                 }
             }
 
@@ -658,29 +686,34 @@ namespace Rend.Layout.Internal
             // Collapse outer edges: per CSS 2.1 §17.6.2, the outer border of the table
             // participates in the collapse as well. For layout purposes, the outer cells
             // get half the collapsed border width on their outer edges.
+            // Use a visited set to avoid halving the same cell multiple times (colspan/rowspan).
+            var visited = new HashSet<LayoutBox>();
             // Top row outer edge
             for (int c = 0; c < numCols; c++)
             {
                 var cell = cellGrid[0, c];
-                if (cell != null) cell.BorderTopWidth /= 2f;
+                if (cell != null && visited.Add(cell)) cell.BorderTopWidth /= 2f;
             }
+            visited.Clear();
             // Bottom row outer edge
             for (int c = 0; c < numCols; c++)
             {
                 var cell = cellGrid[numRows - 1, c];
-                if (cell != null) cell.BorderBottomWidth /= 2f;
+                if (cell != null && visited.Add(cell)) cell.BorderBottomWidth /= 2f;
             }
+            visited.Clear();
             // Left column outer edge
             for (int r = 0; r < numRows; r++)
             {
                 var cell = cellGrid[r, 0];
-                if (cell != null) cell.BorderLeftWidth /= 2f;
+                if (cell != null && visited.Add(cell)) cell.BorderLeftWidth /= 2f;
             }
+            visited.Clear();
             // Right column outer edge
             for (int r = 0; r < numRows; r++)
             {
                 var cell = cellGrid[r, numCols - 1];
-                if (cell != null) cell.BorderRightWidth /= 2f;
+                if (cell != null && visited.Add(cell)) cell.BorderRightWidth /= 2f;
             }
 
             // Compute the outer half of each table edge (the portion extending outside cells).
@@ -891,7 +924,8 @@ namespace Rend.Layout.Internal
             return row;
         }
 
-        private static float[] CalculateFixedWidths(TableContext ctx, int numCols, ref float containerWidth)
+        private static float[] CalculateFixedWidths(TableContext ctx, int numCols, ref float containerWidth,
+                                                     bool collapsed = false)
         {
             float[] widths = new float[numCols];
             float equalWidth = containerWidth / numCols;
@@ -899,6 +933,7 @@ namespace Rend.Layout.Internal
             // First row determines widths in fixed layout.
             // CSS 2.1 §17.5.2.1: cell 'width' is the content width.
             // Column slot width = content width + padding + borders.
+            // In border-collapse mode, border widths are halved (shared with neighbors).
             if (ctx.Rows.Count > 0)
             {
                 var firstRow = ctx.Rows[0];
@@ -918,6 +953,8 @@ namespace Rend.Layout.Internal
                                    + (float.IsNaN(cs.PaddingRight) ? 0 : cs.PaddingRight);
                         float borderH = (cs.BorderLeftStyle != CssBorderStyle.None ? cs.BorderLeftWidth : 0)
                                       + (cs.BorderRightStyle != CssBorderStyle.None ? cs.BorderRightWidth : 0);
+                        // In border-collapse, each cell's border is halved (shared with adjacent cell/table)
+                        if (collapsed) borderH /= 2f;
                         w = specWidth + padH + borderH;
                     }
                     else
@@ -974,12 +1011,29 @@ namespace Rend.Layout.Internal
                     if (cell.StyledElement == null) { col += cell.ColSpan; continue; }
 
                     // Check for specified width (resolve deferred percentage)
-                    float specWidth = DimensionResolver.ResolvePercentWidth(
-                        cell.StyledElement.Style.Width, containerWidth);
+                    float rawWidth = cell.StyledElement.Style.Width;
+                    float specWidth = DimensionResolver.ResolvePercentWidth(rawWidth, containerWidth);
                     if (!float.IsNaN(specWidth) && specWidth > 0 && cell.ColSpan == 1)
                     {
-                        if (specWidth > minWidths[col]) minWidths[col] = specWidth;
-                        if (specWidth > maxWidths[col]) maxWidths[col] = specWidth;
+                        float slotWidth;
+                        if (rawWidth < 0 && !float.IsNaN(rawWidth))
+                        {
+                            // Percentage width: already represents column slot width (CSS 2.1 §17.5.2.2)
+                            slotWidth = specWidth;
+                        }
+                        else
+                        {
+                            // Pixel width: content-box; add padding + border for slot
+                            var cs = cell.StyledElement.Style;
+                            float padH = (float.IsNaN(cs.PaddingLeft) ? 0 : cs.PaddingLeft)
+                                       + (float.IsNaN(cs.PaddingRight) ? 0 : cs.PaddingRight);
+                            float borderH = (cs.BorderLeftStyle != CssBorderStyle.None ? cs.BorderLeftWidth : 0)
+                                          + (cs.BorderRightStyle != CssBorderStyle.None ? cs.BorderRightWidth : 0);
+                            if (collapsed) borderH /= 2f;
+                            slotWidth = specWidth + padH + borderH;
+                        }
+                        if (slotWidth > minWidths[col]) minWidths[col] = slotWidth;
+                        if (slotWidth > maxWidths[col]) maxWidths[col] = slotWidth;
                         col += cell.ColSpan;
                         continue;
                     }

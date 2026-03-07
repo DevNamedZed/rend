@@ -120,10 +120,13 @@ namespace Rend.Core.Values
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public RectF PixelSnap()
         {
-            float snappedLeft = (float)Math.Round(X);
-            float snappedTop = (float)Math.Round(Y);
-            float snappedRight = (float)Math.Round(X + Width);
-            float snappedBottom = (float)Math.Round(Y + Height);
+            // Chrome uses roundf() which rounds half away from zero.
+            // C# Math.Round defaults to banker's rounding (round to even), so we
+            // must specify AwayFromZero to match Chrome's PixelSnappedIntRect.
+            float snappedLeft = (float)Math.Round(X, MidpointRounding.AwayFromZero);
+            float snappedTop = (float)Math.Round(Y, MidpointRounding.AwayFromZero);
+            float snappedRight = (float)Math.Round(X + Width, MidpointRounding.AwayFromZero);
+            float snappedBottom = (float)Math.Round(Y + Height, MidpointRounding.AwayFromZero);
             return new RectF(snappedLeft, snappedTop,
                              snappedRight - snappedLeft, snappedBottom - snappedTop);
         }

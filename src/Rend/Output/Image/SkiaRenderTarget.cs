@@ -177,7 +177,7 @@ namespace Rend.Output.Image
                 {
                     // Transparent white with the requested alpha — colour channels are
                     // irrelevant because SaveLayer uses only the alpha for compositing.
-                    paint.Color = new SKColor(255, 255, 255, (byte)(opacity * 255));
+                    paint.Color = new SKColor(255, 255, 255, (byte)Math.Round(opacity * 255, MidpointRounding.AwayFromZero));
                     _currentCanvas.SaveLayer(paint);
                 }
                 // Individual draw calls should not double-apply opacity.
@@ -331,8 +331,8 @@ namespace Rend.Output.Image
                 }
             }
 
-            // Apply opacity as alpha on the SaveLayer paint
-            byte alpha = (byte)(opacity * 255);
+            // Apply opacity as alpha on the SaveLayer paint (round to match Chrome's SkScalarRoundToInt)
+            byte alpha = (byte)Math.Round(opacity * 255, MidpointRounding.AwayFromZero);
 
             // Convert color filter to image filter if we have both
             if (colorFilter != null)
@@ -479,6 +479,26 @@ namespace Rend.Output.Image
         {
             EnsureCanvas();
             _currentCanvas!.Save();
+
+            // Use native ClipRoundRect when path is a rounded rect — matches Chrome's clipRRect exactly.
+            var rr = path.RoundedRect;
+            if (rr != null)
+            {
+                var rect = new SKRect(rr.Rect.X, rr.Rect.Y,
+                                      rr.Rect.X + rr.Rect.Width, rr.Rect.Y + rr.Rect.Height);
+                var radii = new SKPoint[]
+                {
+                    new SKPoint(rr.TlRx, rr.TlRy),
+                    new SKPoint(rr.TrRx, rr.TrRy),
+                    new SKPoint(rr.BrRx, rr.BrRy),
+                    new SKPoint(rr.BlRx, rr.BlRy),
+                };
+                using var skRRect = new SKRoundRect();
+                skRRect.SetRectRadii(rect, radii);
+                _currentCanvas.ClipRoundRect(skRRect);
+                return;
+            }
+
             using (var skPath = SkiaPathConverter.Convert(path))
             {
                 _currentCanvas.ClipPath(skPath);
@@ -539,6 +559,40 @@ namespace Rend.Output.Image
         public void FillPath(PathData path, BrushInfo brush)
         {
             EnsureCanvas();
+
+            // Use native DrawRoundRect for rounded rect paths — matches Chrome's drawRRect exactly.
+            var rr = path.RoundedRect;
+            if (rr != null && _maskBlurSigma == 0)
+            {
+                var rect = new SKRect(rr.Rect.X, rr.Rect.Y,
+                                      rr.Rect.X + rr.Rect.Width, rr.Rect.Y + rr.Rect.Height);
+                var radii = new SKPoint[]
+                {
+                    new SKPoint(rr.TlRx, rr.TlRy),
+                    new SKPoint(rr.TrRx, rr.TrRy),
+                    new SKPoint(rr.BrRx, rr.BrRy),
+                    new SKPoint(rr.BlRx, rr.BlRy),
+                };
+                using var skRRect = new SKRoundRect();
+                skRRect.SetRectRadii(rect, radii);
+
+                var paint = _paintPool.Rent();
+                try
+                {
+                    paint.IsAntialias = true;
+                    paint.Style = SKPaintStyle.Fill;
+                    ApplyBrush(paint, brush, rr.Rect);
+
+                    _currentCanvas!.DrawRoundRect(skRRect, paint);
+                }
+                finally
+                {
+                    ClearShader(paint);
+                    _paintPool.Return(paint);
+                }
+                return;
+            }
+
             using (var skPath = SkiaPathConverter.Convert(path))
             {
                 var paint = _paintPool.Rent();
@@ -565,6 +619,40 @@ namespace Rend.Output.Image
         public void StrokePath(PathData path, PenInfo pen)
         {
             EnsureCanvas();
+
+            // Use native DrawRoundRect for rounded rect paths — matches Chrome's drawRRect exactly.
+            var rr = path.RoundedRect;
+            if (rr != null)
+            {
+                var rect = new SKRect(rr.Rect.X, rr.Rect.Y,
+                                      rr.Rect.X + rr.Rect.Width, rr.Rect.Y + rr.Rect.Height);
+                var radii = new SKPoint[]
+                {
+                    new SKPoint(rr.TlRx, rr.TlRy),
+                    new SKPoint(rr.TrRx, rr.TrRy),
+                    new SKPoint(rr.BrRx, rr.BrRy),
+                    new SKPoint(rr.BlRx, rr.BlRy),
+                };
+                using var skRRect = new SKRoundRect();
+                skRRect.SetRectRadii(rect, radii);
+
+                var paint = _paintPool.Rent();
+                try
+                {
+                    paint.IsAntialias = true;
+                    paint.Style = SKPaintStyle.Stroke;
+                    ApplyPen(paint, pen);
+
+                    _currentCanvas!.DrawRoundRect(skRRect, paint);
+                }
+                finally
+                {
+                    ClearPathEffect(paint);
+                    _paintPool.Return(paint);
+                }
+                return;
+            }
+
             using (var skPath = SkiaPathConverter.Convert(path))
             {
                 var paint = _paintPool.Rent();
@@ -598,7 +686,7 @@ namespace Rend.Output.Image
                     try
                     {
                         paint.IsAntialias = !_pixelatedRendering;
-                        paint.Color = new SKColor(255, 255, 255, (byte)(_currentOpacity * 255));
+                        paint.Color = new SKColor(255, 255, 255, (byte)Math.Round(_currentOpacity * 255, MidpointRounding.AwayFromZero));
 
                         var sampling = _pixelatedRendering
                             ? new SKSamplingOptions(SKFilterMode.Nearest)
@@ -820,7 +908,7 @@ namespace Rend.Output.Image
         private void ApplyBrush(SKPaint paint, BrushInfo brush, RectF bounds)
         {
             paint.BlendMode = _currentBlendMode;
-            byte alpha = (byte)(_currentOpacity * 255);
+            byte alpha = (byte)Math.Round(_currentOpacity * 255, MidpointRounding.AwayFromZero);
 
             if (brush.Gradient != null && brush.Gradient.Stops.Length > 0)
             {

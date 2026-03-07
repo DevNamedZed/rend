@@ -35,6 +35,26 @@ public static class ColorSampler
             Console.WriteLine();
         }
 
+        // adv-table-colspan debug render
+        {
+            Rend.Layout.Internal.TableLayout._debugTable = true;
+            string colspanHtml = @"<!DOCTYPE html><html><body style=""margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;"">
+<table style=""border-collapse:collapse; width:100%;"">
+<tr><td colspan=""3"" style=""border:1px solid #333; padding:8px; background:#3498db; color:#fff; text-align:center;"">Spanning 3 cols</td></tr>
+<tr><td style=""border:1px solid #333; padding:8px; background:#ecf0f1;"">A</td><td style=""border:1px solid #333; padding:8px; background:#ecf0f1;"">B</td><td style=""border:1px solid #333; padding:8px; background:#ecf0f1;"">C</td></tr>
+<tr><td style=""border:1px solid #333; padding:8px; background:#ecf0f1;"">D</td><td colspan=""2"" style=""border:1px solid #333; padding:8px; background:#e74c3c; color:#fff; text-align:center;"">Spanning 2 cols</td></tr>
+</table></body></html>";
+            Console.WriteLine("=== adv-table-colspan Rend Layout Debug ===");
+            Rend.Render.ToImage(colspanHtml, new Rend.RenderOptions
+            {
+                PageSize = new Rend.Core.Values.SizeF(400, 300),
+                MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
+                Dpi = 96, ImageFormat = "png",
+            });
+            Rend.Layout.Internal.TableLayout._debugTable = false;
+            Console.WriteLine();
+        }
+
         // Table border position diagnostic
         var chromeTable = SKBitmap.Decode(@"C:\src\rend\conformance\Rend.VisualRegression\output\table-basic-chrome.png");
         var rendTable = SKBitmap.Decode(@"C:\src\rend\conformance\Rend.VisualRegression\output\table-basic-rend.png");
@@ -100,6 +120,53 @@ public static class ColorSampler
                 if (cT || rT) Console.WriteLine($"  y={y}: C=({cp.Red,3},{cp.Green,3},{cp.Blue,3})  R=({rp.Red,3},{rp.Green,3},{rp.Blue,3})");
             }
             Console.WriteLine();
+        }
+
+        // adv-table-colspan border position diagnostic
+        var chromeColspan = SKBitmap.Decode(@"C:\src\rend\conformance\Rend.VisualRegression\output\adv-table-colspan-chrome.png");
+        var rendColspan = SKBitmap.Decode(@"C:\src\rend\conformance\Rend.VisualRegression\output\adv-table-colspan-rend.png");
+        if (chromeColspan != null && rendColspan != null)
+        {
+            // Vertical scan: find horizontal border Y positions at x=200 (center)
+            Console.WriteLine("=== adv-table-colspan: Horizontal borders (x=200) ===");
+            Console.WriteLine($"{"Y",-5} {"Chrome",-20} {"Rend",-20} {"Match"}");
+            for (int y = 0; y < Math.Min(chromeColspan.Height, 150); y++)
+            {
+                var cp = chromeColspan.GetPixel(200, y);
+                var rp = rendColspan.GetPixel(200, y);
+                bool cDark = (cp.Red + cp.Green + cp.Blue) / 3 < 100;
+                bool rDark = (rp.Red + rp.Green + rp.Blue) / 3 < 100;
+                if (cDark || rDark)
+                    Console.WriteLine($"{y,-5} ({cp.Red,3},{cp.Green,3},{cp.Blue,3})    ({rp.Red,3},{rp.Green,3},{rp.Blue,3})    {(Math.Abs(cp.Red-rp.Red)+Math.Abs(cp.Green-rp.Green)+Math.Abs(cp.Blue-rp.Blue) < 10?"OK":"DIFF")}");
+            }
+
+            // Horizontal scan: find vertical border X positions at y=55 (middle row)
+            Console.WriteLine("\n=== adv-table-colspan: Vertical borders at y=55 ===");
+            for (int x = 0; x < Math.Min(chromeColspan.Width, 400); x++)
+            {
+                var cp = chromeColspan.GetPixel(x, 55);
+                var rp = rendColspan.GetPixel(x, 55);
+                bool cDark = (cp.Red + cp.Green + cp.Blue) / 3 < 100;
+                bool rDark = (rp.Red + rp.Green + rp.Blue) / 3 < 100;
+                if (cDark || rDark)
+                    Console.WriteLine($"  x={x}: C=({cp.Red},{cp.Green},{cp.Blue}) R=({rp.Red},{rp.Green},{rp.Blue}) {(Math.Abs(cp.Red-rp.Red)+Math.Abs(cp.Green-rp.Green)+Math.Abs(cp.Blue-rp.Blue) < 10?"OK":"DIFF")}");
+            }
+
+            // Check background color transition (cell boundary) at y=55
+            Console.WriteLine("\n=== adv-table-colspan: Cell boundaries at y=55 (background transitions) ===");
+            SKColor prevC = chromeColspan.GetPixel(0, 55);
+            SKColor prevR = rendColspan.GetPixel(0, 55);
+            for (int x = 1; x < Math.Min(chromeColspan.Width, 400); x++)
+            {
+                var cp = chromeColspan.GetPixel(x, 55);
+                var rp = rendColspan.GetPixel(x, 55);
+                bool cTransition = Math.Abs(cp.Red - prevC.Red) + Math.Abs(cp.Green - prevC.Green) + Math.Abs(cp.Blue - prevC.Blue) > 20;
+                bool rTransition = Math.Abs(rp.Red - prevR.Red) + Math.Abs(rp.Green - prevR.Green) + Math.Abs(rp.Blue - prevR.Blue) > 20;
+                if (cTransition || rTransition)
+                    Console.WriteLine($"  x={x}: Chrome ({prevC.Red},{prevC.Green},{prevC.Blue})->({cp.Red},{cp.Green},{cp.Blue})  Rend ({prevR.Red},{prevR.Green},{prevR.Blue})->({rp.Red},{rp.Green},{rp.Blue})");
+                prevC = cp;
+                prevR = rp;
+            }
         }
 
         // Conic gradient sampling

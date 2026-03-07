@@ -96,8 +96,8 @@ namespace Rend.Layout.Internal
                 else if (lstType == CssListStyleType.Disc || lstType == CssListStyleType.Circle ||
                     lstType == CssListStyleType.Square)
                 {
-                    float bulletDiameter = styledElement.Style.FontSize * 0.3f;
-                    markerReserve = bulletDiameter + 6f; // bullet + gap
+                    // Chrome uses ~1.375em marker box for inside disc/circle/square
+                    markerReserve = styledElement.Style.FontSize * 1.375f;
                 }
                 else
                 {
@@ -1391,7 +1391,7 @@ namespace Rend.Layout.Internal
                 // Form controls: apply default intrinsic dimensions if no attributes set
                 if (ReplacedElementLayout.IsFormControl(element))
                 {
-                    if (intrinsicW <= 0) intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(element);
+                    if (intrinsicW <= 0) intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(element, context.TextMeasurer);
                     if (intrinsicH <= 0) intrinsicH = ReplacedElementLayout.GetFormControlIntrinsicHeight(element);
                 }
 

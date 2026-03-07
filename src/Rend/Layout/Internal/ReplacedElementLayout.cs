@@ -1,6 +1,8 @@
 using System;
 using Rend.Css;
+using Rend.Fonts;
 using Rend.Style;
+using Rend.Text;
 
 namespace Rend.Layout.Internal
 {
@@ -41,7 +43,7 @@ namespace Rend.Layout.Internal
         /// <summary>
         /// Returns the default intrinsic width for a form control element, or 0 if not a form control.
         /// </summary>
-        public static float GetFormControlIntrinsicWidth(StyledElement element)
+        public static float GetFormControlIntrinsicWidth(StyledElement element, TextMeasurer? measurer = null)
         {
             string tag = element.TagName;
 
@@ -56,7 +58,7 @@ namespace Rend.Layout.Internal
                     case "submit":
                     case "button":
                     case "reset":
-                        // Chrome: 13.333px sans-serif, ~6px avg char width + 12px padding + 4px border
+                        // Chrome: text_width + padding(6+6) + border(2+2) = text_width + 16
                         string? value = element.GetAttribute("value");
                         if (string.IsNullOrEmpty(value))
                         {
@@ -64,23 +66,51 @@ namespace Rend.Layout.Internal
                                   : inputType == "reset" ? "Reset"
                                   : "Button";
                         }
-                        return Math.Max(40f, value!.Length * 6.1f + 16f);
+                        float textW;
+                        if (measurer != null)
+                        {
+                            var font = new FontDescriptor("sans-serif", 400f);
+                            textW = measurer.MeasureWidth(value!, font, 13.333f);
+                        }
+                        else
+                        {
+                            textW = value!.Length * 6.1f;
+                        }
+                        return Math.Max(40f, textW + 16f);
                     default:
                         // text, password, email, url, search, tel, number, etc.
-                        // Chrome: size=20 chars * ~6.7px avg char width + 4px border + 2px padding ≈ 140px
-                        return 140f;
+                        // Chrome: size=20 chars * ~6.7px avg char width ≈ 134px content-box
+                        // Total 140px with 2px border + 1px padding on each side (set in UA CSS)
+                        return 134f;
                 }
             }
 
             if (tag == "select")
-                return 140f;
+            {
+                // Compute width based on longest option text, like Chrome
+                int maxLen = 0;
+                var child = element.Element.FirstChild;
+                while (child != null)
+                {
+                    if (child is Html.Element optEl && optEl.TagName == "option")
+                    {
+                        int len = (optEl.TextContent?.Trim() ?? "").Length;
+                        if (len > maxLen) maxLen = len;
+                    }
+                    child = child.NextSibling;
+                }
+                if (maxLen == 0) maxLen = 8; // default
+                // ~6.7px per char + 20px arrow area (border+padding now in UA CSS)
+                return maxLen * 6.7f + 20f;
+            }
 
             if (tag == "textarea")
             {
+                // Content-box width: subtract 4px border + 2px padding from total
                 string? cols = element.GetAttribute("cols");
                 if (cols != null && int.TryParse(cols, out int c) && c > 0)
-                    return c * 8f; // ~8px per column character
-                return 200f;
+                    return c * 8f - 6f; // ~8px per column character, minus border+padding
+                return 194f; // 200 - 6
             }
 
             if (tag == "meter" || tag == "progress")
@@ -121,19 +151,21 @@ namespace Rend.Layout.Internal
                     case "reset":
                         return 21f;
                     default:
-                        return 21f;
+                        // Content-box height: 21px total - 4px border - 2px padding = 15px
+                        return 15f;
                 }
             }
 
             if (tag == "select")
-                return 21f;
+                return 15f; // Content-box: 21 - 4px border - 2px padding
 
             if (tag == "textarea")
             {
+                // Content-box height: subtract 4px border + 2px padding
                 string? rows = element.GetAttribute("rows");
                 if (rows != null && int.TryParse(rows, out int r) && r > 0)
-                    return r * 16f; // ~16px per row
-                return 60f;
+                    return r * 16f - 6f; // ~16px per row, minus border+padding
+                return 54f; // 60 - 6
             }
 
             if (tag == "meter" || tag == "progress")

@@ -112,14 +112,41 @@ rp { display: none; }
 /* Links */
 a { color: #0000EE; text-decoration: underline; }
 
-/* Form elements */
-input, textarea, select, button {
+/* Form elements — match Chrome 116 UA defaults.
+   Chrome uses appearance:auto which delegates painting to the native theme,
+   but CSS border/padding still affects layout sizing. We use transparent borders
+   so layout matches Chrome, then ReplacedContentPainter draws the visual border. */
+input, textarea, select {
     display: inline-block;
-    font-family: inherit;
-    font-size: inherit;
+    font-size: 13.333px;
+    border: 2px solid transparent;
+    padding: 1px;
 }
 
-/* Button default styling — match Chrome's default appearance */
+textarea {
+    font-family: monospace;
+}
+
+button {
+    display: inline-block;
+    font-family: inherit;
+    font-size: 13.333px;
+}
+
+/* Checkboxes and radios — no CSS border/padding, styled by ReplacedContentPainter */
+input[type=""checkbox""], input[type=""radio""] {
+    margin: 3px 3px 3px 4px;
+    border: 0;
+    padding: 0;
+}
+
+/* Button inputs — no CSS border, styled by ReplacedContentPainter */
+input[type=""submit""], input[type=""button""], input[type=""reset""] {
+    border: 0;
+    padding: 0;
+}
+
+/* Button element default styling — match Chrome's default appearance */
 button {
     background-color: #efefef;
     border: 2px outset #767676;
@@ -147,10 +174,9 @@ hr {
     margin-bottom: 0.5em;
     margin-left: auto;
     margin-right: auto;
-    border-top-style: inset;
-    border-top-width: 1px;
-    border-bottom-style: inset;
-    border-bottom-width: 1px;
+    border-style: inset;
+    border-width: 1px;
+    border-color: #eee;
 }
 
 /* Image */

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Rend.Core.Values;
 using Rend.Css;
+using Rend.Css.Properties.Internal;
 using Rend.Style;
 
 namespace Rend.Layout.Internal
@@ -57,7 +58,55 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < children.Count; i++)
             {
                 var child = children[i];
-                if (child.IsText) continue;
+                if (child.IsText)
+                {
+                    // CSS Flexbox §4: Text directly inside a flex container is wrapped in
+                    // an anonymous flex item. Whitespace-only text is not rendered.
+                    var textNode = (StyledText)child;
+                    if (string.IsNullOrWhiteSpace(textNode.Text)) continue;
+
+                    // Create anonymous block with display:block (not flex!) to avoid recursion
+                    var blockStyle = CloneStyleAsBlock(styledElement.Style);
+                    var doc = styledElement.Element.OwnerDocument;
+                    var anonElement = doc!.CreateElement("div");
+                    var anonChildren = new List<StyledNode> { new StyledText(textNode.Text, blockStyle) };
+                    var anonStyled = new StyledElement(anonElement, blockStyle, anonChildren);
+
+                    var textBox = new LayoutBox(anonStyled, BoxType.Block);
+                    textBox.ContentRect = new RectF(0, 0, containerWidth, 0);
+                    InlineFormattingContext.Layout(textBox, context);
+                    float textHeight = 0;
+                    if (textBox.LineBoxes != null && textBox.LineBoxes.Count > 0)
+                    {
+                        var lastLine = textBox.LineBoxes[textBox.LineBoxes.Count - 1];
+                        textHeight = lastLine.Y + lastLine.Height - textBox.ContentRect.Y;
+                    }
+                    // Measure actual text width from line fragments
+                    float textWidth = 0;
+                    if (textBox.LineBoxes != null && textBox.LineBoxes.Count > 0)
+                    {
+                        for (int lb = 0; lb < textBox.LineBoxes.Count; lb++)
+                        {
+                            float lw = 0;
+                            var line = textBox.LineBoxes[lb];
+                            for (int f = 0; f < line.Fragments.Count; f++)
+                                lw += line.Fragments[f].Width;
+                            if (lw > textWidth) textWidth = lw;
+                        }
+                    }
+                    textBox.ContentRect = new RectF(0, 0, textWidth, textHeight);
+
+                    items.Add(new FlexItem
+                    {
+                        Box = textBox,
+                        Style = blockStyle,
+                        FlexGrow = 0,
+                        FlexShrink = 1,
+                        BaseSize = isColumn ? textHeight : textWidth,
+                        Order = 0
+                    });
+                    continue;
+                }
 
                 if (child is StyledPseudoElement pseudo)
                 {
@@ -261,7 +310,7 @@ namespace Rend.Layout.Internal
                         {
                             double extra = (double)freeSpace * fractions[i];
                             // Round to 1/64px (Chrome's LayoutUnit precision)
-                            extraSize = (float)(Math.Round(extra * 64.0) / 64.0);
+                            extraSize = (float)(Math.Round(extra * 64.0, MidpointRounding.AwayFromZero) / 64.0);
                         }
                         freeSpace -= extraSize;
 
@@ -917,6 +966,18 @@ namespace Rend.Layout.Internal
         {
             public List<FlexItem> Items { get; } = new List<FlexItem>();
             public float CrossSize { get; set; }
+        }
+
+        /// <summary>
+        /// Clone a computed style but override display to block.
+        /// Prevents infinite recursion when anonymous flex text items get relaid.
+        /// </summary>
+        private static ComputedStyle CloneStyleAsBlock(ComputedStyle source)
+        {
+            var values = (PropertyValue[])source.GetValues().Clone();
+            values[PropertyId.Display] = PropertyValue.FromInt((int)CssDisplay.Block);
+            var refValues = (object?[])source.GetRefValues().Clone();
+            return new ComputedStyle(values, refValues);
         }
     }
 }

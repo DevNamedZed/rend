@@ -81,6 +81,8 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
+
+
             if (tagName == "meter")
             {
                 PaintMeter(element, box, target);
@@ -193,34 +195,32 @@ namespace Rend.Rendering.Internal
                     break;
                 default:
                     // text, password, email, url, search, tel, number, etc.
-                    PaintTextInput(element, rect, target, inputType);
+                    PaintTextInput(element, box, target, inputType);
                     break;
             }
         }
 
         /// <summary>
-        /// Paints a text/password input: white background, 2px inset border, value or placeholder text.
-        /// Chrome default: border: 2px inset; padding: 1px; font-size: 13.333px
+        /// Paints a text/password input matching Chrome's native theme (native_theme_base.cc PaintTextField):
+        /// White background fill, then 1px solid #767676 stroke at 0.5px inset.
+        /// CSS transparent border provides layout sizing (2px each side + 1px padding).
         /// </summary>
-        private static void PaintTextInput(StyledElement element, RectF rect, IRenderTarget target, string inputType)
+        private static void PaintTextInput(StyledElement element, LayoutBox box, IRenderTarget target, string inputType)
         {
+            // Chrome's native theme draws on the border rect (the full control area)
+            RectF borderRect = box.BorderRect;
+
             // White background
-            target.FillRect(rect, BrushInfo.Solid(CssColor.White));
+            target.FillRect(borderRect, BrushInfo.Solid(CssColor.White));
 
-            // 1px inset border (dark top/left, light bottom/right)
-            float bw = 1f;
-            var darkColor = BorderPainter.DarkenColor(BorderColor);
-            var lightColor = BorderPainter.LightenColor(BorderColor);
-            // Top (dark)
-            target.FillRect(new RectF(rect.X, rect.Y, rect.Width, bw), BrushInfo.Solid(darkColor));
-            // Left (dark)
-            target.FillRect(new RectF(rect.X, rect.Y, bw, rect.Height), BrushInfo.Solid(darkColor));
-            // Bottom (light)
-            target.FillRect(new RectF(rect.X, rect.Y + rect.Height - bw, rect.Width, bw), BrushInfo.Solid(lightColor));
-            // Right (light)
-            target.FillRect(new RectF(rect.X + rect.Width - bw, rect.Y, bw, rect.Height), BrushInfo.Solid(lightColor));
+            // 1px stroke border at 0.5px inset (matches Chrome native_theme_base.cc)
+            // skrect.inset(0.5f, 0.5f); canvas->drawRect(skrect, stroke_flags);
+            var strokeRect = new RectF(borderRect.X + 0.5f, borderRect.Y + 0.5f,
+                                        borderRect.Width - 1f, borderRect.Height - 1f);
+            target.StrokeRect(strokeRect, new PenInfo(BorderColor, 1f));
 
-            // Determine text to show
+            // Draw text content in the content rect
+            RectF rect = box.ContentRect;
             string? displayText = element.GetAttribute("value");
             bool isPlaceholder = false;
             if (string.IsNullOrEmpty(displayText))
@@ -243,7 +243,7 @@ namespace Rend.Rendering.Internal
                 CssColor textColor = isPlaceholder ? PlaceholderColor : CssColor.Black;
                 // DrawText uses Y as baseline; center by placing baseline at vertical midpoint + half cap height
                 float textY = rect.Y + rect.Height / 2f + FormFontAscent * 0.4f;
-                target.DrawText(displayText!, rect.X + FormTextPadding, textY,
+                target.DrawText(displayText!, rect.X, textY,
                     new TextStyle
                     {
                         Font = new FontDescriptor("sans-serif", 400f),
@@ -264,28 +264,47 @@ namespace Rend.Rendering.Internal
             var accent = GetAccentColor(element);
             bool hasAccent = accent.A > 0 && isChecked;
 
-            // Background: accent color when checked with accent-color set, otherwise white
-            target.FillRect(rect, BrushInfo.Solid(hasAccent ? accent : CssColor.White));
+            // Chrome native_theme_base.cc: kCheckboxBorderRadius = 2
+            float radius = 2f;
 
-            // 1px border
-            target.StrokeRect(rect, new PenInfo(hasAccent ? accent : BorderColor, 1f));
-
-            // Draw checkmark if checked
             if (isChecked)
             {
+                // Checked: filled rounded rect in accent color + white checkmark
+                var bgPath = new PathData();
+                bgPath.AddRoundedRectangle(rect, radius, radius, radius, radius);
+                target.FillPath(bgPath, BrushInfo.Solid(hasAccent ? accent : CssColor.White));
+                if (hasAccent)
+                    target.StrokePath(bgPath, new PenInfo(accent, 1f));
+                else
+                    target.StrokePath(bgPath, new PenInfo(BorderColor, 1f));
+
                 float cx = rect.X;
                 float cy = rect.Y;
                 float w = rect.Width;
                 float h = rect.Height;
 
+                // Chrome checkmark path: (0.2,0.5) -> (0.4,0.7) -> (0.8,0.2)
                 var path = new PathData();
-                // Checkmark path: two lines forming a check
                 path.MoveTo(cx + w * 0.2f, cy + h * 0.5f);
-                path.LineTo(cx + w * 0.4f, cy + h * 0.75f);
-                path.LineTo(cx + w * 0.8f, cy + h * 0.25f);
+                path.LineTo(cx + w * 0.4f, cy + h * 0.7f);
+                path.LineTo(cx + w * 0.8f, cy + h * 0.2f);
 
-                // White checkmark on accent background, black otherwise
-                target.StrokePath(path, new PenInfo(hasAccent ? CssColor.White : CheckmarkColor, 1.5f));
+                // Chrome stroke width: ceilf(size / 8.0f) = ceil(13/8) = 2
+                float strokeW = (float)Math.Ceiling(w / 8f);
+                target.StrokePath(path, new PenInfo(hasAccent ? CssColor.White : CheckmarkColor, strokeW));
+            }
+            else
+            {
+                // Unchecked: white fill + 1px stroke at 0.5px inset with rounded corners
+                var bgPath = new PathData();
+                bgPath.AddRoundedRectangle(rect, radius, radius, radius, radius);
+                target.FillPath(bgPath, BrushInfo.Solid(CssColor.White));
+
+                var strokeRect = new RectF(rect.X + 0.5f, rect.Y + 0.5f,
+                                            rect.Width - 1f, rect.Height - 1f);
+                var strokePath = new PathData();
+                strokePath.AddRoundedRectangle(strokeRect, radius, radius, radius, radius);
+                target.StrokePath(strokePath, new PenInfo(BorderColor, 1f));
             }
         }
 
@@ -301,17 +320,25 @@ namespace Rend.Rendering.Internal
             var accent = GetAccentColor(element);
             bool hasAccent = accent.A > 0 && isChecked;
 
-            // Outer circle (white fill + border)
-            var outerCircle = BuildCirclePath(cx, cy, radius);
-            target.FillPath(outerCircle, BrushInfo.Solid(hasAccent ? accent : CssColor.White));
-            target.StrokePath(outerCircle, new PenInfo(hasAccent ? accent : BorderColor, 1f));
-
-            // Inner filled circle if checked
             if (isChecked)
             {
-                float innerRadius = radius * 0.45f;
+                // Checked: filled circle in accent color + white inner dot
+                var outerCircle = BuildCirclePath(cx, cy, radius);
+                target.FillPath(outerCircle, BrushInfo.Solid(hasAccent ? accent : CssColor.White));
+                if (!hasAccent)
+                    target.StrokePath(outerCircle, new PenInfo(BorderColor, 1f));
+
+                // Chrome: inner dot radius = outer radius * 0.4
+                float innerRadius = radius * 0.4f;
                 var innerCircle = BuildCirclePath(cx, cy, innerRadius);
                 target.FillPath(innerCircle, BrushInfo.Solid(hasAccent ? CssColor.White : CheckmarkColor));
+            }
+            else
+            {
+                // Unchecked: white fill + 1px stroke at 0.5px inset
+                var outerCircle = BuildCirclePath(cx, cy, radius - 0.5f);
+                target.FillPath(outerCircle, BrushInfo.Solid(CssColor.White));
+                target.StrokePath(outerCircle, new PenInfo(BorderColor, 1f));
             }
         }
 
@@ -322,8 +349,7 @@ namespace Rend.Rendering.Internal
         private static void PaintButtonInput(StyledElement element, RectF rect, IRenderTarget target, string inputType)
         {
             // Chrome's default button: background #efefef, border 2px outset #767676, border-radius 2px
-            // The rect is the content rect; we need to draw the full button including its border area.
-            // Since this is a replaced element, the layout box's content rect IS the full button area.
+            // padding: 1px 6px
             var bgColor = new CssColor(239, 239, 239); // #efefef
             float bw = 2f;
             float radius = 2f;
@@ -355,7 +381,7 @@ namespace Rend.Rendering.Internal
                       : "Button";
             }
 
-            // Center text in the button (inside the border+padding area)
+            // Center text in the button (inside border+padding area)
             var textStyle = new TextStyle
             {
                 Font = new FontDescriptor("sans-serif", 400f),
@@ -376,12 +402,13 @@ namespace Rend.Rendering.Internal
         private static void PaintSelect(StyledElement element, LayoutBox box, IRenderTarget target)
         {
             RectF rect = box.ContentRect;
+            RectF borderRect = box.BorderRect;
 
-            // White background
-            target.FillRect(rect, BrushInfo.Solid(CssColor.White));
-
-            // 1px border
-            target.StrokeRect(rect, new PenInfo(BorderColor, 1f));
+            // Chrome native theme: white background + 1px stroke border
+            target.FillRect(borderRect, BrushInfo.Solid(CssColor.White));
+            var strokeRect = new RectF(borderRect.X + 0.5f, borderRect.Y + 0.5f,
+                                        borderRect.Width - 1f, borderRect.Height - 1f);
+            target.StrokeRect(strokeRect, new PenInfo(BorderColor, 1f));
 
             // Find first <option> text
             string displayText = "";
@@ -404,7 +431,7 @@ namespace Rend.Rendering.Internal
                 target.PushClipRect(textClip);
 
                 float textY = rect.Y + rect.Height / 2f + FormFontAscent * 0.4f;
-                target.DrawText(displayText, rect.X + FormTextPadding, textY,
+                target.DrawText(displayText, rect.X, textY,
                     new TextStyle
                     {
                         Font = new FontDescriptor("sans-serif", 400f),
@@ -435,12 +462,13 @@ namespace Rend.Rendering.Internal
         private static void PaintTextarea(StyledElement element, LayoutBox box, IRenderTarget target)
         {
             RectF rect = box.ContentRect;
+            RectF borderRect = box.BorderRect;
 
-            // White background
-            target.FillRect(rect, BrushInfo.Solid(CssColor.White));
-
-            // 1px border
-            target.StrokeRect(rect, new PenInfo(BorderColor, 1f));
+            // Chrome native theme: white background + 1px stroke border
+            target.FillRect(borderRect, BrushInfo.Solid(CssColor.White));
+            var strokeRect = new RectF(borderRect.X + 0.5f, borderRect.Y + 0.5f,
+                                        borderRect.Width - 1f, borderRect.Height - 1f);
+            target.StrokeRect(strokeRect, new PenInfo(BorderColor, 1f));
 
             // Draw text content
             string content = element.Element.TextContent?.Trim() ?? "";
@@ -449,8 +477,9 @@ namespace Rend.Rendering.Internal
                 target.PushClipRect(rect);
 
                 float lineHeight = FormFontSize * 1.4f;
-                float textX = rect.X + FormTextPadding;
-                float textY = rect.Y + FormTextPadding;
+                float textX = rect.X;
+                // DrawText uses Y as baseline; add ascent to position text inside the box
+                float textY = rect.Y + FormFontAscent;
 
                 // Split content into lines and draw each
                 string[] lines = content.Split('\n');
@@ -613,9 +642,54 @@ namespace Rend.Rendering.Internal
             }
         }
 
+        // Chrome 116 default accent color for checkboxes/radios
+        private static readonly CssColor DefaultAccentBlue = new CssColor(0, 117, 255);
+
         private static CssColor GetAccentColor(StyledElement element)
         {
-            return element.Style.AccentColor;
+            var accent = element.Style.AccentColor;
+            // If no accent-color set (transparent/zero), use Chrome's default blue
+            if (accent.A == 0 && accent.R == 0 && accent.G == 0 && accent.B == 0)
+                return DefaultAccentBlue;
+            return accent;
+        }
+
+        /// <summary>
+        /// Returns true if the element has an explicit accent-color CSS property set.
+        /// </summary>
+        private static bool HasExplicitAccentColor(StyledElement element)
+        {
+            var accent = element.Style.AccentColor;
+            return accent.A != 0 || accent.R != 0 || accent.G != 0 || accent.B != 0;
+        }
+
+        /// <summary>
+        /// Chrome's GetGaugeRegion() logic mapped to colors from UA stylesheet.
+        /// </summary>
+        private static CssColor GetMeterColor(float value, float low, float high, float optimum)
+        {
+            // Chrome 116 UA: optimum=#107c10, suboptimal=#ffb900, even-less-good=#d83b01
+            var colorOptimum = new CssColor(0x10, 0x7C, 0x10);
+            var colorSuboptimal = new CssColor(0xFF, 0xB9, 0x00);
+            var colorEvenLessGood = new CssColor(0xD8, 0x3B, 0x01);
+
+            if (optimum < low)
+            {
+                if (value <= low) return colorOptimum;
+                if (value <= high) return colorSuboptimal;
+                return colorEvenLessGood;
+            }
+
+            if (high < optimum)
+            {
+                if (high <= value) return colorOptimum;
+                if (low <= value) return colorSuboptimal;
+                return colorEvenLessGood;
+            }
+
+            // Optimum between low and high
+            if (low <= value && value <= high) return colorOptimum;
+            return colorSuboptimal;
         }
 
         private static void PaintMeter(StyledElement element, LayoutBox box, IRenderTarget target)
@@ -636,53 +710,58 @@ namespace Rend.Rendering.Internal
             float fraction = (value - min) / range;
             fraction = Math.Max(0f, Math.Min(1f, fraction));
 
-            // Determine color based on value relative to low/high/optimum (match Chrome 116)
+            // Determine gauge region per Chrome's GetGaugeRegion() logic
+            // Colors: optimum=#107c10, suboptimal=#ffb900, even-less-good=#d83b01
             CssColor barColor;
-            CssColor accentColor = GetAccentColor(element);
-            if (accentColor.R != 0 || accentColor.G != 0 || accentColor.B != 0 || accentColor.A != 0)
+            if (HasExplicitAccentColor(element))
             {
-                barColor = accentColor;
-            }
-            else if (value < low)
-            {
-                // Chrome 116 uses (216, 59, 1) for both suboptimal and even-less-optimal
-                barColor = new CssColor(216, 59, 1);
-            }
-            else if (value > high)
-            {
-                barColor = new CssColor(216, 59, 1);
+                barColor = element.Style.AccentColor;
             }
             else
             {
-                // In optimal range — Chrome 116 green: (16, 124, 16)
-                barColor = new CssColor(16, 124, 16);
+                barColor = GetMeterColor(value, low, high, optimum);
             }
 
-            // Chrome 116 renders meter bars vertically centered within the element.
-            // Bar area is rect.Height/2 tall, sharp rectangular (not pill-shaped).
-            float insetY = (float)Math.Round(rect.Height * 0.25f);
-            float barAreaHeight = rect.Height - insetY * 2;
-            var barAreaRect = new RectF(rect.X, rect.Y + insetY, rect.Width, barAreaHeight);
+            // Chrome 116 meter uses shadow DOM with grid: 1fr [line1] 2fr [line2] 1fr
+            // The bar track occupies the center 50% of the element height
+            // border-radius: 20px, background: #efefef, border: thin solid rgba(118,118,118,0.3)
+            float trackHeight = (float)Math.Round(rect.Height * 0.5, MidpointRounding.AwayFromZero);
+            float insetY = (float)Math.Round((rect.Height - trackHeight) * 0.5, MidpointRounding.AwayFromZero);
+            var barAreaRect = new RectF(rect.X, rect.Y + insetY, rect.Width, trackHeight);
+            float radius = 20f; // Chrome UA: border-radius: 20px
 
-            // Draw background track (sharp rect, no rounding)
-            var trackColor = new CssColor(239, 239, 239);
-            target.FillRect(barAreaRect, BrushInfo.Solid(trackColor));
+            // Chrome meter uses CSS: border on bar element, value inside with overflow:hidden
+            // So: 1) fill track, 2) clip to content area (inside border), 3) fill value, 4) stroke border
+            float bw = 1f; // "thin" = 1px border
+            var trackColor = new CssColor(0xEF, 0xEF, 0xEF);
+            var trackPath = new PathData();
+            trackPath.AddRoundedRectangle(barAreaRect, radius, radius, radius, radius);
+            target.FillPath(trackPath, BrushInfo.Solid(trackColor));
 
-            // Draw filled bar (sharp rect)
+            // Value bar clipped to content area (inside border)
             float barWidth = barAreaRect.Width * fraction;
             if (barWidth > 0)
             {
-                var barRect = new RectF(barAreaRect.X, barAreaRect.Y, barWidth, barAreaHeight);
+                var innerRect = new RectF(barAreaRect.X + bw, barAreaRect.Y + bw,
+                                          barAreaRect.Width - bw * 2, barAreaRect.Height - bw * 2);
+                var innerPath = new PathData();
+                innerPath.AddRoundedRectangle(innerRect, radius, radius, radius, radius);
+                target.Save();
+                target.PushClipPath(innerPath);
+                var barRect = new RectF(barAreaRect.X, barAreaRect.Y, barWidth, trackHeight);
                 target.FillRect(barRect, BrushInfo.Solid(barColor));
+                target.PopClip();
+                target.Restore();
             }
 
-            // Draw 1px border matching Chrome 116 — use individual fill rects for pixel-aligned borders
-            var borderColor = new CssColor(202, 202, 202);
-            var bBrush = BrushInfo.Solid(borderColor);
-            target.FillRect(new RectF(barAreaRect.X, barAreaRect.Y, barAreaRect.Width, 1), bBrush); // top
-            target.FillRect(new RectF(barAreaRect.X, barAreaRect.Bottom - 1, barAreaRect.Width, 1), bBrush); // bottom
-            target.FillRect(new RectF(barAreaRect.X, barAreaRect.Y, 1, barAreaRect.Height), bBrush); // left
-            target.FillRect(new RectF(barAreaRect.Right - 1, barAreaRect.Y, 1, barAreaRect.Height), bBrush); // right
+            // Border: thin solid rgba(118,118,118,0.3)
+            // Stroke centered on track edge, inset by borderWidth/2
+            var borderColor = new CssColor(118, 118, 118, (byte)(255 * 0.3f));
+            var borderRect = new RectF(barAreaRect.X + bw * 0.5f, barAreaRect.Y + bw * 0.5f,
+                                       barAreaRect.Width - bw, barAreaRect.Height - bw);
+            var borderPath = new PathData();
+            borderPath.AddRoundedRectangle(borderRect, radius, radius, radius, radius);
+            target.StrokePath(borderPath, new PenInfo(borderColor, bw));
         }
 
         private static void PaintProgress(StyledElement element, LayoutBox box, IRenderTarget target)
@@ -706,63 +785,67 @@ namespace Rend.Rendering.Internal
                 }
             }
 
-            // Chrome 116 renders progress bars vertically centered, pill-shaped (rounded ends)
-            float insetY = (float)Math.Round(rect.Height * 0.25f);
-            float barAreaHeight = rect.Height - insetY * 2;
-            var barAreaRect = new RectF(rect.X, rect.Y + insetY, rect.Width, barAreaHeight);
-            float radius = barAreaHeight * 0.5f; // pill shape
+            // Chrome 116 progress bar (from native_theme_base.cc):
+            // kSliderTrackHeight = 8px, border_radius = 40px (full pill), kBorderWidth = 1px
+            // Track centered vertically via AlignSliderTrack.
+            float trackHeight = 8f;
+            float insetY = (float)Math.Round((rect.Height - trackHeight) * 0.5, MidpointRounding.AwayFromZero);
+            var barAreaRect = new RectF(rect.X, rect.Y + insetY, rect.Width, trackHeight);
+            float radius = 40f; // kGetBorderRadiusForPart returns 40 for progress bar
 
-            // Draw background track with rounded corners
-            var trackColor = new CssColor(239, 239, 239);
+            // ControlsFillColorForState(kNormal) = 0xEF,0xEF,0xEF
+            var trackColor = new CssColor(0xEF, 0xEF, 0xEF);
             var trackPath = new PathData();
             trackPath.AddRoundedRectangle(barAreaRect, radius, radius, radius, radius);
             target.FillPath(trackPath, BrushInfo.Solid(trackColor));
 
+            // ControlsAccentColorForState(kNormal) = 0x00,0x75,0xFF
+            CssColor barColor;
+            CssColor accentColor = GetAccentColor(element);
+            if (accentColor.R != 0 || accentColor.G != 0 || accentColor.B != 0 || accentColor.A != 0)
+                barColor = accentColor;
+            else
+                barColor = new CssColor(0x00, 0x75, 0xFF);
+
             if (valueAttr != null)
             {
-                // Determinate progress bar
+                // Determinate: value bar clipped to track pill shape
                 float value = ParseFloat(valueAttr, 0f);
                 float fraction = max > 0 ? value / max : 0f;
                 fraction = Math.Max(0f, Math.Min(1f, fraction));
 
-                // Chrome 116 blue: (0, 117, 255)
-                CssColor barColor;
-                CssColor accentColor = GetAccentColor(element);
-                if (accentColor.R != 0 || accentColor.G != 0 || accentColor.B != 0 || accentColor.A != 0)
-                {
-                    barColor = accentColor;
-                }
-                else
-                {
-                    barColor = new CssColor(0, 117, 255);
-                }
-
-                float barWidth = barAreaRect.Width * fraction;
-                if (barWidth > 0)
-                {
-                    var barRect = new RectF(barAreaRect.X, barAreaRect.Y, barWidth, barAreaHeight);
-                    float barRadius = Math.Min(radius, barWidth * 0.5f);
-                    var barPath = new PathData();
-                    barPath.AddRoundedRectangle(barRect, barRadius, barRadius, barRadius, barRadius);
-                    target.FillPath(barPath, BrushInfo.Solid(barColor));
-                }
+                float barWidth = Math.Max(barAreaRect.Width * fraction, 2f); // kMinimumProgressInlineValue = 2
+                target.Save();
+                target.PushClipPath(trackPath);
+                var barRect = new RectF(barAreaRect.X, barAreaRect.Y, barWidth, trackHeight);
+                target.FillRect(barRect, BrushInfo.Solid(barColor));
+                target.PopClip();
+                target.Restore();
             }
             else
             {
-                // Indeterminate: draw a single animated-style block (static snapshot)
-                CssColor stripeColor = new CssColor(0, 117, 255);
-                float blockWidth = barAreaRect.Width * 0.25f;
-                var blockRect = new RectF(barAreaRect.X, barAreaRect.Y, blockWidth, barAreaHeight);
+                // Indeterminate: animated block — static snapshot at ~33%
+                // Chrome uses drawRoundRect for indeterminate (not plain rect)
+                target.Save();
+                target.PushClipPath(trackPath);
+                float blockWidth = barAreaRect.Width * 0.33f;
+                var blockRect = new RectF(barAreaRect.X, barAreaRect.Y, blockWidth, trackHeight);
                 var blockPath = new PathData();
-                blockPath.AddRoundedRectangle(blockRect, radius, 0f, 0f, radius);
-                target.FillPath(blockPath, BrushInfo.Solid(stripeColor));
+                blockPath.AddRoundedRectangle(blockRect, radius, radius, radius, radius);
+                target.FillPath(blockPath, BrushInfo.Solid(barColor));
+                target.PopClip();
+                target.Restore();
             }
 
-            // Draw 1px border matching Chrome 116
-            var borderColor = new CssColor(202, 202, 202);
+            // ControlsBorderColorForState(kNormal) = 0x76,0x76,0x76 with 0x80 alpha
+            // Chrome insets the border rect by borderWidth/2 so the stroke stays inside the track
+            var borderColor = new CssColor(0x76, 0x76, 0x76, 0x80);
+            float bw = 1f;
+            var borderRect = new RectF(barAreaRect.X + bw * 0.5f, barAreaRect.Y + bw * 0.5f,
+                                       barAreaRect.Width - bw, barAreaRect.Height - bw);
             var borderPath = new PathData();
-            borderPath.AddRoundedRectangle(barAreaRect, radius, radius, radius, radius);
-            target.StrokePath(borderPath, new PenInfo(borderColor, 1f));
+            borderPath.AddRoundedRectangle(borderRect, radius, radius, radius, radius);
+            target.StrokePath(borderPath, new PenInfo(borderColor, bw));
         }
 
         private static void PaintVideoPlaceholder(StyledElement element, LayoutBox box, IRenderTarget target, ImageResolverDelegate? imageResolver)

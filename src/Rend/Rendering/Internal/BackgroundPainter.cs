@@ -69,7 +69,7 @@ namespace Rend.Rendering.Internal
                     }
                     else
                     {
-                        target.FillRect(clipRect, gradBrush);
+                        target.FillRect(clipRect.PixelSnap(), gradBrush);
                     }
                 }
                 return;

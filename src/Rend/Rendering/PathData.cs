@@ -16,6 +16,34 @@ namespace Rend.Rendering
     }
 
     /// <summary>
+    /// Stores rounded rectangle parameters when a path is a pure rounded rect.
+    /// This enables backends to use native rounded rect operations (e.g. Skia's SkRRect)
+    /// instead of bezier approximations, matching Chrome's rendering exactly.
+    /// </summary>
+    public sealed class RoundedRectInfo
+    {
+        public RectF Rect { get; }
+        public float TlRx { get; }
+        public float TlRy { get; }
+        public float TrRx { get; }
+        public float TrRy { get; }
+        public float BrRx { get; }
+        public float BrRy { get; }
+        public float BlRx { get; }
+        public float BlRy { get; }
+
+        public RoundedRectInfo(RectF rect, float tlRx, float tlRy, float trRx, float trRy,
+                               float brRx, float brRy, float blRx, float blRy)
+        {
+            Rect = rect;
+            TlRx = tlRx; TlRy = tlRy;
+            TrRx = trRx; TrRy = trRy;
+            BrRx = brRx; BrRy = brRy;
+            BlRx = blRx; BlRy = blRy;
+        }
+    }
+
+    /// <summary>
     /// Builds and stores a sequence of path segments for drawing operations.
     /// </summary>
     public sealed class PathData
@@ -26,6 +54,11 @@ namespace Rend.Rendering
         /// Gets or sets the fill type for this path.
         /// </summary>
         public PathFillType FillType { get; set; } = PathFillType.Winding;
+
+        /// <summary>
+        /// If this path is a pure rounded rectangle, stores the parameters for native backend optimization.
+        /// </summary>
+        public RoundedRectInfo? RoundedRect { get; private set; }
 
         /// <summary>
         /// Moves the current point to the specified location without drawing.
@@ -93,6 +126,13 @@ namespace Rend.Rendering
         /// <param name="bottomLeft">The bottom-left corner radius.</param>
         public void AddRoundedRectangle(RectF rect, float topLeft, float topRight, float bottomRight, float bottomLeft)
         {
+            // Store rounded rect info for native backend optimization (Skia SkRRect).
+            if (_segments.Count == 0)
+            {
+                RoundedRect = new RoundedRectInfo(rect, topLeft, topLeft, topRight, topRight,
+                                                   bottomRight, bottomRight, bottomLeft, bottomLeft);
+            }
+
             // Kappa: control point distance for approximating a quarter circle with a cubic bezier.
             const float kappa = 0.5522847498f;
 
@@ -166,6 +206,12 @@ namespace Rend.Rendering
             float tlRx, float tlRy, float trRx, float trRy,
             float brRx, float brRy, float blRx, float blRy)
         {
+            // Store rounded rect info for native backend optimization (Skia SkRRect).
+            if (_segments.Count == 0)
+            {
+                RoundedRect = new RoundedRectInfo(rect, tlRx, tlRy, trRx, trRy, brRx, brRy, blRx, blRy);
+            }
+
             const float kappa = 0.5522847498f;
 
             float x = rect.X;

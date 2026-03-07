@@ -60,9 +60,9 @@ namespace Rend.Fonts
             // with each component rounded individually before summing.
             if (WinAscent > 0 && WinDescent > 0)
             {
-                float a = (float)Math.Round(fontSize * WinAscent / UnitsPerEm);
-                float d = (float)Math.Round(fontSize * WinDescent / UnitsPerEm);
-                float lg = LineGap > 0 ? (float)Math.Round(fontSize * LineGap / UnitsPerEm) : 0;
+                float a = (float)Math.Round((double)fontSize * WinAscent / UnitsPerEm, MidpointRounding.AwayFromZero);
+                float d = (float)Math.Round((double)fontSize * WinDescent / UnitsPerEm, MidpointRounding.AwayFromZero);
+                float lg = LineGap > 0 ? (float)Math.Round((double)fontSize * LineGap / UnitsPerEm, MidpointRounding.AwayFromZero) : 0;
                 float lh = a + d + lg;
                 return lh > 0 ? lh : fontSize;
             }
@@ -81,9 +81,9 @@ namespace Rend.Fonts
 
             // Chrome rounds ascent to integer (lroundf) before using in half-leading.
             if (WinAscent > 0)
-                return (float)Math.Round(fontSize * WinAscent / UnitsPerEm);
+                return (float)Math.Round((double)fontSize * WinAscent / UnitsPerEm, MidpointRounding.AwayFromZero);
 
-            return (float)Math.Round(fontSize * Ascent / UnitsPerEm);
+            return (float)Math.Round((double)fontSize * Ascent / UnitsPerEm, MidpointRounding.AwayFromZero);
         }
 
         /// <summary>
@@ -96,10 +96,10 @@ namespace Rend.Fonts
 
             // Chrome rounds descent to integer (lroundf) before using in half-leading.
             if (WinDescent > 0)
-                return (float)Math.Round(fontSize * WinDescent / UnitsPerEm);
+                return (float)Math.Round((double)fontSize * WinDescent / UnitsPerEm, MidpointRounding.AwayFromZero);
 
             // hhea Descent is typically negative, so negate to return a positive pixel value.
-            return (float)Math.Round(fontSize * -Descent / UnitsPerEm);
+            return (float)Math.Round((double)fontSize * -Descent / UnitsPerEm, MidpointRounding.AwayFromZero);
         }
     }
 }

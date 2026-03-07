@@ -104,7 +104,9 @@ namespace Rend.Layout.Internal
 
                 if (child.IsText)
                 {
-                    // Text in block context: create anonymous inline box
+                    // Text in block context: create anonymous block box with inline formatting
+                    // CSS 2.1 §9.2.1.1: When a block container has both block-level and inline-level
+                    // content, anonymous block boxes are created to wrap the inline content.
                     var textNode = (StyledText)child;
                     if (string.IsNullOrWhiteSpace(textNode.Text)) continue;
 
@@ -117,9 +119,9 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
-                        var inlineBox = CreateInlineBox(textNode, context, containingWidth, cursorY);
-                        parent.AddChild(inlineBox);
-                        cursorY = inlineBox.MarginRect.Bottom;
+                        var anonBox = CreateAnonymousBlockForText(textNode, styledElement, parent, cursorY, containingWidth, context);
+                        parent.AddChild(anonBox);
+                        cursorY = anonBox.ContentRect.Y + anonBox.ContentRect.Height;
                     }
                     prevMarginBottom = 0;
                     continue;
@@ -138,9 +140,9 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
-                        var inlineBox = CreateInlineBox(pseudoText, context, containingWidth, cursorY);
-                        parent.AddChild(inlineBox);
-                        cursorY = inlineBox.MarginRect.Bottom;
+                        var anonBox = CreateAnonymousBlockForText(pseudoText, styledElement, parent, cursorY, containingWidth, context);
+                        parent.AddChild(anonBox);
+                        cursorY = anonBox.ContentRect.Y + anonBox.ContentRect.Height;
                     }
                     prevMarginBottom = 0;
                     continue;
@@ -214,7 +216,7 @@ namespace Rend.Layout.Internal
                     string? attrW = childElement.GetAttribute("width");
                     if (attrW != null && float.TryParse(attrW, out float aw)) intrinsicW = aw;
                     if (intrinsicW <= 0 && ReplacedElementLayout.IsFormControl(childElement))
-                        intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(childElement);
+                        intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(childElement, context.TextMeasurer);
                     if (intrinsicW <= 0 && childElement.TagName == "math")
                     {
                         var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(
@@ -307,7 +309,7 @@ namespace Rend.Layout.Internal
                         if (attrH != null && float.TryParse(attrH, out float ah)) intrinsicH = ah;
                         if (ReplacedElementLayout.IsFormControl(childElement))
                         {
-                            if (intrinsicW <= 0) intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(childElement);
+                            if (intrinsicW <= 0) intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(childElement, context.TextMeasurer);
                             if (intrinsicH <= 0) intrinsicH = ReplacedElementLayout.GetFormControlIntrinsicHeight(childElement);
                         }
                         if (childElement.TagName == "math" && (intrinsicW <= 0 || intrinsicH <= 0))
@@ -375,7 +377,7 @@ namespace Rend.Layout.Internal
                         // Form controls: apply default intrinsic dimensions if no attributes set
                         if (ReplacedElementLayout.IsFormControl(childElement))
                         {
-                            if (intrinsicW <= 0) intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(childElement);
+                            if (intrinsicW <= 0) intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(childElement, context.TextMeasurer);
                             if (intrinsicH <= 0) intrinsicH = ReplacedElementLayout.GetFormControlIntrinsicHeight(childElement);
                         }
                         if (childElement.TagName == "math" && (intrinsicW <= 0 || intrinsicH <= 0))
@@ -434,6 +436,8 @@ namespace Rend.Layout.Internal
                             var contain = childStyle.Contain;
                             if (contain == CssContain.Size || contain == CssContain.Strict)
                                 contentHeight = 0;
+                            else if (childStyle.Display == CssDisplay.Table && childBox.ContentRect.Height > 0)
+                                contentHeight = childBox.ContentRect.Height;
                             else
                                 contentHeight = CalculateAutoHeight(childBox);
 
@@ -446,6 +450,7 @@ namespace Rend.Layout.Internal
                                 contentHeight = minH;
                         }
                     }
+
 
                     // For auto-width tables, LayoutChildren (TableLayout) may shrink-wrap
                     // the content rect. Preserve that width instead of overwriting.
@@ -654,6 +659,45 @@ namespace Rend.Layout.Internal
             }
 
             return bottom - box.ContentRect.Y;
+        }
+
+        /// <summary>
+        /// Creates an anonymous block box for a text node in a block formatting context
+        /// with mixed block/inline content. Runs InlineFormattingContext to produce proper
+        /// line boxes that get painted correctly.
+        /// </summary>
+        private static LayoutBox CreateAnonymousBlockForText(StyledText textNode, StyledElement parentStyled,
+            LayoutBox parent, float cursorY, float containingWidth, LayoutContext context)
+        {
+            // Clone style with display:block to prevent recursion if parent has display:flex/grid
+            var blockStyle = CloneStyleAsBlock(parentStyled.Style);
+            var doc = parentStyled.Element.OwnerDocument;
+            var anonElement = doc!.CreateElement("div");
+            var anonChildren = new List<StyledNode> { new StyledText(textNode.Text, blockStyle) };
+            var anonStyled = new StyledElement(anonElement, blockStyle, anonChildren);
+
+            var box = new LayoutBox(anonStyled, BoxType.Block);
+            box.ContentRect = new RectF(parent.ContentRect.X, cursorY, containingWidth, 0);
+
+            InlineFormattingContext.Layout(box, context);
+
+            // Calculate auto height from line boxes
+            float height = CalculateAutoHeight(box);
+            box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y, box.ContentRect.Width, height);
+
+            return box;
+        }
+
+        /// <summary>
+        /// Clone a computed style but override display to block.
+        /// Prevents issues when anonymous text wrappers inherit non-block display.
+        /// </summary>
+        private static ComputedStyle CloneStyleAsBlock(ComputedStyle source)
+        {
+            var values = (PropertyValue[])source.GetValues().Clone();
+            values[PropertyId.Display] = PropertyValue.FromInt((int)CssDisplay.Block);
+            var refValues = (object?[])source.GetRefValues().Clone();
+            return new ComputedStyle(values, refValues);
         }
 
         private static LayoutBox CreateInlineBox(StyledText textNode, LayoutContext context, float containingWidth, float cursorY, bool vertical = false)

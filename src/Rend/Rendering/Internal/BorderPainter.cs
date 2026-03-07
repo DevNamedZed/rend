@@ -80,10 +80,10 @@ namespace Rend.Rendering.Internal
                 float halfLeft = leftW / 2f;
                 float halfRight = rightW / 2f;
 
-                outerLeft = (float)Math.Round(gridLeft - halfLeft);
-                outerTop = (float)Math.Round(gridTop - halfTop);
-                outerRight = (float)Math.Round(gridRight + halfRight);
-                outerBottom = (float)Math.Round(gridBottom + halfBottom);
+                outerLeft = (float)Math.Round(gridLeft - halfLeft, MidpointRounding.AwayFromZero);
+                outerTop = (float)Math.Round(gridTop - halfTop, MidpointRounding.AwayFromZero);
+                outerRight = (float)Math.Round(gridRight + halfRight, MidpointRounding.AwayFromZero);
+                outerBottom = (float)Math.Round(gridBottom + halfBottom, MidpointRounding.AwayFromZero);
 
                 if (_debugCollapse)
                     Console.Error.WriteLine($"[BORDER] grid=({gridLeft:F2},{gridTop:F2})-({gridRight:F2},{gridBottom:F2}) outer=({outerLeft:F1},{outerTop:F1})-({outerRight:F1},{outerBottom:F1}) widths=L{leftW} T{topW} R{rightW} B{bottomW}");
@@ -99,6 +99,7 @@ namespace Rend.Rendering.Internal
             CssColor rightColor = box.CollapsedBorderRightColor ?? style.BorderRightColor;
             CssColor bottomColor = box.CollapsedBorderBottomColor ?? style.BorderBottomColor;
             CssColor leftColor = box.CollapsedBorderLeftColor ?? style.BorderLeftColor;
+
 
             // Chrome draws rectangular borders as rectangles (not trapezoids):
             // Top/bottom span full width (owning the corners), left/right fill between them.
@@ -304,9 +305,9 @@ namespace Rend.Rendering.Internal
             float maxNumDashes = minNumDashes + 1;
             float minNumGaps = minNumDashes - 1;
             float maxNumGaps = maxNumDashes - 1;
-            if (minNumGaps <= 0) return gapLength;
+            if (minNumGaps <= 0 || maxNumGaps <= 0) return gapLength;
             float minGap = (strokeLength - minNumDashes * dashLength) / minNumGaps;
-            float maxGap = maxNumGaps > 0 ? (strokeLength - maxNumDashes * dashLength) / maxNumGaps : -1;
+            float maxGap = (strokeLength - maxNumDashes * dashLength) / maxNumGaps;
             return (maxGap <= 0) || (Math.Abs(minGap - gapLength) < Math.Abs(maxGap - gapLength))
                 ? minGap
                 : maxGap;
@@ -479,7 +480,7 @@ namespace Rend.Rendering.Internal
             float r = c.R / 255f, g = c.G / 255f, b = c.B / 255f;
             float v = Math.Max(r, Math.Max(g, b));
             if (v == 0f)
-                return new CssColor(64, 64, 64, c.A); // 0.25 * 256 ≈ 64
+                return c; // Black can't be darkened further
             float multiplier = Math.Max(0f, (v - 0.33f) / v);
             const float scale = 255.998f; // nextafterf(256.0f, 0.0f)
             return new CssColor(
@@ -495,13 +496,18 @@ namespace Rend.Rendering.Internal
             float r = c.R / 255f, g = c.G / 255f, b = c.B / 255f;
             float v = Math.Max(r, Math.Max(g, b));
             if (v == 0f)
-                return new CssColor(64, 64, 64, c.A);
+            {
+                // Black can't be lightened by multiplying; use 0.33 absolute
+                const float scale = 255.998f;
+                byte gray = (byte)(0.33f * scale); // 84
+                return new CssColor(gray, gray, gray, c.A);
+            }
             float multiplier = Math.Min(1f, (v + 0.33f) / v);
-            const float scale = 255.998f;
+            const float scale2 = 255.998f;
             return new CssColor(
-                (byte)(r * multiplier * scale),
-                (byte)(g * multiplier * scale),
-                (byte)(b * multiplier * scale),
+                (byte)(r * multiplier * scale2),
+                (byte)(g * multiplier * scale2),
+                (byte)(b * multiplier * scale2),
                 c.A);
         }
 

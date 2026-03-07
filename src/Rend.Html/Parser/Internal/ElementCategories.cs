@@ -234,6 +234,10 @@ namespace Rend.Html.Parser.Internal
         /// </summary>
         public static bool ClosesImpliedParagraph(string tag)
         {
+            // Note: <hr> is intentionally excluded here — it has its own handler
+            // in HtmlTreeBuilder.HandleInBodyStartTag that closes <p> and pops itself
+            // as a void element. Including it here would short-circuit to the generic
+            // block handler which leaves hr on the open elements stack.
             return ReferenceEquals(tag, _address) || ReferenceEquals(tag, _article) ||
                    ReferenceEquals(tag, _aside) || ReferenceEquals(tag, _blockquote) ||
                    ReferenceEquals(tag, _center) || ReferenceEquals(tag, _details) ||
@@ -242,7 +246,7 @@ namespace Rend.Html.Parser.Internal
                    ReferenceEquals(tag, _fieldset) || ReferenceEquals(tag, _figcaption) ||
                    ReferenceEquals(tag, _figure) || ReferenceEquals(tag, _footer) ||
                    ReferenceEquals(tag, _form) || ReferenceEquals(tag, _header) ||
-                   ReferenceEquals(tag, _hgroup) || ReferenceEquals(tag, _hr) ||
+                   ReferenceEquals(tag, _hgroup) ||
                    IsHeadingElement(tag) || ReferenceEquals(tag, _li) ||
                    ReferenceEquals(tag, _listing) || ReferenceEquals(tag, _main) ||
                    ReferenceEquals(tag, _menu) || ReferenceEquals(tag, _nav) ||

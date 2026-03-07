@@ -43,7 +43,32 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < children.Count; i++)
             {
                 var child = children[i];
-                if (child.IsText) continue;
+                if (child.IsText)
+                {
+                    // CSS Grid §4: Text directly inside a grid container is wrapped in
+                    // an anonymous grid item. Whitespace-only text is not rendered.
+                    var textNode = (StyledText)child;
+                    if (string.IsNullOrWhiteSpace(textNode.Text)) continue;
+
+                    var blockStyle = CloneStyleAsBlock(styledElement.Style);
+                    var doc = styledElement.Element.OwnerDocument;
+                    var anonElement = doc!.CreateElement("div");
+                    var anonChildren = new List<StyledNode> { new StyledText(textNode.Text, blockStyle) };
+                    var anonStyled = new StyledElement(anonElement, blockStyle, anonChildren);
+
+                    var textBox = new LayoutBox(anonStyled, BoxType.Block);
+                    textBox.ContentRect = new RectF(0, 0, parent.ContentRect.Width, 0);
+                    InlineFormattingContext.Layout(textBox, context);
+                    float textHeight = 0;
+                    if (textBox.LineBoxes != null && textBox.LineBoxes.Count > 0)
+                    {
+                        var lastLine = textBox.LineBoxes[textBox.LineBoxes.Count - 1];
+                        textHeight = lastLine.Y + lastLine.Height - textBox.ContentRect.Y;
+                    }
+                    textBox.ContentRect = new RectF(0, 0, parent.ContentRect.Width, textHeight);
+                    items.Add(new GridItem { Box = textBox });
+                    continue;
+                }
 
                 if (child is StyledPseudoElement pseudo)
                 {
@@ -430,12 +455,46 @@ namespace Rend.Layout.Internal
                         intrinsicWidths[item.ColStart] = measured;
                 }
 
-                // Replace sentinels with measured widths
+                // Replace intrinsic sentinels with measured widths
                 for (int c = 0; c < finalCols; c++)
                 {
-                    if (colWidths[c] < 0)
+                    if (colWidths[c] >= -2.5f && colWidths[c] < 0)
                     {
                         colWidths[c] = intrinsicWidths[c];
+                    }
+                }
+            }
+
+            // Resolve deferred fr tracks now that intrinsic sizes are known.
+            // Fr sentinels are encoded as -(1000 + frValue).
+            {
+                float totalFr = 0;
+                float totalNonFr = 0;
+                bool hasFrSentinel = false;
+                for (int c = 0; c < finalCols; c++)
+                {
+                    if (colWidths[c] <= -999f)
+                    {
+                        totalFr += -(colWidths[c] + 1000f);
+                        hasFrSentinel = true;
+                    }
+                    else
+                    {
+                        totalNonFr += colWidths[c];
+                    }
+                }
+                if (hasFrSentinel && totalFr > 0)
+                {
+                    float gapSpace = finalCols > 1 ? (finalCols - 1) * colGap : 0;
+                    float remaining = Math.Max(0, containerWidth - totalNonFr - gapSpace);
+                    float frSize = remaining / totalFr;
+                    for (int c = 0; c < finalCols; c++)
+                    {
+                        if (colWidths[c] <= -999f)
+                        {
+                            float frVal = -(colWidths[c] + 1000f);
+                            colWidths[c] = frVal * frSize;
+                        }
                     }
                 }
             }
@@ -1081,6 +1140,7 @@ namespace Rend.Layout.Internal
             var minFloors = new float[flatValues.Count];
             float totalFixed = 0;
             float totalFr = 0;
+            bool hasIntrinsic = false;
 
             for (int i = 0; i < flatValues.Count; i++)
             {
@@ -1088,7 +1148,10 @@ namespace Rend.Layout.Internal
                 sizes.Add(parsed);
                 minFloors[i] = GetMinmaxFloor(flatValues[i], containerSize);
                 if (parsed.value < 0)
+                {
+                    hasIntrinsic = true;
                     continue; // intrinsic sentinel — don't count toward fixed or fr
+                }
                 if (parsed.isFr)
                     totalFr += parsed.value;
                 else
@@ -1109,11 +1172,27 @@ namespace Rend.Layout.Internal
                     tracks[i] = sizes[i].value;
                     continue;
                 }
-                float resolved = sizes[i].isFr ? sizes[i].value * frSize : sizes[i].value;
-                // Enforce minmax() minimum constraint
-                if (minFloors[i] > 0 && resolved < minFloors[i])
-                    resolved = minFloors[i];
-                tracks[i] = resolved;
+                if (sizes[i].isFr)
+                {
+                    if (hasIntrinsic)
+                    {
+                        // Defer fr resolution: encode as sentinel -(1000 + frValue)
+                        // Will be resolved after intrinsic tracks are measured
+                        tracks[i] = -(1000f + sizes[i].value);
+                        continue;
+                    }
+                    float resolved = sizes[i].value * frSize;
+                    if (minFloors[i] > 0 && resolved < minFloors[i])
+                        resolved = minFloors[i];
+                    tracks[i] = resolved;
+                }
+                else
+                {
+                    float resolved = sizes[i].value;
+                    if (minFloors[i] > 0 && resolved < minFloors[i])
+                        resolved = minFloors[i];
+                    tracks[i] = resolved;
+                }
             }
 
             return tracks;
@@ -1382,6 +1461,14 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < count; i++)
                 tracks[i] = parentTracks[start + i];
             return tracks;
+        }
+
+        private static ComputedStyle CloneStyleAsBlock(ComputedStyle source)
+        {
+            var values = (PropertyValue[])source.GetValues().Clone();
+            values[PropertyId.Display] = PropertyValue.FromInt((int)CssDisplay.Block);
+            var refValues = (object?[])source.GetRefValues().Clone();
+            return new ComputedStyle(values, refValues);
         }
 
         private sealed class GridItem

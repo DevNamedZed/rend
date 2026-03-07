@@ -250,6 +250,7 @@ class Program
                     result.DiffImagePath = diffPath;
                 }
 
+
                 // Determine outcome: strict pixel match only
                 if (diffPercent <= testCase.Tolerance)
                 {
