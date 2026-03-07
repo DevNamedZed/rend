@@ -87,7 +87,13 @@ namespace Rend.Layout.Internal
                 // Approximate marker width: bullet + gap
                 float markerReserve;
                 var lstType = styledElement.Style.ListStyleType;
-                if (lstType == CssListStyleType.Disc || lstType == CssListStyleType.Circle ||
+                bool isSummary = styledElement.TagName == "summary";
+                if (isSummary)
+                {
+                    // Disclosure triangle is ~0.5em wide + small gap
+                    markerReserve = styledElement.Style.FontSize * 0.5f + 4f;
+                }
+                else if (lstType == CssListStyleType.Disc || lstType == CssListStyleType.Circle ||
                     lstType == CssListStyleType.Square)
                 {
                     float bulletDiameter = styledElement.Style.FontSize * 0.3f;
@@ -851,7 +857,7 @@ namespace Rend.Layout.Internal
                     WrapText(text, fontDesc, fontSize, context, ref cursorX, ref cursorY, ref startX,
                              ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
                              lineHeight, ascent, parent, inlineAncestor, style.LetterSpacing, style.WordSpacing,
-                             style.WordBreak, style.OverflowWrap, style.Hyphens);
+                             style.WordBreak, style.OverflowWrap, style.Hyphens, style.WhiteSpace);
                 }
             }
             else
@@ -904,7 +910,8 @@ namespace Rend.Layout.Internal
             StyledElement? inlineAncestor = null, float letterSpacing = 0f, float wordSpacing = 0f,
             CssWordBreak wordBreak = CssWordBreak.Normal,
             CssOverflowWrap overflowWrap = CssOverflowWrap.Normal,
-            CssHyphens hyphens = CssHyphens.Manual)
+            CssHyphens hyphens = CssHyphens.Manual,
+            CssWhiteSpace whiteSpace = CssWhiteSpace.Normal)
         {
             // For break-all, every character boundary is a break opportunity
             if (wordBreak == CssWordBreak.BreakAll)
@@ -966,8 +973,21 @@ namespace Rend.Layout.Internal
                         if (hasSoftHyphens) lineCandidate = lineCandidate.Replace("\u00AD", string.Empty);
                         if (lineCandidate.Length > 0)
                         {
-                            var candShape = context.TextMeasurer!.Shape(lineCandidate, fontDesc, fontSize);
-                            candidateWidth = candShape.TotalWidth + CalculateSpacingExtraRaw(lineCandidate, letterSpacing, wordSpacing);
+                            // CSS Text Level 3 §4.1.3: In pre-wrap, trailing whitespace hangs
+                            // and does not contribute to the line width for wrapping decisions.
+                            string measureCandidate = lineCandidate;
+                            bool hangTrailingWs = whiteSpace == CssWhiteSpace.PreWrap;
+                            if (hangTrailingWs)
+                                measureCandidate = lineCandidate.TrimEnd(' ');
+                            if (measureCandidate.Length > 0)
+                            {
+                                var candShape = context.TextMeasurer!.Shape(measureCandidate, fontDesc, fontSize);
+                                candidateWidth = candShape.TotalWidth + CalculateSpacingExtraRaw(measureCandidate, letterSpacing, wordSpacing);
+                            }
+                            else
+                            {
+                                candidateWidth = 0; // all whitespace — hangs
+                            }
                         }
                         else
                         {
@@ -1032,8 +1052,18 @@ namespace Rend.Layout.Internal
                                 if (hasSoftHyphens) newLineCandidate = newLineCandidate.Replace("\u00AD", string.Empty);
                                 if (newLineCandidate.Length > 0)
                                 {
-                                    var nlShape = context.TextMeasurer!.Shape(newLineCandidate, fontDesc, fontSize);
-                                    candidateWidth = nlShape.TotalWidth + CalculateSpacingExtraRaw(newLineCandidate, letterSpacing, wordSpacing);
+                                    string nlMeasure = newLineCandidate;
+                                    if (whiteSpace == CssWhiteSpace.PreWrap)
+                                        nlMeasure = newLineCandidate.TrimEnd(' ');
+                                    if (nlMeasure.Length > 0)
+                                    {
+                                        var nlShape = context.TextMeasurer!.Shape(nlMeasure, fontDesc, fontSize);
+                                        candidateWidth = nlShape.TotalWidth + CalculateSpacingExtraRaw(nlMeasure, letterSpacing, wordSpacing);
+                                    }
+                                    else
+                                    {
+                                        candidateWidth = 0;
+                                    }
                                 }
                                 else
                                 {
@@ -1279,7 +1309,10 @@ namespace Rend.Layout.Internal
                 float leftEdge = floatCtx.GetLeftEdge(cursorY, 0);
                 float rightEdge = floatCtx.GetRightEdge(cursorY, 0);
                 startX = Math.Max(baseX, leftEdge);
-                containingWidth = rightEdge - startX;
+                // Clamp right edge to the parent's content area to avoid
+                // using the float context's wider containing block width.
+                float rightLimit = baseX + baseWidth;
+                containingWidth = Math.Min(rightEdge, rightLimit) - startX;
             }
 
             currentLine = new LineBox { X = startX, Y = cursorY, Width = containingWidth };
@@ -1420,7 +1453,10 @@ namespace Rend.Layout.Internal
                 var measureBox = new LayoutBox(element, BoxType.InlineBlock);
                 BoxModelCalculator.ApplyBoxModel(measureBox, element.Style, containingWidth);
                 measureBox.ContentRect = new RectF(0, 0, contentWidth, 0);
+                var prevFloatM = context.FloatContext;
+                context.FloatContext = null;
                 BlockFormattingContext.LayoutChildren(measureBox, context);
+                context.FloatContext = prevFloatM;
                 float measuredWidth = MeasureContentWidth(measureBox);
                 if (measuredWidth > 0 && measuredWidth < contentWidth)
                     contentWidth = measuredWidth;
@@ -1806,14 +1842,50 @@ namespace Rend.Layout.Internal
                     offset = freeSpace;
                     break;
                 case CssTextAlign.Justify:
-                    // Distribute space between fragments (only non-last lines)
-                    if (line.Fragments.Count > 1 && !line.IsLastLine)
+                    // Distribute space across word gaps (only non-last lines)
+                    if (!line.IsLastLine)
                     {
-                        float gap = freeSpace / (line.Fragments.Count - 1);
-                        for (int i = 1; i < line.Fragments.Count; i++)
+                        // Count total word gaps (spaces) across all text fragments
+                        int totalGaps = 0;
+                        for (int i = 0; i < line.Fragments.Count; i++)
                         {
-                            var frag = line.Fragments[i];
-                            frag.X += gap * i;
+                            var ft = line.Fragments[i].Text;
+                            if (ft != null)
+                            {
+                                for (int c = 0; c < ft.Length; c++)
+                                    if (ft[c] == ' ') totalGaps++;
+                            }
+                        }
+                        if (totalGaps > 0)
+                        {
+                            float extraPerGap = freeSpace / totalGaps;
+                            // Apply extra word spacing to each text fragment
+                            float cumulativeShift = 0;
+                            for (int i = 0; i < line.Fragments.Count; i++)
+                            {
+                                var frag = line.Fragments[i];
+                                frag.X += cumulativeShift;
+                                if (frag.Text != null)
+                                {
+                                    int gapsInFrag = 0;
+                                    for (int c = 0; c < frag.Text.Length; c++)
+                                        if (frag.Text[c] == ' ') gapsInFrag++;
+                                    if (gapsInFrag > 0)
+                                    {
+                                        frag.JustifyWordSpacing = extraPerGap;
+                                        float shift = gapsInFrag * extraPerGap;
+                                        frag.Width += shift;
+                                        cumulativeShift += shift;
+                                    }
+                                }
+                            }
+                        }
+                        else if (line.Fragments.Count > 1)
+                        {
+                            // No word gaps — distribute between fragments
+                            float gap = freeSpace / (line.Fragments.Count - 1);
+                            for (int i = 1; i < line.Fragments.Count; i++)
+                                line.Fragments[i].X += gap * i;
                         }
                     }
                     return;

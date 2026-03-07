@@ -321,8 +321,8 @@ namespace Rend.Rendering.Internal
             CssColor color = style.Color;
             float fontSize = style.FontSize;
 
-            // Triangle size: roughly 0.4em
-            float size = fontSize * 0.4f;
+            // Chrome's disclosure triangle is roughly 0.5em
+            float size = fontSize * 0.5f;
 
             // Compute pixel line height for vertical centering
             float rawLh = style.LineHeight;
@@ -332,14 +332,14 @@ namespace Rend.Rendering.Internal
             else pixelLineHeight = rawLh;
 
             float centerY = contentRect.Y + pixelLineHeight * 0.5f;
-            float centerX = contentRect.X + size * 0.5f + 2f;
+            float centerX = contentRect.X + size * 0.5f + 1f;
 
             var path = new PathData();
             if (isOpen)
             {
                 // Downward pointing triangle ▼
                 float halfW = size * 0.5f;
-                float halfH = size * 0.45f;
+                float halfH = size * 0.4f;
                 path.MoveTo(centerX - halfW, centerY - halfH);
                 path.LineTo(centerX + halfW, centerY - halfH);
                 path.LineTo(centerX, centerY + halfH);
@@ -348,7 +348,7 @@ namespace Rend.Rendering.Internal
             else
             {
                 // Right pointing triangle ▶
-                float halfW = size * 0.45f;
+                float halfW = size * 0.4f;
                 float halfH = size * 0.5f;
                 path.MoveTo(centerX - halfW, centerY - halfH);
                 path.LineTo(centerX + halfW, centerY);

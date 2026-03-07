@@ -30,11 +30,8 @@ namespace Rend.Rendering.Internal
             RectF originRect = ResolveBoxRect(box, (CssBackgroundClip)(int)style.BackgroundOrigin);
 
             // Border-radius for rounded backgrounds.
-            float tlr = style.BorderTopLeftRadius;
-            float trr = style.BorderTopRightRadius;
-            float brr = style.BorderBottomRightRadius;
-            float blr = style.BorderBottomLeftRadius;
-            bool hasRadius = tlr > 0f || trr > 0f || brr > 0f || blr > 0f;
+            var radii = BorderRadiusResolver.Resolve(style, box.BorderRect);
+            bool hasRadius = radii.HasRadius;
 
             // 1. Paint background-color (clipped to background-clip area).
             CssColor bgColor = style.BackgroundColor;
@@ -44,12 +41,13 @@ namespace Rend.Rendering.Internal
                 if (hasRadius)
                 {
                     var path = new PathData();
-                    path.AddRoundedRectangle(clipRect, tlr, trr, brr, blr);
+                    radii.AddToPath(path, clipRect);
                     target.FillPath(path, brush);
                 }
                 else
                 {
-                    target.FillRect(clipRect, brush);
+                    // Snap to integer pixel boundaries (Chrome's PixelSnappedIntRect)
+                    target.FillRect(clipRect.PixelSnap(), brush);
                 }
             }
 
@@ -66,7 +64,7 @@ namespace Rend.Rendering.Internal
                     if (hasRadius)
                     {
                         var path = new PathData();
-                        path.AddRoundedRectangle(clipRect, tlr, trr, brr, blr);
+                        radii.AddToPath(path, clipRect);
                         target.FillPath(path, gradBrush);
                     }
                     else
@@ -122,7 +120,7 @@ namespace Rend.Rendering.Internal
                 if (hasRadius)
                 {
                     var clipPath = new PathData();
-                    clipPath.AddRoundedRectangle(clipRect, tlr, trr, brr, blr);
+                    radii.AddToPath(clipPath, clipRect);
                     target.PushClipPath(clipPath);
                 }
                 else

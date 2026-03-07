@@ -102,6 +102,15 @@ namespace Rend.Layout
         /// layout half-widths; the painter should double them for rendering.
         /// </summary>
         internal bool CollapsedBorderCell { get; set; }
+
+        /// <summary>
+        /// Resolved collapsed border colors (CSS 2.1 §17.6.2 priority).
+        /// When set, the painter uses these instead of the cell's own border colors.
+        /// </summary>
+        internal CssColor? CollapsedBorderTopColor { get; set; }
+        internal CssColor? CollapsedBorderRightColor { get; set; }
+        internal CssColor? CollapsedBorderBottomColor { get; set; }
+        internal CssColor? CollapsedBorderLeftColor { get; set; }
     }
 
     /// <summary>

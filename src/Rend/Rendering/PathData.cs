@@ -160,6 +160,80 @@ namespace Rend.Rendering
         }
 
         /// <summary>
+        /// Add a rounded rectangle with elliptical corners (separate rx/ry per corner).
+        /// </summary>
+        public void AddRoundedRectangleElliptical(RectF rect,
+            float tlRx, float tlRy, float trRx, float trRy,
+            float brRx, float brRy, float blRx, float blRy)
+        {
+            const float kappa = 0.5522847498f;
+
+            float x = rect.X;
+            float y = rect.Y;
+            float w = rect.Width;
+            float h = rect.Height;
+
+            // CSS spec: if sum of adjacent radii exceeds dimension, scale them down proportionally
+            float scaleX = 1f, scaleY = 1f;
+            float topSum = tlRx + trRx;
+            float bottomSum = blRx + brRx;
+            float leftSum = tlRy + blRy;
+            float rightSum = trRy + brRy;
+            if (topSum > w) scaleX = Math.Min(scaleX, w / topSum);
+            if (bottomSum > w) scaleX = Math.Min(scaleX, w / bottomSum);
+            if (leftSum > h) scaleY = Math.Min(scaleY, h / leftSum);
+            if (rightSum > h) scaleY = Math.Min(scaleY, h / rightSum);
+            // Apply uniform scaling per axis
+            if (scaleX < 1f) { tlRx *= scaleX; trRx *= scaleX; blRx *= scaleX; brRx *= scaleX; }
+            if (scaleY < 1f) { tlRy *= scaleY; trRy *= scaleY; blRy *= scaleY; brRy *= scaleY; }
+
+            // Start at the top edge, after the top-left corner
+            MoveTo(x + tlRx, y);
+
+            // Top edge -> top-right corner
+            LineTo(x + w - trRx, y);
+            if (trRx > 0f || trRy > 0f)
+            {
+                CubicBezierTo(
+                    x + w - trRx + trRx * kappa, y,
+                    x + w, y + trRy - trRy * kappa,
+                    x + w, y + trRy);
+            }
+
+            // Right edge -> bottom-right corner
+            LineTo(x + w, y + h - brRy);
+            if (brRx > 0f || brRy > 0f)
+            {
+                CubicBezierTo(
+                    x + w, y + h - brRy + brRy * kappa,
+                    x + w - brRx + brRx * kappa, y + h,
+                    x + w - brRx, y + h);
+            }
+
+            // Bottom edge -> bottom-left corner
+            LineTo(x + blRx, y + h);
+            if (blRx > 0f || blRy > 0f)
+            {
+                CubicBezierTo(
+                    x + blRx - blRx * kappa, y + h,
+                    x, y + h - blRy + blRy * kappa,
+                    x, y + h - blRy);
+            }
+
+            // Left edge -> top-left corner
+            LineTo(x, y + tlRy);
+            if (tlRx > 0f || tlRy > 0f)
+            {
+                CubicBezierTo(
+                    x, y + tlRy - tlRy * kappa,
+                    x + tlRx - tlRx * kappa, y,
+                    x + tlRx, y);
+            }
+
+            Close();
+        }
+
+        /// <summary>
         /// Returns the segments as a read-only list.
         /// </summary>
         /// <returns>A read-only view of the path segments.</returns>

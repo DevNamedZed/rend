@@ -328,45 +328,87 @@ namespace Rend.Css.Parser.Internal
         private static bool ExpandBorderRadius(CssValue value, bool important, List<CssDeclaration> output)
         {
             // border-radius: TL TR BR BL [/ TL TR BR BL]
-            // For v1: ignore the '/' separator (elliptical radii), just expand the first part
             var parts = GetListValues(value);
 
-            // Filter out '/' separator
+            // Split on '/' separator into horizontal and vertical parts
             var horizontal = new List<CssValue>();
+            var vertical = new List<CssValue>();
+            bool foundSlash = false;
             foreach (var p in parts)
             {
-                if (p is CssKeywordValue kw && kw.Keyword == "/") break;
-                horizontal.Add(p);
+                if (p is CssKeywordValue kw && kw.Keyword == "/")
+                {
+                    foundSlash = true;
+                    continue;
+                }
+                if (foundSlash)
+                    vertical.Add(p);
+                else
+                    horizontal.Add(p);
             }
 
+            var hValues = ExpandRadiusValues(horizontal);
+            CssValue[] vValues;
+            if (foundSlash && vertical.Count > 0)
+                vValues = ExpandRadiusValues(vertical);
+            else
+                vValues = hValues; // No vertical part — same as horizontal
+
+            // Emit each corner. When h != v, emit a space-separated pair.
+            string[] props = { "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius" };
+            for (int i = 0; i < 4; i++)
+            {
+                CssValue cornerValue;
+                if (ReferenceEquals(hValues[i], vValues[i]) || CssValueEqual(hValues[i], vValues[i]))
+                {
+                    cornerValue = hValues[i];
+                }
+                else
+                {
+                    // Space-separated pair: horizontal vertical
+                    cornerValue = new CssListValue(new List<CssValue> { hValues[i], vValues[i] }, ' ');
+                }
+                output.Add(new CssDeclaration(props[i], cornerValue, important));
+            }
+            return true;
+        }
+
+        private static CssValue[] ExpandRadiusValues(List<CssValue> values)
+        {
             CssValue tl, tr, br, bl;
-            switch (horizontal.Count)
+            switch (values.Count)
             {
                 case 1:
-                    tl = tr = br = bl = horizontal[0];
+                    tl = tr = br = bl = values[0];
                     break;
                 case 2:
-                    tl = br = horizontal[0];
-                    tr = bl = horizontal[1];
+                    tl = br = values[0];
+                    tr = bl = values[1];
                     break;
                 case 3:
-                    tl = horizontal[0];
-                    tr = bl = horizontal[1];
-                    br = horizontal[2];
+                    tl = values[0];
+                    tr = bl = values[1];
+                    br = values[2];
                     break;
                 default:
-                    tl = horizontal[0];
-                    tr = horizontal.Count > 1 ? horizontal[1] : horizontal[0];
-                    br = horizontal.Count > 2 ? horizontal[2] : horizontal[0];
-                    bl = horizontal.Count > 3 ? horizontal[3] : horizontal.Count > 1 ? horizontal[1] : horizontal[0];
+                    tl = values[0];
+                    tr = values.Count > 1 ? values[1] : values[0];
+                    br = values.Count > 2 ? values[2] : values[0];
+                    bl = values.Count > 3 ? values[3] : values.Count > 1 ? values[1] : values[0];
                     break;
             }
+            return new[] { tl, tr, br, bl };
+        }
 
-            output.Add(new CssDeclaration("border-top-left-radius", tl, important));
-            output.Add(new CssDeclaration("border-top-right-radius", tr, important));
-            output.Add(new CssDeclaration("border-bottom-right-radius", br, important));
-            output.Add(new CssDeclaration("border-bottom-left-radius", bl, important));
-            return true;
+        private static bool CssValueEqual(CssValue a, CssValue b)
+        {
+            if (a is CssDimensionValue da && b is CssDimensionValue db)
+                return da.Value == db.Value && da.Unit == db.Unit;
+            if (a is CssNumberValue na && b is CssNumberValue nb)
+                return na.Value == nb.Value;
+            if (a is CssPercentageValue pa && b is CssPercentageValue pb)
+                return pa.Value == pb.Value;
+            return false;
         }
 
         #endregion

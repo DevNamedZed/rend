@@ -470,12 +470,8 @@ namespace Rend.Layout.Internal
                     {
                         for (int li = 0; li < cellBox.LineBoxes.Count; li++)
                         {
-                            if (_debugTable && li == 0 && ci == 0)
-                                Console.WriteLine($"[TABLE] Cell r={r} c=0: lineBox.X={cellBox.LineBoxes[li].X:F2} lineBox.Y={cellBox.LineBoxes[li].Y:F2} dx={dx:F2} dy={dy:F2}");
                             cellBox.LineBoxes[li].X += dx;
                             cellBox.LineBoxes[li].Y += dy;
-                            if (_debugTable && li == 0 && ci == 0)
-                                Console.WriteLine($"[TABLE] After offset: lineBox.X={cellBox.LineBoxes[li].X:F2} lineBox.Y={cellBox.LineBoxes[li].Y:F2}");
                         }
                     }
 
@@ -606,6 +602,56 @@ namespace Rend.Layout.Internal
                     // Each cell gets half the collapsed border for layout purposes
                     top.BorderBottomWidth = collapsedWidth / 2f;
                     bottom.BorderTopWidth = collapsedWidth / 2f;
+                }
+            }
+
+            // Resolve winning colors for internal shared edges (CSS 2.1 §17.6.2).
+            // For vertical edges (between columns): left cell wins ties.
+            // For horizontal edges (between rows): top cell wins ties.
+            for (int r = 0; r < numRows; r++)
+            {
+                for (int c = 0; c < numCols - 1; c++)
+                {
+                    var left = cellGrid[r, c];
+                    var right = cellGrid[r, c + 1];
+                    if (left == null || right == null) continue;
+                    if (ReferenceEquals(left, right)) continue;
+
+                    var leftStyle = left.StyledNode?.Style;
+                    var rightStyle = right.StyledNode?.Style;
+                    if (leftStyle == null || rightStyle == null) continue;
+
+                    // Left cell wins ties (per CSS 2.1 §17.6.2 position rule)
+                    bool leftWins = BorderWins(
+                        left.BorderRightWidth * 2f, leftStyle.BorderRightStyle,
+                        right.BorderLeftWidth * 2f, rightStyle.BorderLeftStyle);
+
+                    CssColor winColor = leftWins ? leftStyle.BorderRightColor : rightStyle.BorderLeftColor;
+                    left.CollapsedBorderRightColor = winColor;
+                    right.CollapsedBorderLeftColor = winColor;
+                }
+            }
+            for (int r = 0; r < numRows - 1; r++)
+            {
+                for (int c = 0; c < numCols; c++)
+                {
+                    var top = cellGrid[r, c];
+                    var bottom = cellGrid[r + 1, c];
+                    if (top == null || bottom == null) continue;
+                    if (ReferenceEquals(top, bottom)) continue;
+
+                    var topStyle = top.StyledNode?.Style;
+                    var bottomStyle = bottom.StyledNode?.Style;
+                    if (topStyle == null || bottomStyle == null) continue;
+
+                    // Top cell wins ties (per CSS 2.1 §17.6.2 position rule)
+                    bool topWins = BorderWins(
+                        top.BorderBottomWidth * 2f, topStyle.BorderBottomStyle,
+                        bottom.BorderTopWidth * 2f, bottomStyle.BorderTopStyle);
+
+                    CssColor winColor = topWins ? topStyle.BorderBottomColor : bottomStyle.BorderTopColor;
+                    top.CollapsedBorderBottomColor = winColor;
+                    bottom.CollapsedBorderTopColor = winColor;
                 }
             }
 
@@ -911,7 +957,14 @@ namespace Rend.Layout.Internal
             float[] minWidths = new float[numCols];
             float[] maxWidths = new float[numCols];
 
-            // Measure each cell's min-content and max-content width
+            // Chrome two-pass approach (table_layout_utils.cc):
+            // Pass 1: Process colspan==1 cells to establish base column widths
+            // Pass 2: Distribute colspan>1 excess proportionally
+
+            // Collect colspan cells for pass 2
+            var colspanCells = new List<(int col, int span, float minW, float maxW)>();
+
+            // Pass 1: Single-column cells only
             for (int r = 0; r < ctx.Rows.Count; r++)
             {
                 int col = 0;
@@ -933,10 +986,7 @@ namespace Rend.Layout.Internal
 
                     // Measure min-content width (very narrow container)
                     float minW = MeasureCellWidth(cell.StyledElement, 1f, context, collapsed);
-                    // Measure max-content width — use containerWidth as upper bound
-                    // to prevent percentage-width children from inflating.
-                    // CSS Sizing L3: percentage widths behave as auto for intrinsic sizing,
-                    // so capping at containerWidth approximates this behavior.
+                    // Measure max-content width
                     float maxMeasureWidth = Math.Min(10000f, containerWidth > 0 ? containerWidth : 10000f);
                     float maxW = MeasureCellWidth(cell.StyledElement, maxMeasureWidth, context, collapsed);
 
@@ -947,16 +997,62 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
-                        // Distribute spanned widths equally for now
-                        float perCol = minW / cell.ColSpan;
-                        float perColMax = maxW / cell.ColSpan;
-                        for (int s = 0; s < cell.ColSpan && col + s < numCols; s++)
-                        {
-                            if (perCol > minWidths[col + s]) minWidths[col + s] = perCol;
-                            if (perColMax > maxWidths[col + s]) maxWidths[col + s] = perColMax;
-                        }
+                        // Defer colspan cells to pass 2
+                        colspanCells.Add((col, cell.ColSpan, minW, maxW));
                     }
                     col += cell.ColSpan;
+                }
+            }
+
+            // Pass 2: Distribute colspan cells' excess across spanned columns
+            // Chrome (DistributeColspanCellToColumnsAuto): distributes excess
+            // proportionally to each column's growth capacity (max - min).
+            // Sort by span count (shorter spans first, matching Chrome).
+            colspanCells.Sort((a, b) => a.span.CompareTo(b.span));
+            foreach (var (startCol, span, cellMinW, cellMaxW) in colspanCells)
+            {
+                int endCol = Math.Min(startCol + span, numCols);
+                int actualSpan = endCol - startCol;
+
+                // Sum current min/max of spanned columns
+                float sumMin = 0, sumMax = 0;
+                for (int s = startCol; s < endCol; s++)
+                {
+                    sumMin += minWidths[s];
+                    sumMax += maxWidths[s];
+                }
+
+                // Distribute min excess
+                float excessMin = cellMinW - sumMin;
+                if (excessMin > 0)
+                {
+                    // Distribute proportionally to current max (or equally if all zero)
+                    float totalBase = 0;
+                    for (int s = startCol; s < endCol; s++)
+                        totalBase += maxWidths[s];
+                    for (int s = startCol; s < endCol; s++)
+                    {
+                        float delta = totalBase > 0
+                            ? excessMin * (maxWidths[s] / totalBase)
+                            : excessMin / actualSpan;
+                        minWidths[s] += delta;
+                    }
+                }
+
+                // Distribute max excess
+                float excessMax = cellMaxW - sumMax;
+                if (excessMax > 0)
+                {
+                    float totalBase = 0;
+                    for (int s = startCol; s < endCol; s++)
+                        totalBase += maxWidths[s];
+                    for (int s = startCol; s < endCol; s++)
+                    {
+                        float delta = totalBase > 0
+                            ? excessMax * (maxWidths[s] / totalBase)
+                            : excessMax / actualSpan;
+                        maxWidths[s] += delta;
+                    }
                 }
             }
 

@@ -23,6 +23,12 @@ namespace Rend.Css.Resolution.Internal
             switch (prop.ValueType)
             {
                 case PropertyValueType.Length:
+                    // Border-radius pair: "horizontal vertical" as space-separated list
+                    if (IsBorderRadiusProperty(prop.Id) && value is CssListValue brPair
+                        && brPair.Separator == ' ' && brPair.Values.Count == 2)
+                    {
+                        return TryResolveBorderRadiusPair(brPair, prop.Id, ctx, out result, out refResult);
+                    }
                     // For percentage properties that resolve against the containing block
                     // (not the viewport), defer resolution to layout time by encoding as
                     // a negative fraction (e.g., 50% → -0.5). The layout engine resolves
@@ -89,7 +95,61 @@ namespace Rend.Css.Resolution.Internal
             if (id == PropertyId.MarginTop || id == PropertyId.MarginRight
                 || id == PropertyId.MarginBottom || id == PropertyId.MarginLeft)
                 return true;
+            // Border-radius: percentages resolve against the element's own border-box dimensions
+            // (horizontal radius % → width, vertical radius % → height)
+            if (id == PropertyId.BorderTopLeftRadius || id == PropertyId.BorderTopRightRadius
+                || id == PropertyId.BorderBottomRightRadius || id == PropertyId.BorderBottomLeftRadius)
+                return true;
             return false;
+        }
+
+        private static bool IsBorderRadiusProperty(int id)
+        {
+            return id == PropertyId.BorderTopLeftRadius || id == PropertyId.BorderTopRightRadius
+                || id == PropertyId.BorderBottomRightRadius || id == PropertyId.BorderBottomLeftRadius;
+        }
+
+        /// <summary>
+        /// Resolves a border-radius pair value (horizontal vertical).
+        /// Stores the horizontal radius in the float slot and the vertical radius in refResult.
+        /// Percentages are deferred as negative fractions.
+        /// </summary>
+        private static bool TryResolveBorderRadiusPair(CssListValue pair, int propId,
+            CssResolutionContext ctx, out PropertyValue result, out object? refResult)
+        {
+            result = default;
+            refResult = null;
+
+            float hValue = ResolveSingleRadiusValue(pair.Values[0], ctx);
+            float vValue = ResolveSingleRadiusValue(pair.Values[1], ctx);
+
+            result = PropertyValue.FromLength(hValue);
+            // Store vertical radius as a boxed float in refResult
+            refResult = vValue;
+            return true;
+        }
+
+        private static float ResolveSingleRadiusValue(CssValue value, CssResolutionContext ctx)
+        {
+            if (value is CssPercentageValue pct)
+            {
+                // Deferred percentage as negative fraction
+                return -pct.Value / 100f;
+            }
+            if (value is CssDimensionValue dim)
+            {
+                var unit = MapUnit(dim.Unit);
+                if (unit != CssLengthUnit.None)
+                {
+                    return new CssLength(dim.Value, unit).ToPx(ctx);
+                }
+                return dim.Value;
+            }
+            if (value is CssNumberValue num && num.Value == 0)
+            {
+                return 0f;
+            }
+            return 0f;
         }
 
         private static bool TryResolveLength(CssValue value, CssResolutionContext ctx, out PropertyValue result)

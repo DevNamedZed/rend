@@ -13,7 +13,7 @@ namespace Rend.Rendering.Internal
     /// </summary>
     internal static class TextPainter
     {
-        internal static bool _debugText = false;
+        internal static bool _debugText; // set true for debug logging
         /// <summary>
         /// Paints a single line fragment onto the render target.
         /// </summary>
@@ -35,10 +35,7 @@ namespace Rend.Rendering.Internal
             }
 
             float drawX = lineX + fragment.X;
-            float rawY = lineY + fragment.Y + fragment.Baseline;
-            float drawY = (float)Math.Floor(rawY);
-            if (_debugText && fragment.Text != null && fragment.Text.Length > 0)
-                Console.WriteLine($"[TEXT] \"{fragment.Text.Substring(0, Math.Min(20, fragment.Text.Length))}\" drawX={drawX:F2} drawY={drawY} lineX={lineX:F2} lineY={lineY:F4} fragX={fragment.X:F2} fragY={fragment.Y:F4} baseline={fragment.Baseline:F4} rawY={rawY:F4}");
+            float drawY = (float)Math.Floor(lineY + fragment.Y + fragment.Baseline);
 
             // Paint text shadows before main text.
             TextShadowPainter.Paint(fragment, drawX, drawY, target, style);
@@ -49,7 +46,7 @@ namespace Rend.Rendering.Internal
             CssFontStyle fontStyle = style.FontStyle;
             float fontWeight = style.FontWeight;
             float letterSpacing = style.LetterSpacing;
-            float wordSpacing = style.WordSpacing;
+            float wordSpacing = style.WordSpacing + fragment.JustifyWordSpacing;
 
             if (fragment.ShapedRun != null)
             {
@@ -185,7 +182,7 @@ namespace Rend.Rendering.Internal
             CssFontStyle fontStyle = style.FontStyle;
             float fontWeight = style.FontWeight;
             float letterSpacing = style.LetterSpacing;
-            float wordSpacing = style.WordSpacing;
+            float wordSpacing = style.WordSpacing + fragment.JustifyWordSpacing;
 
             if (fragment.ShapedRun != null)
             {

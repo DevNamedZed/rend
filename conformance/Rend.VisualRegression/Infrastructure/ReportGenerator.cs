@@ -93,11 +93,11 @@ namespace Rend.VisualRegression.Infrastructure
             sb.AppendLine("  <div class=\"category-dropdown\" id=\"category-dropdown\">");
             foreach (var cat in categories.OrderBy(c => c.Name))
             {
-                sb.AppendLine($"    <div class=\"category-option\" data-category=\"{Escape(cat.Name.ToLower())}\">{Escape(cat.Name)} <span class=\"cat-count\">{cat.Passed}/{cat.Total}</span></div>");
+                sb.AppendLine($"    <div class=\"category-option\" data-category=\"{Escape(cat.Name.ToLower())}\" data-display=\"{Escape(cat.Name)}\">{Escape(cat.Name)} <span class=\"cat-count\">{cat.Passed}/{cat.Total}</span></div>");
             }
             sb.AppendLine("  </div>");
             sb.AppendLine("</div>");
-            sb.AppendLine($"<div class=\"stats\">avg {avgDiff:F2}% &middot; median {medianDiff:F2}% &middot; max {maxDiff:F2}%</div>");
+            sb.AppendLine($"<div class=\"stats\" id=\"stats-display\">avg {avgDiff:F2}% &middot; median {medianDiff:F2}% &middot; max {maxDiff:F2}%</div>");
             sb.AppendLine("</div>");
             sb.AppendLine("</header>");
 
@@ -757,6 +757,7 @@ var selectedCategories = [];
 function applyFilters() {
     var search = document.getElementById('search-input').value.toLowerCase();
     var visible = 0;
+    var diffs = [];
     document.querySelectorAll('.result-row').forEach(function(row) {
         var status = row.getAttribute('data-status');
         var name = row.getAttribute('data-sort-name');
@@ -767,12 +768,27 @@ function applyFilters() {
         if (matchFilter && matchSearch && matchCategory) {
             row.classList.remove('hidden');
             visible++;
+            var d = parseFloat(row.getAttribute('data-sort-diff'));
+            if (!isNaN(d)) diffs.push(d);
         } else {
             row.classList.add('hidden');
         }
     });
     updateRowCount(visible);
+    updateFilteredStats(diffs);
     renumberRows();
+}
+
+function updateFilteredStats(diffs) {
+    var el = document.getElementById('stats-display');
+    if (!diffs.length) { el.textContent = ''; return; }
+    var sum = 0; for (var i = 0; i < diffs.length; i++) sum += diffs[i];
+    var avg = sum / diffs.length;
+    var max = Math.max.apply(null, diffs);
+    diffs.sort(function(a,b) { return a - b; });
+    var median = diffs[Math.floor(diffs.length / 2)];
+    var passed = diffs.filter(function(d) { return d === 0; }).length;
+    el.innerHTML = diffs.length + ' tests \u00b7 ' + passed + ' passed \u00b7 avg ' + avg.toFixed(2) + '% \u00b7 median ' + median.toFixed(2) + '% \u00b7 max ' + max.toFixed(2) + '%';
 }
 
 // ---- Renumber visible rows ----
@@ -827,7 +843,8 @@ document.getElementById('search-input').addEventListener('input', function() {
         selectedCategories.forEach(function(cat) {
             var tag = document.createElement('span');
             tag.className = 'category-tag';
-            tag.textContent = options.find(function(o) { return o.getAttribute('data-category') === cat; })?.textContent.split(' ')[0] || cat;
+            var opt = options.find(function(o) { return o.getAttribute('data-category') === cat; });
+            tag.textContent = opt ? opt.getAttribute('data-display') : cat;
             var x = document.createElement('span');
             x.className = 'tag-x';
             x.textContent = '\u00d7';

@@ -12,6 +12,8 @@ namespace Rend.Layout.Internal
     /// </summary>
     internal static class FlexLayout
     {
+        internal static bool _debugFlex;
+
         public static void Layout(LayoutBox parent, LayoutContext context)
         {
             var styledElement = parent.StyledNode as StyledElement;
@@ -220,21 +222,50 @@ namespace Rend.Layout.Internal
                     float remainingSpace = mainSize - frozenSpace - unfrozenBaseTotal;
                     bool anyNewlyFrozen = false;
 
+                    // Chrome's sequential consumption approach (line_flexer.cc):
+                    // Compute cumulative fractions, iterate in reverse, each item
+                    // consumes freeSpace * fraction then subtracts from freeSpace.
+                    // This ensures the last item absorbs any rounding remainder.
+
+                    // Step 1: Compute cumulative fractions (matching Chrome's FreezeItems)
+                    float runningGrow = 0;
+                    float runningScaledShrink = 0;
+                    float[] fractions = new float[line.Items.Count];
                     for (int i = 0; i < line.Items.Count; i++)
                     {
                         if (frozen[i]) continue;
-                        var item = line.Items[i];
-                        float resolved = item.BaseSize;
-
                         if (remainingSpace > 0 && activeTotalGrow > 0)
-                            resolved += remainingSpace * (item.FlexGrow / activeTotalGrow);
+                        {
+                            runningGrow += line.Items[i].FlexGrow;
+                            fractions[i] = line.Items[i].FlexGrow / runningGrow;
+                        }
                         else if (remainingSpace < 0 && totalScaledShrink > 0)
                         {
-                            // CSS spec §9.7: scaled flex shrink factor = flex-shrink * base-size
-                            float scaledShrink = item.FlexShrink * item.BaseSize;
-                            resolved += remainingSpace * (scaledShrink / totalScaledShrink);
+                            float ws = line.Items[i].FlexShrink * line.Items[i].BaseSize;
+                            runningScaledShrink += ws;
+                            fractions[i] = ws / runningScaledShrink;
                         }
+                    }
 
+                    // Step 2: Distribute in reverse (matching Chrome's ResolveFlexibleLengths)
+                    float freeSpace = remainingSpace;
+                    for (int i = line.Items.Count - 1; i >= 0; i--)
+                    {
+                        if (frozen[i]) continue;
+                        var item = line.Items[i];
+
+                        float extraSize;
+                        if (fractions[i] >= 1.0f)
+                            extraSize = freeSpace;
+                        else
+                        {
+                            double extra = (double)freeSpace * fractions[i];
+                            // Round to 1/64px (Chrome's LayoutUnit precision)
+                            extraSize = (float)(Math.Round(extra * 64.0) / 64.0);
+                        }
+                        freeSpace -= extraSize;
+
+                        float resolved = item.BaseSize + extraSize;
                         resolved = Math.Max(0, resolved);
 
                         // Check min/max — freeze if clamped
@@ -527,12 +558,22 @@ namespace Rend.Layout.Internal
                                     box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y,
                                                                 box.ContentRect.Width, newHeight);
 
-                                    // If the item is a column flex container and height changed,
-                                    // re-layout to apply justify-content with the correct height.
-                                    if (newHeight > oldHeight + 0.01f && item.Style.Display == CssDisplay.Flex)
+                                    // If the item is a column flex or grid container and height changed,
+                                    // re-layout to distribute the new height among tracks/items.
+                                    if (newHeight > oldHeight + 0.01f)
                                     {
-                                        var itemDir = item.Style.FlexDirection;
-                                        if (itemDir == CssFlexDirection.Column || itemDir == CssFlexDirection.ColumnReverse)
+                                        bool needsRelayout = false;
+                                        if (item.Style.Display == CssDisplay.Flex)
+                                        {
+                                            var itemDir = item.Style.FlexDirection;
+                                            if (itemDir == CssFlexDirection.Column || itemDir == CssFlexDirection.ColumnReverse)
+                                                needsRelayout = true;
+                                        }
+                                        else if (item.Style.Display == CssDisplay.Grid)
+                                        {
+                                            needsRelayout = true;
+                                        }
+                                        if (needsRelayout)
                                         {
                                             box.ClearChildren();
                                             box.LineBoxes?.Clear();

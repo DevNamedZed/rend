@@ -38,15 +38,12 @@ namespace Rend.Rendering.Internal
             }
 
             // Use rounded clip path when border-radius is set
-            float tlr = style.BorderTopLeftRadius;
-            float trr = style.BorderTopRightRadius;
-            float brr = style.BorderBottomRightRadius;
-            float blr = style.BorderBottomLeftRadius;
+            var radii = BorderRadiusResolver.Resolve(style, box.BorderRect);
 
-            if (tlr > 0 || trr > 0 || brr > 0 || blr > 0)
+            if (radii.HasRadius)
             {
                 var path = new PathData();
-                path.AddRoundedRectangle(box.PaddingRect, tlr, trr, brr, blr);
+                radii.AddToPath(path, box.PaddingRect);
                 target.PushClipPath(path);
             }
             else

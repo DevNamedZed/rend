@@ -12,6 +12,7 @@ namespace Rend.Rendering.Internal
     /// </summary>
     internal static class BorderPainter
     {
+        internal static bool _debugCollapse = false;
         /// <summary>
         /// Paints all four borders of the given box onto the render target.
         /// Each side is drawn only if it has a non-none style and a width greater than zero.
@@ -37,17 +38,14 @@ namespace Rend.Rendering.Internal
             CssBorderStyle leftStyle = style.BorderLeftStyle;
 
             // Check for border-radius.
-            float tlr = style.BorderTopLeftRadius;
-            float trr = style.BorderTopRightRadius;
-            float brr = style.BorderBottomRightRadius;
-            float blr = style.BorderBottomLeftRadius;
-            bool hasRadius = tlr > 0f || trr > 0f || brr > 0f || blr > 0f;
+            var radii = BorderRadiusResolver.Resolve(style, box.BorderRect);
+            bool hasRadius = radii.HasRadius;
 
             if (hasRadius)
             {
                 PaintWithRadius(box, target, style, topW, rightW, bottomW, leftW,
                                 topStyle, rightStyle, bottomStyle, leftStyle,
-                                tlr, trr, brr, blr);
+                                radii);
                 return;
             }
 
@@ -59,13 +57,12 @@ namespace Rend.Rendering.Internal
             float outerBottom = borderRect.Bottom;
 
             // In border-collapse mode, layout stores half-widths for positioning.
-            // Expand outward and double widths so the full collapsed border is painted
-            // centered on the grid line between cells.
-            // Snap grid lines to integer pixel boundaries for crisp borders (matching Chrome).
+            // The borderRect edges are at the grid lines between cells.
+            // Expand outward by half the full border width on each side so the
+            // collapsed border is centered on the grid line (matching Chrome).
             if (box.CollapsedBorderCell)
             {
                 // Grid lines are at the current borderRect edges (before expansion).
-                // Each border should start at Floor(gridLine) and span the full border width.
                 float gridTop = outerTop;
                 float gridBottom = outerBottom;
                 float gridLeft = outerLeft;
@@ -76,13 +73,20 @@ namespace Rend.Rendering.Internal
                 bottomW *= 2f;
                 leftW *= 2f;
 
-                // Snap: border starts at Floor(gridLine), extends inward by borderWidth.
-                // Top/left borders grow downward/rightward from Floor(gridLine).
-                // Bottom/right borders grow downward/rightward from Floor(gridLine).
-                outerTop = (float)Math.Floor(gridTop);
-                outerLeft = (float)Math.Floor(gridLeft);
-                outerRight = (float)Math.Floor(gridRight) + rightW;
-                outerBottom = (float)Math.Floor(gridBottom) + bottomW;
+                // Center the full border on each grid line:
+                // expand outward by half the full border width.
+                float halfTop = topW / 2f;
+                float halfBottom = bottomW / 2f;
+                float halfLeft = leftW / 2f;
+                float halfRight = rightW / 2f;
+
+                outerLeft = (float)Math.Round(gridLeft - halfLeft);
+                outerTop = (float)Math.Round(gridTop - halfTop);
+                outerRight = (float)Math.Round(gridRight + halfRight);
+                outerBottom = (float)Math.Round(gridBottom + halfBottom);
+
+                if (_debugCollapse)
+                    Console.Error.WriteLine($"[BORDER] grid=({gridLeft:F2},{gridTop:F2})-({gridRight:F2},{gridBottom:F2}) outer=({outerLeft:F1},{outerTop:F1})-({outerRight:F1},{outerBottom:F1}) widths=L{leftW} T{topW} R{rightW} B{bottomW}");
             }
 
             float innerLeft = outerLeft + leftW;
@@ -90,10 +94,24 @@ namespace Rend.Rendering.Internal
             float innerRight = outerRight - rightW;
             float innerBottom = outerBottom - bottomW;
 
+            // Use resolved collapsed border colors when available
+            CssColor topColor = box.CollapsedBorderTopColor ?? style.BorderTopColor;
+            CssColor rightColor = box.CollapsedBorderRightColor ?? style.BorderRightColor;
+            CssColor bottomColor = box.CollapsedBorderBottomColor ?? style.BorderBottomColor;
+            CssColor leftColor = box.CollapsedBorderLeftColor ?? style.BorderLeftColor;
+
+            // Chrome draws rectangular borders as rectangles (not trapezoids):
+            // Top/bottom span full width (owning the corners), left/right fill between them.
+            // When adjacent borders have DIFFERENT colors, use diagonal (trapezoid) corner joins.
+            bool topLeftDiag = NeedsDiagonalCorner(topW, topStyle, topColor, leftW, leftStyle, leftColor);
+            bool topRightDiag = NeedsDiagonalCorner(topW, topStyle, topColor, rightW, rightStyle, rightColor);
+            bool bottomLeftDiag = NeedsDiagonalCorner(bottomW, bottomStyle, bottomColor, leftW, leftStyle, leftColor);
+            bool bottomRightDiag = NeedsDiagonalCorner(bottomW, bottomStyle, bottomColor, rightW, rightStyle, rightColor);
+
             // Top border
             if (topW > 0f && topStyle != CssBorderStyle.None && topStyle != CssBorderStyle.Hidden)
             {
-                CssColor color = style.BorderTopColor;
+                CssColor color = topColor;
 
                 // Fieldset + legend: split the top border around the legend gap
                 var legendGap = GetFieldsetLegendGap(box);
@@ -102,60 +120,81 @@ namespace Rend.Rendering.Internal
                     float gapLeft = legendGap.Value.Left;
                     float gapRight = legendGap.Value.Right;
 
-                    // Left segment: outerLeft to gapLeft
                     if (gapLeft > outerLeft)
                     {
-                        float segInnerLeft = innerLeft;
-                        float segInnerRight = gapLeft;
                         PaintSide(target, color, topStyle, topW,
                                   outerLeft, outerTop, gapLeft, outerTop,
-                                  segInnerRight, innerTop, segInnerLeft, innerTop);
+                                  gapLeft, innerTop, topLeftDiag ? innerLeft : outerLeft, innerTop);
                     }
 
-                    // Right segment: gapRight to outerRight
                     if (gapRight < outerRight)
                     {
-                        float segInnerLeft = gapRight;
-                        float segInnerRight = innerRight;
                         PaintSide(target, color, topStyle, topW,
                                   gapRight, outerTop, outerRight, outerTop,
-                                  segInnerRight, innerTop, segInnerLeft, innerTop);
+                                  topRightDiag ? innerRight : outerRight, innerTop, gapRight, innerTop);
                     }
                 }
                 else
                 {
+                    // Use rectangle corners where adjacent borders share the same color
+                    float il = topLeftDiag ? innerLeft : outerLeft;
+                    float ir = topRightDiag ? innerRight : outerRight;
                     PaintSide(target, color, topStyle, topW,
                               outerLeft, outerTop, outerRight, outerTop,
-                              innerRight, innerTop, innerLeft, innerTop);
+                              ir, innerTop, il, innerTop);
                 }
-            }
-
-            // Right border
-            if (rightW > 0f && rightStyle != CssBorderStyle.None && rightStyle != CssBorderStyle.Hidden)
-            {
-                CssColor color = style.BorderRightColor;
-                PaintSide(target, color, rightStyle, rightW,
-                          outerRight, outerTop, outerRight, outerBottom,
-                          innerRight, innerBottom, innerRight, innerTop);
             }
 
             // Bottom border
             if (bottomW > 0f && bottomStyle != CssBorderStyle.None && bottomStyle != CssBorderStyle.Hidden)
             {
-                CssColor color = style.BorderBottomColor;
+                CssColor color = bottomColor;
+                float il = bottomLeftDiag ? innerLeft : outerLeft;
+                float ir = bottomRightDiag ? innerRight : outerRight;
                 PaintSide(target, color, bottomStyle, bottomW,
                           outerRight, outerBottom, outerLeft, outerBottom,
-                          innerLeft, innerBottom, innerRight, innerBottom);
+                          il, innerBottom, ir, innerBottom);
             }
 
             // Left border
             if (leftW > 0f && leftStyle != CssBorderStyle.None && leftStyle != CssBorderStyle.Hidden)
             {
-                CssColor color = style.BorderLeftColor;
+                CssColor color = leftColor;
+                // Left border: if no diagonal at top-left, start from innerTop; else outerTop
+                float ot = topLeftDiag ? outerTop : innerTop;
+                float ob = bottomLeftDiag ? outerBottom : innerBottom;
                 PaintSide(target, color, leftStyle, leftW,
-                          outerLeft, outerBottom, outerLeft, outerTop,
-                          innerLeft, innerTop, innerLeft, innerBottom);
+                          outerLeft, ob, outerLeft, ot,
+                          innerLeft, topLeftDiag ? innerTop : ot, innerLeft, bottomLeftDiag ? innerBottom : ob);
             }
+
+            // Right border
+            if (rightW > 0f && rightStyle != CssBorderStyle.None && rightStyle != CssBorderStyle.Hidden)
+            {
+                CssColor color = rightColor;
+                float ot = topRightDiag ? outerTop : innerTop;
+                float ob = bottomRightDiag ? outerBottom : innerBottom;
+                PaintSide(target, color, rightStyle, rightW,
+                          outerRight, ot, outerRight, ob,
+                          innerRight, bottomRightDiag ? innerBottom : ob, innerRight, topRightDiag ? innerTop : ot);
+            }
+        }
+
+        /// <summary>
+        /// Returns true if two adjacent borders need a diagonal (trapezoid) corner join
+        /// because they have different colors. When same color, use rectangular overlap
+        /// (top/bottom border covers the corner, left/right is shorter).
+        /// </summary>
+        private static bool NeedsDiagonalCorner(float widthA, CssBorderStyle styleA, CssColor colorA,
+                                                 float widthB, CssBorderStyle styleB, CssColor colorB)
+        {
+            // No diagonal if either side is invisible
+            if (widthA <= 0 || styleA == CssBorderStyle.None || styleA == CssBorderStyle.Hidden)
+                return false;
+            if (widthB <= 0 || styleB == CssBorderStyle.None || styleB == CssBorderStyle.Hidden)
+                return false;
+            // Diagonal needed only when colors differ
+            return colorA.R != colorB.R || colorA.G != colorB.G || colorA.B != colorB.B || colorA.A != colorB.A;
         }
 
         /// <summary>
@@ -471,14 +510,14 @@ namespace Rend.Rendering.Internal
             float topW, float rightW, float bottomW, float leftW,
             CssBorderStyle topStyle, CssBorderStyle rightStyle,
             CssBorderStyle bottomStyle, CssBorderStyle leftStyle,
-            float tlr, float trr, float brr, float blr)
+            BorderRadii radii)
         {
             RectF borderRect = box.BorderRect;
 
             // For rounded borders, create the outer rounded rect path,
             // clip to it, and then fill each side within the clip.
             var outerPath = new PathData();
-            outerPath.AddRoundedRectangle(borderRect, tlr, trr, brr, blr);
+            radii.AddToPath(outerPath, borderRect);
 
             target.Save();
             target.PushClipPath(outerPath);

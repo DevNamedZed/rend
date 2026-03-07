@@ -62,11 +62,8 @@ namespace Rend.Rendering.Internal
             RectF borderRect = box.BorderRect;
 
             // Border radius for rounded shadows
-            float tlr = style.BorderTopLeftRadius;
-            float trr = style.BorderTopRightRadius;
-            float brr = style.BorderBottomRightRadius;
-            float blr = style.BorderBottomLeftRadius;
-            bool hasRadius = tlr > 0f || trr > 0f || brr > 0f || blr > 0f;
+            var radii = BorderRadiusResolver.Resolve(style, borderRect);
+            bool hasRadius = radii.HasRadius;
 
             // Draw shadows in reverse order (first shadow is topmost per CSS spec).
             for (int i = shadows.Count - 1; i >= 0; i--)
@@ -81,7 +78,7 @@ namespace Rend.Rendering.Internal
 
                 if (shadow.Inset)
                 {
-                    PaintInsetShadow(shadow, borderRect, hasRadius, tlr, trr, brr, blr, target);
+                    PaintInsetShadow(shadow, borderRect, hasRadius, radii, target);
                     continue;
                 }
 
@@ -107,7 +104,7 @@ namespace Rend.Rendering.Internal
                     if (hasRadius)
                     {
                         var path = new PathData();
-                        path.AddRoundedRectangle(new RectF(x, y, w, h), tlr, trr, brr, blr);
+                        radii.AddToPath(path, new RectF(x, y, w, h));
                         target.FillPath(path, brush);
                     }
                     else
@@ -126,7 +123,7 @@ namespace Rend.Rendering.Internal
                     if (hasRadius)
                     {
                         var path = new PathData();
-                        path.AddRoundedRectangle(shadowRect, tlr, trr, brr, blr);
+                        radii.AddToPath(path, shadowRect);
                         target.FillPath(path, brush);
                     }
                     else
@@ -138,7 +135,7 @@ namespace Rend.Rendering.Internal
         }
 
         private static void PaintInsetShadow(BoxShadowLayer shadow, RectF borderRect,
-            bool hasRadius, float tlr, float trr, float brr, float blr, IRenderTarget target)
+            bool hasRadius, BorderRadii radii, IRenderTarget target)
         {
             // Inset shadow: render inside the border box, ON TOP of the background.
             // The shadow area is the border rect contracted by spread, then offset.
@@ -154,7 +151,7 @@ namespace Rend.Rendering.Internal
                 if (hasRadius)
                 {
                     var clipPath = new PathData();
-                    clipPath.AddRoundedRectangle(borderRect, tlr, trr, brr, blr);
+                    radii.AddToPath(clipPath, borderRect);
                     target.PushClipPath(clipPath);
                 }
                 else
@@ -174,7 +171,7 @@ namespace Rend.Rendering.Internal
             if (hasRadius)
             {
                 var clipPath = new PathData();
-                clipPath.AddRoundedRectangle(borderRect, tlr, trr, brr, blr);
+                radii.AddToPath(clipPath, borderRect);
                 target.PushClipPath(clipPath);
             }
             else

@@ -112,6 +112,21 @@ namespace Rend.Core.Values
         public static bool operator ==(RectF left, RectF right) => left.Equals(right);
         public static bool operator !=(RectF left, RectF right) => !left.Equals(right);
         public override string ToString() => $"[{X}, {Y}, {Width}, {Height}]";
+
+        /// <summary>
+        /// Snap rect edges to integer pixel boundaries, matching Chrome's PixelSnappedIntRect.
+        /// Each edge is rounded independently; width/height derived from snapped edges.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public RectF PixelSnap()
+        {
+            float snappedLeft = (float)Math.Round(X);
+            float snappedTop = (float)Math.Round(Y);
+            float snappedRight = (float)Math.Round(X + Width);
+            float snappedBottom = (float)Math.Round(Y + Height);
+            return new RectF(snappedLeft, snappedTop,
+                             snappedRight - snappedLeft, snappedBottom - snappedTop);
+        }
     }
 
     /// <summary>

@@ -65,5 +65,11 @@ namespace Rend.Layout
         /// Whether ruby text should be positioned below (under) instead of above (over).
         /// </summary>
         public bool RubyBelow { get; set; }
+
+        /// <summary>
+        /// Extra word spacing added by text-align: justify.
+        /// Applied on top of the CSS word-spacing value during painting.
+        /// </summary>
+        public float JustifyWordSpacing { get; set; }
     }
 }

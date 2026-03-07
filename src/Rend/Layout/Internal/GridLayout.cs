@@ -646,7 +646,7 @@ namespace Rend.Layout.Internal
                     totalRowH += rowHeights[r];
                 totalRowH += Math.Max(0, finalRows - 1) * rowGap;
                 float freeBlock = containerHeight - totalRowH;
-                if (freeBlock > 1f)
+                if (freeBlock > 0)
                 {
                     var ac = style.AlignContent;
                     if (ac == CssAlignItems.Center)
@@ -729,9 +729,12 @@ namespace Rend.Layout.Internal
                 float yOffset = AlignOffset(alignBlock, spanHeight, outerHeight);
 
                 // Stretch: expand content to fill cell (default grid behavior)
-                if (IsStretch(alignInline) && outerWidth < spanWidth)
+                // Per CSS Grid spec, stretch only applies when the item's size is 'auto' in that axis.
+                bool widthIsAuto = item.StyledElement == null || float.IsNaN(item.StyledElement.Style.Width);
+                bool heightIsAuto = item.StyledElement == null || float.IsNaN(item.StyledElement.Style.Height);
+                if (IsStretch(alignInline) && outerWidth < spanWidth && widthIsAuto)
                     finalWidth = spanWidth - (outerWidth - finalWidth);
-                if (IsStretch(alignBlock) && outerHeight < spanHeight)
+                if (IsStretch(alignBlock) && outerHeight < spanHeight && heightIsAuto)
                     finalHeight = spanHeight - (outerHeight - finalHeight);
 
                 float newX = x + xOffset + item.Box.MarginLeft + item.Box.BorderLeftWidth + item.Box.PaddingLeft;
