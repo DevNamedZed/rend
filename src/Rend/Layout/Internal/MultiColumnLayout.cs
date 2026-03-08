@@ -250,7 +250,7 @@ namespace Rend.Layout.Internal
                             {
                                 if (box.ColumnRules == null)
                                     box.ColumnRules = new List<ColumnRuleInfo>();
-                                float ruleX = colX - columnGap / 2;
+                                float ruleX = (float)Math.Round(colX - columnGap / 2);
                                 box.ColumnRules.Add(new ColumnRuleInfo
                                 {
                                     X = ruleX,

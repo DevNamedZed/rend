@@ -110,6 +110,9 @@ namespace Rend.Layout.Internal
             // Track cells with rowspan > 1 for height distribution
             var rowspanCells = new List<RowspanCellInfo>();
 
+            // Track natural content heights for vertical-align centering
+            var naturalContentHeights = new Dictionary<LayoutBox, float>();
+
             // First pass: lay out all cells, determine row heights for rowspan=1 cells
             for (int r = 0; r < numRows; r++)
             {
@@ -160,6 +163,7 @@ namespace Rend.Layout.Internal
                     BlockFormattingContext.LayoutChildren(cellBox, context);
                     context.FloatContext = prevFloat;
                     float cellContentHeight = CalculateAutoHeight(cellBox);
+                    float naturalHeight = cellContentHeight;
 
                     // Respect explicit height on the cell (e.g. <td style="height:30px">)
                     if (cell.StyledElement != null)
@@ -181,6 +185,8 @@ namespace Rend.Layout.Internal
 
                     // Truncate to 1/64th pixel precision (matching Chrome's LayoutUnit).
                     cellContentHeight = (int)(cellContentHeight * 64f) / 64f;
+                    naturalHeight = (int)(naturalHeight * 64f) / 64f;
+                    naturalContentHeights[cellBox] = naturalHeight;
                     cellBox.ContentRect = new RectF(0, 0, contentWidth, cellContentHeight);
 
                     float totalCellHeight = cellContentHeight + cellBox.PaddingTop + cellBox.PaddingBottom
@@ -478,7 +484,9 @@ namespace Rend.Layout.Internal
 
                     // Apply vertical-align: only offset children within the cell,
                     // NOT the cell's ContentRect (background must span the full row).
-                    float freeSpace = fullCellContentH - cellContentHeight;
+                    // Use natural content height (before explicit height override) for vertical centering
+                    float natH = naturalContentHeights.TryGetValue(cellBox, out float nh) ? nh : cellContentHeight;
+                    float freeSpace = fullCellContentH - natH;
                     if (freeSpace > 0)
                     {
                         var valign = CssVerticalAlign.Baseline;

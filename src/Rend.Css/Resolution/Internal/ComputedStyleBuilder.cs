@@ -245,5 +245,6 @@ namespace Rend.Css.Resolution.Internal
             if (values[PropertyId.TextDecoration_Color].IsCurrentColor())
                 values[PropertyId.TextDecoration_Color] = elementColor;
         }
+
     }
 }

@@ -81,7 +81,7 @@ thead { display: table-header-group; vertical-align: middle; }
 tbody { display: table-row-group; vertical-align: middle; }
 tfoot { display: table-footer-group; vertical-align: middle; }
 tr { display: table-row; vertical-align: inherit; }
-td, th { display: table-cell; vertical-align: inherit; padding: 1px; }
+td, th { display: table-cell; vertical-align: middle; padding: 1px; }
 th { font-weight: bold; text-align: center; }
 caption { display: table-caption; text-align: center; }
 col { display: table-column; }
@@ -116,11 +116,23 @@ a { color: #0000EE; text-decoration: underline; }
    Chrome uses appearance:auto which delegates painting to the native theme,
    but CSS border/padding still affects layout sizing. We use transparent borders
    so layout matches Chrome, then ReplacedContentPainter draws the visual border. */
-input, textarea, select {
+input {
     display: inline-block;
     font-size: 13.333px;
     border: 2px solid transparent;
     padding: 1px;
+}
+textarea {
+    display: inline-block;
+    font-size: 13.333px;
+    border: 1px solid transparent;
+    padding: 2px;
+}
+select {
+    display: inline-block;
+    font-size: 13.333px;
+    border: 1px solid transparent;
+    padding: 0;
 }
 
 textarea {

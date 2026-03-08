@@ -35,7 +35,10 @@ namespace Rend.Rendering.Internal
             }
 
             float drawX = lineX + fragment.X;
-            float drawY = (float)Math.Floor(lineY + fragment.Y + fragment.Baseline);
+            // Chrome pixel-snaps block positions (PixelSnappedIntRect) before drawing text.
+            // Round the line-box Y to nearest pixel, then floor after adding baseline.
+            float snappedLineY = (float)Math.Round(lineY + fragment.Y);
+            float drawY = (float)Math.Floor(snappedLineY + fragment.Baseline);
 
             // Paint text shadows before main text.
             TextShadowPainter.Paint(fragment, drawX, drawY, target, style);
@@ -278,9 +281,15 @@ namespace Rend.Rendering.Internal
             }
 
             float fontSize = style.FontSize;
-            // Use text-decoration-thickness if set, otherwise default to 1/16th of font size (min 1px).
+
+            // Get font-specific decoration metrics (underline/strikeout position and thickness).
+            float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
+            var fontDesc = new FontDescriptor(style.FontFamily, style.FontWeight, style.FontStyle, stretch);
+            var metrics = target.GetDecorationMetrics(fontDesc, fontSize);
+
+            // Use text-decoration-thickness if set, otherwise use font's underline thickness.
             float thickness = style.TextDecorationThickness;
-            float strokeWidth = thickness > 0 ? thickness : (fontSize > 16f ? fontSize / 16f : 1f);
+            float strokeWidth = thickness > 0 ? thickness : metrics.UnderlineThickness;
 
             // Build pen based on text-decoration-style.
             CssTextDecorationStyle decoStyle = style.TextDecorationStyle;
@@ -289,26 +298,63 @@ namespace Rend.Rendering.Internal
             float startX = lineX + fragment.X;
             float endX = startX + fragment.Width;
 
+            // Snap line-box Y the same way as text rendering (Chrome pixel-snaps block positions)
+            float snappedFragY = (float)Math.Round(lineY + fragment.Y);
+
             // text-underline-offset: additional offset for underlines (positive = further from text)
             float underlineOffset = style.TextUnderlineOffset;
 
+            // Chrome paints solid text decorations as pixel-snapped filled rectangles,
+            // not stroked lines. Use FillRect for solid style to match.
+            bool useFillRect = decoStyle == CssTextDecorationStyle.Solid;
+
             if (decoration == CssTextDecorationLine.Underline)
             {
-                // Underline sits slightly below the baseline, plus any custom offset.
-                float underlineY = lineY + fragment.Y + fragment.Baseline + fontSize * 0.15f + underlineOffset;
-                DrawLine(target, pen, startX, underlineY, endX, underlineY);
+                // Underline at font's underline position below baseline, plus any custom offset.
+                float underlineY = snappedFragY + fragment.Baseline + metrics.UnderlinePosition + underlineOffset;
+                if (useFillRect)
+                {
+                    // Chrome floors the underline Y via PixelSnappedIntRect (floor origin, ceil far edge).
+                    float snappedY = (float)Math.Floor(underlineY);
+                    float snappedH = Math.Max(1f, (float)Math.Round(strokeWidth));
+                    target.FillRect(new RectF(startX, snappedY, endX - startX, snappedH),
+                                    BrushInfo.Solid(decoColor));
+                }
+                else
+                    DrawLine(target, pen, startX, underlineY, endX, underlineY);
             }
             else if (decoration == CssTextDecorationLine.Overline)
             {
-                // Overline sits at the top of the text.
-                float overlineY = lineY + fragment.Y;
-                DrawLine(target, pen, startX, overlineY, endX, overlineY);
+                // Overline sits at the top of the content area (ascent line), not the line box.
+                // Half-leading = (lineHeight - contentHeight) / 2
+                float halfLeading = fragment.ContentHeight > 0
+                    ? (fragment.Height - fragment.ContentHeight) / 2f
+                    : 0f;
+                float overlineY = snappedFragY + halfLeading;
+                if (useFillRect)
+                {
+                    float snappedY = (float)Math.Floor(overlineY);
+                    float snappedH = Math.Max(1f, (float)Math.Round(strokeWidth));
+                    target.FillRect(new RectF(startX, snappedY, endX - startX, snappedH),
+                                    BrushInfo.Solid(decoColor));
+                }
+                else
+                    DrawLine(target, pen, startX, overlineY, endX, overlineY);
             }
             else if (decoration == CssTextDecorationLine.LineThrough)
             {
-                // Line-through goes through the middle of the text.
-                float strikeY = lineY + fragment.Y + fragment.Height * 0.5f;
-                DrawLine(target, pen, startX, strikeY, endX, strikeY);
+                // Chrome uses the font's OS/2 strikeoutPosition relative to baseline,
+                // not the middle of the content area.
+                float strikeY = snappedFragY + fragment.Baseline + metrics.StrikeoutPosition;
+                if (useFillRect)
+                {
+                    float snappedY = (float)Math.Floor(strikeY);
+                    float snappedH = Math.Max(1f, (float)Math.Round(strokeWidth));
+                    target.FillRect(new RectF(startX, snappedY, endX - startX, snappedH),
+                                    BrushInfo.Solid(decoColor));
+                }
+                else
+                    DrawLine(target, pen, startX, strikeY, endX, strikeY);
             }
 
             // For "wavy" style, draw a second offset line to approximate a wave.
@@ -317,17 +363,19 @@ namespace Rend.Rendering.Internal
                 float wavyOffset = strokeWidth * 2f;
                 if (decoration == CssTextDecorationLine.Underline)
                 {
-                    float underlineY = lineY + fragment.Y + fragment.Baseline + fontSize * 0.15f + underlineOffset + wavyOffset;
+                    float underlineY = snappedFragY + fragment.Baseline + metrics.UnderlinePosition + underlineOffset + wavyOffset;
                     DrawLine(target, pen, startX, underlineY, endX, underlineY);
                 }
                 else if (decoration == CssTextDecorationLine.Overline)
                 {
-                    float overlineY = lineY + fragment.Y + wavyOffset;
+                    float hl = fragment.ContentHeight > 0 ? (fragment.Height - fragment.ContentHeight) / 2f : 0f;
+                    float overlineY = snappedFragY + hl + wavyOffset;
                     DrawLine(target, pen, startX, overlineY, endX, overlineY);
                 }
                 else if (decoration == CssTextDecorationLine.LineThrough)
                 {
-                    float strikeY = lineY + fragment.Y + fragment.Height * 0.5f + wavyOffset;
+                    float hl = fragment.ContentHeight > 0 ? (fragment.Height - fragment.ContentHeight) / 2f : 0f;
+                    float strikeY = snappedFragY + hl + fragment.ContentHeight * 0.5f + wavyOffset;
                     DrawLine(target, pen, startX, strikeY, endX, strikeY);
                 }
             }
@@ -338,17 +386,19 @@ namespace Rend.Rendering.Internal
                 float doubleOffset = strokeWidth * 2f;
                 if (decoration == CssTextDecorationLine.Underline)
                 {
-                    float underlineY = lineY + fragment.Y + fragment.Baseline + fontSize * 0.15f + underlineOffset + doubleOffset;
+                    float underlineY = snappedFragY + fragment.Baseline + metrics.UnderlinePosition + underlineOffset + doubleOffset;
                     DrawLine(target, pen, startX, underlineY, endX, underlineY);
                 }
                 else if (decoration == CssTextDecorationLine.Overline)
                 {
-                    float overlineY = lineY + fragment.Y - doubleOffset;
+                    float hl = fragment.ContentHeight > 0 ? (fragment.Height - fragment.ContentHeight) / 2f : 0f;
+                    float overlineY = snappedFragY + hl - doubleOffset;
                     DrawLine(target, pen, startX, overlineY, endX, overlineY);
                 }
                 else if (decoration == CssTextDecorationLine.LineThrough)
                 {
-                    float strikeY = lineY + fragment.Y + fragment.Height * 0.5f + doubleOffset;
+                    float hl = fragment.ContentHeight > 0 ? (fragment.Height - fragment.ContentHeight) / 2f : 0f;
+                    float strikeY = snappedFragY + hl + fragment.ContentHeight * 0.5f + doubleOffset;
                     DrawLine(target, pen, startX, strikeY, endX, strikeY);
                 }
             }

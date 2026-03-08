@@ -5666,6 +5666,242 @@ namespace Rend.VisualRegression.TestCases
                     <div style=""background:#eee; padding:8px;"">Text on gray</div>
                 </body></html>",
             });
+
+            // Multi-line text wrapping regression tests (trailing whitespace fix)
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-text-multiline",
+                Name = "Multi-line text wrapping",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:20px; background:#fff; font-family:Arial,sans-serif; font-size:14px; line-height:normal;"">
+                    <div style=""width:200px;"">The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.</div>
+                </body></html>",
+            });
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-text-multiline-16",
+                Name = "Multi-line text at 16px",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:20px; background:#fff; font-family:Arial,sans-serif; font-size:16px; line-height:normal;"">
+                    <div style=""width:200px;"">The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.</div>
+                </body></html>",
+            });
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-text-multiline-lh12",
+                Name = "Multi-line text line-height:1.2",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:20px; background:#fff; font-family:Arial,sans-serif; font-size:14px; line-height:1.2;"">
+                    <div style=""width:200px;"">The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.</div>
+                </body></html>",
+            });
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-text-multiline-bold",
+                Name = "Multi-line bold text",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:20px; background:#fff; font-family:Arial,sans-serif; font-size:14px; line-height:normal;"">
+                    <div style=""width:200px;""><b>The quick brown fox jumps over the lazy dog. The quick brown fox jumps.</b></div>
+                </body></html>",
+            });
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-text-heading-stack",
+                Name = "Stacked headings",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff; font-family:Arial,sans-serif; line-height:1.2;"">
+                    <h1 style=""font-size:24px; margin:4px 0;"">Heading 1</h1>
+                    <h2 style=""font-size:20px; margin:4px 0;"">Heading 2</h2>
+                    <h3 style=""font-size:18px; margin:4px 0;"">Heading 3</h3>
+                    <h4 style=""font-size:16px; margin:4px 0;"">Heading 4</h4>
+                    <h5 style=""font-size:14px; margin:4px 0;"">Heading 5</h5>
+                    <h6 style=""font-size:12px; margin:4px 0;"">Heading 6</h6>
+                </body></html>",
+            });
+
+            // --- Monospace text tests ---
+
+            // --- Text wrapping tests ---
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-text-wrap-14",
+                Name = "Text wrapping at 14px in 200px",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""width:200px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;"">The quick brown fox jumps over the lazy dog and runs away.</div>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-text-center-200",
+                Name = "Centered text in 200px",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""width:200px; font-family:Arial,sans-serif; font-size:14px; text-align:center;"">Centered text content</div>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-text-right-200",
+                Name = "Right-aligned text in 200px",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""width:200px; font-family:Arial,sans-serif; font-size:14px; text-align:right;"">Right aligned text</div>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-text-justify-200",
+                Name = "Justified text in 200px",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""width:200px; font-family:Arial,sans-serif; font-size:14px; text-align:justify;"">The quick brown fox jumps over the lazy dog and runs away fast.</div>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-mono-courier",
+                Name = "Courier New 13px",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""font-family:'Courier New',monospace; font-size:13px;"">Hello World 123</div>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-mono-pre",
+                Name = "Pre with explicit Courier New",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <pre style=""margin:0; font-family:'Courier New',monospace; font-size:13px;"">Line 1
+  indented line
+    double indent
+Line 4</pre>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-mono-long",
+                Name = "Long monospace line 13px",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <pre style=""margin:0; font-family:'Courier New',monospace; font-size:13px;"">abcdefghij klmnopqrst uvwxyz 1234567890</pre>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-mono-generic",
+                Name = "Generic monospace 13px",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <pre style=""margin:0; font-family:monospace; font-size:13px;"">abcdefghij klmnopqrst uvwxyz 1234567890</pre>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-valign-super",
+                Name = "Vertical Align Super",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff; font-family:Arial,sans-serif; font-size:14px; line-height:2;"">
+                    <p style=""margin:0;"">Normal <span style=""vertical-align:super; font-size:10px;"">superscript</span> text</p>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-valign-sub",
+                Name = "Vertical Align Sub",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff; font-family:Arial,sans-serif; font-size:14px; line-height:2;"">
+                    <p style=""margin:0;"">Normal <span style=""vertical-align:sub; font-size:10px;"">subscript</span> text</p>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-valign-middle",
+                Name = "Vertical Align Middle",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff; font-family:Arial,sans-serif; font-size:20px; line-height:1.5;"">
+                    <p style=""margin:0;"">Big <span style=""font-size:10px; vertical-align:middle;"">middle</span> text</p>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-valign-top-bottom",
+                Name = "Vertical Align Top Bottom",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff; font-family:Arial,sans-serif; font-size:20px; line-height:1.5;"">
+                    <p style=""margin:0;"">Big <span style=""font-size:10px; vertical-align:top;"">top</span> and <span style=""font-size:10px; vertical-align:bottom;"">bottom</span></p>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-max-content",
+                Name = "Width max-content",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""width:max-content; font-family:Arial,sans-serif; font-size:14px; background:#eee; padding:4px;"">Hello World</div>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-underline-arial",
+                Name = "Underline Arial 16px",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""font-family:Arial,sans-serif; font-size:16px; text-decoration:underline;"">Underlined text</div>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-line-through-arial",
+                Name = "Line-through Arial 16px",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""font-family:Arial,sans-serif; font-size:16px; text-decoration:line-through;"">Strikethrough text</div>
+                </body></html>",
+            });
+
+            // --- Table cell vertical-align test ---
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-table-valign",
+                Name = "Table Cell Vertical Align",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff; font-family:Arial,sans-serif; font-size:14px;"">
+                    <table style=""border-collapse:collapse; width:300px;"">
+                        <tr>
+                            <td style=""border:1px solid #999; padding:6px; height:60px;"">Short</td>
+                            <td style=""border:1px solid #999; padding:6px; height:60px;"">Also short</td>
+                        </tr>
+                    </table>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "pp-border-radius-circle",
+                Name = "Border Radius Circle",
+                Category = "Pixel Perfect",
+                Html = @"<html><body style=""margin:0; padding:20px; background:#fff;"">
+                    <div style=""width:80px; height:80px; border-radius:50%; background:#3498db; border:4px solid #333;""></div>
+                    <div style=""margin-top:10px; width:60px; height:60px; border-radius:50%; background:#e74c3c; border:2px solid white;""></div>
+                </body></html>",
+            });
+
         }
     }
 }

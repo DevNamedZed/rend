@@ -109,13 +109,18 @@ namespace Rend.Rendering.Internal
             bool bottomLeftDiag = NeedsDiagonalCorner(bottomW, bottomStyle, bottomColor, leftW, leftStyle, leftColor);
             bool bottomRightDiag = NeedsDiagonalCorner(bottomW, bottomStyle, bottomColor, rightW, rightStyle, rightColor);
 
+            // Fieldset + legend: shift the top border down so it passes through
+            // the legend's vertical center (per WHATWG rendering spec).
+            var legendGap = GetFieldsetLegendGap(box);
+            float topBorderShift = legendGap?.TopOffset ?? 0f;
+            float effectiveOuterTop = outerTop + topBorderShift;
+            float effectiveInnerTop = effectiveOuterTop + topW;
+
             // Top border
             if (topW > 0f && topStyle != CssBorderStyle.None && topStyle != CssBorderStyle.Hidden)
             {
                 CssColor color = topColor;
 
-                // Fieldset + legend: split the top border around the legend gap
-                var legendGap = GetFieldsetLegendGap(box);
                 if (legendGap.HasValue)
                 {
                     float gapLeft = legendGap.Value.Left;
@@ -124,15 +129,15 @@ namespace Rend.Rendering.Internal
                     if (gapLeft > outerLeft)
                     {
                         PaintSide(target, color, topStyle, topW,
-                                  outerLeft, outerTop, gapLeft, outerTop,
-                                  gapLeft, innerTop, topLeftDiag ? innerLeft : outerLeft, innerTop);
+                                  outerLeft, effectiveOuterTop, gapLeft, effectiveOuterTop,
+                                  gapLeft, effectiveInnerTop, topLeftDiag ? innerLeft : outerLeft, effectiveInnerTop);
                     }
 
                     if (gapRight < outerRight)
                     {
                         PaintSide(target, color, topStyle, topW,
-                                  gapRight, outerTop, outerRight, outerTop,
-                                  topRightDiag ? innerRight : outerRight, innerTop, gapRight, innerTop);
+                                  gapRight, effectiveOuterTop, outerRight, effectiveOuterTop,
+                                  topRightDiag ? innerRight : outerRight, effectiveInnerTop, gapRight, effectiveInnerTop);
                     }
                 }
                 else
@@ -141,8 +146,8 @@ namespace Rend.Rendering.Internal
                     float il = topLeftDiag ? innerLeft : outerLeft;
                     float ir = topRightDiag ? innerRight : outerRight;
                     PaintSide(target, color, topStyle, topW,
-                              outerLeft, outerTop, outerRight, outerTop,
-                              ir, innerTop, il, innerTop);
+                              outerLeft, effectiveOuterTop, outerRight, effectiveOuterTop,
+                              ir, effectiveInnerTop, il, effectiveInnerTop);
                 }
             }
 
@@ -157,27 +162,26 @@ namespace Rend.Rendering.Internal
                           il, innerBottom, ir, innerBottom);
             }
 
-            // Left border
+            // Left border — starts at the effective top border position (shifted for legend)
             if (leftW > 0f && leftStyle != CssBorderStyle.None && leftStyle != CssBorderStyle.Hidden)
             {
                 CssColor color = leftColor;
-                // Left border: if no diagonal at top-left, start from innerTop; else outerTop
-                float ot = topLeftDiag ? outerTop : innerTop;
+                float ot = topLeftDiag ? effectiveOuterTop : effectiveInnerTop;
                 float ob = bottomLeftDiag ? outerBottom : innerBottom;
                 PaintSide(target, color, leftStyle, leftW,
                           outerLeft, ob, outerLeft, ot,
-                          innerLeft, topLeftDiag ? innerTop : ot, innerLeft, bottomLeftDiag ? innerBottom : ob);
+                          innerLeft, topLeftDiag ? effectiveInnerTop : ot, innerLeft, bottomLeftDiag ? innerBottom : ob);
             }
 
-            // Right border
+            // Right border — starts at the effective top border position (shifted for legend)
             if (rightW > 0f && rightStyle != CssBorderStyle.None && rightStyle != CssBorderStyle.Hidden)
             {
                 CssColor color = rightColor;
-                float ot = topRightDiag ? outerTop : innerTop;
+                float ot = topRightDiag ? effectiveOuterTop : effectiveInnerTop;
                 float ob = bottomRightDiag ? outerBottom : innerBottom;
                 PaintSide(target, color, rightStyle, rightW,
                           outerRight, ot, outerRight, ob,
-                          innerRight, bottomRightDiag ? innerBottom : ob, innerRight, topRightDiag ? innerTop : ot);
+                          innerRight, bottomRightDiag ? innerBottom : ob, innerRight, topRightDiag ? effectiveInnerTop : ot);
             }
         }
 
@@ -203,7 +207,7 @@ namespace Rend.Rendering.Internal
         /// (left x, right x) where the top border should be interrupted.
         /// Returns null if this is not a fieldset or has no legend child.
         /// </summary>
-        private static (float Left, float Right)? GetFieldsetLegendGap(LayoutBox box)
+        private static (float Left, float Right, float TopOffset)? GetFieldsetLegendGap(LayoutBox box)
         {
             if (box.StyledNode is not StyledElement elem || elem.TagName != "fieldset")
                 return null;
@@ -216,7 +220,13 @@ namespace Rend.Rendering.Internal
                 {
                     // The gap spans the legend's margin box horizontally
                     RectF legendMargin = child.MarginRect;
-                    return (legendMargin.Left, legendMargin.Right);
+                    // Per WHATWG spec: the top border goes through the center of the legend.
+                    // Shift the top border down by (legendHeight - borderTopWidth) / 2.
+                    float legendBorderBoxH = child.BorderTopWidth + child.PaddingTop
+                        + child.ContentRect.Height + child.PaddingBottom + child.BorderBottomWidth;
+                    float borderTopW = box.BorderTopWidth;
+                    float topOffset = Math.Max(0, (legendBorderBoxH - borderTopW) / 2f);
+                    return (legendMargin.Left, legendMargin.Right, topOffset);
                 }
             }
 
@@ -520,8 +530,17 @@ namespace Rend.Rendering.Internal
         {
             RectF borderRect = box.BorderRect;
 
-            // For rounded borders, create the outer rounded rect path,
-            // clip to it, and then fill each side within the clip.
+            // Optimization: when all visible border sides share the same solid color,
+            // paint the border as an annular ring (outer - inner rounded rect) using EvenOdd fill.
+            // This correctly handles large border-radius (e.g. 50% circles) where the 4-rectangle
+            // approach leaves diagonal gaps.
+            if (TryPaintAnnularRing(box, target, style, topW, rightW, bottomW, leftW,
+                                     topStyle, rightStyle, bottomStyle, leftStyle, radii))
+            {
+                return;
+            }
+
+            // Fallback: clip to outer rounded rect and fill each side as a rectangle.
             var outerPath = new PathData();
             radii.AddToPath(outerPath, borderRect);
 
@@ -598,6 +617,98 @@ namespace Rend.Rendering.Internal
 
             target.PopClip();
             target.Restore();
+        }
+
+        /// <summary>
+        /// When all visible border sides share the same solid color, paint the border as
+        /// the annular ring between the outer and inner rounded rects using EvenOdd fill.
+        /// Returns true if painted, false if the fallback approach should be used.
+        /// </summary>
+        private static bool TryPaintAnnularRing(
+            LayoutBox box, IRenderTarget target, ComputedStyle style,
+            float topW, float rightW, float bottomW, float leftW,
+            CssBorderStyle topStyle, CssBorderStyle rightStyle,
+            CssBorderStyle bottomStyle, CssBorderStyle leftStyle,
+            BorderRadii radii)
+        {
+            // Collect visible sides and check they are all solid with the same color.
+            CssColor? ringColor = null;
+            bool hasLegendGap = GetFieldsetLegendGap(box).HasValue;
+            if (hasLegendGap) return false; // legend gap needs per-side painting
+
+            bool hasSide(float w, CssBorderStyle s) =>
+                w > 0f && s != CssBorderStyle.None && s != CssBorderStyle.Hidden;
+
+            if (hasSide(topW, topStyle))
+            {
+                if (topStyle != CssBorderStyle.Solid) return false;
+                var c = style.BorderTopColor;
+                if (c.A == 0) return false;
+                ringColor = c;
+            }
+            if (hasSide(rightW, rightStyle))
+            {
+                if (rightStyle != CssBorderStyle.Solid) return false;
+                var c = style.BorderRightColor;
+                if (c.A == 0) return false;
+                if (ringColor.HasValue && !ringColor.Value.Equals(c)) return false;
+                ringColor = c;
+            }
+            if (hasSide(bottomW, bottomStyle))
+            {
+                if (bottomStyle != CssBorderStyle.Solid) return false;
+                var c = style.BorderBottomColor;
+                if (c.A == 0) return false;
+                if (ringColor.HasValue && !ringColor.Value.Equals(c)) return false;
+                ringColor = c;
+            }
+            if (hasSide(leftW, leftStyle))
+            {
+                if (leftStyle != CssBorderStyle.Solid) return false;
+                var c = style.BorderLeftColor;
+                if (c.A == 0) return false;
+                if (ringColor.HasValue && !ringColor.Value.Equals(c)) return false;
+                ringColor = c;
+            }
+
+            if (!ringColor.HasValue) return false;
+
+            RectF borderRect = box.BorderRect;
+
+            // Build inner rounded rect: shrink by border widths, reduce radii accordingly.
+            // Per CSS spec, inner radius = max(0, outer-radius - border-width).
+            float innerX = borderRect.X + leftW;
+            float innerY = borderRect.Y + topW;
+            float innerW = borderRect.Width - leftW - rightW;
+            float innerH = borderRect.Height - topW - bottomW;
+
+            if (innerW < 0) innerW = 0;
+            if (innerH < 0) innerH = 0;
+
+            var innerRect = new RectF(innerX, innerY, innerW, innerH);
+
+            var innerRadii = new BorderRadii
+            {
+                TlRx = Math.Max(0, radii.TlRx - leftW),
+                TlRy = Math.Max(0, radii.TlRy - topW),
+                TrRx = Math.Max(0, radii.TrRx - rightW),
+                TrRy = Math.Max(0, radii.TrRy - topW),
+                BrRx = Math.Max(0, radii.BrRx - rightW),
+                BrRy = Math.Max(0, radii.BrRy - bottomW),
+                BlRx = Math.Max(0, radii.BlRx - leftW),
+                BlRy = Math.Max(0, radii.BlRy - bottomW),
+            };
+
+            // Use native rounded rect difference for pixel-perfect match with Chrome's SkRRect rendering.
+            var outerRR = new RoundedRectInfo(borderRect,
+                radii.TlRx, radii.TlRy, radii.TrRx, radii.TrRy,
+                radii.BrRx, radii.BrRy, radii.BlRx, radii.BlRy);
+            var innerRR = new RoundedRectInfo(innerRect,
+                innerRadii.TlRx, innerRadii.TlRy, innerRadii.TrRx, innerRadii.TrRy,
+                innerRadii.BrRx, innerRadii.BrRy, innerRadii.BlRx, innerRadii.BlRy);
+
+            target.FillRoundRectDifference(outerRR, innerRR, BrushInfo.Solid(ringColor.Value));
+            return true;
         }
     }
 }

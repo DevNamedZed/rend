@@ -59,7 +59,6 @@ class Program
             return 0;
         }
 
-
         // Run text diagnostic if requested
         if (args.Length > 0 && args[0] == "--text-diag")
         {
@@ -131,7 +130,7 @@ class Program
 
         // Create shared font provider, text shaper, and font mapper so we don't
         // reload system fonts, re-pin font data, or re-copy font files into native
-        // memory for every test. Without sharing, 237 renders × ~5 fonts × ~1MB each
+        // memory for every test. Without sharing, 237 renders x ~5 fonts x ~1MB each
         // = massive native memory churn.
         var fontProvider = CreateSharedFontProvider();
         using var fontMapper = new Rend.Output.Image.Internal.SkiaFontMapper();
@@ -141,6 +140,27 @@ class Program
         using var textShaper = new Rend.Output.Image.SkiaTextShaper(fontMapper);
 
         var testCases = VisualTestCatalog.AllCases;
+
+        // --filter: run only tests whose Id, Name, or Category contains the filter string
+        string? filterArg = null;
+        for (int ai = 0; ai < args.Length; ai++)
+        {
+            if (args[ai] == "--filter" && ai + 1 < args.Length)
+            {
+                filterArg = args[ai + 1];
+                break;
+            }
+        }
+        if (filterArg != null)
+        {
+            testCases = testCases.Where(t =>
+                t.Id.Contains(filterArg, StringComparison.OrdinalIgnoreCase) ||
+                t.Name.Contains(filterArg, StringComparison.OrdinalIgnoreCase) ||
+                t.Category.Contains(filterArg, StringComparison.OrdinalIgnoreCase)).ToList();
+            Console.WriteLine($"Filter: \"{filterArg}\" -- {testCases.Count} tests matched");
+            Console.WriteLine();
+        }
+
         var results = new List<ComparisonResult>();
 
         foreach (var testCase in testCases)

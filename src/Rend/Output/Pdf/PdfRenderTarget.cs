@@ -234,6 +234,19 @@ namespace Rend.Output.Pdf
         }
 
         /// <inheritdoc />
+        public void FillRoundRectDifference(RoundedRectInfo outer, RoundedRectInfo inner, BrushInfo brush)
+        {
+            // PDF fallback: build EvenOdd path from both rounded rects.
+            var path = new PathData();
+            path.FillType = PathFillType.EvenOdd;
+            path.AddRoundedRectangleElliptical(outer.Rect, outer.TlRx, outer.TlRy, outer.TrRx, outer.TrRy,
+                                outer.BrRx, outer.BrRy, outer.BlRx, outer.BlRy);
+            path.AddRoundedRectangleElliptical(inner.Rect, inner.TlRx, inner.TlRy, inner.TrRx, inner.TrRy,
+                                inner.BrRx, inner.BrRy, inner.BlRx, inner.BlRy);
+            FillPath(path, brush);
+        }
+
+        /// <inheritdoc />
         public void FillPath(PathData path, BrushInfo brush)
         {
             EnsurePage();
@@ -321,6 +334,15 @@ namespace Rend.Output.Pdf
             // CID encoding for embedded fonts.
             content.ShowText(pdfFont, run.OriginalText);
             content.EndText();
+        }
+
+        public (float UnderlinePosition, float UnderlineThickness,
+                float StrikeoutPosition, float StrikeoutThickness) GetDecorationMetrics(
+            FontDescriptor font, float fontSize)
+        {
+            // Default approximation for PDF output
+            // underlinePosition positive = below baseline, strikeoutPosition negative = above
+            return (fontSize * 0.15f, 1f, -fontSize * 0.3f, 1f);
         }
 
         /// <inheritdoc />

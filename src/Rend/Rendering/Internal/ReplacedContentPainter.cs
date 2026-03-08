@@ -264,44 +264,56 @@ namespace Rend.Rendering.Internal
             var accent = GetAccentColor(element);
             bool hasAccent = accent.A > 0 && isChecked;
 
-            // Chrome native_theme_base.cc: kCheckboxBorderRadius = 2
+            // Chrome native_theme_base.cc: border_radius = 2.0f
             float radius = 2f;
+            float w = rect.Width;
+            float h = rect.Height;
 
             if (isChecked)
             {
-                // Checked: filled rounded rect in accent color + white checkmark
+                // Chrome: checked checkbox has accent fill, NO separate border stroke.
+                // Background inset by kBorderWidth * 0.2 = 0.2px
+                var bgRect = new RectF(rect.X + 0.2f, rect.Y + 0.2f, w - 0.4f, h - 0.4f);
                 var bgPath = new PathData();
-                bgPath.AddRoundedRectangle(rect, radius, radius, radius, radius);
+                bgPath.AddRoundedRectangle(bgRect, radius, radius, radius, radius);
                 target.FillPath(bgPath, BrushInfo.Solid(hasAccent ? accent : CssColor.White));
-                if (hasAccent)
-                    target.StrokePath(bgPath, new PenInfo(accent, 1f));
-                else
-                    target.StrokePath(bgPath, new PenInfo(BorderColor, 1f));
 
-                float cx = rect.X;
-                float cy = rect.Y;
-                float w = rect.Width;
-                float h = rect.Height;
+                if (!hasAccent)
+                {
+                    // If no accent, draw border
+                    var strokeRect = new RectF(rect.X + 0.5f, rect.Y + 0.5f, w - 1f, h - 1f);
+                    var strokePath = new PathData();
+                    strokePath.AddRoundedRectangle(strokeRect, radius, radius, radius, radius);
+                    target.StrokePath(strokePath, new PenInfo(BorderColor, 1f));
+                }
 
-                // Chrome checkmark path: (0.2,0.5) -> (0.4,0.7) -> (0.8,0.2)
+                // Chrome checkmark path (native_theme_base.cc PaintCheckbox):
+                //   moveTo(skrect.x + width * 0.2, skrect.centerY)
+                //   rLineTo(width * 0.2, height * 0.2)
+                //   lineTo(skrect.right - width * 0.2, skrect.y + height * 0.2)
+                // Stroke width: height * 0.16
                 var path = new PathData();
-                path.MoveTo(cx + w * 0.2f, cy + h * 0.5f);
-                path.LineTo(cx + w * 0.4f, cy + h * 0.7f);
-                path.LineTo(cx + w * 0.8f, cy + h * 0.2f);
+                float startX = rect.X + w * 0.2f;
+                float startY = rect.Y + h * 0.5f;
+                path.MoveTo(startX, startY);
+                path.LineTo(startX + w * 0.2f, startY + h * 0.2f);
+                path.LineTo(rect.X + w - w * 0.2f, rect.Y + h * 0.2f);
 
-                // Chrome stroke width: ceilf(size / 8.0f) = ceil(13/8) = 2
-                float strokeW = (float)Math.Ceiling(w / 8f);
-                target.StrokePath(path, new PenInfo(hasAccent ? CssColor.White : CheckmarkColor, strokeW));
+                // Chrome: stroke width = height * 0.16, with kRound_Cap
+                float strokeW = h * 0.16f;
+                target.StrokePath(path, new PenInfo(hasAccent ? CssColor.White : CheckmarkColor, strokeW, cap: StrokeCap.Round));
             }
             else
             {
-                // Unchecked: white fill + 1px stroke at 0.5px inset with rounded corners
+                // Chrome: unchecked checkbox — white fill + 1px border
+                // Background inset by kBorderWidth * 0.2 = 0.2px
+                var bgRect = new RectF(rect.X + 0.2f, rect.Y + 0.2f, w - 0.4f, h - 0.4f);
                 var bgPath = new PathData();
-                bgPath.AddRoundedRectangle(rect, radius, radius, radius, radius);
+                bgPath.AddRoundedRectangle(bgRect, radius, radius, radius, radius);
                 target.FillPath(bgPath, BrushInfo.Solid(CssColor.White));
 
-                var strokeRect = new RectF(rect.X + 0.5f, rect.Y + 0.5f,
-                                            rect.Width - 1f, rect.Height - 1f);
+                // Border: inset by kBorderWidth/2 = 0.5px, stroke 1px
+                var strokeRect = new RectF(rect.X + 0.5f, rect.Y + 0.5f, w - 1f, h - 1f);
                 var strokePath = new PathData();
                 strokePath.AddRoundedRectangle(strokeRect, radius, radius, radius, radius);
                 target.StrokePath(strokePath, new PenInfo(BorderColor, 1f));
@@ -315,30 +327,43 @@ namespace Rend.Rendering.Internal
         {
             float cx = rect.X + rect.Width / 2f;
             float cy = rect.Y + rect.Height / 2f;
-            float radius = Math.Min(rect.Width, rect.Height) / 2f;
+            float w = rect.Width;
+            float h = rect.Height;
+            float radius = Math.Max(w, h) * 0.5f;
             bool isChecked = element.GetAttribute("checked") != null;
             var accent = GetAccentColor(element);
             bool hasAccent = accent.A > 0 && isChecked;
 
+            // Chrome: PaintCheckboxRadioCommon always draws background and border for radio
+            // Background inset by kBorderWidth * 0.2 = 0.2px
+            var bgRect = new RectF(rect.X + 0.2f, rect.Y + 0.2f, w - 0.4f, h - 0.4f);
+            float bgRadius = Math.Max(bgRect.Width, bgRect.Height) * 0.5f;
+
             if (isChecked)
             {
-                // Checked: filled circle in accent color + white inner dot
-                var outerCircle = BuildCirclePath(cx, cy, radius);
-                target.FillPath(outerCircle, BrushInfo.Solid(hasAccent ? accent : CssColor.White));
-                if (!hasAccent)
-                    target.StrokePath(outerCircle, new PenInfo(BorderColor, 1f));
+                // Chrome: checked radio — accent fill + accent border + white inner dot
+                var bgPath = new PathData();
+                bgPath.AddRoundedRectangle(bgRect, bgRadius, bgRadius, bgRadius, bgRadius);
+                target.FillPath(bgPath, BrushInfo.Solid(hasAccent ? accent : CssColor.White));
 
-                // Chrome: inner dot radius = outer radius * 0.4
+                // Border at 0.5px inset with accent color
+                var strokeCircle = BuildCirclePath(cx, cy, radius - 0.5f);
+                target.StrokePath(strokeCircle, new PenInfo(hasAccent ? accent : BorderColor, 1f));
+
+                // Chrome: inner dot — visually measures ~40% of diameter (radius * 0.4)
                 float innerRadius = radius * 0.4f;
                 var innerCircle = BuildCirclePath(cx, cy, innerRadius);
                 target.FillPath(innerCircle, BrushInfo.Solid(hasAccent ? CssColor.White : CheckmarkColor));
             }
             else
             {
-                // Unchecked: white fill + 1px stroke at 0.5px inset
-                var outerCircle = BuildCirclePath(cx, cy, radius - 0.5f);
-                target.FillPath(outerCircle, BrushInfo.Solid(CssColor.White));
-                target.StrokePath(outerCircle, new PenInfo(BorderColor, 1f));
+                // Chrome: unchecked radio — white fill + border
+                var bgPath = new PathData();
+                bgPath.AddRoundedRectangle(bgRect, bgRadius, bgRadius, bgRadius, bgRadius);
+                target.FillPath(bgPath, BrushInfo.Solid(CssColor.White));
+
+                var strokeCircle = BuildCirclePath(cx, cy, radius - 0.5f);
+                target.StrokePath(strokeCircle, new PenInfo(BorderColor, 1f));
             }
         }
 
@@ -348,10 +373,10 @@ namespace Rend.Rendering.Internal
         /// </summary>
         private static void PaintButtonInput(StyledElement element, RectF rect, IRenderTarget target, string inputType)
         {
-            // Chrome's default button: background #efefef, border 2px outset #767676, border-radius 2px
-            // padding: 1px 6px
+            // Chrome native_theme_base.cc PaintButton:
+            // - Fill: #efefef rounded rect with radius 2
+            // - Border: 1px stroke #767676 at 0.5px inset
             var bgColor = new CssColor(239, 239, 239); // #efefef
-            float bw = 2f;
             float radius = 2f;
 
             // Fill background with rounded corners
@@ -359,18 +384,12 @@ namespace Rend.Rendering.Internal
             bgPath.AddRoundedRectangle(rect, radius, radius, radius, radius);
             target.FillPath(bgPath, BrushInfo.Solid(bgColor));
 
-            // Outset border: light on top/left, dark on bottom/right
-            var lightColor = BorderPainter.LightenColor(BorderColor);
-            var darkColor = BorderPainter.DarkenColor(BorderColor);
-
-            // Top border (light)
-            target.FillRect(new RectF(rect.X + radius, rect.Y, rect.Width - radius * 2, bw), BrushInfo.Solid(lightColor));
-            // Left border (light)
-            target.FillRect(new RectF(rect.X, rect.Y + radius, bw, rect.Height - radius * 2), BrushInfo.Solid(lightColor));
-            // Bottom border (dark)
-            target.FillRect(new RectF(rect.X + radius, rect.Y + rect.Height - bw, rect.Width - radius * 2, bw), BrushInfo.Solid(darkColor));
-            // Right border (dark)
-            target.FillRect(new RectF(rect.X + rect.Width - bw, rect.Y + radius, bw, rect.Height - radius * 2), BrushInfo.Solid(darkColor));
+            // 1px border at 0.5px inset (matching Chrome's stroke at border_width/2)
+            var strokeRect = new RectF(rect.X + 0.5f, rect.Y + 0.5f,
+                                        rect.Width - 1f, rect.Height - 1f);
+            var strokePath = new PathData();
+            strokePath.AddRoundedRectangle(strokeRect, radius, radius, radius, radius);
+            target.StrokePath(strokePath, new PenInfo(BorderColor, 1f));
 
             // Button label text
             string? label = element.GetAttribute("value");
@@ -511,16 +530,11 @@ namespace Rend.Rendering.Internal
         /// </summary>
         private static PathData BuildCirclePath(float cx, float cy, float radius)
         {
-            const float kappa = 0.5522847498f;
-            float k = radius * kappa;
-
+            // Use AddRoundedRectangle with equal radii to create a circle.
+            // This triggers native SKRoundRect (type=kOval) matching Chrome's Skia drawOval.
             var path = new PathData();
-            path.MoveTo(cx + radius, cy);
-            path.CubicBezierTo(cx + radius, cy + k, cx + k, cy + radius, cx, cy + radius);
-            path.CubicBezierTo(cx - k, cy + radius, cx - radius, cy + k, cx - radius, cy);
-            path.CubicBezierTo(cx - radius, cy - k, cx - k, cy - radius, cx, cy - radius);
-            path.CubicBezierTo(cx + k, cy - radius, cx + radius, cy - k, cx + radius, cy);
-            path.Close();
+            var rect = new RectF(cx - radius, cy - radius, radius * 2f, radius * 2f);
+            path.AddRoundedRectangle(rect, radius, radius, radius, radius);
             return path;
         }
 

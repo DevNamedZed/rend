@@ -13,6 +13,8 @@ namespace Rend.Output.Image.Internal
     public sealed class SkiaFontMapper : IDisposable
     {
         private readonly Dictionary<FontDescriptor, SKTypeface> _cache = new Dictionary<FontDescriptor, SKTypeface>();
+        // Cache typefaces by font data identity to ensure identical bytes produce the same typeface instance.
+        private readonly Dictionary<int, SKTypeface> _fontDataCache = new Dictionary<int, SKTypeface>();
         private bool _disposed;
 
         /// <summary>
@@ -31,15 +33,23 @@ namespace Rend.Output.Image.Internal
             SKTypeface typeface;
             if (fontData != null && fontData.Length > 0)
             {
-                using (var skData = SKData.CreateCopy(fontData))
+                // Cache by font data identity so the same font bytes always produce
+                // the same SKTypeface instance (avoids subtle rendering differences
+                // when Skia creates multiple typefaces from identical data).
+                int dataKey = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(fontData);
+                if (!_fontDataCache.TryGetValue(dataKey, out typeface!))
                 {
-                    typeface = SKTypeface.FromData(skData);
-                }
+                    using (var skData = SKData.CreateCopy(fontData))
+                    {
+                        typeface = SKTypeface.FromData(skData);
+                    }
 
-                // FromData may return null if the font data is invalid.
-                if (typeface == null)
-                {
-                    typeface = SKTypeface.Default;
+                    // FromData may return null if the font data is invalid.
+                    if (typeface == null)
+                    {
+                        typeface = SKTypeface.Default;
+                    }
+                    _fontDataCache[dataKey] = typeface;
                 }
             }
             else
@@ -57,7 +67,7 @@ namespace Rend.Output.Image.Internal
         {
             ["sans-serif"] = new[] { "Helvetica", "Helvetica Neue", "Arial", "Segoe UI", "DejaVu Sans" },
             ["serif"] = new[] { "Times New Roman", "Times", "Georgia", "DejaVu Serif" },
-            ["monospace"] = new[] { "Courier New", "Courier", "Menlo", "Consolas", "DejaVu Sans Mono" },
+            ["monospace"] = new[] { "Courier New", "Courier", "Consolas", "Menlo", "DejaVu Sans Mono" },
             ["cursive"] = new[] { "Comic Sans MS", "Apple Chancery" },
             ["fantasy"] = new[] { "Impact", "Papyrus" },
             ["system-ui"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },

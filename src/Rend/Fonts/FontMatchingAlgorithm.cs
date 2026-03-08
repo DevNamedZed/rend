@@ -18,7 +18,7 @@ namespace Rend.Fonts
         {
             ["sans-serif"] = new[] { "Helvetica", "Helvetica Neue", "Arial", "Segoe UI", "DejaVu Sans", "Liberation Sans", "FreeSans", "Noto Sans" },
             ["serif"] = new[] { "Times New Roman", "Times", "Georgia", "DejaVu Serif", "Liberation Serif", "FreeSerif", "Noto Serif" },
-            ["monospace"] = new[] { "Courier New", "Courier", "Menlo", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "FreeMono", "Noto Sans Mono" },
+            ["monospace"] = new[] { "Courier New", "Courier", "Consolas", "Menlo", "DejaVu Sans Mono", "Liberation Mono", "FreeMono", "Noto Sans Mono" },
             ["cursive"] = new[] { "Comic Sans MS", "Apple Chancery", "Snell Roundhand" },
             ["fantasy"] = new[] { "Impact", "Papyrus" },
             ["system-ui"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },

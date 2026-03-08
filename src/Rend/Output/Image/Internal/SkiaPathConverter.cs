@@ -20,8 +20,9 @@ namespace Rend.Output.Image.Internal
 
             // Use native Skia rounded rect when available — matches Chrome's SkRRect exactly
             // (uses conic sections instead of cubic bezier approximation).
+            // Skip for EvenOdd paths (compound paths like annular rings) that have additional subpaths.
             var rr = path.RoundedRect;
-            if (rr != null)
+            if (rr != null && path.FillType != PathFillType.EvenOdd)
             {
                 var rect = new SKRect(rr.Rect.X, rr.Rect.Y,
                                       rr.Rect.X + rr.Rect.Width, rr.Rect.Y + rr.Rect.Height);

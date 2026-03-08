@@ -348,17 +348,11 @@ namespace Rend.Rendering.Internal
 
         private static PathData BuildEllipsePath(float cx, float cy, float rx, float ry)
         {
-            const float kappa = 0.5522847498f;
-            float kx = rx * kappa;
-            float ky = ry * kappa;
-
+            // Use AddRoundedRectangleElliptical with radii = half dimensions to create an oval.
+            // This triggers native SKRoundRect (type=kOval) matching Chrome's Skia drawOval.
             var path = new PathData();
-            path.MoveTo(cx + rx, cy);
-            path.CubicBezierTo(cx + rx, cy + ky, cx + kx, cy + ry, cx, cy + ry);
-            path.CubicBezierTo(cx - kx, cy + ry, cx - rx, cy + ky, cx - rx, cy);
-            path.CubicBezierTo(cx - rx, cy - ky, cx - kx, cy - ry, cx, cy - ry);
-            path.CubicBezierTo(cx + kx, cy - ry, cx + rx, cy - ky, cx + rx, cy);
-            path.Close();
+            var rect = new RectF(cx - rx, cy - ry, rx * 2f, ry * 2f);
+            path.AddRoundedRectangleElliptical(rect, rx, ry, rx, ry, rx, ry, rx, ry);
             return path;
         }
 

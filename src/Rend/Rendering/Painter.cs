@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Rend.Core.Values;
 using Rend.Css;
@@ -360,7 +361,8 @@ namespace Rend.Rendering
                 if (inlineStyle.BackgroundColor.A <= 0) continue;
 
                 float fx = lineBox.X + fragment.X;
-                float fy = lineBox.Y + fragment.Y;
+                // Snap line-box Y to pixel boundary (matching Chrome's PixelSnappedIntRect)
+                float fy = (float)Math.Round(lineBox.Y + fragment.Y);
 
                 // Include inline padding in the background rectangle
                 float padL = float.IsNaN(inlineStyle.PaddingLeft) ? 0 : inlineStyle.PaddingLeft;

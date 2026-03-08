@@ -89,13 +89,23 @@ namespace Rend.Rendering.Internal
             else
                 pixelLineHeight = rawLh; // Already in pixels
 
+            // For inside position, Chrome renders disc/circle/square as text glyphs
+            // via the ::marker pseudo-element ("•", "◦", "▪" + trailing space).
+            if (isInside && (listType == CssListStyleType.Disc ||
+                             listType == CssListStyleType.Circle ||
+                             listType == CssListStyleType.Square))
+            {
+                string markerChar = listType == CssListStyleType.Disc ? "\u2022"    // • BULLET
+                                  : listType == CssListStyleType.Circle ? "\u25E6"  // ◦ WHITE BULLET
+                                  : "\u25AA";                                        // ▪ BLACK SMALL SQUARE
+                PaintCounterText(target, markerChar, contentRect, color, fontSize, style, isInside);
+                return;
+            }
+
             // Chrome centers list bullets vertically on the first line
             float markerCenterY = contentRect.Y + pixelLineHeight * 0.5f;
             // Outside: marker drawn to the left of content area.
-            // Inside: marker drawn at the start of content area (text is indented to make room).
-            float markerX = isInside
-                ? contentRect.X + bulletRadius + 2f
-                : contentRect.X - GetMarkerOffset(fontSize);
+            float markerX = contentRect.X - GetMarkerOffset(fontSize);
 
             switch (listType)
             {
@@ -224,9 +234,13 @@ namespace Rend.Rendering.Internal
             }
             else
             {
-                // Outside: draw to the left of the content area.
-                float estimatedWidth = text.Length * fontSize * 0.6f;
-                float x = contentRect.X - estimatedWidth - 4f;
+                // Outside: right-align marker text so it ends just before the content area.
+                // Use actual text measurement for accurate positioning instead of estimation.
+                float textWidth = target.MeasureText(text, textStyle);
+                if (textWidth < 0) textWidth = text.Length * fontSize * 0.6f; // fallback
+                // Chrome places marker text with ~0.5ch gap before content
+                float gap = fontSize * 0.3f;
+                float x = contentRect.X - textWidth - gap;
                 target.DrawText(text, x, y, textStyle);
             }
         }
@@ -313,6 +327,9 @@ namespace Rend.Rendering.Internal
         /// <summary>
         /// Paint a disclosure triangle for a &lt;summary&gt; element.
         /// ▼ for open, ▶ for closed.
+        /// Chrome renders these as Unicode text glyphs (U+25BE/U+25B8) in list_marker.cc,
+        /// falling back to Segoe UI Symbol or similar. We draw as paths to avoid font fallback
+        /// issues, but match Chrome's sizing and positioning.
         /// </summary>
         private static void PaintDisclosureTriangle(IRenderTarget target, LayoutBox box,
             ComputedStyle style, bool isOpen)

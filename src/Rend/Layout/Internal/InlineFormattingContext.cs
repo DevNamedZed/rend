@@ -17,6 +17,7 @@ namespace Rend.Layout.Internal
     /// </summary>
     internal static class InlineFormattingContext
     {
+        internal static bool _debugJustify; // set true for debug logging
         /// <summary>
         /// Lazily-initialized hyphenation dictionary for auto-hyphenation (en-US patterns).
         /// </summary>
@@ -90,13 +91,16 @@ namespace Rend.Layout.Internal
                 bool isSummary = styledElement.TagName == "summary";
                 if (isSummary)
                 {
-                    // Disclosure triangle is ~0.5em wide + small gap
-                    markerReserve = styledElement.Style.FontSize * 0.5f + 4f;
+                    // Chrome's disclosure marker is the character "▾"/"▸" (U+25BE/U+25B8)
+                    // rendered as ::marker content with a trailing space. The total advance
+                    // width is approximately 1em (character + space in fallback font).
+                    markerReserve = styledElement.Style.FontSize * 1.1f;
                 }
                 else if (lstType == CssListStyleType.Disc || lstType == CssListStyleType.Circle ||
                     lstType == CssListStyleType.Square)
                 {
-                    // Chrome uses ~1.375em marker box for inside disc/circle/square
+                    // Chrome's ::marker for inside disc renders "•" glyph + space.
+                    // Empirical measurement from Chrome output shows marker reserve ≈ 1.5em.
                     markerReserve = styledElement.Style.FontSize * 1.375f;
                 }
                 else
@@ -344,7 +348,8 @@ namespace Rend.Layout.Internal
             {
                 currentLine.IsLastLine = true;
                 FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, styledElement.Style.TextAlign,
-                                styledElement.Style.TextAlignLast, styledElement.Style.Direction);
+                                styledElement.Style.TextAlignLast, styledElement.Style.Direction,
+                                styledElement.Style.FontSize);
                 lineBoxes.Add(currentLine);
             }
 
@@ -770,9 +775,10 @@ namespace Rend.Layout.Internal
                               style.WhiteSpace == CssWhiteSpace.Nowrap;
             if (isNormalWs && text.Length > 0 && text[0] == ' ')
             {
-                if (Math.Abs(cursorX - startX) < 0.01f)
+                if (currentLine.Fragments.Count == 0)
                 {
-                    // At start of line — strip leading space
+                    // No fragments on line yet — this is the start of the line.
+                    // Strip leading space regardless of cursor position (e.g., text-indent).
                     text = text.TrimStart(' ');
                     if (text.Length == 0) return;
                 }
@@ -944,6 +950,7 @@ namespace Rend.Layout.Internal
             int wordStart = 0;
             bool hasSoftHyphens = hyphens != CssHyphens.None && text.IndexOf('\u00AD') >= 0;
 
+
             // Accumulate consecutive words into a single fragment per line.
             // This prevents word spacing mismatch between HarfBuzz layout and Skia rendering
             // by letting Skia handle intra-line glyph spacing as one continuous string.
@@ -973,12 +980,12 @@ namespace Rend.Layout.Internal
                         if (hasSoftHyphens) lineCandidate = lineCandidate.Replace("\u00AD", string.Empty);
                         if (lineCandidate.Length > 0)
                         {
-                            // CSS Text Level 3 §4.1.3: In pre-wrap, trailing whitespace hangs
-                            // and does not contribute to the line width for wrapping decisions.
-                            string measureCandidate = lineCandidate;
-                            bool hangTrailingWs = whiteSpace == CssWhiteSpace.PreWrap;
-                            if (hangTrailingWs)
-                                measureCandidate = lineCandidate.TrimEnd(' ');
+                            // CSS Text Level 3 §8.2: Trailing whitespace at the end of a line
+                            // hangs and does not contribute to the line width for wrapping.
+                            // This applies to all white-space modes (normal, nowrap, pre-wrap, etc).
+                            // In 'normal' mode, trailing spaces are removed after line-break;
+                            // in 'pre-wrap' mode, they hang visibly but still don't cause overflow.
+                            string measureCandidate = lineCandidate.TrimEnd(' ');
                             if (measureCandidate.Length > 0)
                             {
                                 var candShape = context.TextMeasurer!.Shape(measureCandidate, fontDesc, fontSize);
@@ -994,7 +1001,6 @@ namespace Rend.Layout.Internal
                             candidateWidth = accumulatedWidth + wordWidth;
                         }
                     }
-
                     bool wordHandled = false;
                     if (lineFragStartX + candidateWidth > startX + containingWidth && (currentLine.Fragments.Count > 0 || accumulatedWidth > 0))
                     {
@@ -1296,9 +1302,10 @@ namespace Rend.Layout.Internal
             var parentStyle = parent.StyledNode as StyledElement;
             var align = parentStyle?.Style.TextAlign ?? CssTextAlign.Left;
             var dir = parentStyle?.Style.Direction ?? CssDirection.Ltr;
-            FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, align, CssTextAlign.Auto, dir);
+            float pfs = parentStyle?.Style.FontSize ?? 14f;
+            FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, align, CssTextAlign.Auto, dir, pfs);
             lineBoxes.Add(currentLine);
-            cursorY += maxLineHeight;
+            cursorY += currentLine.Height;
 
             // Re-query float context for the new line's Y position
             var floatCtx = context?.FloatContext;
@@ -1341,9 +1348,10 @@ namespace Rend.Layout.Internal
                     var parentStyle = parent.StyledNode as StyledElement;
                     var align = parentStyle?.Style.TextAlign ?? CssTextAlign.Left;
                     var dir = parentStyle?.Style.Direction ?? CssDirection.Ltr;
-                    FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, align, CssTextAlign.Auto, dir);
+                    float pfs2 = parentStyle?.Style.FontSize ?? 14f;
+                    FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, align, CssTextAlign.Auto, dir, pfs2);
                     lineBoxes.Add(currentLine);
-                    cursorY += maxLineHeight;
+                    cursorY += currentLine.Height;
                     currentLine = new LineBox { X = startX, Y = cursorY, Width = containingWidth };
                     cursorX = startX;
                     maxLineHeight = 0;
@@ -1469,9 +1477,10 @@ namespace Rend.Layout.Internal
                 var parentStyle = parent.StyledNode as StyledElement;
                 var align = parentStyle?.Style.TextAlign ?? CssTextAlign.Left;
                 var dir = parentStyle?.Style.Direction ?? CssDirection.Ltr;
-                FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, align, CssTextAlign.Auto, dir);
+                float pfs3 = parentStyle?.Style.FontSize ?? 14f;
+                FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, align, CssTextAlign.Auto, dir, pfs3);
                 lineBoxes.Add(currentLine);
-                cursorY += maxLineHeight;
+                cursorY += currentLine.Height;
                 currentLine = new LineBox { X = startX, Y = cursorY, Width = containingWidth };
                 cursorX = startX;
                 maxLineHeight = 0;
@@ -1751,7 +1760,8 @@ namespace Rend.Layout.Internal
         }
 
         private static void FinalizeLineBox(LineBox line, float height, float baseline, CssTextAlign textAlign,
-            CssTextAlign textAlignLast = CssTextAlign.Auto, CssDirection direction = CssDirection.Ltr)
+            CssTextAlign textAlignLast = CssTextAlign.Auto, CssDirection direction = CssDirection.Ltr,
+            float parentFontSize = 14f)
         {
             float h = height > 0 ? height : 16f;
             // Chrome uses LayoutUnit internally (1/64th pixel precision, truncated).
@@ -1779,8 +1789,10 @@ namespace Rend.Layout.Internal
                         frag.Y = line.Height - frag.Height;
                         break;
                     case CssVerticalAlign.Middle:
-                        // Align midpoint of fragment with baseline + half x-height
-                        frag.Y = baseline - frag.Height / 2;
+                        // CSS: align midpoint of box with baseline + half x-height of parent.
+                        // x-height ≈ 0.52 * fontSize for most Latin fonts (Arial: 1062/2048 = 0.518).
+                        float halfXHeight = parentFontSize * 0.52f / 2f;
+                        frag.Y = baseline - halfXHeight - frag.Height / 2;
                         break;
                     case CssVerticalAlign.TextTop:
                         frag.Y = 0;
@@ -1813,6 +1825,45 @@ namespace Rend.Layout.Internal
                 }
                 contentWidth = Math.Max(contentWidth, fragRight);
             }
+
+            // CSS Text Module Level 3 §4.1.1: trailing whitespace "hangs" off the end
+            // of the line — its advance width is excluded from content width for alignment.
+            float trailingWhitespaceWidth = 0;
+            for (int i = line.Fragments.Count - 1; i >= 0; i--)
+            {
+                var frag = line.Fragments[i];
+                if (frag.Text == null || frag.Text.Length == 0) continue;
+                // Find trailing spaces in this fragment
+                int trailCount = 0;
+                for (int c = frag.Text.Length - 1; c >= 0; c--)
+                {
+                    if (frag.Text[c] == ' ') trailCount++;
+                    else break;
+                }
+                if (trailCount > 0 && frag.ShapedRun != null)
+                {
+                    // Sum advance widths of trailing space glyphs
+                    var glyphs = frag.ShapedRun.Glyphs;
+                    for (int gi = glyphs.Length - 1; gi >= 0; gi--)
+                    {
+                        uint cluster = glyphs[gi].Cluster;
+                        if (cluster < (uint)frag.Text.Length && frag.Text[(int)cluster] == ' '
+                            && (int)cluster >= frag.Text.Length - trailCount)
+                        {
+                            trailingWhitespaceWidth += glyphs[gi].XAdvance;
+                        }
+                        else break;
+                    }
+                }
+                else if (trailCount > 0 && frag.Text != null)
+                {
+                    // Estimate: for unshaped text, approximate space width
+                    trailingWhitespaceWidth += trailCount * frag.Width / frag.Text.Length;
+                }
+                break; // only check last text fragment
+            }
+            contentWidth -= trailingWhitespaceWidth;
+
             line.NaturalContentWidth = contentWidth;
 
             // Apply text-align (for last lines, use text-align-last if set)
@@ -1845,14 +1896,22 @@ namespace Rend.Layout.Internal
                     // Distribute space across word gaps (only non-last lines)
                     if (!line.IsLastLine)
                     {
-                        // Count total word gaps (spaces) across all text fragments
+                        // Count total word gaps (spaces) across all text fragments.
+                        // Trailing whitespace is excluded — it hangs off the line and
+                        // is not a justification opportunity (CSS Text L3 §7.5).
                         int totalGaps = 0;
                         for (int i = 0; i < line.Fragments.Count; i++)
                         {
                             var ft = line.Fragments[i].Text;
                             if (ft != null)
                             {
-                                for (int c = 0; c < ft.Length; c++)
+                                int end = ft.Length;
+                                // For last text fragment, exclude trailing spaces
+                                if (i == line.Fragments.Count - 1)
+                                {
+                                    while (end > 0 && ft[end - 1] == ' ') end--;
+                                }
+                                for (int c = 0; c < end; c++)
                                     if (ft[c] == ' ') totalGaps++;
                             }
                         }

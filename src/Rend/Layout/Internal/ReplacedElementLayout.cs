@@ -109,8 +109,8 @@ namespace Rend.Layout.Internal
                 // Content-box width: subtract 4px border + 2px padding from total
                 string? cols = element.GetAttribute("cols");
                 if (cols != null && int.TryParse(cols, out int c) && c > 0)
-                    return c * 8f - 6f; // ~8px per column character, minus border+padding
-                return 194f; // 200 - 6
+                    return c * 8f; // ~8px per column character (border+padding added by UA CSS)
+                return 160f; // default 20 cols * 8
             }
 
             if (tag == "meter" || tag == "progress")
@@ -157,15 +157,15 @@ namespace Rend.Layout.Internal
             }
 
             if (tag == "select")
-                return 15f; // Content-box: 21 - 4px border - 2px padding
+                return 19f; // Content-box: 21 - 2px border (1px each side, no padding)
 
             if (tag == "textarea")
             {
-                // Content-box height: subtract 4px border + 2px padding
+                // Content-box height: rows * line-height (border+padding added by UA CSS)
                 string? rows = element.GetAttribute("rows");
                 if (rows != null && int.TryParse(rows, out int r) && r > 0)
-                    return r * 16f - 6f; // ~16px per row, minus border+padding
-                return 54f; // 60 - 6
+                    return r * 16f;
+                return 32f; // default 2 rows * 16
             }
 
             if (tag == "meter" || tag == "progress")

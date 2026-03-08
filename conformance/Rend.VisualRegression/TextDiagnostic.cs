@@ -363,6 +363,72 @@ static class TextDiagnostic
         foreach (var kvp in fsMetrics)
             Console.WriteLine($"  {kvp.Key}: {System.Text.Json.JsonSerializer.Serialize(kvp.Value)}");
 
+        // --- Line-breaking width diagnostic ---
+        Console.WriteLine("\n--- Line-Breaking Width Diagnostic ---");
+        string wrapHtml = @"<!DOCTYPE html><html><body style='margin:0; font-family:Arial,sans-serif;'>
+            <div id='wrap' style='width:200px; font-size:14px; line-height:normal; padding:20px;'>The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.</div>
+        </body></html>";
+        await using var pagewrap = await browser.NewPageAsync();
+        await pagewrap.SetViewportAsync(new ViewPortOptions { Width = 400, Height = 300 });
+        await pagewrap.SetContentAsync(wrapHtml, new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.Load } });
+        var wrapMetrics = await pagewrap.EvaluateFunctionAsync<Dictionary<string, object>>(@"() => {
+            const r = {};
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.font = '14px Arial';
+            // Measure progressive strings to find wrap point
+            const text = 'The quick brown fox jumps over the lazy dog.';
+            const words = text.split(' ');
+            let acc = '';
+            for (let i = 0; i < words.length; i++) {
+                if (i > 0) acc += ' ';
+                acc += words[i];
+                const m = ctx.measureText(acc);
+                r['w' + i + '_' + words[i]] = { text: acc, width: m.width };
+            }
+            // Also measure specific candidate strings
+            r['candidate1'] = { text: 'The quick brown fox jumps ', width: ctx.measureText('The quick brown fox jumps ').width };
+            r['candidate2'] = { text: 'The quick brown fox jumps over ', width: ctx.measureText('The quick brown fox jumps over ').width };
+            r['candidate3'] = { text: 'The quick brown fox jumps over', width: ctx.measureText('The quick brown fox jumps over').width };
+
+            // Get actual line boxes
+            const wrap = document.getElementById('wrap');
+            const range = document.createRange();
+            const textNode = wrap.firstChild;
+            r['lineBoxes'] = [];
+            return r;
+        }");
+        Console.WriteLine("Chrome text widths for wrapping:");
+        foreach (var kvp in wrapMetrics)
+            Console.WriteLine($"  {kvp.Key}: {System.Text.Json.JsonSerializer.Serialize(kvp.Value)}");
+
+        // Rend text width measurements
+        Console.WriteLine("\nRend text widths for wrapping:");
+        var arialDesc14 = new FontDescriptor("Arial, sans-serif", 400, Rend.Css.CssFontStyle.Normal);
+        string[] candidates = {
+            "The quick brown fox jumps",
+            "The quick brown fox jumps ",
+            "The quick brown fox jumps over",
+            "The quick brown fox jumps over ",
+            "The quick brown fox jumps over the",
+        };
+        foreach (var cand in candidates)
+        {
+            var shaped = measurer.Shape(cand, arialDesc14, 14);
+            Console.WriteLine($"  '{cand}' = {shaped.TotalWidth:F4}px ({shaped.Glyphs.Length} glyphs)");
+        }
+        // Also measure word by word accumulating
+        string fullText = "The quick brown fox jumps over the lazy dog.";
+        var fullWords = fullText.Split(' ');
+        string acc2 = "";
+        for (int i = 0; i < fullWords.Length; i++)
+        {
+            if (i > 0) acc2 += " ";
+            acc2 += fullWords[i];
+            var shaped2 = measurer.Shape(acc2, arialDesc14, 14);
+            Console.WriteLine($"  word[{i}] '{fullWords[i]}': accumulated '{acc2}' = {shaped2.TotalWidth:F4}px");
+        }
+
         Console.WriteLine("\n=== END DIAGNOSTIC ===");
     }
 

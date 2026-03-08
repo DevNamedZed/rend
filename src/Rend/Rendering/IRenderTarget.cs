@@ -93,6 +93,12 @@ namespace Rend.Rendering
         /// <param name="pen">The stroke pen descriptor.</param>
         void StrokeRect(RectF rect, PenInfo pen);
 
+        /// <summary>Fills the area between an outer and inner rounded rectangle (annular ring).</summary>
+        /// <param name="outer">The outer rounded rectangle.</param>
+        /// <param name="inner">The inner rounded rectangle.</param>
+        /// <param name="brush">The fill brush descriptor.</param>
+        void FillRoundRectDifference(RoundedRectInfo outer, RoundedRectInfo inner, BrushInfo brush);
+
         /// <summary>Fills a path with the specified brush.</summary>
         /// <param name="path">The path to fill.</param>
         /// <param name="brush">The fill brush descriptor.</param>
@@ -113,6 +119,17 @@ namespace Rend.Rendering
         /// <param name="style">The text style to apply.</param>
         /// <returns>The advance width in pixels, or -1 if measurement is not supported.</returns>
         float MeasureText(string text, TextStyle style);
+
+        /// <summary>
+        /// Gets text decoration metrics from the font for the given size.
+        /// Returns offsets relative to the baseline:
+        /// underlinePosition (positive = below baseline),
+        /// strikeoutPosition (negative = above baseline).
+        /// Returns (0,0,0,0) if not supported.
+        /// </summary>
+        (float UnderlinePosition, float UnderlineThickness,
+         float StrikeoutPosition, float StrikeoutThickness) GetDecorationMetrics(
+            FontDescriptor font, float fontSize);
 
         /// <summary>Draws a text string at the specified position using the given style.</summary>
         /// <param name="text">The text to draw.</param>

@@ -556,13 +556,47 @@ namespace Rend.Output.Image
         }
 
         /// <inheritdoc />
+        public void FillRoundRectDifference(RoundedRectInfo outer, RoundedRectInfo inner, BrushInfo brush)
+        {
+            EnsureCanvas();
+            using var outerRR = new SKRoundRect();
+            outerRR.SetRectRadii(
+                new SKRect(outer.Rect.X, outer.Rect.Y, outer.Rect.X + outer.Rect.Width, outer.Rect.Y + outer.Rect.Height),
+                new SKPoint[] {
+                    new SKPoint(outer.TlRx, outer.TlRy), new SKPoint(outer.TrRx, outer.TrRy),
+                    new SKPoint(outer.BrRx, outer.BrRy), new SKPoint(outer.BlRx, outer.BlRy),
+                });
+            using var innerRR = new SKRoundRect();
+            innerRR.SetRectRadii(
+                new SKRect(inner.Rect.X, inner.Rect.Y, inner.Rect.X + inner.Rect.Width, inner.Rect.Y + inner.Rect.Height),
+                new SKPoint[] {
+                    new SKPoint(inner.TlRx, inner.TlRy), new SKPoint(inner.TrRx, inner.TrRy),
+                    new SKPoint(inner.BrRx, inner.BrRy), new SKPoint(inner.BlRx, inner.BlRy),
+                });
+            var paint = _paintPool.Rent();
+            try
+            {
+                paint.IsAntialias = true;
+                paint.Style = SKPaintStyle.Fill;
+                ApplyBrush(paint, brush, outer.Rect);
+                _currentCanvas!.DrawRoundRectDifference(outerRR, innerRR, paint);
+            }
+            finally
+            {
+                ClearShader(paint);
+                _paintPool.Return(paint);
+            }
+        }
+
+        /// <inheritdoc />
         public void FillPath(PathData path, BrushInfo brush)
         {
             EnsureCanvas();
 
             // Use native DrawRoundRect for rounded rect paths — matches Chrome's drawRRect exactly.
+            // Skip for EvenOdd paths (compound paths like annular rings) that need full path rendering.
             var rr = path.RoundedRect;
-            if (rr != null && _maskBlurSigma == 0)
+            if (rr != null && _maskBlurSigma == 0 && path.FillType != Rendering.PathFillType.EvenOdd)
             {
                 var rect = new SKRect(rr.Rect.X, rr.Rect.Y,
                                       rr.Rect.X + rr.Rect.Width, rr.Rect.Y + rr.Rect.Height);
@@ -709,6 +743,7 @@ namespace Rend.Output.Image
             SKTypeface typeface = _fontMapper.GetOrCreate(style.Font, style.FontData);
             using var skFont = new SKFont(typeface, style.FontSize);
             skFont.Subpixel = true;
+            skFont.Edging = SKFontEdging.SubpixelAntialias;
             return skFont.MeasureText(text);
         }
 
@@ -727,6 +762,7 @@ namespace Rend.Output.Image
                 SKTypeface typeface = _fontMapper.GetOrCreate(style.Font, style.FontData);
                 using var skFont = new SKFont(typeface, style.FontSize);
                 skFont.Subpixel = true;
+                skFont.Edging = SKFontEdging.SubpixelAntialias;
 
                 if (style.LetterSpacing != 0 || style.WordSpacing != 0)
                 {
@@ -756,7 +792,6 @@ namespace Rend.Output.Image
                 paint.Color = new SKColor(color.R, color.G, color.B, (byte)(color.A * _currentOpacity));
 
                 SKTypeface typeface = _fontMapper.GetOrCreate(font, run.FontData);
-
                 // Use HarfBuzz glyph positions directly so rendering matches layout measurements.
                 var glyphs = run.Glyphs;
                 if (glyphs != null && glyphs.Length > 0)
@@ -764,7 +799,6 @@ namespace Rend.Output.Image
                     using var skFont = new SKFont(typeface, run.FontSize);
                     skFont.Subpixel = true;
                     skFont.Edging = SKFontEdging.SubpixelAntialias;
-                    skFont.EmbeddedBitmaps = true;
 
                     var glyphIds = new ushort[glyphs.Length];
                     var positions = new SKPoint[glyphs.Length];
@@ -789,6 +823,7 @@ namespace Rend.Output.Image
                     {
                         using var fallbackFont = new SKFont(typeface, run.FontSize);
                         fallbackFont.Subpixel = true;
+                        fallbackFont.Edging = SKFontEdging.SubpixelAntialias;
                         _currentCanvas!.DrawText(run.OriginalText, x, y, SKTextAlign.Left, fallbackFont, paint);
                     }
                 }
@@ -796,6 +831,7 @@ namespace Rend.Output.Image
                 {
                     using var skFont = new SKFont(typeface, run.FontSize);
                     skFont.Subpixel = true;
+                    skFont.Edging = SKFontEdging.SubpixelAntialias;
                     _currentCanvas!.DrawText(run.OriginalText, x, y, SKTextAlign.Left, skFont, paint);
                 }
             }
@@ -806,6 +842,24 @@ namespace Rend.Output.Image
         }
 
         /// <inheritdoc />
+        public (float UnderlinePosition, float UnderlineThickness,
+                float StrikeoutPosition, float StrikeoutThickness) GetDecorationMetrics(
+            FontDescriptor font, float fontSize)
+        {
+            SKTypeface typeface = _fontMapper.GetOrCreate(font, null);
+            using var skFont = new SKFont(typeface, fontSize);
+            skFont.Subpixel = true;
+            var metrics = skFont.Metrics;
+            // Skia metrics: UnderlinePosition positive = below baseline,
+            // StrikeoutPosition negative = above baseline.
+            // We pass these values directly to TextPainter which adds them to baseline Y.
+            float ulPos = metrics.UnderlinePosition ?? fontSize * 0.15f;
+            float ulThick = metrics.UnderlineThickness ?? 1f;
+            float stPos = metrics.StrikeoutPosition ?? -fontSize * 0.3f;
+            float stThick = metrics.StrikeoutThickness ?? 1f;
+            return (ulPos, ulThick, stPos, stThick);
+        }
+
         public void AddLink(RectF rect, string uri)
         {
             // Links are not applicable to raster image output.
@@ -890,6 +944,8 @@ namespace Rend.Output.Image
                 }
             }
         }
+
+
 
         private static SKEncodedImageFormat ParseFormat(string format)
         {
