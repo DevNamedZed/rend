@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using PuppeteerSharp;
 using Rend;
@@ -18,14 +21,13 @@ class Program
         Console.WriteLine("Visual Regression: Chrome vs Rend");
         Console.WriteLine();
 
-        // Resolve output directory relative to project root (not bin/)
-        var outputDir = FindOutputDir();
-        if (!Directory.Exists(outputDir))
-            Directory.CreateDirectory(outputDir);
+        // Create a timestamped run folder under the output root.
+        var outputRoot = FindOutputRoot();
+        var runId = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
+        var outputDir = Path.Combine(outputRoot, runId);
+        Directory.CreateDirectory(outputDir);
 
-        // Download Chrome 116 to match SkiaSharp 2.88.9's bundled Skia m116.
-        // This ensures glyph rasterization uses the same Skia version on both sides.
-        // Chrome 116 predates chrome-headless-shell, so we download the regular chrome binary.
+        // Download Chrome 116 to match SkiaSharp's bundled Skia m116.
         const string chromeBuildId = "116.0.5845.96";
         var chromeDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Chrome", $"Win64-{chromeBuildId}");
         var chromeExePath = Path.Combine(chromeDir, "chrome-win64", "chrome.exe");
@@ -102,253 +104,262 @@ class Program
             return 0;
         }
 
-        // Launch headless Chrome — will be restarted if it crashes
-        IBrowser? browser = null;
-
-        async Task<IBrowser> EnsureBrowser()
-        {
-            if (browser != null && !browser.IsClosed)
-                return browser;
-            if (browser != null)
-            {
-                try { await browser.DisposeAsync(); } catch { }
-            }
-            browser = await Puppeteer.LaunchAsync(new LaunchOptions
-            {
-                Headless = true,
-                ExecutablePath = chromeExePath,
-                Args = new[] {
-                    "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
-                    // Disable ClearType/LCD subpixel AA so Chrome uses grayscale AA.
-                    // This matches Skia's off-screen rendering which doesn't know
-                    // the display's physical pixel geometry.
-                    "--disable-lcd-text",
-                },
-            });
-            return browser;
-        }
-
-        // Create shared font provider, text shaper, and font mapper so we don't
-        // reload system fonts, re-pin font data, or re-copy font files into native
-        // memory for every test. Without sharing, 237 renders x ~5 fonts x ~1MB each
-        // = massive native memory churn.
-        var fontProvider = CreateSharedFontProvider();
-        using var fontMapper = new Rend.Output.Image.Internal.SkiaFontMapper();
-        // Use SkiaTextShaper for image rendering: Skia's text measurement matches
-        // Chrome's exactly (via DirectWrite), while HarfBuzz's OpenType backend
-        // produces slightly different advances (~0.005px/glyph, ~0.1px/line).
-        using var textShaper = new Rend.Output.Image.SkiaTextShaper(fontMapper);
-
-        var testCases = VisualTestCatalog.AllCases;
-
-        // --filter: run only tests whose Id, Name, or Category contains the filter string
-        string? filterArg = null;
+        // Determine parallelism level.
+        int workerCount = Math.Clamp(Environment.ProcessorCount / 2, 1, 8);
         for (int ai = 0; ai < args.Length; ai++)
         {
-            if (args[ai] == "--filter" && ai + 1 < args.Length)
-            {
-                filterArg = args[ai + 1];
-                break;
-            }
+            if (args[ai] == "--parallel" && ai + 1 < args.Length && int.TryParse(args[ai + 1], out int p))
+                workerCount = Math.Clamp(p, 1, 32);
         }
-        if (filterArg != null)
+        Console.WriteLine($"Workers: {workerCount}");
+
+        // Shared font provider (read-only after init).
+        var fontProvider = CreateSharedFontProvider();
+
+        // Browser pool — reuses Chrome instances across workers.
+        await using var browserPool = new BrowserPool(chromeExePath, workerCount);
+
+        // Per-worker render resources (SkiaTextShaper is not thread-safe).
+        var renderResources = new ThreadLocal<(Rend.Output.Image.Internal.SkiaFontMapper mapper, Rend.Output.Image.SkiaTextShaper shaper)>(
+            () =>
+            {
+                var mapper = new Rend.Output.Image.Internal.SkiaFontMapper();
+                var shaper = new Rend.Output.Image.SkiaTextShaper(mapper);
+                return (mapper, shaper);
+            },
+            trackAllValues: true);
+
+        var testCases = VisualTestCatalog.AllCases;
+        var results = new ConcurrentBag<ComparisonResult>();
+        var totalSw = Stopwatch.StartNew();
+
+        await Parallel.ForEachAsync(
+            testCases,
+            new ParallelOptions { MaxDegreeOfParallelism = workerCount },
+            async (testCase, ct) =>
+            {
+                var res = renderResources.Value;
+                var result = await RunTest(testCase, browserPool, fontProvider, res.shaper, res.mapper, outputDir);
+                results.Add(result);
+            });
+
+        totalSw.Stop();
+
+        // Dispose render resources.
+        foreach (var res in renderResources.Values)
         {
-            testCases = testCases.Where(t =>
-                t.Id.Contains(filterArg, StringComparison.OrdinalIgnoreCase) ||
-                t.Name.Contains(filterArg, StringComparison.OrdinalIgnoreCase) ||
-                t.Category.Contains(filterArg, StringComparison.OrdinalIgnoreCase)).ToList();
-            Console.WriteLine($"Filter: \"{filterArg}\" -- {testCases.Count} tests matched");
-            Console.WriteLine();
+            res.shaper.Dispose();
+            res.mapper.Dispose();
         }
+        renderResources.Dispose();
 
-        var results = new List<ComparisonResult>();
+        // Sort results by test ID for stable output.
+        var sortedResults = results.OrderBy(r => r.TestId).ToList();
 
-        foreach (var testCase in testCases)
+        // Write JSON results file.
+        var jsonPath = Path.Combine(outputDir, "results.json");
+        WriteResultsJson(sortedResults, jsonPath, runId, totalSw.Elapsed);
+
+        // Generate HTML report.
+        Console.WriteLine();
+        var reportPath = Path.Combine(outputDir, "report.html");
+        ReportGenerator.Generate(sortedResults, reportPath);
+
+        double avgDiff = sortedResults.Where(r => r.Outcome != ComparisonOutcome.Error)
+            .Select(r => r.DiffPercentage)
+            .DefaultIfEmpty(0)
+            .Average();
+
+        int passCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Pass);
+        int failCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Fail);
+        int errorCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Error);
+
+        Console.WriteLine($"Results: {sortedResults.Count} tests, {passCount} passed, {failCount} failed, {errorCount} errors, avg diff {avgDiff:F2}%");
+        Console.WriteLine($"Duration: {totalSw.Elapsed.TotalSeconds:F1}s");
+        Console.WriteLine($"Output:  {outputDir}");
+        Console.WriteLine($"Report:  {reportPath}");
+        Console.WriteLine($"JSON:    {jsonPath}");
+
+        return failCount > 0 || errorCount > 0 ? 1 : 0;
+    }
+
+    private static async Task<ComparisonResult> RunTest(
+        VisualTestCase testCase,
+        BrowserPool browserPool,
+        Rend.Fonts.IFontProvider fontProvider,
+        Rend.Output.Image.SkiaTextShaper textShaper,
+        Rend.Output.Image.Internal.SkiaFontMapper fontMapper,
+        string outputDir)
+    {
+        var sw = Stopwatch.StartNew();
+        var result = new ComparisonResult
         {
-            var sw = Stopwatch.StartNew();
-            var result = new ComparisonResult
-            {
-                TestId = testCase.Id,
-                TestName = testCase.Name,
-                Category = testCase.Category,
-            };
+            TestId = testCase.Id,
+            TestName = testCase.Name,
+            Category = testCase.Category,
+        };
 
-            try
+        try
+        {
+            var html = testCase.Html;
+            if (!html.TrimStart().StartsWith("<!DOCTYPE", StringComparison.OrdinalIgnoreCase))
+                html = "<!DOCTYPE html>" + html;
+
+            // --- Chrome render ---
+            byte[] chromePng;
+            await using (var lease = await browserPool.AcquireAsync())
             {
-                // --- Chrome render (fresh page per test for stability) ---
-                var b = await EnsureBrowser();
-                await using var page = await b.NewPageAsync();
+                await using var page = await lease.Browser.NewPageAsync();
                 await page.SetViewportAsync(new ViewPortOptions
                 {
                     Width = testCase.ViewportWidth,
                     Height = testCase.ViewportHeight,
                 });
-                // Force light mode via media emulation to avoid system dark mode affecting screenshots
                 await page.EmulateMediaFeaturesAsync(new MediaFeatureValue[]
                 {
                     new MediaFeatureValue { MediaFeature = MediaFeature.PrefersColorScheme, Value = "light" },
                 });
-                // Ensure standards mode (DOCTYPE) so Chrome matches our renderer's behavior.
-                var html = testCase.Html;
-                if (!html.TrimStart().StartsWith("<!DOCTYPE", StringComparison.OrdinalIgnoreCase))
-                    html = "<!DOCTYPE html>" + html;
 
                 await page.SetContentAsync(html, new NavigationOptions
                 {
                     WaitUntil = new[] { WaitUntilNavigation.Load },
                 });
-                // Clip to viewport size to ensure Chrome and Rend images have the same dimensions.
-                // FullPage can produce larger images when content overflows the viewport.
-                var chromePng = await page.ScreenshotDataAsync(new ScreenshotOptions
+
+                chromePng = await page.ScreenshotDataAsync(new ScreenshotOptions
                 {
                     Clip = new PuppeteerSharp.Media.Clip
                     {
-                        X = 0,
-                        Y = 0,
+                        X = 0, Y = 0,
                         Width = testCase.ViewportWidth,
                         Height = testCase.ViewportHeight,
                     }
                 });
+            }
 
-                var chromePath = Path.Combine(outputDir, $"{testCase.Id}-chrome.png");
-                File.WriteAllBytes(chromePath, chromePng);
-                result.ChromeImagePath = chromePath;
+            var chromePath = Path.Combine(outputDir, $"{testCase.Id}-chrome.png");
+            File.WriteAllBytes(chromePath, chromePng);
+            result.ChromeImagePath = chromePath;
 
-                // --- Rend render ---
-                var renderOptions = new RenderOptions
+            // --- Rend render ---
+            byte[] rendPng;
+            try
+            {
+                rendPng = Render.ToImage(html, new RenderOptions
                 {
                     PageSize = new SizeF(testCase.ViewportWidth, testCase.ViewportHeight),
-                    MarginTop = 0,
-                    MarginRight = 0,
-                    MarginBottom = 0,
-                    MarginLeft = 0,
+                    MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
                     Dpi = 96,
                     ImageFormat = "png",
                     FontProvider = fontProvider,
                     TextShaper = textShaper,
                     FontMapper = fontMapper,
-                };
-
-                byte[] rendPng;
-                try
-                {
-                    rendPng = Render.ToImage(html, renderOptions);
-                }
-                catch (Exception ex) when (IsNativeLibraryFailure(ex))
-                {
-                    sw.Stop();
-                    result.Outcome = ComparisonOutcome.Error;
-                    result.ErrorMessage = $"Native library not available: {ex.Message}";
-                    result.Duration = sw.Elapsed;
-                    results.Add(result);
-                    Console.WriteLine($"  ERROR  {testCase.Id} -- {testCase} ({ex.GetType().Name})");
-                    continue;
-                }
-
-                var rendPath = Path.Combine(outputDir, $"{testCase.Id}-rend.png");
-                File.WriteAllBytes(rendPath, rendPng);
-                result.RendImagePath = rendPath;
-
-                // --- Compare & Diff in single pass (decode images once, not twice) ---
-                // Use per-channel threshold of 2 to tolerate minor rounding differences
-                // in gradient interpolation, opacity compositing, and font antialiasing
-                // between Chrome's Blink engine and Skia.
-                var cmpResult = ImageDiffer.CompareAndDiff(chromePng, rendPng, perChannelThreshold: 2);
-                double diffPercent = cmpResult.StrictDiffFraction * 100.0;
-                double shiftDiffPercent = cmpResult.ShiftTolerantDiffFraction * 100.0;
-
-                result.DiffPercentage = diffPercent;
-                result.DiffPixels = cmpResult.StrictDiffPixels;
-                result.ShiftTolerantDiffPercentage = shiftDiffPercent;
-                result.ShiftTolerantDiffPixels = cmpResult.ShiftTolerantDiffPixels;
-                result.TotalPixels = cmpResult.TotalPixels;
-
-                if (cmpResult.DiffPng != null)
-                {
-                    var diffPath = Path.Combine(outputDir, $"{testCase.Id}-diff.png");
-                    File.WriteAllBytes(diffPath, cmpResult.DiffPng);
-                    result.DiffImagePath = diffPath;
-                }
-
-
-                // Determine outcome: strict pixel match only
-                if (diffPercent <= testCase.Tolerance)
-                {
-                    result.Outcome = ComparisonOutcome.Pass;
-                }
-                else
-                {
-                    result.Outcome = ComparisonOutcome.Fail;
-                }
-
-                sw.Stop();
-                result.Duration = sw.Elapsed;
-                results.Add(result);
-
-                Console.WriteLine($"  {diffPercent,6:F2}%  {testCase.Id} -- {testCase}");
+                });
             }
-            catch (Exception ex)
+            catch (Exception ex) when (IsNativeLibraryFailure(ex))
             {
                 sw.Stop();
                 result.Outcome = ComparisonOutcome.Error;
-                result.ErrorMessage = ex.Message;
+                result.ErrorMessage = $"Native library not available: {ex.Message}";
                 result.Duration = sw.Elapsed;
-                results.Add(result);
-                Console.WriteLine($"  ERROR  {testCase.Id} -- {testCase} ({ex.Message})");
-
-                // If it was a browser crash, force restart on next iteration
-                if (ex.Message.Contains("Session closed") || ex.Message.Contains("Protocol error"))
-                {
-                    try { if (browser != null) await browser.DisposeAsync(); } catch { }
-                    browser = null;
-                }
+                Console.WriteLine($"  ERROR  {testCase.Id} -- {testCase} ({ex.GetType().Name})");
+                return result;
             }
-        }
 
-        // Clean up browser
-        if (browser != null)
+            var rendPath = Path.Combine(outputDir, $"{testCase.Id}-rend.png");
+            File.WriteAllBytes(rendPath, rendPng);
+            result.RendImagePath = rendPath;
+
+            // --- Compare ---
+            var cmpResult = ImageDiffer.CompareAndDiff(chromePng, rendPng, perChannelThreshold: 2);
+            double diffPercent = cmpResult.StrictDiffFraction * 100.0;
+
+            result.DiffPercentage = diffPercent;
+            result.DiffPixels = cmpResult.StrictDiffPixels;
+            result.ShiftTolerantDiffPercentage = cmpResult.ShiftTolerantDiffFraction * 100.0;
+            result.ShiftTolerantDiffPixels = cmpResult.ShiftTolerantDiffPixels;
+            result.TotalPixels = cmpResult.TotalPixels;
+
+            if (cmpResult.DiffPng != null)
+            {
+                var diffPath = Path.Combine(outputDir, $"{testCase.Id}-diff.png");
+                File.WriteAllBytes(diffPath, cmpResult.DiffPng);
+                result.DiffImagePath = diffPath;
+            }
+
+            result.Outcome = diffPercent <= testCase.Tolerance
+                ? ComparisonOutcome.Pass
+                : ComparisonOutcome.Fail;
+
+            sw.Stop();
+            result.Duration = sw.Elapsed;
+            Console.WriteLine($"  {diffPercent,6:F2}%  {testCase.Id} -- {testCase}");
+        }
+        catch (Exception ex)
         {
-            try { await browser.DisposeAsync(); } catch { }
+            sw.Stop();
+            result.Outcome = ComparisonOutcome.Error;
+            result.ErrorMessage = ex.Message;
+            result.Duration = sw.Elapsed;
+            Console.WriteLine($"  ERROR  {testCase.Id} -- {testCase} ({ex.Message})");
         }
 
-        // Generate report
-        Console.WriteLine();
-        var reportPath = Path.Combine(outputDir, "report.html");
-        ReportGenerator.Generate(results, reportPath);
+        return result;
+    }
 
-        double avgDiff = results.Where(r => r.Outcome != ComparisonOutcome.Error)
-            .Select(r => r.DiffPercentage)
-            .DefaultIfEmpty(0)
-            .Average();
-
+    private static void WriteResultsJson(List<ComparisonResult> results, string path, string runId, TimeSpan totalDuration)
+    {
         int passCount = results.Count(r => r.Outcome == ComparisonOutcome.Pass);
         int failCount = results.Count(r => r.Outcome == ComparisonOutcome.Fail);
         int errorCount = results.Count(r => r.Outcome == ComparisonOutcome.Error);
+        double avgDiff = results.Where(r => r.Outcome != ComparisonOutcome.Error)
+            .Select(r => r.DiffPercentage).DefaultIfEmpty(0).Average();
 
-        Console.WriteLine($"Results: {results.Count} tests, {passCount} passed, {failCount} failed, {errorCount} errors, avg diff {avgDiff:F2}%");
-        Console.WriteLine($"Report: {reportPath}");
+        var payload = new
+        {
+            runId,
+            timestamp = DateTime.Now.ToString("o"),
+            totalDurationMs = (int)totalDuration.TotalMilliseconds,
+            summary = new
+            {
+                total = results.Count,
+                passed = passCount,
+                failed = failCount,
+                errors = errorCount,
+                avgDiffPercentage = Math.Round(avgDiff, 4),
+            },
+            tests = results.Select(r => new
+            {
+                testId = r.TestId,
+                testName = r.TestName,
+                category = r.Category,
+                outcome = r.Outcome.ToString(),
+                diffPercentage = Math.Round(r.DiffPercentage, 4),
+                shiftTolerantDiffPercentage = Math.Round(r.ShiftTolerantDiffPercentage, 4),
+                diffPixels = r.DiffPixels,
+                shiftTolerantDiffPixels = r.ShiftTolerantDiffPixels,
+                totalPixels = r.TotalPixels,
+                durationMs = (int)r.Duration.TotalMilliseconds,
+                errorMessage = r.ErrorMessage,
+            }).ToList(),
+        };
 
-        return failCount > 0 || errorCount > 0 ? 1 : 0;
+        File.WriteAllText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    private static string FindOutputDir()
+    private static string FindOutputRoot()
     {
-        // Walk up from the current directory to find the project directory
         var dir = AppContext.BaseDirectory;
         while (dir != null)
         {
-            var csproj = Path.Combine(dir, "Rend.VisualRegression.csproj");
-            if (File.Exists(csproj))
+            if (File.Exists(Path.Combine(dir, "Rend.VisualRegression.csproj")))
                 return Path.Combine(dir, "output");
             dir = Path.GetDirectoryName(dir);
         }
 
-        // Fallback: try relative from working directory
         var candidate = Path.Combine(Directory.GetCurrentDirectory(), "conformance", "Rend.VisualRegression", "output");
         if (Directory.Exists(Path.GetDirectoryName(candidate)!))
             return candidate;
 
-        // Last resort
         return Path.Combine(AppContext.BaseDirectory, "output");
     }
 
@@ -356,19 +367,11 @@ class Program
     {
         var collection = new Rend.Fonts.FontCollection();
 
-        // On WSL2, prefer Windows fonts first so Rend uses the same fonts as Chrome
-        // (which runs on Windows via PuppeteerSharp). This ensures matching metrics.
         string winFontsPath = "/mnt/c/Windows/Fonts";
-        if (System.IO.Directory.Exists(winFontsPath))
+        if (Directory.Exists(winFontsPath))
         {
-            try
-            {
-                collection.RegisterFontDirectory(winFontsPath);
-            }
-            catch
-            {
-                // Windows fonts unavailable
-            }
+            try { collection.RegisterFontDirectory(winFontsPath); }
+            catch { }
         }
 
         try
@@ -376,10 +379,7 @@ class Program
             var resolver = new Rend.Fonts.SystemFontResolver();
             collection.RegisterFromResolver(resolver);
         }
-        catch
-        {
-            // System fonts unavailable — fall back to defaults
-        }
+        catch { }
 
         return collection;
     }
