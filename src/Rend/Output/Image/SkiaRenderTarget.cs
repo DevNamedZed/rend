@@ -744,7 +744,63 @@ namespace Rend.Output.Image
             using var skFont = new SKFont(typeface, style.FontSize);
             skFont.Subpixel = true;
             skFont.Edging = SKFontEdging.SubpixelAntialias;
-            return skFont.MeasureText(text);
+
+            // Check for missing glyphs and measure with fallback if needed.
+            var glyphIds = skFont.GetGlyphs(text);
+            bool needsFallback = false;
+            for (int i = 0; i < glyphIds.Length; i++)
+            {
+                if (glyphIds[i] == 0)
+                {
+                    needsFallback = true;
+                    break;
+                }
+            }
+
+            if (!needsFallback)
+                return skFont.MeasureText(text);
+
+            // Measure with fallback for missing glyphs.
+            float total = 0;
+            int ci = 0;
+            while (ci < text.Length)
+            {
+                var gids = skFont.GetGlyphs(text.AsSpan(ci, 1));
+                bool isPrimary = gids.Length > 0 && gids[0] != 0;
+                int runStart = ci;
+                ci++;
+                while (ci < text.Length)
+                {
+                    gids = skFont.GetGlyphs(text.AsSpan(ci, 1));
+                    bool thisPrimary = gids.Length > 0 && gids[0] != 0;
+                    if (thisPrimary != isPrimary) break;
+                    ci++;
+                }
+
+                string segment = text.Substring(runStart, ci - runStart);
+                if (isPrimary)
+                {
+                    total += skFont.MeasureText(segment);
+                }
+                else
+                {
+                    int codepoint = char.IsHighSurrogate(segment[0]) && segment.Length > 1
+                        ? char.ConvertToUtf32(segment[0], segment[1])
+                        : segment[0];
+                    using var fallbackTypeface = SKFontManager.Default.MatchCharacter(codepoint);
+                    if (fallbackTypeface != null)
+                    {
+                        using var fallbackFont = new SKFont(fallbackTypeface, style.FontSize);
+                        fallbackFont.Subpixel = true;
+                        total += fallbackFont.MeasureText(segment);
+                    }
+                    else
+                    {
+                        total += skFont.MeasureText(segment);
+                    }
+                }
+            }
+            return total;
         }
 
         public void DrawText(string text, float x, float y, TextStyle style)
@@ -762,9 +818,26 @@ namespace Rend.Output.Image
                 SKTypeface typeface = _fontMapper.GetOrCreate(style.Font, style.FontData);
                 using var skFont = new SKFont(typeface, style.FontSize);
                 skFont.Subpixel = true;
+
                 skFont.Edging = SKFontEdging.SubpixelAntialias;
 
-                if (style.LetterSpacing != 0 || style.WordSpacing != 0)
+                // Check for missing glyphs and use font fallback if needed.
+                bool needsFallback = false;
+                var glyphIds = skFont.GetGlyphs(text);
+                for (int gi = 0; gi < glyphIds.Length; gi++)
+                {
+                    if (glyphIds[gi] == 0)
+                    {
+                        needsFallback = true;
+                        break;
+                    }
+                }
+
+                if (needsFallback)
+                {
+                    DrawTextWithFallback(text, x, y, skFont, paint, typeface, style);
+                }
+                else if (style.LetterSpacing != 0 || style.WordSpacing != 0)
                 {
                     DrawTextWithSpacing(text, x, y, skFont, paint, style.LetterSpacing, style.WordSpacing);
                 }
@@ -796,41 +869,50 @@ namespace Rend.Output.Image
                 var glyphs = run.Glyphs;
                 if (glyphs != null && glyphs.Length > 0)
                 {
-                    using var skFont = new SKFont(typeface, run.FontSize);
-                    skFont.Subpixel = true;
-                    skFont.Edging = SKFontEdging.SubpixelAntialias;
-
-                    var glyphIds = new ushort[glyphs.Length];
-                    var positions = new SKPoint[glyphs.Length];
-                    float cx = 0;
-                    for (int i = 0; i < glyphs.Length; i++)
+                    // Check if we need multi-font rendering (font fallback).
+                    if (run.GlyphFontOverrides != null)
                     {
-                        glyphIds[i] = (ushort)glyphs[i].GlyphId;
-                        positions[i] = new SKPoint(cx + glyphs[i].XOffset, -glyphs[i].YOffset);
-                        cx += glyphs[i].XAdvance;
-                    }
-
-                    using var builder = new SKTextBlobBuilder();
-                    var buffer = builder.AllocatePositionedRun(skFont, glyphs.Length);
-                    buffer.SetGlyphs(glyphIds);
-                    buffer.SetPositions(positions);
-                    using var blob = builder.Build();
-                    if (blob != null)
-                    {
-                        _currentCanvas!.DrawText(blob, x, y, paint);
+                        DrawGlyphsMultiFont(run, x, y, paint, typeface);
                     }
                     else
                     {
-                        using var fallbackFont = new SKFont(typeface, run.FontSize);
-                        fallbackFont.Subpixel = true;
-                        fallbackFont.Edging = SKFontEdging.SubpixelAntialias;
-                        _currentCanvas!.DrawText(run.OriginalText, x, y, SKTextAlign.Left, fallbackFont, paint);
+                        using var skFont = new SKFont(typeface, run.FontSize);
+                        skFont.Subpixel = true;
+                        skFont.Edging = SKFontEdging.SubpixelAntialias;
+
+                        var glyphIds = new ushort[glyphs.Length];
+                        var positions = new SKPoint[glyphs.Length];
+                        float cx = 0;
+                        for (int i = 0; i < glyphs.Length; i++)
+                        {
+                            glyphIds[i] = (ushort)glyphs[i].GlyphId;
+                            positions[i] = new SKPoint(cx + glyphs[i].XOffset, -glyphs[i].YOffset);
+                            cx += glyphs[i].XAdvance;
+                        }
+
+                        using var builder = new SKTextBlobBuilder();
+                        var buffer = builder.AllocatePositionedRun(skFont, glyphs.Length);
+                        buffer.SetGlyphs(glyphIds);
+                        buffer.SetPositions(positions);
+                        using var blob = builder.Build();
+                        if (blob != null)
+                        {
+                            _currentCanvas!.DrawText(blob, x, y, paint);
+                        }
+                        else
+                        {
+                            using var fallbackFont = new SKFont(typeface, run.FontSize);
+                            fallbackFont.Subpixel = true;
+                            fallbackFont.Edging = SKFontEdging.SubpixelAntialias;
+                            _currentCanvas!.DrawText(run.OriginalText, x, y, SKTextAlign.Left, fallbackFont, paint);
+                        }
                     }
                 }
                 else
                 {
                     using var skFont = new SKFont(typeface, run.FontSize);
                     skFont.Subpixel = true;
+
                     skFont.Edging = SKFontEdging.SubpixelAntialias;
                     _currentCanvas!.DrawText(run.OriginalText, x, y, SKTextAlign.Left, skFont, paint);
                 }
@@ -838,6 +920,78 @@ namespace Rend.Output.Image
             finally
             {
                 _paintPool.Return(paint);
+            }
+        }
+
+        private void DrawGlyphsMultiFont(ShapedTextRun run, float x, float y, SKPaint paint, SKTypeface primaryTypeface)
+        {
+            var glyphs = run.Glyphs;
+            var overrides = run.GlyphFontOverrides!;
+
+            // Compute positions for all glyphs first.
+            var positions = new SKPoint[glyphs.Length];
+            float cx = 0;
+            for (int i = 0; i < glyphs.Length; i++)
+            {
+                positions[i] = new SKPoint(cx + glyphs[i].XOffset, -glyphs[i].YOffset);
+                cx += glyphs[i].XAdvance;
+            }
+
+            // Group consecutive glyphs by font and draw each group.
+            int start = 0;
+            while (start < glyphs.Length)
+            {
+                byte[]? currentFontData = overrides[start];
+                int end = start + 1;
+                while (end < glyphs.Length && overrides[end] == currentFontData)
+                    end++;
+
+                int segLen = end - start;
+                SKTypeface segTypeface;
+                bool disposeTypeface = false;
+
+                if (currentFontData == null)
+                {
+                    segTypeface = primaryTypeface;
+                }
+                else
+                {
+                    using var skData = SKData.CreateCopy(currentFontData);
+                    segTypeface = SKTypeface.FromData(skData) ?? primaryTypeface;
+                    disposeTypeface = segTypeface != primaryTypeface;
+                }
+
+                try
+                {
+                    using var skFont = new SKFont(segTypeface, run.FontSize);
+                    skFont.Subpixel = true;
+                    skFont.Edging = SKFontEdging.SubpixelAntialias;
+
+                    var segGlyphIds = new ushort[segLen];
+                    var segPositions = new SKPoint[segLen];
+                    for (int j = 0; j < segLen; j++)
+                    {
+                        segGlyphIds[j] = (ushort)glyphs[start + j].GlyphId;
+                        segPositions[j] = positions[start + j];
+                    }
+
+                    using var builder = new SKTextBlobBuilder();
+                    var buffer = builder.AllocatePositionedRun(skFont, segLen);
+                    buffer.SetGlyphs(segGlyphIds);
+                    buffer.SetPositions(segPositions);
+                    using var blob = builder.Build();
+                    if (blob != null)
+                    {
+                        _currentCanvas!.DrawText(blob, x, y, paint);
+                    }
+                }
+                finally
+                {
+                    if (disposeTypeface)
+                        segTypeface.Dispose();
+                }
+
+                start = end;
             }
         }
 
@@ -849,6 +1003,7 @@ namespace Rend.Output.Image
             SKTypeface typeface = _fontMapper.GetOrCreate(font, null);
             using var skFont = new SKFont(typeface, fontSize);
             skFont.Subpixel = true;
+
             var metrics = skFont.Metrics;
             // Skia metrics: UnderlinePosition positive = below baseline,
             // StrikeoutPosition negative = above baseline.
@@ -1042,6 +1197,56 @@ namespace Rend.Output.Image
         private static SKColor ToSKColor(CssColor color)
         {
             return new SKColor(color.R, color.G, color.B, color.A);
+        }
+
+        private void DrawTextWithFallback(string text, float x, float y, SKFont primaryFont, SKPaint paint,
+                                          SKTypeface primaryTypeface, TextStyle style)
+        {
+            // Split text into segments by whether the primary font can render each character.
+            float cx = x;
+            int i = 0;
+            while (i < text.Length)
+            {
+                // Check if current char is renderable by primary font.
+                var glyphIds = primaryFont.GetGlyphs(text.AsSpan(i, Math.Min(1, text.Length - i)));
+                bool isPrimary = glyphIds.Length > 0 && glyphIds[0] != 0;
+
+                // Find contiguous run of same type.
+                int runStart = i;
+                i++;
+                while (i < text.Length)
+                {
+                    glyphIds = primaryFont.GetGlyphs(text.AsSpan(i, 1));
+                    bool thisPrimary = glyphIds.Length > 0 && glyphIds[0] != 0;
+                    if (thisPrimary != isPrimary) break;
+                    i++;
+                }
+
+                string segment = text.Substring(runStart, i - runStart);
+
+                if (isPrimary)
+                {
+                    _currentCanvas!.DrawText(segment, cx, y, SKTextAlign.Left, primaryFont, paint);
+                    cx += primaryFont.MeasureText(segment);
+                }
+                else
+                {
+                    // Find fallback font for the first character.
+                    int codepoint = char.IsHighSurrogate(segment[0]) && segment.Length > 1
+                        ? char.ConvertToUtf32(segment[0], segment[1])
+                        : segment[0];
+
+                    using var fallbackTypeface = SKFontManager.Default.MatchCharacter(codepoint);
+                    var useTypeface = fallbackTypeface ?? primaryTypeface;
+
+                    using var fallbackFont = new SKFont(useTypeface, style.FontSize);
+                    fallbackFont.Subpixel = true;
+                    fallbackFont.Edging = SKFontEdging.SubpixelAntialias;
+
+                    _currentCanvas!.DrawText(segment, cx, y, SKTextAlign.Left, fallbackFont, paint);
+                    cx += fallbackFont.MeasureText(segment);
+                }
+            }
         }
 
         private void DrawTextWithSpacing(string text, float x, float y, SKFont font, SKPaint paint,

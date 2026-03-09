@@ -31,6 +31,7 @@ namespace Rend.VisualRegression.Infrastructure
         public string? RendImagePath { get; set; }
         public string? DiffImagePath { get; set; }
         public string? ErrorMessage { get; set; }
+        public string? Html { get; set; }
         public TimeSpan Duration { get; set; }
     }
 }

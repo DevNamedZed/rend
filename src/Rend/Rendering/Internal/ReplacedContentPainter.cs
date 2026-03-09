@@ -341,19 +341,23 @@ namespace Rend.Rendering.Internal
 
             if (isChecked)
             {
-                // Chrome: checked radio — accent fill + accent border + white inner dot
+                // Chrome: checked radio — white background + accent border + accent inner dot
+                // See native_theme_base.cc PaintRadio: white fill, then accent stroke, then accent dot
                 var bgPath = new PathData();
                 bgPath.AddRoundedRectangle(bgRect, bgRadius, bgRadius, bgRadius, bgRadius);
-                target.FillPath(bgPath, BrushInfo.Solid(hasAccent ? accent : CssColor.White));
+                target.FillPath(bgPath, BrushInfo.Solid(CssColor.White));
 
-                // Border at 0.5px inset with accent color
+                // Accent-colored border outline
                 var strokeCircle = BuildCirclePath(cx, cy, radius - 0.5f);
                 target.StrokePath(strokeCircle, new PenInfo(hasAccent ? accent : BorderColor, 1f));
 
-                // Chrome: inner dot — visually measures ~40% of diameter (radius * 0.4)
-                float innerRadius = radius * 0.4f;
+                // Chrome refreshed form controls: kCheckboxRadioIndicatorDotScale = 0.4
+                // dot_size = min(bgRect.Width, bgRect.Height) * 0.4 = 12.6 * 0.4 = 5.04
+                // dot_radius = 5.04 / 2 = 2.52
+                float dotSize = Math.Min(bgRect.Width, bgRect.Height) * 0.4f;
+                float innerRadius = dotSize / 2f;
                 var innerCircle = BuildCirclePath(cx, cy, innerRadius);
-                target.FillPath(innerCircle, BrushInfo.Solid(hasAccent ? CssColor.White : CheckmarkColor));
+                target.FillPath(innerCircle, BrushInfo.Solid(hasAccent ? accent : CheckmarkColor));
             }
             else
             {

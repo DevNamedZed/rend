@@ -130,13 +130,191 @@ namespace Rend.Output.Image
                         );
                     }
 
-                    return new ShapedTextRun(glyphs, text, fontSize, fontData);
+                    // Check for .notdef glyphs (glyph ID 0) that need font fallback.
+                    bool hasNotdef = false;
+                    for (int i = 0; i < count; i++)
+                    {
+                        if (glyphs[i].GlyphId == 0)
+                        {
+                            hasNotdef = true;
+                            break;
+                        }
+                    }
+
+                    if (!hasNotdef)
+                        return new ShapedTextRun(glyphs, text, fontSize, fontData);
+
+                    // Font fallback: find alternative fonts for .notdef glyphs.
+                    var fontOverrides = new byte[]?[count];
+                    int i2 = 0;
+                    while (i2 < count)
+                    {
+                        if (glyphs[i2].GlyphId != 0)
+                        {
+                            i2++;
+                            continue;
+                        }
+
+                        // Find the character for this .notdef glyph.
+                        int charIndex = (int)glyphs[i2].Cluster;
+                        if (charIndex >= text.Length)
+                        {
+                            i2++;
+                            continue;
+                        }
+
+                        int codepoint = char.IsHighSurrogate(text[charIndex]) && charIndex + 1 < text.Length
+                            ? char.ConvertToUtf32(text[charIndex], text[charIndex + 1])
+                            : text[charIndex];
+
+                        // Find a fallback typeface for this character.
+                        using var fallbackTypeface = SKFontManager.Default.MatchCharacter(codepoint);
+                        if (fallbackTypeface == null)
+                        {
+                            i2++;
+                            continue;
+                        }
+
+                        // Get font data from the fallback typeface.
+                        byte[]? fallbackData = GetFontDataFromTypeface(fallbackTypeface);
+                        if (fallbackData == null)
+                        {
+                            i2++;
+                            continue;
+                        }
+
+                        // Find the contiguous range of .notdef glyphs that this fallback covers.
+                        int rangeStart = i2;
+                        int rangeEnd = i2;
+                        while (rangeEnd < count && glyphs[rangeEnd].GlyphId == 0)
+                            rangeEnd++;
+
+                        // Extract the text substring for this range.
+                        int textStart = (int)glyphs[rangeStart].Cluster;
+                        int textEnd = rangeEnd < count
+                            ? (int)glyphs[rangeEnd].Cluster
+                            : text.Length;
+                        string subText = text.Substring(textStart, textEnd - textStart);
+
+                        // Shape the substring with the fallback font.
+                        var fallbackCached = GetOrCreateFont(fallbackData, fontSize);
+                        _activeSkFont = fallbackCached.SkFont;
+
+                        using var fbBuffer = new HarfBuzzSharp.Buffer();
+                        fbBuffer.AddUtf16(subText);
+                        fbBuffer.GuessSegmentProperties();
+                        fallbackCached.HbFont.Shape(fbBuffer);
+
+                        var fbInfos = fbBuffer.GlyphInfos;
+                        var fbPositions = fbBuffer.GlyphPositions;
+
+                        // Replace .notdef glyphs with fallback glyphs.
+                        // The fallback may produce a different number of glyphs.
+                        if (fbInfos.Length == rangeEnd - rangeStart)
+                        {
+                            // Same glyph count — simple replacement.
+                            for (int j = 0; j < fbInfos.Length; j++)
+                            {
+                                int idx = rangeStart + j;
+                                glyphs[idx] = new ShapedGlyph(
+                                    glyphId: fbInfos[j].Codepoint,
+                                    cluster: glyphs[idx].Cluster,
+                                    xAdvance: fbPositions[j].XAdvance / scale,
+                                    yAdvance: fbPositions[j].YAdvance / scale,
+                                    xOffset: fbPositions[j].XOffset / scale,
+                                    yOffset: fbPositions[j].YOffset / scale
+                                );
+                                fontOverrides[idx] = fallbackData;
+                            }
+                        }
+                        else
+                        {
+                            // Different glyph count — rebuild arrays.
+                            int newCount = count - (rangeEnd - rangeStart) + fbInfos.Length;
+                            var newGlyphs = new ShapedGlyph[newCount];
+                            var newOverrides = new byte[]?[newCount];
+
+                            // Copy glyphs before the range.
+                            Array.Copy(glyphs, 0, newGlyphs, 0, rangeStart);
+                            Array.Copy(fontOverrides, 0, newOverrides, 0, rangeStart);
+
+                            // Insert fallback glyphs.
+                            for (int j = 0; j < fbInfos.Length; j++)
+                            {
+                                uint cluster = (uint)(textStart + (int)fbInfos[j].Cluster);
+                                newGlyphs[rangeStart + j] = new ShapedGlyph(
+                                    glyphId: fbInfos[j].Codepoint,
+                                    cluster: cluster,
+                                    xAdvance: fbPositions[j].XAdvance / scale,
+                                    yAdvance: fbPositions[j].YAdvance / scale,
+                                    xOffset: fbPositions[j].XOffset / scale,
+                                    yOffset: fbPositions[j].YOffset / scale
+                                );
+                                newOverrides[rangeStart + j] = fallbackData;
+                            }
+
+                            // Copy glyphs after the range.
+                            int afterCount = count - rangeEnd;
+                            if (afterCount > 0)
+                            {
+                                Array.Copy(glyphs, rangeEnd, newGlyphs, rangeStart + fbInfos.Length, afterCount);
+                                Array.Copy(fontOverrides, rangeEnd, newOverrides, rangeStart + fbInfos.Length, afterCount);
+                            }
+
+                            glyphs = newGlyphs;
+                            fontOverrides = newOverrides;
+                            count = newCount;
+                        }
+
+                        // Restore the primary font as active.
+                        _activeSkFont = cached.SkFont;
+                        i2 = rangeStart + fbInfos.Length;
+                    }
+
+                    // Check if any overrides were actually set.
+                    bool hasOverrides = false;
+                    for (int k = 0; k < fontOverrides.Length; k++)
+                    {
+                        if (fontOverrides[k] != null)
+                        {
+                            hasOverrides = true;
+                            break;
+                        }
+                    }
+
+                    return new ShapedTextRun(glyphs, text, fontSize, fontData,
+                        hasOverrides ? fontOverrides : null);
                 }
                 finally
                 {
                     _activeSkFont = null;
                 }
             }
+        }
+
+        private readonly Dictionary<string, byte[]> _typefaceFontDataCache = new();
+
+        private byte[]? GetFontDataFromTypeface(SKTypeface typeface)
+        {
+            string key = typeface.FamilyName + "|" + (int)typeface.FontStyle.Weight + "|" + (int)typeface.FontStyle.Slant;
+            if (_typefaceFontDataCache.TryGetValue(key, out var cached))
+                return cached;
+
+            using var stream = typeface.OpenStream(out _);
+            if (stream == null) return null;
+
+            var data = new byte[stream.Length];
+            int totalRead = 0;
+            while (totalRead < data.Length)
+            {
+                int bytesRead = stream.Read(data, data.Length - totalRead);
+                if (bytesRead <= 0) break;
+                totalRead += bytesRead;
+            }
+            if (totalRead < data.Length) return null;
+
+            _typefaceFontDataCache[key] = data;
+            return data;
         }
 
         private CachedShapingFont GetOrCreateFont(byte[] fontData, float fontSize)

@@ -67,21 +67,27 @@ namespace Rend.Fonts
 
         /// <summary>
         /// Computes the ascent in pixels for the given font size.
-        /// Uses hhea ascent to match Chrome/DirectWrite.
+        /// Uses WinAscent (OS/2) when available, falling back to hhea ascent.
+        /// Chrome's fontBoundingBoxAscent matches WinAscent, and for fonts where
+        /// hhea ascent differs significantly from WinAscent (e.g., Consolas),
+        /// using WinAscent gives the correct baseline position in the half-leading model.
         /// </summary>
         public float GetAscent(float fontSize)
         {
             if (UnitsPerEm == 0) return fontSize;
-            return (float)Math.Round((double)fontSize * Ascent / UnitsPerEm, MidpointRounding.AwayFromZero);
+            int metric = WinAscent > 0 ? WinAscent : Ascent;
+            return (float)Math.Round((double)fontSize * metric / UnitsPerEm, MidpointRounding.AwayFromZero);
         }
 
         /// <summary>
         /// Computes the descent in pixels for the given font size (returns a positive value).
-        /// Uses hhea descent to match Chrome/DirectWrite.
+        /// Uses WinDescent (OS/2) when available, falling back to hhea descent.
         /// </summary>
         public float GetDescent(float fontSize)
         {
             if (UnitsPerEm == 0) return 0f;
+            if (WinDescent > 0)
+                return (float)Math.Round((double)fontSize * WinDescent / UnitsPerEm, MidpointRounding.AwayFromZero);
             // hhea Descent is typically negative, so negate to return a positive pixel value.
             return (float)Math.Round((double)fontSize * -Descent / UnitsPerEm, MidpointRounding.AwayFromZero);
         }

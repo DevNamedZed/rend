@@ -1511,12 +1511,51 @@ namespace Rend.Layout.Internal
             // Compute baseline for inline-block: use last line box baseline if available,
             // otherwise fall back to bottom margin edge (CSS 2.1 §10.8.1)
             float fragmentBaseline = totalHeight;
-            var overflow = element.Style.OverflowY;
-            if (overflow == CssOverflow.Visible || overflow == CssOverflow.Auto)
+            bool isReplacedForm = ReplacedElementLayout.IsFormControl(element);
+            if (isReplacedForm)
             {
-                float? lastLineBaseline = FindLastLineBaseline(box);
-                if (lastLineBaseline.HasValue)
-                    fragmentBaseline = lastLineBaseline.Value + box.PaddingTop + box.BorderTopWidth + box.MarginTop;
+                // Replaced form controls (select, textarea, input): baseline is the internal
+                // text baseline, not bottom edge. Chrome computes this from font metrics.
+                // baseline from border-box top = border-top + padding-top + internal-padding + ascent
+                string tag = element.TagName;
+                if (tag == "select")
+                {
+                    // Chrome: baseline = border + internal padding(1px) + font ascent(11px for Arial 13.333px)
+                    fragmentBaseline = box.BorderTopWidth + box.PaddingTop + 1f + 11f;
+                }
+                else if (tag == "textarea")
+                {
+                    // Textarea baseline = border + padding + first-line ascent
+                    fragmentBaseline = box.BorderTopWidth + box.PaddingTop + 11f;
+                }
+                else
+                {
+                    // Input: baseline depends on type
+                    string inputType = element.GetAttribute("type")?.ToLowerInvariant() ?? "text";
+                    if (inputType == "checkbox" || inputType == "radio" ||
+                        inputType == "submit" || inputType == "button" || inputType == "reset")
+                    {
+                        // Checkbox/radio/button: use bottom margin edge (CSS 2.1 §10.8.1)
+                        // Button types have border:0;padding:0 in UA CSS, so border+padding+ascent
+                        // gives wrong result (0+0+11=11 instead of centered ~14.5)
+                        fragmentBaseline = totalHeight;
+                    }
+                    else
+                    {
+                        // Text-type inputs (text, email, url, etc.): baseline = border + padding + ascent
+                        fragmentBaseline = box.BorderTopWidth + box.PaddingTop + 11f;
+                    }
+                }
+            }
+            else
+            {
+                var overflow = element.Style.OverflowY;
+                if (overflow == CssOverflow.Visible || overflow == CssOverflow.Auto)
+                {
+                    float? lastLineBaseline = FindLastLineBaseline(box);
+                    if (lastLineBaseline.HasValue)
+                        fragmentBaseline = lastLineBaseline.Value + box.PaddingTop + box.BorderTopWidth + box.MarginTop;
+                }
             }
 
             var fragment = new LineFragment

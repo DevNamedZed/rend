@@ -149,7 +149,8 @@ namespace Rend.VisualRegression.Infrastructure
                 string diffColor = DiffColor(result.DiffPercentage);
 
                 rowIndex++;
-                sb.AppendLine($"<tr class=\"result-row {statusClass}\" data-status=\"{statusClass}\" data-sort-index=\"{rowIndex}\" data-sort-status=\"{statusOrder}\" data-sort-name=\"{Escape(result.TestName.ToLower())}\" data-sort-category=\"{Escape(result.Category.ToLower())}\" data-sort-diff=\"{result.DiffPercentage:F4}\" data-sort-duration=\"{result.Duration.TotalMilliseconds:F0}\">");
+                string htmlEncoded = result.Html != null ? Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(result.Html)) : "";
+                sb.AppendLine($"<tr class=\"result-row {statusClass}\" data-status=\"{statusClass}\" data-sort-index=\"{rowIndex}\" data-sort-status=\"{statusOrder}\" data-sort-name=\"{Escape(result.TestName.ToLower())}\" data-sort-category=\"{Escape(result.Category.ToLower())}\" data-sort-diff=\"{result.DiffPercentage:F4}\" data-sort-duration=\"{result.Duration.TotalMilliseconds:F0}\" data-html=\"{htmlEncoded}\">");
                 sb.AppendLine($"  <td class=\"index-cell\">{rowIndex}</td>");
                 sb.AppendLine($"  <td><span class=\"status-badge status-{statusClass}\">{statusLabel}</span></td>");
                 sb.AppendLine($"  <td class=\"test-name\">{Escape(result.TestName)}</td>");
@@ -221,17 +222,24 @@ namespace Rend.VisualRegression.Infrastructure
             sb.AppendLine("<div class=\"row-count\" id=\"row-count\"></div>");
             sb.AppendLine("</main>");
 
-            // Lightbox overlay — side-by-side view
+            // Lightbox overlay — side-by-side view with HTML tab
             sb.AppendLine("<div id=\"lightbox\" class=\"lightbox\" onclick=\"closeLightboxBg(event)\">");
             sb.AppendLine("  <div class=\"lightbox-content\">");
             sb.AppendLine("    <div class=\"lightbox-header\">");
             sb.AppendLine("      <span id=\"lightbox-title\"></span>");
+            sb.AppendLine("      <div class=\"lightbox-tabs\">");
+            sb.AppendLine("        <button class=\"lb-tab active\" data-tab=\"images\" onclick=\"switchLbTab('images')\">Images</button>");
+            sb.AppendLine("        <button class=\"lb-tab\" data-tab=\"html\" onclick=\"switchLbTab('html')\">HTML</button>");
+            sb.AppendLine("      </div>");
             sb.AppendLine("      <button class=\"lightbox-close\" onclick=\"closeLightbox()\">&times;</button>");
             sb.AppendLine("    </div>");
-            sb.AppendLine("    <div class=\"lightbox-body\">");
+            sb.AppendLine("    <div class=\"lightbox-body\" id=\"lb-images\">");
             sb.AppendLine("      <div class=\"lightbox-panel\"><div class=\"lightbox-label\">Chrome</div><img id=\"lb-chrome\" src=\"\"></div>");
             sb.AppendLine("      <div class=\"lightbox-panel\"><div class=\"lightbox-label\">Rend</div><img id=\"lb-rend\" src=\"\"></div>");
             sb.AppendLine("      <div class=\"lightbox-panel\"><div class=\"lightbox-label\">Diff</div><img id=\"lb-diff\" src=\"\"></div>");
+            sb.AppendLine("    </div>");
+            sb.AppendLine("    <div class=\"lightbox-html\" id=\"lb-html\" style=\"display:none\">");
+            sb.AppendLine("      <pre id=\"lb-html-code\"></pre>");
             sb.AppendLine("    </div>");
             sb.AppendLine("  </div>");
             sb.AppendLine("</div>");
@@ -695,6 +703,44 @@ tbody tr:hover {
     border-radius: 4px;
     border: 1px solid rgba(255,255,255,0.1);
 }
+
+.lightbox-tabs {
+    display: flex;
+    gap: 4px;
+}
+
+.lb-tab {
+    padding: 4px 12px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    background: transparent;
+    color: #888;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.lb-tab:hover { color: #ccc; }
+.lb-tab.active { background: rgba(255,255,255,0.15); color: #fff; border-color: rgba(255,255,255,0.4); }
+
+.lightbox-html {
+    padding: 16px;
+    max-height: 75vh;
+    overflow: auto;
+}
+
+.lightbox-html pre {
+    background: #0d1117;
+    color: #c9d1d9;
+    padding: 16px;
+    border-radius: 6px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    border: 1px solid rgba(255,255,255,0.1);
+}
 ";
         }
 
@@ -923,6 +969,8 @@ document.getElementById('search-input').addEventListener('input', function() {
 })();
 
 // ---- Lightbox (side-by-side) ----
+var currentLbHtml = '';
+
 function openLightbox(img, event) {
     event.stopPropagation();
     var row = img.closest('tr');
@@ -941,7 +989,22 @@ function openLightbox(img, event) {
     document.getElementById('lb-rend').src = srcs[1] || '';
     document.getElementById('lb-diff').src = srcs[2] || '';
 
+    // Decode and store HTML
+    var b64 = row.getAttribute('data-html') || '';
+    try { currentLbHtml = b64 ? decodeURIComponent(escape(atob(b64))) : ''; } catch(e) { currentLbHtml = ''; }
+    document.getElementById('lb-html-code').textContent = currentLbHtml;
+
+    // Reset to images tab
+    switchLbTab('images');
+
     lb.classList.add('visible');
+}
+
+function switchLbTab(tab) {
+    document.querySelectorAll('.lb-tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelector('.lb-tab[data-tab=""' + tab + '""]').classList.add('active');
+    document.getElementById('lb-images').style.display = tab === 'images' ? '' : 'none';
+    document.getElementById('lb-html').style.display = tab === 'html' ? '' : 'none';
 }
 
 function closeLightbox() {

@@ -24,18 +24,26 @@ namespace Rend.Text
         public byte[]? FontData { get; }
 
         /// <summary>
+        /// Per-glyph font data overrides for font fallback. Null if all glyphs use the primary font.
+        /// When set, GlyphFontOverrides[i] is the font data for glyph i (null means primary font).
+        /// </summary>
+        public byte[]?[]? GlyphFontOverrides { get; }
+
+        /// <summary>
         /// Creates a new <see cref="ShapedTextRun"/>.
         /// </summary>
         /// <param name="glyphs">The shaped glyphs.</param>
         /// <param name="originalText">The original input text.</param>
         /// <param name="fontSize">The font size used.</param>
         /// <param name="fontData">The raw font data bytes used for shaping.</param>
-        public ShapedTextRun(ShapedGlyph[] glyphs, string originalText, float fontSize, byte[]? fontData = null)
+        /// <param name="glyphFontOverrides">Per-glyph font data overrides for fallback glyphs.</param>
+        public ShapedTextRun(ShapedGlyph[] glyphs, string originalText, float fontSize, byte[]? fontData = null, byte[]?[]? glyphFontOverrides = null)
         {
             Glyphs = glyphs ?? throw new ArgumentNullException(nameof(glyphs));
             OriginalText = originalText ?? throw new ArgumentNullException(nameof(originalText));
             FontSize = fontSize;
             FontData = fontData;
+            GlyphFontOverrides = glyphFontOverrides;
 
             float total = 0f;
             for (int i = 0; i < glyphs.Length; i++)

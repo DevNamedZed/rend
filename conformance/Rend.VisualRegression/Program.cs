@@ -213,6 +213,7 @@ class Program
             TestId = testCase.Id,
             TestName = testCase.Name,
             Category = testCase.Category,
+            Html = testCase.Html,
         };
 
         try
