@@ -67,7 +67,7 @@ namespace Rend.Output.Image.Internal
         {
             ["sans-serif"] = new[] { "Helvetica", "Helvetica Neue", "Arial", "Segoe UI", "DejaVu Sans" },
             ["serif"] = new[] { "Times New Roman", "Times", "Georgia", "DejaVu Serif" },
-            ["monospace"] = new[] { "Courier New", "Courier", "Consolas", "Menlo", "DejaVu Sans Mono" },
+            ["monospace"] = new[] { "Consolas", "Courier New", "Courier", "Menlo", "DejaVu Sans Mono" },
             ["cursive"] = new[] { "Comic Sans MS", "Apple Chancery" },
             ["fantasy"] = new[] { "Impact", "Papyrus" },
             ["system-ui"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },

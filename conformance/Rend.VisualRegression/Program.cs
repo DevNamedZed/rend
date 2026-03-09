@@ -129,6 +129,7 @@ class Program
             },
             trackAllValues: true);
 
+
         var testCases = VisualTestCatalog.AllCases;
         var results = new ConcurrentBag<ComparisonResult>();
         var totalSw = Stopwatch.StartNew();

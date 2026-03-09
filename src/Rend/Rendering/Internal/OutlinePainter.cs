@@ -53,6 +53,7 @@ namespace Rend.Rendering.Internal
 
                 case CssBorderStyle.Dotted:
                 {
+                    // Chrome: dot = width, gap = width
                     float dotLen = Math.Max(width, 1f);
                     var pen = new PenInfo(color, width, new[] { dotLen, dotLen });
                     target.StrokeRect(outlineRect, pen);

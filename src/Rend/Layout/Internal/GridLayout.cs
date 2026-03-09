@@ -487,13 +487,29 @@ namespace Rend.Layout.Internal
                 {
                     float gapSpace = finalCols > 1 ? (finalCols - 1) * colGap : 0;
                     float remaining = Math.Max(0, containerWidth - totalNonFr - gapSpace);
-                    float frSize = remaining / totalFr;
+                    // Use LayoutUnit integer arithmetic for fr distribution (matching Chrome)
+                    int remainingRaw = (int)(remaining * 64f);
+                    int totalFrI = (int)totalFr;
+                    int frSizeRaw = totalFrI > 0 ? remainingRaw / totalFrI : 0;
+                    int frRem = totalFrI > 0 ? remainingRaw % totalFrI : 0;
+                    int frIdx = 0;
                     for (int c = 0; c < finalCols; c++)
                     {
                         if (colWidths[c] <= -999f)
                         {
                             float frVal = -(colWidths[c] + 1000f);
-                            colWidths[c] = frVal * frSize;
+                            int trackFrI = (int)frVal;
+                            if (trackFrI > 0 && totalFrI > 0)
+                            {
+                                int trackRaw = frSizeRaw * trackFrI;
+                                if (frIdx < frRem) trackRaw += 1;
+                                colWidths[c] = trackRaw / 64f;
+                            }
+                            else
+                            {
+                                colWidths[c] = frVal * (remaining / totalFr);
+                            }
+                            frIdx++;
                         }
                     }
                 }
@@ -795,6 +811,36 @@ namespace Rend.Layout.Internal
                     finalWidth = spanWidth - (outerWidth - finalWidth);
                 if (IsStretch(alignBlock) && outerHeight < spanHeight && heightIsAuto)
                     finalHeight = spanHeight - (outerHeight - finalHeight);
+
+                // If stretched dimensions differ from original, re-layout children
+                // for items whose layout depends on container size (grid/flex with fr tracks).
+                bool widthChanged = Math.Abs(finalWidth - item.ContentWidth) > 0.01f;
+                bool heightChanged = Math.Abs(finalHeight - item.ContentHeight) > 0.01f;
+                if ((widthChanged || heightChanged) && item.StyledElement != null)
+                {
+                    var itemDisplay = item.StyledElement.Style.Display;
+                    if (itemDisplay == CssDisplay.Grid || itemDisplay == CssDisplay.InlineGrid)
+                    {
+                        // Re-layout inner grid with stretched dimensions
+                        item.Box.ClearChildren();
+                        item.Box.LineBoxes = null;
+                        item.Box.ContentRect = new RectF(0, 0, finalWidth, finalHeight);
+                        var savedCtx = context.ParentGridContext;
+                        context.ParentGridContext = new ParentGridContext
+                        {
+                            ColumnWidths = colWidths,
+                            RowHeights = rowHeights,
+                            ColumnGap = colGap,
+                            RowGap = rowGap,
+                            ItemColStart = item.ColStart,
+                            ItemColSpan = item.ColSpan,
+                            ItemRowStart = item.RowStart,
+                            ItemRowSpan = item.RowSpan
+                        };
+                        BlockFormattingContext.LayoutChildren(item.Box, context);
+                        context.ParentGridContext = savedCtx;
+                    }
+                }
 
                 float newX = x + xOffset + item.Box.MarginLeft + item.Box.BorderLeftWidth + item.Box.PaddingLeft;
                 float newY = y + yOffset + item.Box.MarginTop + item.Box.BorderTopWidth + item.Box.PaddingTop;
@@ -1161,9 +1207,18 @@ namespace Rend.Layout.Internal
             // Subtract gap space: N tracks have (N-1) gaps
             float totalGapSpace = flatValues.Count > 1 ? (flatValues.Count - 1) * gap : 0;
             float remaining = Math.Max(0, containerSize - totalFixed - totalGapSpace);
+
+            // Chrome resolves fr tracks using LayoutUnit (1/64px) integer arithmetic.
+            // This truncates frSize to 1/64px and distributes the remainder (1/64px units)
+            // to the first fr tracks. This avoids sub-pixel accumulation differences.
+            int remainingRaw = (int)(remaining * 64f);
+            int totalFrInt = (int)totalFr; // fr values are typically integers (1fr, 2fr)
+            int frSizeRaw = totalFrInt > 0 ? remainingRaw / totalFrInt : 0;
+            int frRemainder = totalFrInt > 0 ? remainingRaw % totalFrInt : 0;
             float frSize = totalFr > 0 ? remaining / totalFr : 0;
 
             var tracks = new float[sizes.Count];
+            int frIndex = 0; // track which fr track we're on for remainder distribution
             for (int i = 0; i < sizes.Count; i++)
             {
                 if (sizes[i].value < 0)
@@ -1181,10 +1236,28 @@ namespace Rend.Layout.Internal
                         tracks[i] = -(1000f + sizes[i].value);
                         continue;
                     }
-                    float resolved = sizes[i].value * frSize;
-                    if (minFloors[i] > 0 && resolved < minFloors[i])
-                        resolved = minFloors[i];
-                    tracks[i] = resolved;
+                    // Use LayoutUnit integer arithmetic for fr distribution
+                    int trackFr = (int)sizes[i].value;
+                    if (trackFr > 0 && totalFrInt > 0)
+                    {
+                        int trackRaw = frSizeRaw * trackFr;
+                        // Distribute remainder: first tracks get +1/64px each
+                        if (frIndex < frRemainder)
+                            trackRaw += 1;
+                        float resolved = trackRaw / 64f;
+                        if (minFloors[i] > 0 && resolved < minFloors[i])
+                            resolved = minFloors[i];
+                        tracks[i] = resolved;
+                    }
+                    else
+                    {
+                        // Non-integer fr: fall back to float division
+                        float resolved = sizes[i].value * frSize;
+                        if (minFloors[i] > 0 && resolved < minFloors[i])
+                            resolved = minFloors[i];
+                        tracks[i] = resolved;
+                    }
+                    frIndex++;
                 }
                 else
                 {

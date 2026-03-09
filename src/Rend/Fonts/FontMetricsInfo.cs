@@ -7,13 +7,13 @@ namespace Rend.Fonts
     /// </summary>
     public readonly struct FontMetricsInfo
     {
-        /// <summary>Typographic ascent in font design units.</summary>
+        /// <summary>Typographic ascent in font design units (hhea ascender).</summary>
         public int Ascent { get; }
 
-        /// <summary>Typographic descent in font design units (typically negative).</summary>
+        /// <summary>Typographic descent in font design units (hhea descender, typically negative).</summary>
         public int Descent { get; }
 
-        /// <summary>Typographic line gap in font design units.</summary>
+        /// <summary>Typographic line gap in font design units (hhea lineGap).</summary>
         public int LineGap { get; }
 
         /// <summary>Units per em for the font (typically 1000 or 2048).</summary>
@@ -49,55 +49,39 @@ namespace Rend.Fonts
 
         /// <summary>
         /// Computes the line height in pixels for the given font size.
-        /// Uses OS/2 Win metrics with per-component rounding to match Chrome/Windows:
-        /// lineHeight = round(winAscent_px) + round(winDescent_px) + round(lineGap_px)
+        /// Chrome/DirectWrite uses hhea ascent + |hhea descent| + hhea lineGap,
+        /// with each component rounded individually (lroundf) before summing.
         /// </summary>
         public float GetLineHeight(float fontSize)
         {
             if (UnitsPerEm == 0) return fontSize;
 
-            // Chrome on Windows (DirectWrite) uses WinAscent + WinDescent + hhea lineGap,
-            // with each component rounded individually before summing.
-            if (WinAscent > 0 && WinDescent > 0)
-            {
-                float a = (float)Math.Round((double)fontSize * WinAscent / UnitsPerEm, MidpointRounding.AwayFromZero);
-                float d = (float)Math.Round((double)fontSize * WinDescent / UnitsPerEm, MidpointRounding.AwayFromZero);
-                float lg = LineGap > 0 ? (float)Math.Round((double)fontSize * LineGap / UnitsPerEm, MidpointRounding.AwayFromZero) : 0;
-                float lh = a + d + lg;
-                return lh > 0 ? lh : fontSize;
-            }
-
-            float fallback = fontSize * (Ascent - Descent + LineGap) / UnitsPerEm;
-            return fallback > 0 ? fallback : fontSize;
+            // DirectWrite's DWRITE_FONT_METRICS uses hhea metrics.
+            // Chrome computes: round(ascent) + round(|descent|) + round(lineGap)
+            float a = (float)Math.Round((double)fontSize * Ascent / UnitsPerEm, MidpointRounding.AwayFromZero);
+            float d = (float)Math.Round((double)fontSize * -Descent / UnitsPerEm, MidpointRounding.AwayFromZero);
+            float lg = LineGap > 0 ? (float)Math.Round((double)fontSize * LineGap / UnitsPerEm, MidpointRounding.AwayFromZero) : 0;
+            float lh = a + d + lg;
+            return lh > 0 ? lh : fontSize;
         }
 
         /// <summary>
         /// Computes the ascent in pixels for the given font size.
-        /// Uses OS/2 WinAscent when available to match Chrome/Windows.
+        /// Uses hhea ascent to match Chrome/DirectWrite.
         /// </summary>
         public float GetAscent(float fontSize)
         {
             if (UnitsPerEm == 0) return fontSize;
-
-            // Chrome rounds ascent to integer (lroundf) before using in half-leading.
-            if (WinAscent > 0)
-                return (float)Math.Round((double)fontSize * WinAscent / UnitsPerEm, MidpointRounding.AwayFromZero);
-
             return (float)Math.Round((double)fontSize * Ascent / UnitsPerEm, MidpointRounding.AwayFromZero);
         }
 
         /// <summary>
         /// Computes the descent in pixels for the given font size (returns a positive value).
-        /// Uses OS/2 WinDescent when available to match Chrome/Windows.
+        /// Uses hhea descent to match Chrome/DirectWrite.
         /// </summary>
         public float GetDescent(float fontSize)
         {
             if (UnitsPerEm == 0) return 0f;
-
-            // Chrome rounds descent to integer (lroundf) before using in half-leading.
-            if (WinDescent > 0)
-                return (float)Math.Round((double)fontSize * WinDescent / UnitsPerEm, MidpointRounding.AwayFromZero);
-
             // hhea Descent is typically negative, so negate to return a positive pixel value.
             return (float)Math.Round((double)fontSize * -Descent / UnitsPerEm, MidpointRounding.AwayFromZero);
         }

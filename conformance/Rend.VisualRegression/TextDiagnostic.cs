@@ -429,6 +429,189 @@ static class TextDiagnostic
             Console.WriteLine($"  word[{i}] '{fullWords[i]}': accumulated '{acc2}' = {shaped2.TotalWidth:F4}px");
         }
 
+        // --- Monospace diagnostic ---
+        Console.WriteLine("\n--- MONOSPACE DIAGNOSTIC ---");
+        string monoHtml = @"<!DOCTYPE html><html><body style='margin:0; padding:10px; background:#fff;'>
+            <pre id='generic' style='margin:0; font-family:monospace; font-size:13px;'>abcdefghij klmnopqrst uvwxyz 1234567890</pre>
+            <pre id='explicit' style='margin:0; font-family:""Courier New"",monospace; font-size:13px;'>abcdefghij klmnopqrst uvwxyz 1234567890</pre>
+            <div id='divmono' style='font-family:monospace; font-size:13px;'>abcdefghij klmnopqrst uvwxyz 1234567890</div>
+            <div id='divexpl' style='font-family:""Courier New"",monospace; font-size:13px;'>abcdefghij klmnopqrst uvwxyz 1234567890</div>
+            <pre id='inherited' style='margin:0; font-size:13px;'>abcdefghij klmnopqrst uvwxyz 1234567890</pre>
+        </body></html>";
+        await using var pageMono = await browser.NewPageAsync();
+        await pageMono.SetViewportAsync(new ViewPortOptions { Width = 400, Height = 300 });
+        await pageMono.SetContentAsync(monoHtml, new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.Load } });
+        var monoMetrics = await pageMono.EvaluateFunctionAsync<Dictionary<string, object>>(@"() => {
+            const r = {};
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            for (const id of ['generic','explicit','divmono','divexpl','inherited']) {
+                const el = document.getElementById(id);
+                if (!el) continue;
+                const cs = getComputedStyle(el);
+                const rect = el.getBoundingClientRect();
+                // Measure text width using computed font
+                ctx.font = cs.fontSize + ' ' + cs.fontFamily;
+                const m = ctx.measureText('abcdefghij klmnopqrst uvwxyz 1234567890');
+                r[id] = {
+                    fontFamily: cs.fontFamily,
+                    fontSize: cs.fontSize,
+                    lineHeight: cs.lineHeight,
+                    top: rect.top,
+                    left: rect.left,
+                    width: rect.width,
+                    height: rect.height,
+                    textWidth: m.width,
+                    ascent: m.actualBoundingBoxAscent,
+                    descent: m.actualBoundingBoxDescent,
+                    fontAscent: m.fontBoundingBoxAscent,
+                    fontDescent: m.fontBoundingBoxDescent
+                };
+            }
+            // Also check what font Chrome actually resolves monospace to
+            ctx.font = '13px monospace';
+            const mMono = ctx.measureText('abcdefghij klmnopqrst uvwxyz 1234567890');
+            ctx.font = '13px ""Courier New""';
+            const mCN = ctx.measureText('abcdefghij klmnopqrst uvwxyz 1234567890');
+            ctx.font = '13px Consolas';
+            const mCons = ctx.measureText('abcdefghij klmnopqrst uvwxyz 1234567890');
+            r['canvas_monospace'] = { width: mMono.width, ascent: mMono.fontBoundingBoxAscent, descent: mMono.fontBoundingBoxDescent };
+            r['canvas_courierNew'] = { width: mCN.width, ascent: mCN.fontBoundingBoxAscent, descent: mCN.fontBoundingBoxDescent };
+            r['canvas_consolas'] = { width: mCons.width, ascent: mCons.fontBoundingBoxAscent, descent: mCons.fontBoundingBoxDescent };
+            return r;
+        }");
+        Console.WriteLine("Chrome monospace analysis:");
+        foreach (var kvp in monoMetrics)
+            Console.WriteLine($"  {kvp.Key}: {System.Text.Json.JsonSerializer.Serialize(kvp.Value)}");
+
+        // --- Consolas metrics comparison ---
+        Console.WriteLine("\n--- CONSOLAS METRICS ---");
+        var consolasDesc = new FontDescriptor("Consolas", 400, Rend.Css.CssFontStyle.Normal);
+        var consolasEntry = fontProvider.ResolveFont(consolasDesc);
+        Console.WriteLine($"  Consolas resolves to: {consolasEntry?.FamilyName ?? "NULL"}");
+        if (consolasEntry != null)
+        {
+            var cm = consolasEntry.Metrics;
+            Console.WriteLine($"  UnitsPerEm: {cm.UnitsPerEm}");
+            Console.WriteLine($"  Ascent: {cm.Ascent}, Descent: {cm.Descent}, LineGap: {cm.LineGap}");
+            Console.WriteLine($"  WinAscent: {cm.WinAscent}, WinDescent: {cm.WinDescent}");
+            float asc13 = cm.GetAscent(13);
+            float desc13 = cm.GetDescent(13);
+            float lh13 = cm.GetLineHeight(13);
+            Console.WriteLine($"  At 13px: Ascent={asc13:F4} Descent={desc13:F4} LineHeight(normal)={lh13:F4}");
+            Console.WriteLine($"  ContentArea={asc13+desc13:F4} HalfLeading={(lh13-(asc13+desc13))/2:F4}");
+
+            // Also check Skia metrics
+            if (consolasEntry.FontData != null)
+            {
+                using var skData2 = SkiaSharp.SKData.CreateCopy(consolasEntry.FontData);
+                var tf2 = SkiaSharp.SKTypeface.FromData(skData2);
+                if (tf2 != null)
+                {
+                    using var skf13 = new SkiaSharp.SKFont(tf2, 13);
+                    var sm = skf13.Metrics;
+                    Console.WriteLine($"  Skia 13px: Ascent={sm.Ascent:F4} Descent={sm.Descent:F4} Leading={sm.Leading:F4}");
+                    Console.WriteLine($"  Skia lineSpacing={sm.Descent-sm.Ascent+sm.Leading:F4}");
+                    Console.WriteLine($"  Skia underlinePos={sm.UnderlinePosition:F4} thickness={sm.UnderlineThickness:F4}");
+                    tf2.Dispose();
+                }
+            }
+        }
+
+        // Check monospace entry via generic lookup
+        var monoDesc = new FontDescriptor("monospace", 400, Rend.Css.CssFontStyle.Normal);
+        var monoEntry = fontProvider.ResolveFont(monoDesc);
+        Console.WriteLine($"  'monospace' resolves to: {monoEntry?.FamilyName ?? "NULL"}");
+
+        // Measure Consolas text width
+        float consolasWidth = measurer.MeasureWidth("abcdefghij klmnopqrst uvwxyz 1234567890", consolasDesc, 13);
+        Console.WriteLine($"  Consolas text width at 13px: {consolasWidth:F4} (Chrome: 278.7510)");
+        float consolasNLH = measurer.GetNormalLineHeight(consolasDesc, 13);
+        Console.WriteLine($"  Consolas normal line-height at 13px: {consolasNLH:F4} (Chrome: 15)");
+
+        // --- Shaping advance diagnostic ---
+        Console.WriteLine("\n--- SHAPING ADVANCE DIAGNOSTIC ---");
+        if (consolasEntry?.FontData != null)
+        {
+            using var skData3 = SkiaSharp.SKData.CreateCopy(consolasEntry.FontData);
+            var tf3 = SkiaSharp.SKTypeface.FromData(skData3);
+            if (tf3 != null)
+            {
+                // With LinearMetrics (same as shaping path)
+                using var skfLin = new SkiaSharp.SKFont(tf3, 13);
+                skfLin.Subpixel = true;
+                skfLin.LinearMetrics = true;
+
+                // Without LinearMetrics (same as rendering path)
+                using var skfNoLin = new SkiaSharp.SKFont(tf3, 13);
+                skfNoLin.Subpixel = true;
+                skfNoLin.LinearMetrics = false;
+
+                string testChars = "abcdefghij klmnopqrst uvwxyz 1234567890";
+                var glyphIds = new ushort[testChars.Length];
+                skfLin.GetGlyphs(testChars, glyphIds);
+
+                var advLin = new float[testChars.Length];
+                var advNoLin = new float[testChars.Length];
+                skfLin.GetGlyphWidths(glyphIds, advLin, null);
+                skfNoLin.GetGlyphWidths(glyphIds, advNoLin, null);
+
+                float totalLin = 0, totalNoLin = 0;
+                for (int i = 0; i < testChars.Length; i++)
+                    totalLin += advLin[i];
+                for (int i = 0; i < testChars.Length; i++)
+                    totalNoLin += advNoLin[i];
+
+                Console.WriteLine($"  Consolas 13px advances (LinearMetrics=true):");
+                Console.WriteLine($"    'a' glyph={glyphIds[0]} advance={advLin[0]:F6}");
+                Console.WriteLine($"    ' ' glyph={glyphIds[10]} advance={advLin[10]:F6}");
+                Console.WriteLine($"    '0' glyph={glyphIds[35]} advance={advLin[35]:F6}");
+                Console.WriteLine($"    Total width: {totalLin:F6}");
+                Console.WriteLine($"  Consolas 13px advances (LinearMetrics=false):");
+                Console.WriteLine($"    'a' advance={advNoLin[0]:F6}");
+                Console.WriteLine($"    ' ' advance={advNoLin[10]:F6}");
+                Console.WriteLine($"    '0' advance={advNoLin[35]:F6}");
+                Console.WriteLine($"    Total width: {totalNoLin:F6}");
+
+                // Also check 16.16 FP conversion
+                int hb16 = (int)(advLin[0] * 65536.0);
+                float backToFloat = hb16 / 65536f;
+                Console.WriteLine($"  HarfBuzz 16.16 FP: advance={advLin[0]:F6} → int={hb16} → back={backToFloat:F6}");
+                Console.WriteLine($"  39 chars in 16.16: {39 * hb16} → pixels={39 * hb16 / 65536f:F6}");
+
+                // Compare with HarfBuzz shaped result
+                var consolasShaped = measurer.Shape("abcdefghij klmnopqrst uvwxyz 1234567890", consolasDesc, 13);
+                Console.WriteLine($"  HarfBuzz shaped total: {consolasShaped.TotalWidth:F6} ({consolasShaped.Glyphs.Length} glyphs)");
+
+                // Also check Courier New for comparison
+                var cnDesc = new FontDescriptor("Courier New", 400, Rend.Css.CssFontStyle.Normal);
+                var cnEntry = fontProvider.ResolveFont(cnDesc);
+                if (cnEntry?.FontData != null)
+                {
+                    using var skDataCN = SkiaSharp.SKData.CreateCopy(cnEntry.FontData);
+                    var tfCN = SkiaSharp.SKTypeface.FromData(skDataCN);
+                    if (tfCN != null)
+                    {
+                        using var skfCN = new SkiaSharp.SKFont(tfCN, 13);
+                        skfCN.Subpixel = true;
+                        skfCN.LinearMetrics = true;
+                        var cnGlyphs = new ushort[testChars.Length];
+                        skfCN.GetGlyphs(testChars, cnGlyphs);
+                        var cnAdv = new float[testChars.Length];
+                        skfCN.GetGlyphWidths(cnGlyphs, cnAdv, null);
+                        float cnTotal = 0;
+                        for (int i = 0; i < testChars.Length; i++) cnTotal += cnAdv[i];
+                        Console.WriteLine($"  Courier New 13px: 'a' advance={cnAdv[0]:F6}, total={cnTotal:F6}");
+
+                        var cnShaped = measurer.Shape("abcdefghij klmnopqrst uvwxyz 1234567890", cnDesc, 13);
+                        Console.WriteLine($"  Courier New shaped total: {cnShaped.TotalWidth:F6}");
+                        tfCN.Dispose();
+                    }
+                }
+                tf3.Dispose();
+            }
+        }
+
         Console.WriteLine("\n=== END DIAGNOSTIC ===");
     }
 

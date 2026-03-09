@@ -101,6 +101,36 @@ namespace Rend.Rendering.Internal
             CssColor leftColor = box.CollapsedBorderLeftColor ?? style.BorderLeftColor;
 
 
+            // Optimization: uniform double borders drawn as two stroked rectangles,
+            // matching Chrome's rendering. This avoids corner pixel artifacts from
+            // per-side trapezoid painting.
+            if (!box.CollapsedBorderCell && !GetFieldsetLegendGap(box).HasValue &&
+                topStyle == CssBorderStyle.Double && rightStyle == CssBorderStyle.Double &&
+                bottomStyle == CssBorderStyle.Double && leftStyle == CssBorderStyle.Double &&
+                topW == rightW && topW == bottomW && topW == leftW && topW >= 3f &&
+                topColor.Equals(rightColor) && topColor.Equals(bottomColor) && topColor.Equals(leftColor))
+            {
+                float w = topW;
+                float third = w / 3f;
+
+                // Outer stroke: centered at 1/6 of border width from outer edge
+                float outerOffset = third * 0.5f;
+                var outerStrokeRect = new RectF(
+                    outerLeft + outerOffset, outerTop + outerOffset,
+                    (outerRight - outerLeft) - outerOffset * 2f,
+                    (outerBottom - outerTop) - outerOffset * 2f);
+                target.StrokeRect(outerStrokeRect, new PenInfo(topColor, third));
+
+                // Inner stroke: centered at 5/6 of border width from outer edge
+                float innerOffset = w - third * 0.5f;
+                var innerStrokeRect = new RectF(
+                    outerLeft + innerOffset, outerTop + innerOffset,
+                    (outerRight - outerLeft) - innerOffset * 2f,
+                    (outerBottom - outerTop) - innerOffset * 2f);
+                target.StrokeRect(innerStrokeRect, new PenInfo(topColor, third));
+                return;
+            }
+
             // Chrome draws rectangular borders as rectangles (not trapezoids):
             // Top/bottom span full width (owning the corners), left/right fill between them.
             // When adjacent borders have DIFFERENT colors, use diagonal (trapezoid) corner joins.
