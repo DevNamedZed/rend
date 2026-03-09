@@ -19,6 +19,7 @@ namespace Rend.Layout.Internal
             box.PaddingBottom = ResolveLength(style.PaddingBottom, containingBlockWidth, style, PropertyId.PaddingBottom);
             box.PaddingLeft = ResolveLength(style.PaddingLeft, containingBlockWidth, style, PropertyId.PaddingLeft);
 
+
             // Border
             box.BorderTopWidth = style.BorderTopStyle != CssBorderStyle.None ? style.BorderTopWidth : 0;
             box.BorderRightWidth = style.BorderRightStyle != CssBorderStyle.None ? style.BorderRightWidth : 0;

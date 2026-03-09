@@ -85,28 +85,28 @@ namespace Rend.Layout.Internal
                 styledElement.Style.ListStylePosition == CssListStylePosition.Inside &&
                 styledElement.Style.ListStyleType != CssListStyleType.None)
             {
-                // Approximate marker width: bullet + gap
                 float markerReserve;
                 var lstType = styledElement.Style.ListStyleType;
                 bool isSummary = styledElement.TagName == "summary";
                 if (isSummary)
                 {
-                    // Chrome's disclosure marker is the character "▾"/"▸" (U+25BE/U+25B8)
-                    // rendered as ::marker content with a trailing space. The total advance
-                    // width is approximately 1em (character + space in fallback font).
                     markerReserve = styledElement.Style.FontSize * 1.1f;
-                }
-                else if (lstType == CssListStyleType.Disc || lstType == CssListStyleType.Circle ||
-                    lstType == CssListStyleType.Square)
-                {
-                    // Chrome's ::marker for inside disc renders "•" glyph + space.
-                    // Empirical measurement from Chrome output shows marker reserve ≈ 1.5em.
-                    markerReserve = styledElement.Style.FontSize * 1.375f;
                 }
                 else
                 {
-                    // Counter text: estimate width
-                    markerReserve = styledElement.Style.FontSize * 1.2f;
+                    // Chrome's ::marker content for bullets: "• " (bullet + space).
+                    // The reserve width must match Chrome's ::marker inline box width.
+                    float bulletDiameter = styledElement.Style.FontSize * 0.3f;
+                    if (lstType == CssListStyleType.Disc ||
+                        lstType == CssListStyleType.Circle ||
+                        lstType == CssListStyleType.Square)
+                    {
+                        markerReserve = styledElement.Style.FontSize * 1.375f;
+                    }
+                    else
+                    {
+                        markerReserve = styledElement.Style.FontSize * 1.2f;
+                    }
                 }
                 cursorX += markerReserve;
             }

@@ -65,6 +65,7 @@ namespace Rend.Rendering.Internal
             float fontSize = style.FontSize;
             bool isInside = style.ListStylePosition == CssListStylePosition.Inside;
 
+
             // Try list-style-image first
             if (imageResolver != null && TryPaintImageMarker(box, target, style, imageResolver, contentRect, fontSize, isInside))
             {
@@ -89,45 +90,21 @@ namespace Rend.Rendering.Internal
             else
                 pixelLineHeight = rawLh; // Already in pixels
 
-            // For inside position, Chrome renders disc/circle/square as text glyphs
-            // via the ::marker pseudo-element ("•", "◦", "▪" + trailing space).
-            if (isInside && (listType == CssListStyleType.Disc ||
-                             listType == CssListStyleType.Circle ||
-                             listType == CssListStyleType.Square))
+            // Chrome renders ALL markers as text via ::marker pseudo-element.
+            // Marker content includes a trailing space that creates the visual gap.
+            string? markerText;
+            if (listType == CssListStyleType.Disc)
+                markerText = "\u2022 ";    // • BULLET + space
+            else if (listType == CssListStyleType.Circle)
+                markerText = "\u25E6 ";    // ◦ WHITE BULLET + space
+            else if (listType == CssListStyleType.Square)
+                markerText = "\u25AA ";    // ▪ BLACK SMALL SQUARE + space
+            else
+                markerText = GetMarkerText(listType, itemIndex);
+
+            if (markerText != null)
             {
-                string markerChar = listType == CssListStyleType.Disc ? "\u2022"    // • BULLET
-                                  : listType == CssListStyleType.Circle ? "\u25E6"  // ◦ WHITE BULLET
-                                  : "\u25AA";                                        // ▪ BLACK SMALL SQUARE
-                PaintCounterText(target, markerChar, contentRect, color, fontSize, style, isInside);
-                return;
-            }
-
-            // Chrome centers list bullets vertically on the first line
-            float markerCenterY = contentRect.Y + pixelLineHeight * 0.5f;
-            // Outside: marker drawn to the left of content area.
-            float markerX = contentRect.X - GetMarkerOffset(fontSize);
-
-            switch (listType)
-            {
-                case CssListStyleType.Disc:
-                    PaintDisc(target, markerX, markerCenterY, bulletRadius, color);
-                    break;
-
-                case CssListStyleType.Circle:
-                    PaintCircle(target, markerX, markerCenterY, bulletRadius, color);
-                    break;
-
-                case CssListStyleType.Square:
-                    PaintSquare(target, markerX, markerCenterY, bulletRadius, color);
-                    break;
-
-                default:
-                    string? markerText = GetMarkerText(listType, itemIndex);
-                    if (markerText != null)
-                    {
-                        PaintCounterText(target, markerText, contentRect, color, fontSize, style, isInside);
-                    }
-                    break;
+                PaintCounterText(target, markerText, contentRect, color, fontSize, style, isInside);
             }
         }
 
@@ -234,13 +211,12 @@ namespace Rend.Rendering.Internal
             }
             else
             {
-                // Outside: right-align marker text so it ends just before the content area.
-                // Use actual text measurement for accurate positioning instead of estimation.
+                // Outside: right-align marker text so its trailing space ends at the content edge.
+                // Chrome positions outside markers this way — the trailing space in the marker
+                // text creates the visual gap between marker and content.
                 float textWidth = target.MeasureText(text, textStyle);
                 if (textWidth < 0) textWidth = text.Length * fontSize * 0.6f; // fallback
-                // Chrome places marker text with ~0.5ch gap before content
-                float gap = fontSize * 0.3f;
-                float x = contentRect.X - textWidth - gap;
+                float x = contentRect.X - textWidth;
                 target.DrawText(text, x, y, textStyle);
             }
         }
@@ -250,24 +226,24 @@ namespace Rend.Rendering.Internal
             switch (listType)
             {
                 case CssListStyleType.Decimal:
-                    return index.ToString(CultureInfo.InvariantCulture) + ".";
+                    return index.ToString(CultureInfo.InvariantCulture) + ". ";
 
                 case CssListStyleType.DecimalLeadingZero:
-                    return index.ToString("D2", CultureInfo.InvariantCulture) + ".";
+                    return index.ToString("D2", CultureInfo.InvariantCulture) + ". ";
 
                 case CssListStyleType.LowerAlpha:
                 case CssListStyleType.LowerLatin:
-                    return ToAlpha(index, lowercase: true) + ".";
+                    return ToAlpha(index, lowercase: true) + ". ";
 
                 case CssListStyleType.UpperAlpha:
                 case CssListStyleType.UpperLatin:
-                    return ToAlpha(index, lowercase: false) + ".";
+                    return ToAlpha(index, lowercase: false) + ". ";
 
                 case CssListStyleType.LowerRoman:
-                    return ToRoman(index).ToLowerInvariant() + ".";
+                    return ToRoman(index).ToLowerInvariant() + ". ";
 
                 case CssListStyleType.UpperRoman:
-                    return ToRoman(index) + ".";
+                    return ToRoman(index) + ". ";
 
                 default:
                     return null;

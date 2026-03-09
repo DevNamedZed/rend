@@ -89,6 +89,21 @@ class Program
             return 0;
         }
 
+        // Run form control diagnostic
+        if (args.Length > 0 && args[0] == "--form-diag")
+        {
+            var diagBrowser = await Puppeteer.LaunchAsync(new LaunchOptions
+            {
+                Headless = true,
+                ExecutablePath = chromeExePath,
+                Args = new[] { "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
+                    "--disable-lcd-text" },
+            });
+            await FormDiagnostic.Run(diagBrowser);
+            await diagBrowser.DisposeAsync();
+            return 0;
+        }
+
         // Run font render settings diagnostic
         if (args.Length > 0 && args[0] == "--font-diag")
         {

@@ -87,30 +87,50 @@ namespace Rend.Layout.Internal
 
             if (tag == "select")
             {
-                // Compute width based on longest option text, like Chrome
-                int maxLen = 0;
+                // Chrome 116 select intrinsic sizing (measured via diagnostic):
+                // border-box = 75x19 for "Option 1" with 1px border, box-sizing: border-box
+                // content-box = 73x17 (border-box minus 2px border)
+                // Text width: "Option 1" = 50.39px (Arial 13.333px via DirectWrite)
+                // Internal padding: 4px start + 1px + ~15px arrow end ≈ 20px horizontal
+                // Our UA has border: 1px, padding: 0 (content-box sizing) → return content-box width
+                //
+                // Note: Our HarfBuzz measurement gives ~53px for "Option 1" (differs from Chrome's
+                // DirectWrite), so we use a per-char estimate of ~6.3px matching Chrome's average.
+                float maxTextWidth = 0;
                 var child = element.Element.FirstChild;
                 while (child != null)
                 {
                     if (child is Html.Element optEl && optEl.TagName == "option")
                     {
-                        int len = (optEl.TextContent?.Trim() ?? "").Length;
-                        if (len > maxLen) maxLen = len;
+                        string text = optEl.TextContent?.Trim() ?? "";
+                        // ~6.3px per char matches Chrome's Arial 13.333px average char width
+                        float w = text.Length * 6.3f;
+                        if (w > maxTextWidth) maxTextWidth = w;
                     }
                     child = child.NextSibling;
                 }
-                if (maxLen == 0) maxLen = 8; // default
-                // ~6.7px per char + 20px arrow area (border+padding now in UA CSS)
-                return maxLen * 6.7f + 20f;
+                if (maxTextWidth == 0) maxTextWidth = 8 * 6.3f;
+                // Chrome: content-box = ceil(textWidth) + internal padding (~22px)
+                return (float)Math.Ceiling(maxTextWidth) + 22f;
             }
 
             if (tag == "textarea")
             {
-                // Content-box width: subtract 4px border + 2px padding from total
+                // Chrome intrinsic textarea sizing (measured from Chrome 116):
+                // Content-box width = ceil(avgCharWidth * cols) + scrollbarThickness(17)
+                // avgCharWidth for Courier New at 13.333px = 7.329px (from Chrome's DirectWrite)
+                // Content-box height = FontMetrics::Height() * rows = 15px * rows
+                // Note: Our HarfBuzz shaping gives 8.001px/char (raw font advance) but Chrome's
+                // layout uses DirectWrite hinted advances which differ. Use Chrome's measured value.
                 string? cols = element.GetAttribute("cols");
+                int colCount = 20; // default
                 if (cols != null && int.TryParse(cols, out int c) && c > 0)
-                    return c * 8f; // ~8px per column character (border+padding added by UA CSS)
-                return 160f; // default 20 cols * 8
+                    colCount = c;
+                // Chrome: ceil(7.329 * cols) + 17 (scrollbar)
+                // cols=20 → ceil(146.58)+17 = 147+17 = 164
+                // cols=30 → ceil(219.87)+17 = 220+17 = 237
+                float charWidth = 7.329f;
+                return (float)Math.Ceiling(charWidth * colCount) + 17f;
             }
 
             if (tag == "meter" || tag == "progress")
@@ -157,15 +177,20 @@ namespace Rend.Layout.Internal
             }
 
             if (tag == "select")
-                return 19f; // Content-box: 21 - 2px border (1px each side, no padding)
+                return 17f; // Chrome: FontMetrics::Height()+2 = 17px content-box (border-box 19)
 
             if (tag == "textarea")
             {
-                // Content-box height: rows * line-height (border+padding added by UA CSS)
+                // Chrome: FontMetrics::Height() * rows
+                // For Courier New at 13.333px: Height = ascent + descent = 15
+                // Chrome diagnostic shows rows=3 → content height = 45
                 string? rows = element.GetAttribute("rows");
+                int rowCount = 2; // default
                 if (rows != null && int.TryParse(rows, out int r) && r > 0)
-                    return r * 16f;
-                return 32f; // default 2 rows * 16
+                    rowCount = r;
+                // Line height = font metrics height for line-height:normal
+                // For Courier New at 13.333px: 15px per line
+                return rowCount * 15f;
             }
 
             if (tag == "meter" || tag == "progress")

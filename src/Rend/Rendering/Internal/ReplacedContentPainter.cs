@@ -443,14 +443,22 @@ namespace Rend.Rendering.Internal
             }
 
             // Draw text (clip to content minus arrow area)
+            // Chrome internal padding: 4px start, ~16px end (arrow area)
+            float internalPadStart = 4f;
             float arrowAreaWidth = 16f;
             if (!string.IsNullOrEmpty(displayText))
             {
                 var textClip = new RectF(rect.X, rect.Y, rect.Width - arrowAreaWidth, rect.Height);
                 target.PushClipRect(textClip);
 
-                float textY = rect.Y + rect.Height / 2f + FormFontAscent * 0.4f;
-                target.DrawText(displayText, rect.X, textY,
+                // Chrome: align-items:center centers the line-height (14px) in the content box
+                // baseline = top + (contentHeight - lineHeight)/2 + ascent
+                float lineHeight = 14f;  // font metrics height for Arial 13.333px
+                float ascent = 11f;
+                float textY = rect.Y + (rect.Height - lineHeight) / 2f + ascent;
+                float textX = rect.X + internalPadStart;
+
+                target.DrawText(displayText, textX, textY,
                     new TextStyle
                     {
                         Font = new FontDescriptor("sans-serif", 400f),
@@ -495,10 +503,12 @@ namespace Rend.Rendering.Internal
             {
                 target.PushClipRect(rect);
 
-                float lineHeight = FormFontSize * 1.4f;
+                // Chrome textarea: line-height = FontMetrics::Height() = 15px for Courier New 13.333px
+                float lineHeight = 15f;
                 float textX = rect.X;
-                // DrawText uses Y as baseline; add ascent to position text inside the box
-                float textY = rect.Y + FormFontAscent;
+                // Chrome positions text at baseline = top + ascent (from font metrics)
+                // For Courier New at 13.333px: ascent ≈ 11px (from WinAscent)
+                float textY = rect.Y + 11f;
 
                 // Split content into lines and draw each
                 string[] lines = content.Split('\n');
@@ -522,6 +532,46 @@ namespace Rend.Rendering.Internal
                 }
 
                 target.PopClip();
+            }
+
+            // Draw resize grip (Chrome's ScrollableAreaPainter)
+            PaintResizeGrip(target, borderRect);
+        }
+
+        /// <summary>
+        /// Paints a resize grip in the bottom-right corner of a textarea,
+        /// matching Chrome's diagonal line pattern.
+        /// </summary>
+        private static void PaintResizeGrip(IRenderTarget target, RectF borderRect)
+        {
+            // Chrome draws two sets of diagonal lines: dark (rgba(0,0,0,0.6)) and
+            // light (rgba(255,255,255,0.6)), offset by 1px for a 3D shadow effect.
+            float right = borderRect.X + borderRect.Width - 1f;
+            float bottom = borderRect.Y + borderRect.Height - 1f;
+
+            var darkColor = new CssColor(102, 102, 102);   // ~rgba(0,0,0,0.6) on white
+            var lightColor = new CssColor(255, 255, 255);   // light lines on the left of each pair
+
+            // Three pairs of diagonal lines from bottom-right corner
+            for (int i = 0; i < 3; i++)
+            {
+                float offset = i * 4f;
+                float x1 = right - 1f - offset;
+                float y1 = bottom;
+                float x2 = right;
+                float y2 = bottom - 1f - offset;
+
+                // Light line (offset -1)
+                var lightPath = new PathData();
+                lightPath.MoveTo(x1 - 1f, y1);
+                lightPath.LineTo(x2, y2 - 1f);
+                target.StrokePath(lightPath, new PenInfo(lightColor, 1f));
+
+                // Dark line
+                var darkPath = new PathData();
+                darkPath.MoveTo(x1, y1);
+                darkPath.LineTo(x2, y2);
+                target.StrokePath(darkPath, new PenInfo(darkColor, 1f));
             }
         }
 
