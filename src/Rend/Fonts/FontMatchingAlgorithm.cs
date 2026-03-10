@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+#if NET8_0_OR_GREATER
+using System.Collections.Frozen;
+#endif
 using Rend.Css;
 
 namespace Rend.Fonts
@@ -14,6 +17,21 @@ namespace Rend.Fonts
         /// Returns null if no candidates match the requested family name.
         /// </summary>
         // Generic CSS family name → concrete font family fallback lists.
+#if NET8_0_OR_GREATER
+        private static readonly FrozenDictionary<string, string[]> GenericFamilyMap =
+            new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["sans-serif"] = new[] { "Helvetica", "Helvetica Neue", "Arial", "Segoe UI", "DejaVu Sans", "Liberation Sans", "FreeSans", "Noto Sans" },
+                ["serif"] = new[] { "Times New Roman", "Times", "Georgia", "DejaVu Serif", "Liberation Serif", "FreeSerif", "Noto Serif" },
+                ["monospace"] = new[] { "Consolas", "Courier New", "Courier", "Menlo", "DejaVu Sans Mono", "Liberation Mono", "FreeMono", "Noto Sans Mono" },
+                ["cursive"] = new[] { "Comic Sans MS", "Apple Chancery", "Snell Roundhand" },
+                ["fantasy"] = new[] { "Impact", "Papyrus" },
+                ["system-ui"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },
+                ["ui-sans-serif"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },
+                ["ui-serif"] = new[] { "New York", "Georgia", "Times New Roman" },
+                ["ui-monospace"] = new[] { "SF Mono", "Menlo", "Consolas", "Courier New" },
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+#else
         private static readonly Dictionary<string, string[]> GenericFamilyMap = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
             ["sans-serif"] = new[] { "Helvetica", "Helvetica Neue", "Arial", "Segoe UI", "DejaVu Sans", "Liberation Sans", "FreeSans", "Noto Sans" },
@@ -26,6 +44,7 @@ namespace Rend.Fonts
             ["ui-serif"] = new[] { "New York", "Georgia", "Times New Roman" },
             ["ui-monospace"] = new[] { "SF Mono", "Menlo", "Consolas", "Courier New" },
         };
+#endif
 
         public static FontEntry? FindBestMatch(FontDescriptor requested, IReadOnlyList<FontEntry> candidates)
         {

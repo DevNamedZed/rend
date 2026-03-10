@@ -206,7 +206,7 @@ namespace Rend.Pdf.Tests
             Assert.True(bracketEnd > bracketStart, "Malformed /H array");
 
             string hValues = pdfText.Substring(bracketStart, bracketEnd - bracketStart).Trim();
-            string[] parts = hValues.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            string[] parts = hValues.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             Assert.Equal(2, parts.Length);
 
             // Both values should be positive integers
@@ -383,7 +383,7 @@ namespace Rend.Pdf.Tests
         {
             using var ms = new MemoryStream();
             doc.Save(ms);
-            return Encoding.Latin1.GetString(ms.ToArray());
+            return Encoding.GetEncoding(28591).GetString(ms.ToArray());
         }
     }
 }

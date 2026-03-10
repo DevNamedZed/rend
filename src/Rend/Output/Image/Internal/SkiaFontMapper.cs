@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+#if NET8_0_OR_GREATER
+using System.Collections.Frozen;
+#endif
 using Rend.Css;
 using Rend.Fonts;
 using SkiaSharp;
@@ -70,6 +73,21 @@ namespace Rend.Output.Image.Internal
         }
 
         // Generic CSS family → concrete family names (mirrors FontMatchingAlgorithm).
+#if NET8_0_OR_GREATER
+        private static readonly FrozenDictionary<string, string[]> GenericFamilyMap =
+            new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["sans-serif"] = new[] { "Helvetica", "Helvetica Neue", "Arial", "Segoe UI", "DejaVu Sans" },
+                ["serif"] = new[] { "Times New Roman", "Times", "Georgia", "DejaVu Serif" },
+                ["monospace"] = new[] { "Consolas", "Courier New", "Courier", "Menlo", "DejaVu Sans Mono" },
+                ["cursive"] = new[] { "Comic Sans MS", "Apple Chancery" },
+                ["fantasy"] = new[] { "Impact", "Papyrus" },
+                ["system-ui"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },
+                ["ui-sans-serif"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue" },
+                ["ui-serif"] = new[] { "New York", "Georgia", "Times New Roman" },
+                ["ui-monospace"] = new[] { "SF Mono", "Menlo", "Consolas", "Courier New" },
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+#else
         private static readonly Dictionary<string, string[]> GenericFamilyMap = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
             ["sans-serif"] = new[] { "Helvetica", "Helvetica Neue", "Arial", "Segoe UI", "DejaVu Sans" },
@@ -82,6 +100,7 @@ namespace Rend.Output.Image.Internal
             ["ui-serif"] = new[] { "New York", "Georgia", "Times New Roman" },
             ["ui-monospace"] = new[] { "SF Mono", "Menlo", "Consolas", "Courier New" },
         };
+#endif
 
         /// <summary>
         /// Gets or creates a shared SKTypeface from font data bytes.

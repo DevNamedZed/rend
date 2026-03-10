@@ -166,6 +166,9 @@ namespace Rend.Tests.Rendering
             public void Finish(Stream output) { }
             public void AddLink(RectF rect, string uri) { }
             public void AddBookmark(string title, int level, float yPosition) { }
+            public void FillRoundRectDifference(RoundedRectInfo outer, RoundedRectInfo inner, BrushInfo brush) { }
+            public float MeasureText(string text, TextStyle style) => -1f;
+            public (float UnderlinePosition, float UnderlineThickness, float StrikeoutPosition, float StrikeoutThickness) GetDecorationMetrics(FontDescriptor font, float fontSize) => (0, 0, 0, 0);
 
             public void StrokeRect(RectF rect, PenInfo pen)
             {

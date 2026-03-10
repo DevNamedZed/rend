@@ -155,7 +155,7 @@ namespace Rend.Text.Internal
                 for (int j = i + 1; j <= workLen; j++)
                 {
                     string fragment = work.Substring(i, j - i);
-                    if (_patterns.TryGetValue(fragment, out byte[] weights))
+                    if (_patterns.TryGetValue(fragment, out byte[]? weights) && weights != null)
                     {
                         // Apply weights: weights[k] applies to position (i + k)
                         for (int k = 0; k < weights.Length && (i + k) <= workLen; k++)

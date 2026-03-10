@@ -266,6 +266,9 @@ namespace Rend.Tests.Rendering
             public void DrawText(string text, float x, float y, TextStyle style) { }
             public void DrawGlyphs(ShapedTextRun run, float x, float y, CssColor color, FontDescriptor font) { }
             public void Finish(Stream output) { }
+            public void FillRoundRectDifference(RoundedRectInfo outer, RoundedRectInfo inner, BrushInfo brush) { }
+            public float MeasureText(string text, TextStyle style) => -1f;
+            public (float UnderlinePosition, float UnderlineThickness, float StrikeoutPosition, float StrikeoutThickness) GetDecorationMetrics(FontDescriptor font, float fontSize) => (0, 0, 0, 0);
 
             public void AddLink(RectF rect, string uri)
             {

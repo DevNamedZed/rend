@@ -1,4 +1,7 @@
 using System;
+#if NET8_0_OR_GREATER
+using System.Buffers;
+#endif
 using System.Text;
 
 namespace Rend.Css.Parser.Internal
@@ -747,6 +750,26 @@ namespace Rend.Css.Parser.Internal
         {
             _sb.Clear();
 
+#if NET8_0_OR_GREATER
+            // Fast path: bulk-scan ASCII name chars via span
+            var span = _input.AsSpan(_pos);
+            int idx = span.IndexOfAnyExcept(NameCharsAscii);
+            if (idx < 0)
+            {
+                // All remaining is name chars
+                _sb.Append(span);
+                _pos = _input.Length;
+                return _sb.ToString();
+            }
+            if (idx > 0)
+            {
+                // Check for non-ASCII (>0x7F) chars in the scanned range — they're valid name chars too
+                // IndexOfAnyExcept stops at non-ASCII, so we can just append what we found
+                _sb.Append(span.Slice(0, idx));
+                _pos += idx;
+            }
+            // Continue with char-by-char for escapes and non-ASCII
+#endif
             while (_pos < _input.Length)
             {
                 char c = Peek();
@@ -775,8 +798,18 @@ namespace Rend.Css.Parser.Internal
 
         private void ConsumeWhitespace()
         {
+#if NET8_0_OR_GREATER
+            // Bulk-skip whitespace via span scan
+            var span = _input.AsSpan(_pos);
+            int idx = span.IndexOfAnyExcept(WhitespaceChars);
+            if (idx < 0)
+                _pos = _input.Length;
+            else
+                _pos += idx;
+#else
             while (_pos < _input.Length && IsWhitespace(Peek()))
                 Advance();
+#endif
         }
 
         #endregion
@@ -850,6 +883,26 @@ namespace Rend.Css.Parser.Internal
             return false;
         }
 
+#if NET8_0_OR_GREATER
+        private static readonly SearchValues<char> WhitespaceChars =
+            SearchValues.Create(" \t\n\r\f");
+
+        private static readonly SearchValues<char> HexDigitChars =
+            SearchValues.Create("0123456789abcdefABCDEF");
+
+        private static readonly SearchValues<char> NameCharsAscii =
+            SearchValues.Create("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789-");
+
+        private static bool IsWhitespace(char c) => WhitespaceChars.Contains(c);
+
+        private static bool IsNameStartChar(char c)
+            => (c <= '\u007F') ? (char.IsAsciiLetter(c) || c == '_') : true;
+
+        private static bool IsNameChar(char c)
+            => (c <= '\u007F') ? NameCharsAscii.Contains(c) : true;
+
+        private static bool IsHexDigit(char c) => HexDigitChars.Contains(c);
+#else
         private static bool IsWhitespace(char c)
         {
             return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f';
@@ -869,6 +922,7 @@ namespace Rend.Css.Parser.Internal
         {
             return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
         }
+#endif
 
         private static int HexValue(char c)
         {

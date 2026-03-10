@@ -1,14 +1,31 @@
 <Project>
+  <Import Project="Version.props" />
+
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>CS1591</NoWarn>
-    <Authors>Rend Contributors</Authors>
-    <Company>Rend</Company>
-    <Copyright>Copyright (c) Rend Contributors</Copyright>
-    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <Authors>Ziad Elmalki</Authors>
+    <Company>Rend</Company>
+    <Copyright>Copyright (c) Ziad Elmalki</Copyright>
+    <Description>HTML/CSS rendering engine for .NET. Renders to PDF and images.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ArtifactCoding/rend</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/ArtifactCoding/rend</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>html;css;pdf;render;image;layout</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <!-- Include README in package -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 </Project>

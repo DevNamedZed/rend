@@ -6,9 +6,11 @@ namespace Rend.Pdf
 {
     /// <summary>
     /// Default implementation of <see cref="IPdfSigningService"/>.
+    /// Uses PKCS#7/CMS detached signatures for PAdES-compatible PDF signing.
     /// </summary>
     public sealed class PdfSigningService : IPdfSigningService
     {
+        /// <inheritdoc />
         public void Sign(Stream input, Stream output, PdfSignatureOptions options)
         {
             if (input == null) throw new ArgumentNullException(nameof(input));
@@ -27,6 +29,7 @@ namespace Rend.Pdf
             output.Write(signed, 0, signed.Length);
         }
 
+        /// <inheritdoc />
         public byte[] Sign(byte[] pdfBytes, PdfSignatureOptions options)
         {
             if (pdfBytes == null || pdfBytes.Length == 0)
@@ -37,6 +40,7 @@ namespace Rend.Pdf
             return Internal.PdfSigner.Sign(pdfBytes, options);
         }
 
+        /// <inheritdoc />
         public void Sign(Stream input, Stream output, X509Certificate2 certificate,
             string? signerName = null, string? reason = null)
         {
@@ -49,6 +53,7 @@ namespace Rend.Pdf
             Sign(input, output, options);
         }
 
+        /// <inheritdoc />
         public byte[] Sign(byte[] pdfBytes, X509Certificate2 certificate,
             string? signerName = null, string? reason = null)
         {

@@ -19,11 +19,28 @@ namespace Rend.Pdf.Tests
             return cert.Export(X509ContentType.Pfx, password);
         }
 
+        private static PdfSignatureOptions CreateSignatureOptions(
+            byte[]? pfx = null, string? password = "test",
+            string? signerName = null, string? reason = null,
+            string? location = null, string? contactInfo = null)
+        {
+            var opts = new PdfSignatureOptions
+            {
+                SignerName = signerName,
+                Reason = reason,
+                Location = location,
+                ContactInfo = contactInfo
+            };
+            if (pfx != null)
+                opts.Signer = new Pkcs12Signer(pfx, password);
+            return opts;
+        }
+
         private static string SaveToString(PdfDocument doc)
         {
             using var ms = new MemoryStream();
             doc.Save(ms);
-            return Encoding.Latin1.GetString(ms.ToArray());
+            return Encoding.GetEncoding(28591).GetString(ms.ToArray());
         }
 
         private static byte[] SaveToBytes(PdfDocument doc)
@@ -44,7 +61,7 @@ namespace Rend.Pdf.Tests
             {
                 Signature = new PdfSignatureOptions
                 {
-                    // CertificateData intentionally null
+                    // Signer intentionally null
                 }
             };
             using var doc = new PdfDocument(options);
@@ -56,18 +73,16 @@ namespace Rend.Pdf.Tests
         [Fact]
         public void Signature_EmptyCertificateData_Throws()
         {
-            var options = new PdfDocumentOptions
+            Assert.Throws<ArgumentException>(() =>
             {
-                Signature = new PdfSignatureOptions
+                var options = new PdfDocumentOptions
                 {
-                    CertificateData = Array.Empty<byte>(),
-                    CertificatePassword = "test"
-                }
-            };
-            using var doc = new PdfDocument(options);
-            doc.AddPage(595, 842);
-
-            Assert.Throws<InvalidOperationException>(() => doc.ToArray());
+                    Signature = new PdfSignatureOptions
+                    {
+                        Signer = new Pkcs12Signer(Array.Empty<byte>(), "test")
+                    }
+                };
+            });
         }
 
         // ═══════════════════════════════════════════
@@ -80,12 +95,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test",
-                    SignerName = "Test Signer"
-                }
+                Signature = CreateSignatureOptions(pfx, signerName: "Test Signer")
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
@@ -103,12 +113,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test",
-                    SignerName = "Alice"
-                }
+                Signature = CreateSignatureOptions(pfx, signerName: "Alice")
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
@@ -123,13 +128,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test",
-                    Reason = "Approval",
-                    Location = "New York"
-                }
+                Signature = CreateSignatureOptions(pfx, reason: "Approval", location: "New York")
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
@@ -145,12 +144,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test",
-                    ContactInfo = "alice@example.com"
-                }
+                Signature = CreateSignatureOptions(pfx, contactInfo: "alice@example.com")
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
@@ -165,11 +159,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test"
-                }
+                Signature = CreateSignatureOptions(pfx)
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
@@ -184,11 +174,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test"
-                }
+                Signature = CreateSignatureOptions(pfx)
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
@@ -204,11 +190,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test"
-                }
+                Signature = CreateSignatureOptions(pfx)
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
@@ -225,11 +207,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test"
-                }
+                Signature = CreateSignatureOptions(pfx)
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
@@ -249,11 +227,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test"
-                }
+                Signature = CreateSignatureOptions(pfx)
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
@@ -299,17 +273,13 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test"
-                }
+                Signature = CreateSignatureOptions(pfx)
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
 
             byte[] pdfBytes = SaveToBytes(doc);
-            string pdfText = Encoding.Latin1.GetString(pdfBytes);
+            string pdfText = Encoding.GetEncoding(28591).GetString(pdfBytes);
 
             // Extract ByteRange
             int brIdx = pdfText.IndexOf("/ByteRange [", StringComparison.Ordinal);
@@ -341,17 +311,13 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test"
-                }
+                Signature = CreateSignatureOptions(pfx)
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
 
             byte[] pdfBytes = SaveToBytes(doc);
-            string pdfText = Encoding.Latin1.GetString(pdfBytes);
+            string pdfText = Encoding.GetEncoding(28591).GetString(pdfBytes);
 
             // Find /Contents in signature dict context (near /Type /Sig)
             int sigTypeIdx = pdfText.IndexOf("/Type /Sig", StringComparison.Ordinal);
@@ -380,11 +346,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test"
-                }
+                Signature = CreateSignatureOptions(pfx)
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
@@ -400,11 +362,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test"
-                }
+                Signature = CreateSignatureOptions(pfx)
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
@@ -419,11 +377,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test"
-                }
+                Signature = CreateSignatureOptions(pfx)
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
@@ -452,12 +406,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test",
-                    SignerName = "Multi-Page Signer"
-                }
+                Signature = CreateSignatureOptions(pfx, signerName: "Multi-Page Signer")
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);
@@ -477,13 +426,7 @@ namespace Rend.Pdf.Tests
             var options = new PdfDocumentOptions
             {
                 Compression = PdfCompression.None,
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test",
-                    SignerName = "Content Signer",
-                    Reason = "Testing"
-                }
+                Signature = CreateSignatureOptions(pfx, signerName: "Content Signer", reason: "Testing")
             };
             using var doc = new PdfDocument(options);
             var page = doc.AddPage(595, 842);
@@ -495,7 +438,7 @@ namespace Rend.Pdf.Tests
             page.Content.EndText();
 
             byte[] pdfBytes = SaveToBytes(doc);
-            string pdfText = Encoding.Latin1.GetString(pdfBytes);
+            string pdfText = Encoding.GetEncoding(28591).GetString(pdfBytes);
 
             // Should have both the content and the signature
             Assert.Contains("Signed document content", pdfText);
@@ -509,11 +452,7 @@ namespace Rend.Pdf.Tests
             byte[] pfx = CreateTestCertificate();
             var options = new PdfDocumentOptions
             {
-                Signature = new PdfSignatureOptions
-                {
-                    CertificateData = pfx,
-                    CertificatePassword = "test"
-                }
+                Signature = CreateSignatureOptions(pfx)
             };
             using var doc = new PdfDocument(options);
             doc.AddPage(595, 842);

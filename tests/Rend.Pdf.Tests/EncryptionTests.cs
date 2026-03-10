@@ -198,8 +198,8 @@ namespace Rend.Pdf.Tests
             }
 
             // Encrypted output must differ and be larger (due to encryption overhead)
-            string unencText = Encoding.Latin1.GetString(unencrypted);
-            string encText = Encoding.Latin1.GetString(encrypted);
+            string unencText = Encoding.GetEncoding(28591).GetString(unencrypted);
+            string encText = Encoding.GetEncoding(28591).GetString(encrypted);
 
             Assert.DoesNotContain("/Encrypt", unencText);
             Assert.Contains("/Encrypt", encText);
@@ -282,7 +282,7 @@ namespace Rend.Pdf.Tests
         {
             using var ms = new MemoryStream();
             doc.Save(ms);
-            return Encoding.Latin1.GetString(ms.ToArray());
+            return Encoding.GetEncoding(28591).GetString(ms.ToArray());
         }
 
         private static string SaveEncryptedWithPermissions(PdfPermissions permissions)

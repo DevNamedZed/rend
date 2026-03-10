@@ -1,4 +1,7 @@
 using System;
+#if NET8_0_OR_GREATER
+using System.Buffers;
+#endif
 using System.Text;
 using Rend.Core;
 
@@ -244,7 +247,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.TagName:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _token.TagName = InternTagName();
                             _state = TokenizerState.BeforeAttributeName;
@@ -266,12 +269,10 @@ namespace Rend.Html.Parser.Internal
                             EmitTag(out token);
                             return true;
                         }
-                        if (c >= 'A' && c <= 'Z')
-                            _tagNameBuffer.Append((char)(c + 0x20)); // lowercase
-                        else if (c == '\0')
+                        if (c == '\0')
                             _tagNameBuffer.Append('\uFFFD');
                         else
-                            _tagNameBuffer.Append(c);
+                            _tagNameBuffer.Append(AsciiLower(c));
                         _pos++;
                         continue;
 
@@ -304,7 +305,7 @@ namespace Rend.Html.Parser.Internal
                         return true;
 
                     case TokenizerState.RcDataEndTagName:
-                        if ((c == '\t' || c == '\n' || c == '\f' || c == ' ') && IsAppropriateEndTag())
+                        if ((IsHtmlWhitespace(c)) && IsAppropriateEndTag())
                         {
                             _token.TagName = InternTagName();
                             _state = TokenizerState.BeforeAttributeName;
@@ -328,7 +329,7 @@ namespace Rend.Html.Parser.Internal
                         }
                         if (IsAsciiAlpha(c))
                         {
-                            _tagNameBuffer.Append(c >= 'A' && c <= 'Z' ? (char)(c + 0x20) : c);
+                            _tagNameBuffer.Append(AsciiLower(c));
                             _tempBuffer.Append(c);
                             _pos++;
                             continue;
@@ -367,7 +368,7 @@ namespace Rend.Html.Parser.Internal
                         return true;
 
                     case TokenizerState.RawTextEndTagName:
-                        if ((c == '\t' || c == '\n' || c == '\f' || c == ' ') && IsAppropriateEndTag())
+                        if ((IsHtmlWhitespace(c)) && IsAppropriateEndTag())
                         {
                             _token.TagName = InternTagName();
                             _state = TokenizerState.BeforeAttributeName;
@@ -391,7 +392,7 @@ namespace Rend.Html.Parser.Internal
                         }
                         if (IsAsciiAlpha(c))
                         {
-                            _tagNameBuffer.Append(c >= 'A' && c <= 'Z' ? (char)(c + 0x20) : c);
+                            _tagNameBuffer.Append(AsciiLower(c));
                             _tempBuffer.Append(c);
                             _pos++;
                             continue;
@@ -438,7 +439,7 @@ namespace Rend.Html.Parser.Internal
                         return true;
 
                     case TokenizerState.ScriptDataEndTagName:
-                        if ((c == '\t' || c == '\n' || c == '\f' || c == ' ') && IsAppropriateEndTag())
+                        if ((IsHtmlWhitespace(c)) && IsAppropriateEndTag())
                         {
                             _token.TagName = InternTagName();
                             _state = TokenizerState.BeforeAttributeName;
@@ -462,7 +463,7 @@ namespace Rend.Html.Parser.Internal
                         }
                         if (IsAsciiAlpha(c))
                         {
-                            _tagNameBuffer.Append(c >= 'A' && c <= 'Z' ? (char)(c + 0x20) : c);
+                            _tagNameBuffer.Append(AsciiLower(c));
                             _tempBuffer.Append(c);
                             _pos++;
                             continue;
@@ -611,7 +612,7 @@ namespace Rend.Html.Parser.Internal
                         return true;
 
                     case TokenizerState.ScriptDataEscapedEndTagName:
-                        if ((c == '\t' || c == '\n' || c == '\f' || c == ' ') && IsAppropriateEndTag())
+                        if ((IsHtmlWhitespace(c)) && IsAppropriateEndTag())
                         {
                             _token.TagName = InternTagName();
                             _state = TokenizerState.BeforeAttributeName;
@@ -635,7 +636,7 @@ namespace Rend.Html.Parser.Internal
                         }
                         if (IsAsciiAlpha(c))
                         {
-                            _tagNameBuffer.Append(c >= 'A' && c <= 'Z' ? (char)(c + 0x20) : c);
+                            _tagNameBuffer.Append(AsciiLower(c));
                             _tempBuffer.Append(c);
                             _pos++;
                             continue;
@@ -645,7 +646,7 @@ namespace Rend.Html.Parser.Internal
                         return true;
 
                     case TokenizerState.ScriptDataDoubleEscapeStart:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ' || c == '/' || c == '>')
+                        if (IsHtmlWhitespace(c) || c == '/' || c == '>')
                         {
                             if (_tempBuffer.ToString() == "script")
                                 _state = TokenizerState.ScriptDataDoubleEscaped;
@@ -657,7 +658,7 @@ namespace Rend.Html.Parser.Internal
                         }
                         if (IsAsciiAlpha(c))
                         {
-                            _tempBuffer.Append(c >= 'A' && c <= 'Z' ? (char)(c + 0x20) : c);
+                            _tempBuffer.Append(AsciiLower(c));
                             _pos++;
                             EmitChar(c, out token);
                             return true;
@@ -763,7 +764,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.ScriptDataDoubleEscapeEnd:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ' || c == '/' || c == '>')
+                        if (IsHtmlWhitespace(c) || c == '/' || c == '>')
                         {
                             if (_tempBuffer.ToString() == "script")
                                 _state = TokenizerState.ScriptDataEscaped;
@@ -775,7 +776,7 @@ namespace Rend.Html.Parser.Internal
                         }
                         if (IsAsciiAlpha(c))
                         {
-                            _tempBuffer.Append(c >= 'A' && c <= 'Z' ? (char)(c + 0x20) : c);
+                            _tempBuffer.Append(AsciiLower(c));
                             _pos++;
                             EmitChar(c, out token);
                             return true;
@@ -784,7 +785,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.BeforeAttributeName:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _pos++;
                             continue;
@@ -808,7 +809,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.AttributeName:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _state = TokenizerState.AfterAttributeName;
                             _pos++;
@@ -836,17 +837,15 @@ namespace Rend.Html.Parser.Internal
                             EmitTag(out token);
                             return true;
                         }
-                        if (c >= 'A' && c <= 'Z')
-                            _attrBuffer.AppendName((char)(c + 0x20));
-                        else if (c == '\0')
+                        if (c == '\0')
                             _attrBuffer.AppendName('\uFFFD');
                         else
-                            _attrBuffer.AppendName(c);
+                            _attrBuffer.AppendName(AsciiLower(c));
                         _pos++;
                         continue;
 
                     case TokenizerState.AfterAttributeName:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _pos++;
                             continue;
@@ -880,7 +879,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.BeforeAttributeValue:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _pos++;
                             continue;
@@ -961,7 +960,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.AttributeValueUnquoted:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _attrBuffer.FinishAttribute();
                             _state = TokenizerState.BeforeAttributeName;
@@ -995,7 +994,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.AfterAttributeValueQuoted:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _state = TokenizerState.BeforeAttributeName;
                             _pos++;
@@ -1244,7 +1243,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.Doctype:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _state = TokenizerState.BeforeDoctypeName;
                             _pos++;
@@ -1260,7 +1259,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.BeforeDoctypeName:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _pos++;
                             continue;
@@ -1284,13 +1283,13 @@ namespace Rend.Html.Parser.Internal
                             continue;
                         }
                         _doctypeNameBuffer.Length = 0;
-                        _doctypeNameBuffer.Append(c >= 'A' && c <= 'Z' ? (char)(c + 0x20) : c);
+                        _doctypeNameBuffer.Append(AsciiLower(c));
                         _state = TokenizerState.DoctypeName;
                         _pos++;
                         continue;
 
                     case TokenizerState.DoctypeName:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _state = TokenizerState.AfterDoctypeName;
                             _pos++;
@@ -1312,12 +1311,12 @@ namespace Rend.Html.Parser.Internal
                             _pos++;
                             continue;
                         }
-                        _doctypeNameBuffer.Append(c >= 'A' && c <= 'Z' ? (char)(c + 0x20) : c);
+                        _doctypeNameBuffer.Append(AsciiLower(c));
                         _pos++;
                         continue;
 
                     case TokenizerState.AfterDoctypeName:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _pos++;
                             continue;
@@ -1351,7 +1350,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.AfterDoctypePublicKeyword:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _state = TokenizerState.BeforeDoctypePublicIdentifier;
                             _pos++;
@@ -1388,7 +1387,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.BeforeDoctypePublicIdentifier:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _pos++;
                             continue;
@@ -1476,7 +1475,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.AfterDoctypePublicIdentifier:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _state = TokenizerState.BetweenDoctypePublicAndSystemIdentifiers;
                             _pos++;
@@ -1513,7 +1512,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.BetweenDoctypePublicAndSystemIdentifiers:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _pos++;
                             continue;
@@ -1549,7 +1548,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.AfterDoctypeSystemKeyword:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _state = TokenizerState.BeforeDoctypeSystemIdentifier;
                             _pos++;
@@ -1586,7 +1585,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.BeforeDoctypeSystemIdentifier:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _pos++;
                             continue;
@@ -1676,7 +1675,7 @@ namespace Rend.Html.Parser.Internal
                         continue;
 
                     case TokenizerState.AfterDoctypeSystemIdentifier:
-                        if (c == '\t' || c == '\n' || c == '\f' || c == ' ')
+                        if (IsHtmlWhitespace(c))
                         {
                             _pos++;
                             continue;
@@ -1833,6 +1832,43 @@ namespace Rend.Html.Parser.Internal
             token = _token;
         }
 
+#if NET8_0_OR_GREATER
+        private static readonly SearchValues<char> HtmlWhitespaceChars =
+            SearchValues.Create("\t\n\f ");
+
+        private static bool IsAsciiAlpha(char c) => char.IsAsciiLetter(c);
+
+        private static bool IsHtmlWhitespace(char c) => HtmlWhitespaceChars.Contains(c);
+
+        private static char AsciiLower(char c) => (c >= 'A' && c <= 'Z') ? (char)(c + 0x20) : c;
+
+        private bool MatchAhead(string text)
+        {
+            if (_pos + text.Length > _input.Length) return false;
+            return _input.AsSpan(_pos, text.Length).SequenceEqual(text.AsSpan());
+        }
+
+        private bool MatchAheadInsensitive(string text)
+        {
+            if (_pos + text.Length > _input.Length) return false;
+            return _input.AsSpan(_pos, text.Length).Equals(text.AsSpan(), StringComparison.OrdinalIgnoreCase);
+        }
+#else
+        private static bool IsAsciiAlpha(char c)
+        {
+            return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+        }
+
+        private static bool IsHtmlWhitespace(char c)
+        {
+            return IsHtmlWhitespace(c);
+        }
+
+        private static char AsciiLower(char c)
+        {
+            return (c >= 'A' && c <= 'Z') ? (char)(c + 0x20) : c;
+        }
+
         private bool MatchAhead(string text)
         {
             if (_pos + text.Length > _input.Length) return false;
@@ -1856,10 +1892,6 @@ namespace Rend.Html.Parser.Internal
             }
             return true;
         }
-
-        private static bool IsAsciiAlpha(char c)
-        {
-            return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-        }
+#endif
     }
 }

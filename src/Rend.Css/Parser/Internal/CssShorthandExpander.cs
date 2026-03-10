@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+#if NET8_0_OR_GREATER
+using System.Collections.Frozen;
+#endif
 using Rend.Css.Properties.Internal;
 
 namespace Rend.Css.Parser.Internal
@@ -1143,6 +1146,33 @@ namespace Rend.Css.Parser.Internal
         /// contains var(), we pass the whole value to each longhand so that var()
         /// substitution during style resolution will produce the correct value.
         /// </summary>
+#if NET8_0_OR_GREATER
+        private static readonly FrozenDictionary<string, string[]> ShorthandLonghands =
+            new Dictionary<string, string[]>
+            {
+                ["margin"] = new[] { "margin-top", "margin-right", "margin-bottom", "margin-left" },
+                ["padding"] = new[] { "padding-top", "padding-right", "padding-bottom", "padding-left" },
+                ["border"] = new[] { "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+                                     "border-top-style", "border-right-style", "border-bottom-style", "border-left-style",
+                                     "border-top-color", "border-right-color", "border-bottom-color", "border-left-color" },
+                ["border-width"] = new[] { "border-top-width", "border-right-width", "border-bottom-width", "border-left-width" },
+                ["border-style"] = new[] { "border-top-style", "border-right-style", "border-bottom-style", "border-left-style" },
+                ["border-color"] = new[] { "border-top-color", "border-right-color", "border-bottom-color", "border-left-color" },
+                ["border-radius"] = new[] { "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius" },
+                ["background"] = new[] { "background-color" },
+                ["font"] = new[] { "font-size", "font-family" },
+                ["flex"] = new[] { "flex-grow", "flex-shrink", "flex-basis" },
+                ["outline"] = new[] { "outline-width", "outline-style", "outline-color" },
+                ["gap"] = new[] { "row-gap", "column-gap" },
+                ["inset"] = new[] { "top", "right", "bottom", "left" },
+                ["overflow"] = new[] { "overflow-x", "overflow-y" },
+                ["text-decoration"] = new[] { "text-decoration-line", "text-decoration-color", "text-decoration-style" },
+                ["border-top"] = new[] { "border-top-width", "border-top-style", "border-top-color" },
+                ["border-right"] = new[] { "border-right-width", "border-right-style", "border-right-color" },
+                ["border-bottom"] = new[] { "border-bottom-width", "border-bottom-style", "border-bottom-color" },
+                ["border-left"] = new[] { "border-left-width", "border-left-style", "border-left-color" },
+            }.ToFrozenDictionary();
+#else
         private static readonly Dictionary<string, string[]> ShorthandLonghands = new()
         {
             ["margin"] = new[] { "margin-top", "margin-right", "margin-bottom", "margin-left" },
@@ -1167,6 +1197,7 @@ namespace Rend.Css.Parser.Internal
             ["border-bottom"] = new[] { "border-bottom-width", "border-bottom-style", "border-bottom-color" },
             ["border-left"] = new[] { "border-left-width", "border-left-style", "border-left-color" },
         };
+#endif
 
         private static bool TryExpandVarShorthand(string property, CssValue value, bool important, List<CssDeclaration> output)
         {

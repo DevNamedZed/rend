@@ -6,9 +6,11 @@ namespace Rend.Pdf
 {
     /// <summary>
     /// Default implementation of <see cref="IPdfOverlay"/>.
+    /// Uses PDF incremental updates with standard PDF fonts (no embedding required).
     /// </summary>
     public sealed class PdfOverlay : IPdfOverlay
     {
+        /// <inheritdoc />
         public void Apply(Stream input, Stream output, IEnumerable<PdfOverlayElement> elements)
         {
             if (input == null) throw new ArgumentNullException(nameof(input));
@@ -26,6 +28,7 @@ namespace Rend.Pdf
             output.Write(result, 0, result.Length);
         }
 
+        /// <inheritdoc />
         public byte[] Apply(byte[] pdfBytes, IEnumerable<PdfOverlayElement> elements)
         {
             if (pdfBytes == null || pdfBytes.Length == 0)

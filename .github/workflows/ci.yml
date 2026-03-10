@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore Rend.sln
+
+      - name: Build
+        run: dotnet build Rend.sln --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test Rend.sln --no-build --configuration Release --verbosity normal
+
+      - name: Pack (validate)
+        run: dotnet pack Rend.sln --no-build --configuration Release --output ./nupkg
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg-${{ matrix.os }}
+          path: ./nupkg/*.nupkg
+          retention-days: 7

@@ -259,7 +259,7 @@ namespace Rend.Pdf.Tests
         {
             using var ms = new MemoryStream();
             doc.Save(ms);
-            return Encoding.Latin1.GetString(ms.ToArray());
+            return Encoding.GetEncoding(28591).GetString(ms.ToArray());
         }
     }
 }

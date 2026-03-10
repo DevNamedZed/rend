@@ -62,7 +62,7 @@ namespace Rend.Tests
         [Fact]
         public void ToPdf_NullHtml_ThrowsArgumentNullException()
         {
-            Assert.Throws<ArgumentNullException>(() => Render.ToPdf(null!));
+            Assert.Throws<ArgumentNullException>(() => Render.ToPdf((string)null!));
         }
 
         [Fact]
@@ -154,7 +154,7 @@ namespace Rend.Tests
         [Fact]
         public void ToImage_NullHtml_ThrowsArgumentNullException()
         {
-            Assert.Throws<ArgumentNullException>(() => Render.ToImage(null!));
+            Assert.Throws<ArgumentNullException>(() => Render.ToImage((string)null!));
         }
 
         [Fact]
