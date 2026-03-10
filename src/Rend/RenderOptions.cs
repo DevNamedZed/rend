@@ -29,6 +29,14 @@ namespace Rend
         /// <summary>Resource loader for external resources (CSS, images, fonts).</summary>
         public IResourceLoader? ResourceLoader { get; set; }
 
+        /// <summary>
+        /// Custom image resolver. Called for every image URL encountered in HTML
+        /// (<c>&lt;img src&gt;</c>) or CSS (<c>background-image</c>, <c>border-image</c>,
+        /// <c>list-style-image</c>). Return a stream of image bytes, or null to skip.
+        /// When set, takes priority over <see cref="ResourceLoader"/> for image loading.
+        /// </summary>
+        public IImageResolver? ImageResolver { get; set; }
+
         /// <summary>Font provider. If null, a default system font provider is created.</summary>
         public IFontProvider? FontProvider { get; set; }
 

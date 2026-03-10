@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Rend.Html;
 using Rend.Rendering;
 
@@ -11,13 +12,24 @@ namespace Rend.Internal
     internal sealed class InlineImageResolver
     {
         private readonly Dictionary<string, ImageData?> _cache = new Dictionary<string, ImageData?>();
+        private readonly IImageResolver? _imageResolver;
         private readonly Func<string, byte[]?>? _resourceLoader;
         private readonly Uri? _baseUrl;
 
-        public InlineImageResolver(Uri? baseUrl = null, Func<string, byte[]?>? resourceLoader = null)
+        public InlineImageResolver(Uri? baseUrl = null, IImageResolver? imageResolver = null,
+            Func<string, byte[]?>? resourceLoader = null)
         {
             _baseUrl = baseUrl;
+            _imageResolver = imageResolver;
             _resourceLoader = resourceLoader;
+        }
+
+        /// <summary>
+        /// Load an image on-demand by URL (for CSS url() images not pre-resolved from the DOM).
+        /// </summary>
+        public ImageData? LoadOnDemand(string src)
+        {
+            return LoadImage(src);
         }
 
         /// <summary>
@@ -163,9 +175,9 @@ namespace Rend.Internal
             {
                 result = DecodeDataUri(src);
             }
-            else if (_resourceLoader != null)
+            else
             {
-                var data = _resourceLoader(src);
+                byte[]? data = LoadFromResolver(src) ?? LoadFromResourceLoader(src);
                 if (data != null && data.Length > 0)
                 {
                     string format = DetectFormat(src, data);
@@ -175,6 +187,25 @@ namespace Rend.Internal
 
             _cache[src] = result;
             return result;
+        }
+
+        private byte[]? LoadFromResolver(string src)
+        {
+            if (_imageResolver == null) return null;
+
+            using var stream = _imageResolver.Resolve(src);
+            if (stream == null) return null;
+
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            var bytes = ms.ToArray();
+            return bytes.Length > 0 ? bytes : null;
+        }
+
+        private byte[]? LoadFromResourceLoader(string src)
+        {
+            if (_resourceLoader == null) return null;
+            return _resourceLoader(src);
         }
 
         private static ImageData? DecodeDataUri(string dataUri)

@@ -96,15 +96,22 @@ namespace Rend
 
             // 9. Resolve images + paint
             progress?.Report(new RenderProgress(70, RenderStage.Rendering, "Resolving images"));
-            var imageResolver = new InlineImageResolver(
-                _options.BaseUrl,
-                _options.ResourceLoader != null ? (System.Func<string, byte[]?>)(url => resourceCtx.LoadResourceBytes(url)) : null);
+
+            System.Func<string, byte[]?>? byteLoader = _options.ResourceLoader != null
+                ? url => resourceCtx.LoadResourceBytes(url)
+                : null;
+
+            var imageResolver = new InlineImageResolver(_options.BaseUrl, _options.ImageResolver, byteLoader);
             var resolvedImages = imageResolver.Resolve(document);
 
             // 10. Paint
             progress?.Report(new RenderProgress(80, RenderStage.Rendering, "Painting output"));
             System.Func<string, ImageData?> resolveImage = src =>
-                resolvedImages.TryGetValue(src, out var img) ? img : null;
+            {
+                if (resolvedImages.TryGetValue(src, out var img))
+                    return img;
+                return imageResolver.LoadOnDemand(src);
+            };
             var painter = new Painter(resolveImage, _options.GenerateLinks, _options.GenerateBookmarks);
 
             // Set up header/footer renderer if configured

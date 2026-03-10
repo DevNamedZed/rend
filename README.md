@@ -1,66 +1,57 @@
 # Rend
 
-A high-fidelity HTML/CSS rendering engine for .NET. Converts HTML to PDF or images (PNG, JPEG, WebP) with pixel-perfect accuracy.
+Rend is an HTML/CSS rendering engine for .NET. It parses HTML, resolves CSS, computes layout, and renders the result to PDF or images.
 
-> **Status**: Active development. Focused on Chrome-level rendering accuracy. The public API will evolve — expect breaking changes.
+It implements the rendering pipeline itself: HTML5 parsing, CSS cascade and inheritance, block/inline/flex/grid/table layout, text shaping with HarfBuzz, and painting through pluggable backends. It does not rely on a browser, WebView, or external rendering engine.
 
 ## Quick Start
 
 ```csharp
-// HTML to PDF
-byte[] pdf = Render.ToPdf("<h1>Hello, World!</h1>");
-File.WriteAllBytes("output.pdf", pdf);
+using Rend;
 
-// HTML to image
-byte[] png = Render.ToImage("<h1>Hello, World!</h1>");
-File.WriteAllBytes("output.png", png);
+using var pdfOutput = File.Create("report.pdf");
+Render.ToPdf(html, pdfOutput);
+
+using var imageOutput = File.Create("report.png");
+Render.ToImage(html, imageOutput);
 ```
 
-### With Options
+### Async
+
+```csharp
+await Render.ToPdfAsync(html, outputStream, cancellationToken: ct);
+```
+
+### Render Options
 
 ```csharp
 var options = new RenderOptions
 {
-    PageSize = Rend.Core.Values.PageSize.Letter,
+    PageSize = PageSize.Letter,
     MarginTop = 48f,
     MarginRight = 48f,
     MarginBottom = 48f,
     MarginLeft = 48f,
     Title = "Invoice #1234",
     Author = "Acme Corp",
-    ImageFormat = "png",
-    Dpi = 150f,
+    HeaderHtml = "<div style='font-size:10px;text-align:center'>Page {pageNumber} of {totalPages}</div>",
+    FooterHtml = "<div style='font-size:9px;text-align:right'>{date}</div>",
 };
 
-byte[] pdf = Render.ToPdf(html, options);
+Render.ToPdf(html, output, options);
 ```
 
-### Async
-
-```csharp
-byte[] pdf = await Render.ToPdfAsync(html, options, cancellationToken);
-
-// Or write directly to a stream
-await Render.ToPdfAsync(html, outputStream, options, cancellationToken);
-```
-
-### Headers and Footers
+### Image Output
 
 ```csharp
 var options = new RenderOptions
 {
-    HeaderHtml = "<div style='font-size:10px;text-align:center'>Page {pageNumber} of {totalPages}</div>",
-    FooterHtml = "<div style='font-size:9px;text-align:right'>{date}</div>",
+    ImageFormat = "jpeg", // png, jpeg, webp
+    ImageQuality = 85,
+    Dpi = 150f,
 };
-```
 
-### Progress Reporting
-
-```csharp
-var progress = new Progress<RenderProgress>(p =>
-    Console.WriteLine($"[{p.Percentage}%] {p.Stage}: {p.Description}"));
-
-var options = new RenderOptions { Progress = progress };
+Render.ToImage(html, output, options);
 ```
 
 ### Custom Fonts
@@ -70,107 +61,142 @@ var fonts = new FontCollection();
 fonts.RegisterFromResolver(new SystemFontResolver());
 fonts.RegisterFromResolver(new DirectoryFontResolver("/path/to/fonts"));
 
-var options = new RenderOptions { FontProvider = fonts };
+var options = new RenderOptions
+{
+    FontProvider = fonts
+};
 ```
 
-## Features
+### Custom Image Resolver
 
-### Layout
+Use a custom resolver to control how images are loaded for `<img>`, `background-image`, `border-image`, and `list-style-image`.
 
-- Block, inline, and inline-block formatting contexts
-- Flexbox (all axes, wrapping, alignment, gap, order, flex-grow/shrink)
-- CSS Grid (auto-placement, fr/minmax/repeat, auto-fill/fit, named lines/areas, subgrid)
-- Table layout (fixed and auto, rowspan/colspan, border-collapse)
-- Positioned elements (relative, absolute, fixed, sticky)
-- Floats and clear
-- Multi-column layout
-- Pagination with page breaks, orphans, and widows
+```csharp
+public class S3ImageResolver : IImageResolver
+{
+    public Stream? Resolve(string url)
+    {
+        return _s3Client.GetObjectStream(url);
+    }
+}
 
-### CSS
+var options = new RenderOptions
+{
+    ImageResolver = new S3ImageResolver()
+};
 
-- Full cascade, specificity, and inheritance
-- `calc()`, `var()`, custom properties
-- `@media`, `@font-face`, `@import`, `@page`, `@supports`
-- CSS Color Level 4
-- Shorthand expansion
-
-### Rendering
-
-- Backgrounds (solid, gradients, images, multiple)
-- Borders (all styles, border-radius, border-image)
-- Box shadows, text shadows
-- CSS transforms, opacity, filters, clip-path
-- Linear, radial, and conic gradients
-- SVG rendering
-- `text-overflow: ellipsis`
-
-### Text
-
-- HarfBuzz text shaping
-- Unicode line/word breaking (UAX #14, #29)
-- Bidirectional text (UAX #9)
-- White-space handling, text-transform, letter/word-spacing
-- Font fallback chains
-- WOFF/WOFF2 support
-- System font discovery
-
-### PDF Output
-
-- PDF 1.7 with font subsetting (TrueType, CFF/OpenType)
-- Bookmarks, clickable links, document metadata
-- AcroForms (text fields, checkboxes, dropdowns)
-- Encryption (RC4-128, AES-128)
-- ICC color profiles, XMP metadata
-
-### Image Output
-
-- PNG, JPEG, WebP via SkiaSharp
-- Configurable DPI
-
-## Architecture
-
-```
-HTML string
-     |
-     v
-[ HTML Parser ]        WHATWG HTML5 spec
-     |
-     v
-[ CSS Parser ]         CSS Syntax Level 3
-     |
-     v
-[ Style Resolution ]   Cascade, specificity, inheritance
-     |
-     v
-[ Layout Engine ]      Block, inline, flex, grid, table, floats, positioning
-     |
-     v
-[ Painter ]            Abstract drawing commands
-     |
-     +---------+---------+
-     |                   |
-     v                   v
-[ PDF Target ]    [ Skia Target ]
-     |                   |
-     v                   v
-  PDF bytes        Image bytes
+Render.ToPdf(html, output, options);
 ```
 
-### Projects
+### Progress Reporting
 
-| Project | Description |
-|---------|-------------|
-| `Rend.Core` | Shared types — geometry, color, units |
-| `Rend.Html` | HTML5 parser, DOM, selector engine |
-| `Rend.Css` | CSS3 parser, cascade, style resolution |
-| `Rend.Pdf` | Standalone PDF 1.7 writer (no HTML/CSS dependency) |
-| `Rend` | Layout, rendering, text shaping, fonts, output bridges, orchestrator |
+```csharp
+var progress = new Progress<RenderProgress>(p =>
+    Console.WriteLine($"[{p.Percentage}%] {p.Stage}: {p.Description}"));
 
-All projects target **netstandard2.0** (.NET Framework 4.6.1+, .NET Core 2.0+, .NET 5–9+).
+Render.ToPdf(html, output, new RenderOptions
+{
+    Progress = progress
+});
+```
 
-### Standalone PDF Writer
+## PDF Digital Signatures
 
-`Rend.Pdf` is independently usable — no HTML/CSS dependency:
+Sign any PDF using a local certificate or an external signer. Works with any PDF, not just ones generated by Rend.
+
+```csharp
+using Rend.Pdf;
+
+var signer = new Pkcs12Signer(File.ReadAllBytes("cert.pfx"), "password");
+
+using var input = File.OpenRead("document.pdf");
+using var output = File.Create("signed.pdf");
+
+PdfSigning.Sign(input, output, new PdfSignatureOptions
+{
+    Signer = signer,
+    SignerName = "John Doe",
+    Reason = "Approved",
+    Location = "New York",
+});
+```
+
+For HSM or cloud KMS scenarios where the private key is not directly accessible, implement `IPdfSigner`:
+
+```csharp
+public class AzureKeyVaultSigner : IPdfSigner
+{
+    public int EstimatedSignatureSize => 8192;
+
+    public byte[] Sign(byte[] data)
+    {
+        return _keyVaultClient.SignCms(data);
+    }
+}
+
+PdfSigning.Sign(input, output, new PdfSignatureOptions
+{
+    Signer = new AzureKeyVaultSigner(),
+});
+```
+
+There is also a convenience overload for simple cases:
+
+```csharp
+var cert = new X509Certificate2("cert.pfx", "password");
+PdfSigning.Sign(input, output, cert);
+```
+
+For DI, use `IPdfSigningService` and `PdfSigningService`:
+
+```csharp
+services.AddSingleton<IPdfSigningService, PdfSigningService>();
+```
+
+## PDF Overlays
+
+Draw text and images onto specific positions on existing PDF pages. Useful for filling form fields, adding signatures, or placing watermarks.
+
+```csharp
+using Rend.Pdf;
+
+using var input = File.OpenRead("template.pdf");
+using var output = File.Create("filled.pdf");
+
+PdfOverlays.Apply(input, output, new PdfOverlayElement[]
+{
+    new TextOverlay
+    {
+        Page = 1,
+        X = 100,
+        Y = 200,
+        Text = "John Doe",
+        FontSize = 14,
+        FontFamily = "Helvetica",
+    },
+    new ImageOverlay
+    {
+        Page = 1,
+        X = 100,
+        Y = 500,
+        Width = 200,
+        Height = 80,
+        Data = File.ReadAllBytes("signature.png"),
+    },
+});
+```
+
+Coordinates use top-left origin. Supports Helvetica, Times, and Courier font families with bold and italic variants. JPEG and PNG image formats are supported.
+
+For DI, use `IPdfOverlay` and `PdfOverlay`:
+
+```csharp
+services.AddSingleton<IPdfOverlay, PdfOverlay>();
+```
+
+## Standalone PDF Writer
+
+`Rend.Pdf` can be used independently of the HTML/CSS renderer.
 
 ```csharp
 using Rend.Pdf;
@@ -190,9 +216,116 @@ using var stream = File.Create("output.pdf");
 doc.Save(stream);
 ```
 
+## Features
+
+### Layout
+
+- Block, inline, and inline-block formatting contexts
+- Flexbox, including wrapping, alignment, gap, order, and flex grow/shrink
+- CSS Grid, including auto-placement, fr, minmax(), repeat(), auto-fill/fit, named lines/areas, and subgrid
+- Table layout, including fixed and auto layout, rowspan/colspan, and border-collapse
+- Positioned elements: relative, absolute, fixed, and sticky
+- Floats and clear
+- Multi-column layout
+- Pagination with page breaks, widows, and orphans
+
+### CSS
+
+- Cascade, specificity, and inheritance
+- `calc()`, `var()`, and custom properties
+- `@media`, `@font-face`, `@import`, `@page`, and `@supports`
+- CSS Color Level 4
+- Shorthand expansion
+
+### Rendering
+
+- Backgrounds: solid colors, gradients, images, and multiple backgrounds
+- Borders, border radius, and border images
+- Box shadows and text shadows
+- Transforms, opacity, filters, and clip paths
+- Linear, radial, and conic gradients
+- SVG rendering
+- `text-overflow: ellipsis`
+
+### Text
+
+- HarfBuzz text shaping
+- Unicode line and word breaking
+- Bidirectional text
+- White-space handling, text transforms, and letter/word spacing
+- Font fallback chains
+- WOFF and WOFF2 support
+- System font discovery
+
+### PDF Output
+
+- PDF 1.7 writer with TrueType and CFF/OpenType font subsetting
+- Bookmarks, clickable links, and document metadata
+- AcroForms: text fields, checkboxes, and dropdowns
+- Digital signatures using local PKCS#12 certificates or external `IPdfSigner` implementations
+- Content overlays: draw text and images onto existing PDFs
+- Encryption: RC4-128 and AES-128
+- ICC color profiles and XMP metadata
+
+### Image Output
+
+- PNG, JPEG, and WebP via SkiaSharp
+- Configurable DPI
+
+## Dependency Injection
+
+Every static API has a corresponding interface and implementation class for DI and testing.
+
+```csharp
+services.AddSingleton<IRenderer, HtmlRenderer>();
+services.AddSingleton<IPdfSigningService, PdfSigningService>();
+services.AddSingleton<IPdfOverlay, PdfOverlay>();
+```
+
+## Architecture
+
+```
+HTML string
+     |
+     v
+[ HTML Parser ]
+     |
+     v
+[ CSS Parser ]
+     |
+     v
+[ Style Resolution ]
+     |
+     v
+[ Layout Engine ]
+     |
+     v
+[ Painter ]
+     |
+     +---------+---------+
+     |                   |
+     v                   v
+[ PDF Target ]    [ Skia Target ]
+     |                   |
+     v                   v
+  PDF bytes        Image bytes
+```
+
+### Projects
+
+| Project | Description |
+|---------|-------------|
+| `Rend.Core` | Shared types such as geometry, color, and units |
+| `Rend.Html` | HTML5 parser, DOM, and selector engine |
+| `Rend.Css` | CSS parser, cascade, and style resolution |
+| `Rend.Pdf` | Standalone PDF writer, signing, and overlay support |
+| `Rend` | Layout engine, rendering pipeline, text shaping, and public API |
+
+All projects target **netstandard2.0** (.NET Framework 4.6.1+, .NET Core 2.0+, .NET 5+).
+
 ## Building
 
-Requires .NET 8 SDK.
+Requires the .NET 8 SDK.
 
 ```bash
 dotnet build Rend.sln
