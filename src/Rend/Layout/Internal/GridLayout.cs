@@ -1540,6 +1540,14 @@ namespace Rend.Layout.Internal
         {
             var values = (PropertyValue[])source.GetValues().Clone();
             values[PropertyId.Display] = PropertyValue.FromInt((int)CssDisplay.Block);
+            // Anonymous grid items must not inherit the parent's explicit sizing properties.
+            var autoVal = PropertyValue.FromLength(float.NaN);
+            values[PropertyId.Width] = autoVal;
+            values[PropertyId.Height] = autoVal;
+            values[PropertyId.MinWidth] = autoVal;
+            values[PropertyId.MinHeight] = autoVal;
+            values[PropertyId.MaxWidth] = autoVal;
+            values[PropertyId.MaxHeight] = autoVal;
             var refValues = (object?[])source.GetRefValues().Clone();
             return new ComputedStyle(values, refValues);
         }

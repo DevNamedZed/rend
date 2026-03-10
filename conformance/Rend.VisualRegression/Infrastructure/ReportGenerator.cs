@@ -97,7 +97,7 @@ namespace Rend.VisualRegression.Infrastructure
             }
             sb.AppendLine("  </div>");
             sb.AppendLine("</div>");
-            sb.AppendLine($"<div class=\"stats\" id=\"stats-display\">avg {avgDiff:F2}% &middot; median {medianDiff:F2}% &middot; max {maxDiff:F2}%</div>");
+            sb.AppendLine($"<div class=\"stats\" id=\"stats-display\">avg {avgDiff:F4}% &middot; median {medianDiff:F4}% &middot; max {maxDiff:F4}%</div>");
             sb.AppendLine("</div>");
             sb.AppendLine("</header>");
 
@@ -202,11 +202,11 @@ namespace Rend.VisualRegression.Infrastructure
                 }
                 else if (result.Outcome == ComparisonOutcome.NearPass)
                 {
-                    sb.AppendLine($"  <td class=\"diff-cell\"><span class=\"diff-value\" style=\"color:{diffColor}\">{result.DiffPercentage:F2}%</span> <span class=\"diff-shift\">→ {result.ShiftTolerantDiffPercentage:F2}%</span></td>");
+                    sb.AppendLine($"  <td class=\"diff-cell\"><span class=\"diff-value\" style=\"color:{diffColor}\">{result.DiffPercentage:F4}%</span> <span class=\"diff-shift\">→ {result.ShiftTolerantDiffPercentage:F4}%</span></td>");
                 }
                 else
                 {
-                    sb.AppendLine($"  <td class=\"diff-cell\"><span class=\"diff-value\" style=\"color:{diffColor}\">{result.DiffPercentage:F2}%</span></td>");
+                    sb.AppendLine($"  <td class=\"diff-cell\"><span class=\"diff-value\" style=\"color:{diffColor}\">{result.DiffPercentage:F4}%</span></td>");
                 }
 
                 // Duration

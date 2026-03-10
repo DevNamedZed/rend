@@ -12,7 +12,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "margin-collapse-parent-child",
                 Name = "Margin Collapsing Parent-Child",
-                Category = "Margin Collapsing",
+                Category = "Box Model",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""background:#ecf0f1; margin-top:20px;"">
                         <div style=""margin-top:30px; background:#3498db; height:40px;""></div>
@@ -25,7 +25,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "margin-collapse-through",
                 Name = "Margin Collapsing Through Empty Elements",
-                Category = "Margin Collapsing",
+                Category = "Box Model",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""background:#3498db; height:30px; margin-bottom:20px;""></div>
                     <div style=""margin-top:15px; margin-bottom:25px;""></div>
@@ -39,7 +39,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "negative-margin-overlap",
                 Name = "Negative Margins Overlapping",
-                Category = "Negative Margins",
+                Category = "Box Model",
                 Html = @"<html><body style=""margin:0; padding:20px; background:#fff;"">
                     <div style=""background:#3498db; height:50px; width:200px;""></div>
                     <div style=""background:rgba(231,76,60,0.7); height:50px; width:200px; margin-top:-20px; margin-left:30px;""></div>
@@ -52,7 +52,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "calc-complex",
                 Name = "Complex calc() Expressions",
-                Category = "CSS Calc",
+                Category = "Sizing",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""width:calc(100% - 40px); height:30px; background:#3498db; margin-bottom:8px;""></div>
                     <div style=""width:calc(50% + 20px); height:30px; background:#e74c3c; margin-bottom:8px;""></div>
@@ -66,7 +66,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "min-max-percent",
                 Name = "Min/Max Width with Percentages",
-                Category = "Sizing Constraints",
+                Category = "Sizing",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""width:80%; min-width:200px; max-width:350px; height:30px; background:#3498db; margin-bottom:8px;""></div>
                     <div style=""width:30%; min-width:100px; height:30px; background:#e74c3c; margin-bottom:8px;""></div>
@@ -80,7 +80,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "flex-min-max",
                 Name = "Flex Items with Min/Max Width",
-                Category = "Flex Constraints",
+                Category = "Flexbox",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""display:flex; gap:8px;"">
                         <div style=""flex:1; min-width:80px; max-width:150px; height:40px; background:#3498db;""></div>
@@ -96,7 +96,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "grid-auto-fill",
                 Name = "Grid Auto-fill Repeat",
-                Category = "Grid Auto",
+                Category = "Grid",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""display:grid; grid-template-columns:repeat(auto-fill, minmax(80px, 1fr)); gap:8px;"">
                         <div style=""height:40px; background:#3498db;""></div>
@@ -114,7 +114,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "grid-auto-fit",
                 Name = "Grid Auto-fit Repeat",
-                Category = "Grid Auto",
+                Category = "Grid",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:8px;"">
                         <div style=""height:40px; background:#3498db;""></div>
@@ -130,7 +130,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "grid-nested",
                 Name = "Nested Grids",
-                Category = "Grid Advanced",
+                Category = "Grid",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""display:grid; grid-template-columns:1fr 1fr; gap:8px;"">
                         <div style=""display:grid; grid-template-rows:1fr 1fr; gap:4px;"">
@@ -152,7 +152,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "float-text-wrap",
                 Name = "Float with Inline Text Wrapping",
-                Category = "Float Layout",
+                Category = "Float",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#fff;"">
                     <div>
                         <div style=""float:left; width:60px; height:60px; background:#3498db; margin:0 8px 4px 0;""></div>
@@ -183,7 +183,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "display-contents",
                 Name = "Display Contents",
-                Category = "Display Types",
+                Category = "Display & Visibility",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""display:flex; gap:8px;"">
                         <div style=""background:#3498db; padding:10px; height:30px;""></div>

@@ -10,7 +10,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "pos-relative-offset",
                 Name = "Relative Position Offset",
-                Category = "Positioning Patterns",
+                Category = "Positioning",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""width:200px; background:#ecf0f1; padding:10px;"">
                         <div style=""width:80px; height:40px; background:#3498db; margin-bottom:4px;""></div>
@@ -24,7 +24,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "pos-absolute-fill",
                 Name = "Absolute Position Fill Parent",
-                Category = "Positioning Patterns",
+                Category = "Positioning",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""position:relative; width:200px; height:100px; background:#ecf0f1;"">
                         <div style=""position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(52,152,219,0.3);""></div>
@@ -37,7 +37,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "pos-fixed-like-absolute",
                 Name = "Absolute in Viewport-Like Container",
-                Category = "Positioning Patterns",
+                Category = "Positioning",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""position:relative; width:300px; height:200px; background:#ecf0f1; overflow:hidden;"">
                         <div style=""position:absolute; top:0; left:0; right:0; height:40px; background:#2c3e50;""></div>
@@ -51,7 +51,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "pos-stacking-no-zindex",
                 Name = "Stacking Without Z-Index",
-                Category = "Positioning Patterns",
+                Category = "Positioning",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""position:relative; width:200px; height:150px;"">
                         <div style=""position:absolute; left:0; top:0; width:100px; height:100px; background:#e74c3c;""></div>
@@ -65,7 +65,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "pos-negative-offset",
                 Name = "Negative Position Offsets",
-                Category = "Positioning Patterns",
+                Category = "Positioning",
                 Html = @"<html><body style=""margin:0; padding:30px; background:#fff;"">
                     <div style=""position:relative; width:200px; height:100px; background:#ecf0f1;"">
                         <div style=""position:absolute; top:-10px; left:-10px; width:50px; height:50px; background:#e74c3c;""></div>
@@ -78,7 +78,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "pos-centered-absolute",
                 Name = "Centered Absolute Element",
-                Category = "Positioning Patterns",
+                Category = "Positioning",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""position:relative; width:200px; height:150px; background:#ecf0f1;"">
                         <div style=""position:absolute; top:45px; left:60px; width:80px; height:60px; background:#3498db; border-radius:8px;""></div>

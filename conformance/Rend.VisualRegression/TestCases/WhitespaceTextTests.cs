@@ -52,7 +52,7 @@ Line 4</pre>
             {
                 Id = "text-indent",
                 Name = "Text Indent",
-                Category = "Text Properties",
+                Category = "Typography",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <p style=""margin:0 0 8px; text-indent:30px; background:#f0f0f0; padding:4px;"">
                         This paragraph has a 30px text indent on the first line. The second line should not be indented.
@@ -69,7 +69,7 @@ Line 4</pre>
             {
                 Id = "letter-spacing",
                 Name = "Letter Spacing",
-                Category = "Text Properties",
+                Category = "Typography",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <p style=""margin:0 0 6px; letter-spacing:0;"">Normal letter spacing</p>
                     <p style=""margin:0 0 6px; letter-spacing:2px;"">2px letter spacing</p>
@@ -84,7 +84,7 @@ Line 4</pre>
             {
                 Id = "word-spacing",
                 Name = "Word Spacing",
-                Category = "Text Properties",
+                Category = "Typography",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <p style=""margin:0 0 6px; word-spacing:0;"">Normal word spacing between words</p>
                     <p style=""margin:0 0 6px; word-spacing:5px;"">5px extra word spacing between words</p>
@@ -98,7 +98,7 @@ Line 4</pre>
             {
                 Id = "vertical-align",
                 Name = "Vertical Align in Inline Context",
-                Category = "Text Properties",
+                Category = "Typography",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <p style=""margin:0 0 8px; line-height:2;"">
                         Normal <span style=""vertical-align:super; font-size:10px;"">superscript</span>
@@ -118,7 +118,7 @@ Line 4</pre>
             {
                 Id = "text-transform",
                 Name = "Text Transform",
-                Category = "Text Properties",
+                Category = "Typography",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <p style=""margin:0 0 6px; text-transform:uppercase;"">this text should be uppercase</p>
                     <p style=""margin:0 0 6px; text-transform:lowercase;"">THIS TEXT SHOULD BE LOWERCASE</p>
@@ -132,7 +132,7 @@ Line 4</pre>
             {
                 Id = "css-variables",
                 Name = "CSS Custom Properties",
-                Category = "CSS Variables",
+                Category = "White-space",
                 Html = @"<html><head><style>
                     :root { --main-color: #3498db; --spacing: 10px; --radius: 6px; }
                     .var-box { background: var(--main-color); padding: var(--spacing);
@@ -150,7 +150,7 @@ Line 4</pre>
             {
                 Id = "aspect-ratio",
                 Name = "CSS Aspect Ratio",
-                Category = "Sizing Advanced",
+                Category = "Sizing",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""width:160px; aspect-ratio:16/9; background:#3498db; margin-bottom:8px;""></div>
                     <div style=""width:100px; aspect-ratio:1/1; background:#e74c3c; margin-bottom:8px;""></div>
@@ -177,7 +177,7 @@ Line 4</pre>
             {
                 Id = "outline-styles",
                 Name = "CSS Outline Styles",
-                Category = "Outline",
+                Category = "Borders",
                 Html = @"<html><body style=""margin:0; padding:15px; background:#fff;"">
                     <div style=""width:120px; height:40px; background:#f0f0f0; outline:2px solid #3498db; margin-bottom:15px;""></div>
                     <div style=""width:120px; height:40px; background:#f0f0f0; outline:3px dashed #e74c3c; margin-bottom:15px;""></div>

@@ -10,7 +10,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "color-hex-3digit",
                 Name = "3-Digit Hex Colors",
-                Category = "Color Patterns",
+                Category = "Color & Background",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""display:flex; gap:4px;"">
                         <div style=""width:50px; height:50px; background:#f00;""></div>
@@ -26,7 +26,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "color-named-basic",
                 Name = "Named CSS Colors",
-                Category = "Color Patterns",
+                Category = "Color & Background",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""display:flex; gap:4px; flex-wrap:wrap; width:280px;"">
                         <div style=""width:50px; height:50px; background:red;""></div>
@@ -47,7 +47,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "color-rgb-function",
                 Name = "RGB Function Colors",
-                Category = "Color Patterns",
+                Category = "Color & Background",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""display:flex; gap:4px;"">
                         <div style=""width:50px; height:50px; background:rgb(255, 0, 0);""></div>
@@ -62,7 +62,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "color-opacity-rgba",
                 Name = "RGBA Opacity Levels",
-                Category = "Color Patterns",
+                Category = "Color & Background",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""position:relative; width:250px; height:80px; background:#2c3e50;"">
                         <div style=""position:absolute; left:0; top:0; width:250px; height:80px; background:rgba(255,255,255,0.1);""></div>
@@ -78,7 +78,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "color-border-colors",
                 Name = "Different Border Colors",
-                Category = "Color Patterns",
+                Category = "Color & Background",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""width:150px; height:80px; border:4px solid; border-color:#e74c3c #3498db #2ecc71 #f39c12; margin-bottom:8px;""></div>
                     <div style=""width:150px; height:80px; border:4px solid; border-color:#2c3e50 #95a5a6;""></div>
@@ -89,7 +89,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "color-grayscale",
                 Name = "Grayscale Palette",
-                Category = "Color Patterns",
+                Category = "Color & Background",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""display:flex;"">
                         <div style=""width:30px; height:60px; background:#000;""></div>

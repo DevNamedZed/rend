@@ -38,7 +38,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "border-radius-nested",
                 Name = "Nested Border Radius",
-                Category = "Border Effects",
+                Category = "Borders",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#f0f0f0;"">
                     <div style=""background:#3498db; border-radius:16px; padding:12px; width:200px;"">
                         <div style=""background:#fff; border-radius:8px; padding:8px; height:40px;""></div>
@@ -50,7 +50,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "border-radius-circle",
                 Name = "Circle and Ellipse Shapes",
-                Category = "Border Effects",
+                Category = "Borders",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff; display:flex; gap:12px;"">
                     <div style=""width:80px; height:80px; background:#e74c3c; border-radius:50%;""></div>
                     <div style=""width:120px; height:80px; background:#3498db; border-radius:50%;""></div>
@@ -109,7 +109,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "flex-nested-centering",
                 Name = "Nested Flex Centering",
-                Category = "Flexbox Advanced",
+                Category = "Flexbox",
                 Html = @"<html><body style=""margin:0; background:#f0f0f0; display:flex; align-items:center; justify-content:center; height:300px;"">
                     <div style=""width:200px; height:150px; background:#fff; display:flex; align-items:center; justify-content:center; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1);"">
                         <div style=""width:80px; height:80px; background:#3498db; border-radius:50%;""></div>
@@ -123,7 +123,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "grid-areas-layout",
                 Name = "Grid Template Areas",
-                Category = "Grid Advanced",
+                Category = "Grid",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""display:grid; grid-template-areas: 'header header' 'sidebar main' 'footer footer'; grid-template-columns:100px 1fr; grid-template-rows:40px 1fr 30px; gap:4px; height:200px; width:300px;"">
                         <div style=""grid-area:header; background:#2c3e50;""></div>
@@ -140,7 +140,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "z-index-stacking",
                 Name = "Z-Index Stacking Order",
-                Category = "Positioning Advanced",
+                Category = "Positioning",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""position:relative; width:200px; height:150px;"">
                         <div style=""position:absolute; left:0; top:0; width:100px; height:100px; background:#e74c3c; z-index:1;""></div>
@@ -156,7 +156,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "border-styles-mixed",
                 Name = "Mixed Border Styles",
-                Category = "Border Effects",
+                Category = "Borders",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""width:200px; height:50px; border-top:3px solid #e74c3c; border-right:3px dashed #3498db; border-bottom:3px dotted #2ecc71; border-left:3px double #f39c12; margin-bottom:10px;""></div>
                     <div style=""width:200px; height:50px; border:4px solid transparent; border-image:linear-gradient(to right, #e74c3c, #3498db) 1;""></div>
@@ -210,7 +210,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "flex-gap-variations",
                 Name = "Flex Gap Variations",
-                Category = "Flexbox Advanced",
+                Category = "Flexbox",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""display:flex; gap:4px; margin-bottom:8px;"">
                         <div style=""width:40px; height:30px; background:#3498db;""></div>
@@ -236,7 +236,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "grid-gap-row-col",
                 Name = "Grid Row and Column Gap",
-                Category = "Grid Advanced",
+                Category = "Grid",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""display:grid; grid-template-columns:repeat(3, 60px); row-gap:8px; column-gap:16px;"">
                         <div style=""height:40px; background:#3498db;""></div>
@@ -255,7 +255,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "color-rgba-hsla",
                 Name = "RGBA and HSLA Colors",
-                Category = "Colors",
+                Category = "Color & Background",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""display:flex; gap:4px; margin-bottom:8px;"">
                         <div style=""width:50px; height:50px; background:rgba(52, 152, 219, 1.0);""></div>
@@ -278,7 +278,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "pos-absolute-offsets",
                 Name = "Absolute Position Offsets",
-                Category = "Positioning Advanced",
+                Category = "Positioning",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
                     <div style=""position:relative; width:200px; height:200px; background:#eee;"">
                         <div style=""position:absolute; top:10px; left:10px; width:40px; height:40px; background:#e74c3c;""></div>

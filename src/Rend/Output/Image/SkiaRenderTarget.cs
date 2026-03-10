@@ -16,6 +16,30 @@ namespace Rend.Output.Image
     /// </summary>
     public sealed class SkiaRenderTarget : IRenderTarget, IDisposable
     {
+        // Shared cache for MatchCharacter fallback typefaces across all threads.
+        private static readonly Dictionary<int, SKTypeface?> s_charFallbackCache = new();
+        private static readonly object s_charFallbackLock = new();
+
+        private static SKTypeface? GetCachedCharacterFallback(int codepoint)
+        {
+            lock (s_charFallbackLock)
+            {
+                if (s_charFallbackCache.TryGetValue(codepoint, out var cached))
+                    return cached;
+            }
+            var tf = SKFontManager.Default.MatchCharacter(codepoint);
+            lock (s_charFallbackLock)
+            {
+                if (s_charFallbackCache.TryGetValue(codepoint, out var existing))
+                {
+                    tf?.Dispose();
+                    return existing;
+                }
+                s_charFallbackCache[codepoint] = tf;
+            }
+            return tf;
+        }
+
         private readonly SkiaRenderOptions _options;
         private readonly SkiaFontMapper _fontMapper;
         private readonly bool _ownsFontMapper;
@@ -787,7 +811,7 @@ namespace Rend.Output.Image
                     int codepoint = char.IsHighSurrogate(segment[0]) && segment.Length > 1
                         ? char.ConvertToUtf32(segment[0], segment[1])
                         : segment[0];
-                    using var fallbackTypeface = SKFontManager.Default.MatchCharacter(codepoint);
+                    var fallbackTypeface = GetCachedCharacterFallback(codepoint);
                     if (fallbackTypeface != null)
                     {
                         using var fallbackFont = new SKFont(fallbackTypeface, style.FontSize);
@@ -956,9 +980,8 @@ namespace Rend.Output.Image
                 }
                 else
                 {
-                    using var skData = SKData.CreateCopy(currentFontData);
-                    segTypeface = SKTypeface.FromData(skData) ?? primaryTypeface;
-                    disposeTypeface = segTypeface != primaryTypeface;
+                    segTypeface = Internal.SkiaFontMapper.GetOrCreateSharedTypeface(currentFontData);
+                    disposeTypeface = false;
                 }
 
                 try
@@ -1236,7 +1259,7 @@ namespace Rend.Output.Image
                         ? char.ConvertToUtf32(segment[0], segment[1])
                         : segment[0];
 
-                    using var fallbackTypeface = SKFontManager.Default.MatchCharacter(codepoint);
+                    var fallbackTypeface = GetCachedCharacterFallback(codepoint);
                     var useTypeface = fallbackTypeface ?? primaryTypeface;
 
                     using var fallbackFont = new SKFont(useTypeface, style.FontSize);

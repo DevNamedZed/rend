@@ -13,8 +13,12 @@ namespace Rend.Output.Image.Internal
     public sealed class SkiaFontMapper : IDisposable
     {
         private readonly Dictionary<FontDescriptor, SKTypeface> _cache = new Dictionary<FontDescriptor, SKTypeface>();
-        // Cache typefaces by font data identity to ensure identical bytes produce the same typeface instance.
-        private readonly Dictionary<int, SKTypeface> _fontDataCache = new Dictionary<int, SKTypeface>();
+        // Global typeface cache shared across ALL mapper instances.
+        // SKTypeface.FromData() produces subtly different SubpixelAntialias rendering
+        // for each native instance, even from identical font bytes. Sharing a single
+        // SKTypeface per font ensures deterministic rendering across threads.
+        private static readonly Dictionary<int, SKTypeface> s_globalTypefaceCache = new();
+        private static readonly object s_typefaceLock = new();
         private bool _disposed;
 
         /// <summary>
@@ -33,23 +37,26 @@ namespace Rend.Output.Image.Internal
             SKTypeface typeface;
             if (fontData != null && fontData.Length > 0)
             {
-                // Cache by font data identity so the same font bytes always produce
-                // the same SKTypeface instance (avoids subtle rendering differences
-                // when Skia creates multiple typefaces from identical data).
+                // Use global cache so all threads share the same SKTypeface instance
+                // for each font. SKTypeface.FromData() creates different native objects
+                // that produce subtly different SubpixelAntialias rendering.
                 int dataKey = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(fontData);
-                if (!_fontDataCache.TryGetValue(dataKey, out typeface!))
+                lock (s_typefaceLock)
                 {
-                    using (var skData = SKData.CreateCopy(fontData))
+                    if (!s_globalTypefaceCache.TryGetValue(dataKey, out typeface!))
                     {
-                        typeface = SKTypeface.FromData(skData);
-                    }
+                        using (var skData = SKData.CreateCopy(fontData))
+                        {
+                            typeface = SKTypeface.FromData(skData);
+                        }
 
-                    // FromData may return null if the font data is invalid.
-                    if (typeface == null)
-                    {
-                        typeface = SKTypeface.Default;
+                        // FromData may return null if the font data is invalid.
+                        if (typeface == null)
+                        {
+                            typeface = SKTypeface.Default;
+                        }
+                        s_globalTypefaceCache[dataKey] = typeface;
                     }
-                    _fontDataCache[dataKey] = typeface;
                 }
             }
             else
@@ -76,8 +83,43 @@ namespace Rend.Output.Image.Internal
             ["ui-monospace"] = new[] { "SF Mono", "Menlo", "Consolas", "Courier New" },
         };
 
+        /// <summary>
+        /// Gets or creates a shared SKTypeface from font data bytes.
+        /// Thread-safe. Returns the same instance for the same byte[] identity.
+        /// </summary>
+        internal static SKTypeface GetOrCreateSharedTypeface(byte[] fontData)
+        {
+            int dataKey = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(fontData);
+            lock (s_typefaceLock)
+            {
+                if (s_globalTypefaceCache.TryGetValue(dataKey, out var existing))
+                    return existing;
+
+                SKTypeface typeface;
+                using (var skData = SKData.CreateCopy(fontData))
+                {
+                    typeface = SKTypeface.FromData(skData) ?? SKTypeface.Default;
+                }
+                s_globalTypefaceCache[dataKey] = typeface;
+                return typeface;
+            }
+        }
+
+        // Shared cache for family-name resolved typefaces.
+        // SKTypeface.FromFamilyName() can return different native objects per call,
+        // causing non-deterministic SubpixelAntialias rendering across threads.
+        private static readonly Dictionary<string, SKTypeface> s_familyTypefaceCache = new();
+
         private static SKTypeface ResolveByFamilyName(FontDescriptor descriptor)
         {
+            // Check shared cache first.
+            string cacheKey = descriptor.Family + "|" + (int)descriptor.Weight + "|" + (int)descriptor.Style;
+            lock (s_typefaceLock)
+            {
+                if (s_familyTypefaceCache.TryGetValue(cacheKey, out var cached))
+                    return cached;
+            }
+
             // Map CSS font-weight to SKFontStyleWeight.
             SKFontStyleWeight weight = (SKFontStyleWeight)(int)descriptor.Weight;
             SKFontStyleSlant slant = descriptor.Style == Css.CssFontStyle.Italic ? SKFontStyleSlant.Italic
@@ -94,7 +136,18 @@ namespace Rend.Output.Image.Internal
                 // Try the exact family name first.
                 var tf = SKTypeface.FromFamilyName(family, skStyle);
                 if (tf != null && !IsDefault(tf, family))
+                {
+                    lock (s_typefaceLock)
+                    {
+                        if (s_familyTypefaceCache.TryGetValue(cacheKey, out var existing))
+                        {
+                            tf.Dispose();
+                            return existing;
+                        }
+                        s_familyTypefaceCache[cacheKey] = tf;
+                    }
                     return tf;
+                }
                 tf?.Dispose();
 
                 // Try generic CSS family name fallbacks.
@@ -104,7 +157,18 @@ namespace Rend.Output.Image.Internal
                     {
                         tf = SKTypeface.FromFamilyName(fallbacks[i], skStyle);
                         if (tf != null && !IsDefault(tf, fallbacks[i]))
+                        {
+                            lock (s_typefaceLock)
+                            {
+                                if (s_familyTypefaceCache.TryGetValue(cacheKey, out var existing))
+                                {
+                                    tf.Dispose();
+                                    return existing;
+                                }
+                                s_familyTypefaceCache[cacheKey] = tf;
+                            }
                             return tf;
+                        }
                         tf?.Dispose();
                     }
                 }
@@ -134,12 +198,17 @@ namespace Rend.Output.Image.Internal
             if (!_disposed)
             {
                 _disposed = true;
-                foreach (var kvp in _cache)
+                // Don't dispose any shared typefaces (from global data cache or family cache).
+                lock (s_typefaceLock)
                 {
-                    // Do not dispose SKTypeface.Default.
-                    if (kvp.Value != SKTypeface.Default)
+                    foreach (var kvp in _cache)
                     {
-                        kvp.Value.Dispose();
+                        if (kvp.Value != SKTypeface.Default
+                            && !s_globalTypefaceCache.ContainsValue(kvp.Value)
+                            && !s_familyTypefaceCache.ContainsValue(kvp.Value))
+                        {
+                            kvp.Value.Dispose();
+                        }
                     }
                 }
                 _cache.Clear();

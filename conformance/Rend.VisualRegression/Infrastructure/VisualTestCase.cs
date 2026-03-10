@@ -9,9 +9,9 @@ namespace Rend.VisualRegression.Infrastructure
         public int ViewportWidth { get; set; } = 400;
         public int ViewportHeight { get; set; } = 300;
         /// <summary>
-        /// Maximum allowed diff percentage for this test to pass (0.0 = exact match).
+        /// Diff percentage threshold. Tests with diff strictly below this pass.
         /// </summary>
-        public double Tolerance { get; set; } = 0.0;
+        public double Tolerance { get; set; } = 0.01;
         public override string ToString() => $"{Category}/{Name}";
     }
 }

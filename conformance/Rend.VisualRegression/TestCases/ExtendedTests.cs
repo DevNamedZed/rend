@@ -12,7 +12,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "flex-row-reverse",
                 Name = "Flex Row Reverse",
-                Category = "Flexbox Edge Cases",
+                Category = "Flexbox",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:flex; flex-direction:row-reverse; gap:8px;"">
                         <div style=""width:60px; height:40px; background:#3498db;""></div>
@@ -26,7 +26,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "flex-justify-center",
                 Name = "Flex Justify Center",
-                Category = "Flexbox Edge Cases",
+                Category = "Flexbox",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:flex; justify-content:center; gap:8px; background:#f0f0f0; padding:8px;"">
                         <div style=""width:60px; height:40px; background:#3498db;""></div>
@@ -39,7 +39,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "flex-justify-end",
                 Name = "Flex Justify End",
-                Category = "Flexbox Edge Cases",
+                Category = "Flexbox",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:flex; justify-content:flex-end; gap:8px; background:#f0f0f0; padding:8px;"">
                         <div style=""width:60px; height:40px; background:#3498db;""></div>
@@ -52,7 +52,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "flex-justify-space-between",
                 Name = "Flex Justify Space Between",
-                Category = "Flexbox Edge Cases",
+                Category = "Flexbox",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:flex; justify-content:space-between; background:#f0f0f0; padding:8px;"">
                         <div style=""width:60px; height:40px; background:#3498db;""></div>
@@ -66,7 +66,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "flex-justify-space-evenly",
                 Name = "Flex Justify Space Evenly",
-                Category = "Flexbox Edge Cases",
+                Category = "Flexbox",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:flex; justify-content:space-evenly; background:#f0f0f0; padding:8px;"">
                         <div style=""width:60px; height:40px; background:#3498db;""></div>
@@ -80,7 +80,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "flex-column-grow",
                 Name = "Flex Column with Grow",
-                Category = "Flexbox Edge Cases",
+                Category = "Flexbox",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:flex; flex-direction:column; height:200px; gap:4px;"">
                         <div style=""flex-grow:1; background:#3498db;""></div>
@@ -94,7 +94,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "flex-wrap-align-content",
                 Name = "Flex Wrap with Align Content Center",
-                Category = "Flexbox Edge Cases",
+                Category = "Flexbox",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:flex; flex-wrap:wrap; align-content:center; height:200px; gap:4px; background:#f0f0f0;"">
                         <div style=""width:120px; height:40px; background:#3498db;""></div>
@@ -109,7 +109,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "flex-basis-px",
                 Name = "Flex Basis with Pixel Values",
-                Category = "Flexbox Edge Cases",
+                Category = "Flexbox",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:flex; gap:4px;"">
                         <div style=""flex:0 0 100px; height:40px; background:#3498db;""></div>
@@ -125,7 +125,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "grid-auto-flow-dense",
                 Name = "Grid Auto Flow (default)",
-                Category = "Grid Edge Cases",
+                Category = "Grid",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:grid; grid-template-columns:repeat(3, 1fr); gap:4px;"">
                         <div style=""background:#3498db; height:40px;""></div>
@@ -142,7 +142,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "grid-explicit-placement",
                 Name = "Grid Explicit Row/Column Placement",
-                Category = "Grid Edge Cases",
+                Category = "Grid",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:grid; grid-template-columns:1fr 1fr 1fr; grid-template-rows:50px 50px; gap:4px;"">
                         <div style=""grid-column:1; grid-row:1; background:#3498db;""></div>
@@ -156,7 +156,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "grid-minmax",
                 Name = "Grid Minmax Track Sizing",
-                Category = "Grid Edge Cases",
+                Category = "Grid",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:grid; grid-template-columns:minmax(50px, 1fr) minmax(100px, 2fr); gap:8px;"">
                         <div style=""background:#3498db; height:50px;""></div>
@@ -169,7 +169,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "grid-gap-variations",
                 Name = "Grid Row and Column Gap",
-                Category = "Grid Edge Cases",
+                Category = "Grid",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:grid; grid-template-columns:1fr 1fr; row-gap:16px; column-gap:4px;"">
                         <div style=""background:#3498db; height:40px;""></div>
@@ -186,7 +186,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "box-border-box",
                 Name = "Border-Box Sizing Comparison",
-                Category = "Box Model Edge Cases",
+                Category = "Box Model",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""width:200px; padding:20px; border:5px solid #333; background:#3498db; height:50px; margin-bottom:10px;""></div>
                     <div style=""width:200px; padding:20px; border:5px solid #333; background:#e74c3c; height:50px; box-sizing:border-box;""></div>
@@ -197,7 +197,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "box-margin-collapse",
                 Name = "Margin Collapsing Between Siblings",
-                Category = "Box Model Edge Cases",
+                Category = "Box Model",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""background:#3498db; height:40px; margin-bottom:20px;""></div>
                     <div style=""background:#e74c3c; height:40px; margin-top:30px; margin-bottom:20px;""></div>
@@ -209,7 +209,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "box-percent-padding",
                 Name = "Percentage Padding",
-                Category = "Box Model Edge Cases",
+                Category = "Box Model",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""width:300px; background:#f0f0f0;"">
                         <div style=""padding:5%; background:#3498db; height:30px;""></div>
@@ -221,7 +221,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "box-auto-margin-center",
                 Name = "Auto Margins Horizontal Centering",
-                Category = "Box Model Edge Cases",
+                Category = "Box Model",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""width:200px; margin:0 auto; background:#3498db; height:50px;""></div>
                     <div style=""width:150px; margin:10px auto 0; background:#e74c3c; height:50px;""></div>
@@ -234,7 +234,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "pos-fixed-like",
                 Name = "Absolute in Viewport-Sized Container",
-                Category = "Positioning Edge Cases",
+                Category = "Positioning",
                 Html = @"<html><body style=""margin:0;"">
                     <div style=""position:relative; width:400px; height:300px; background:#f0f0f0;"">
                         <div style=""position:absolute; top:0; left:0; right:0; height:40px; background:#3498db;""></div>
@@ -248,7 +248,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "pos-z-index",
                 Name = "Z-Index Stacking",
-                Category = "Positioning Edge Cases",
+                Category = "Positioning",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""position:relative; height:100px;"">
                         <div style=""position:absolute; top:0; left:0; width:120px; height:80px; background:#3498db; z-index:1;""></div>
@@ -262,7 +262,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "pos-inset-shorthand",
                 Name = "Absolute with Top/Right/Bottom/Left",
-                Category = "Positioning Edge Cases",
+                Category = "Positioning",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""position:relative; width:200px; height:150px; background:#f0f0f0;"">
                         <div style=""position:absolute; top:10px; right:10px; bottom:10px; left:10px; background:#3498db;""></div>
@@ -276,7 +276,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "overflow-hidden-clip",
                 Name = "Overflow Hidden Clips Content",
-                Category = "Overflow Edge Cases",
+                Category = "Overflow",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""width:150px; height:80px; overflow:hidden; background:#f0f0f0; border:1px solid #ccc;"">
                         <div style=""width:200px; height:40px; background:#3498db; margin-bottom:4px;""></div>
@@ -290,7 +290,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "overflow-border-radius",
                 Name = "Overflow Hidden with Border Radius",
-                Category = "Overflow Edge Cases",
+                Category = "Overflow",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""width:200px; height:120px; overflow:hidden; border-radius:20px; background:#f0f0f0;"">
                         <div style=""background:#3498db; height:60px;""></div>
@@ -305,7 +305,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "size-percent-height",
                 Name = "Percentage Height with Explicit Parent",
-                Category = "Sizing Edge Cases",
+                Category = "Sizing",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""height:200px; background:#f0f0f0;"">
                         <div style=""height:50%; background:#3498db;""></div>
@@ -318,7 +318,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "size-min-max-width",
                 Name = "Min and Max Width Together",
-                Category = "Sizing Edge Cases",
+                Category = "Sizing",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""min-width:100px; max-width:250px; width:80%; background:#3498db; height:40px; margin-bottom:8px;""></div>
                     <div style=""min-width:100px; max-width:250px; width:20%; background:#e74c3c; height:40px;""></div>
@@ -329,7 +329,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "size-calc-complex",
                 Name = "Complex Calc Expressions",
-                Category = "Sizing Edge Cases",
+                Category = "Sizing",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""width:calc(100% - 40px); background:#3498db; height:30px; margin-bottom:8px;""></div>
                     <div style=""display:flex; gap:8px;"">
@@ -345,7 +345,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "nested-deep-boxes",
                 Name = "Deeply Nested Box Model",
-                Category = "Nested Edge Cases",
+                Category = "Nested Layout",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""background:#ecf0f1; padding:10px;"">
                         <div style=""background:#bdc3c7; padding:10px;"">
@@ -363,7 +363,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "nested-grid-2x2",
                 Name = "Grid 2x2 with Nested Content",
-                Category = "Nested Edge Cases",
+                Category = "Nested Layout",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:grid; grid-template-columns:1fr 1fr; gap:8px;"">
                         <div style=""background:#f0f0f0; padding:8px;"">
@@ -388,7 +388,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "nested-flex-column-in-row",
                 Name = "Column Flex inside Row Flex",
-                Category = "Nested Edge Cases",
+                Category = "Nested Layout",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:flex; gap:8px; height:120px;"">
                         <div style=""flex:1; display:flex; flex-direction:column; justify-content:space-between;"">
@@ -410,7 +410,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "display-none-gap",
                 Name = "Display None Does Not Take Space",
-                Category = "Display Edge Cases",
+                Category = "Display & Visibility",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""background:#3498db; height:30px; margin-bottom:8px;""></div>
                     <div style=""display:none; background:#e74c3c; height:30px; margin-bottom:8px;""></div>
@@ -422,7 +422,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "visibility-hidden-space",
                 Name = "Visibility Hidden Preserves Space",
-                Category = "Display Edge Cases",
+                Category = "Display & Visibility",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""background:#3498db; height:30px; margin-bottom:8px;""></div>
                     <div style=""visibility:hidden; background:#e74c3c; height:30px; margin-bottom:8px;""></div>
@@ -436,7 +436,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "border-radius-individual",
                 Name = "Individual Corner Radii",
-                Category = "Border Radius",
+                Category = "Borders",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""width:200px; height:80px; background:#3498db; border-radius:20px 0 20px 0; margin-bottom:10px;""></div>
                     <div style=""width:200px; height:80px; background:#e74c3c; border-radius:0 30px 0 30px;""></div>
@@ -447,7 +447,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "border-radius-circle",
                 Name = "Perfect Circle with Border Radius",
-                Category = "Border Radius",
+                Category = "Borders",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""width:100px; height:100px; background:#3498db; border-radius:50%;""></div>
                 </body></html>",
@@ -459,7 +459,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "bg-nested-colors",
                 Name = "Nested Background Colors",
-                Category = "Background Edge Cases",
+                Category = "Backgrounds",
                 Html = @"<html><body style=""margin:0; padding:10px; background:#ecf0f1;"">
                     <div style=""background:#fff; padding:15px; border-radius:8px;"">
                         <div style=""background:#3498db; height:30px; border-radius:4px; margin-bottom:8px;""></div>
@@ -475,7 +475,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "float-clearfix",
                 Name = "Float Clearfix with Overflow Hidden",
-                Category = "Float Edge Cases",
+                Category = "Float",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""overflow:hidden; background:#f0f0f0; padding:8px; margin-bottom:10px;"">
                         <div style=""float:left; width:100px; height:60px; background:#3498db; margin-right:8px;""></div>
@@ -489,7 +489,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "float-wrap-text",
                 Name = "Float with Block Content Wrapping",
-                Category = "Float Edge Cases",
+                Category = "Float",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""overflow:hidden;"">
                         <div style=""float:left; width:80px; height:80px; background:#3498db; margin:0 10px 10px 0;""></div>
@@ -506,7 +506,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "transform-rotate",
                 Name = "CSS Transform Rotate",
-                Category = "Transform Edge Cases",
+                Category = "Transforms",
                 Html = @"<html><body style=""margin:0; padding:60px;"">
                     <div style=""width:80px; height:80px; background:#3498db; transform:rotate(45deg);""></div>
                 </body></html>",
@@ -516,7 +516,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "transform-multiple",
                 Name = "Multiple Transforms",
-                Category = "Transform Edge Cases",
+                Category = "Transforms",
                 Html = @"<html><body style=""margin:0; padding:60px;"">
                     <div style=""width:100px; height:60px; background:#e74c3c; transform:translate(10px, 5px) rotate(15deg);""></div>
                 </body></html>",
@@ -528,7 +528,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "flex-percent-width-items",
                 Name = "Flex Items with Percent Width",
-                Category = "Flex Percentage",
+                Category = "Flexbox",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:flex; gap:8px;"">
                         <div style=""width:30%; background:#3498db; height:40px;""></div>
@@ -542,7 +542,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "grid-percent-heights",
                 Name = "Grid with Explicit Row Heights",
-                Category = "Grid Percentage",
+                Category = "Grid",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""display:grid; grid-template-columns:1fr 1fr; grid-template-rows:60px 80px; gap:4px;"">
                         <div style=""background:#3498db;""></div>
@@ -559,7 +559,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "border-thick-colored",
                 Name = "Thick Colored Borders",
-                Category = "Border Combinations",
+                Category = "Borders",
                 Html = @"<html><body style=""margin:0; padding:10px;"">
                     <div style=""border:8px solid #3498db; padding:15px; margin-bottom:10px;"">
                         <div style=""background:#f0f0f0; height:30px;""></div>

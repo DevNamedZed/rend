@@ -127,7 +127,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "mask-gradient-fade",
                 Name = "Mask Gradient Fade",
-                Category = "CSS Masks",
+                Category = "CSS Filters",
                 Html = @"<html><body style=""margin:0; padding:20px; font-family:sans-serif;"">
                     <div style=""display:flex; gap:20px;"">
                         <div style=""width:100px; height:100px; background:#e74c3c;""></div>
@@ -141,7 +141,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "mask-radial-gradient",
                 Name = "Mask Radial Gradient",
-                Category = "CSS Masks",
+                Category = "CSS Filters",
                 Html = @"<html><body style=""margin:0; padding:20px; font-family:sans-serif;"">
                     <div style=""display:flex; gap:20px;"">
                         <div style=""width:100px; height:100px; background:#e74c3c; -webkit-mask-image:radial-gradient(circle, black, transparent); mask-image:radial-gradient(circle, black, transparent);""></div>

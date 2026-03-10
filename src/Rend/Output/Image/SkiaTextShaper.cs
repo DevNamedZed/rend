@@ -292,13 +292,19 @@ namespace Rend.Output.Image
             }
         }
 
-        private readonly Dictionary<string, byte[]> _typefaceFontDataCache = new();
+        // Static cache so all threads share the same byte[] instances for fallback fonts.
+        // Same byte[] identity → same RuntimeHelpers.GetHashCode → same shared SKTypeface.
+        private static readonly Dictionary<string, byte[]> s_typefaceFontDataCache = new();
+        private static readonly object s_fontDataLock = new();
 
         private byte[]? GetFontDataFromTypeface(SKTypeface typeface)
         {
             string key = typeface.FamilyName + "|" + (int)typeface.FontStyle.Weight + "|" + (int)typeface.FontStyle.Slant;
-            if (_typefaceFontDataCache.TryGetValue(key, out var cached))
-                return cached;
+            lock (s_fontDataLock)
+            {
+                if (s_typefaceFontDataCache.TryGetValue(key, out var cached))
+                    return cached;
+            }
 
             using var stream = typeface.OpenStream(out _);
             if (stream == null) return null;
@@ -313,7 +319,13 @@ namespace Rend.Output.Image
             }
             if (totalRead < data.Length) return null;
 
-            _typefaceFontDataCache[key] = data;
+            lock (s_fontDataLock)
+            {
+                // Double-check: another thread may have added it.
+                if (s_typefaceFontDataCache.TryGetValue(key, out var existing))
+                    return existing;
+                s_typefaceFontDataCache[key] = data;
+            }
             return data;
         }
 
@@ -369,9 +381,10 @@ namespace Rend.Output.Image
                 hbFont.SetScale(fontScale, fontScale);
                 hbFont.SetFontFunctions(_fontFunctions, null);
 
-                // Create Skia typeface/font for advance queries.
-                using var skData = SKData.CreateCopy(fontData);
-                typeface = SKTypeface.FromData(skData) ?? SKTypeface.Default;
+                // Use shared global typeface to ensure deterministic rendering.
+                // SKTypeface.FromData() creates different native objects with subtly
+                // different SubpixelAntialias behavior per instance.
+                typeface = Internal.SkiaFontMapper.GetOrCreateSharedTypeface(fontData);
 
                 skFont = new SKFont(typeface, fontSize);
                 skFont.Subpixel = true;
@@ -439,8 +452,7 @@ namespace Rend.Output.Image
             public void Dispose()
             {
                 SkFont.Dispose();
-                if (Typeface != SKTypeface.Default)
-                    Typeface.Dispose();
+                // Do NOT dispose Typeface — it's shared via the global typeface cache.
                 HbFont.Dispose();
                 _parentFont.Dispose();
                 _face.Dispose();

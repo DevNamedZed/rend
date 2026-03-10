@@ -12,7 +12,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "dialog-open",
                 Name = "Dialog Element (Open)",
-                Category = "New Features",
+                Category = "Semantic Elements",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <p style=""margin:0 0 8px;"">Page content behind dialog.</p>
                     <dialog open style=""border:1px solid #ccc; padding:16px; background:#fff; margin:0 auto; display:block; width:200px;"">
@@ -28,7 +28,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "meter-element",
                 Name = "Meter Element",
-                Category = "New Features",
+                Category = "Form Controls",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <div style=""margin-bottom:8px;"">
                         <span>Optimal: </span>
@@ -51,7 +51,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "progress-element",
                 Name = "Progress Element",
-                Category = "New Features",
+                Category = "Form Controls",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <div style=""margin-bottom:8px;"">
                         <span>50%: </span>
@@ -68,13 +68,13 @@ namespace Rend.VisualRegression.TestCases
                 </body></html>",
             });
 
-            // --- MathML Basic ---
+            // --- MathML ---
 
             VisualTestCatalog.Register(new VisualTestCase
             {
                 Id = "mathml-fraction",
                 Name = "MathML Fraction",
-                Category = "New Features",
+                Category = "MathML",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <p style=""margin:0 0 8px;"">Simple fraction:</p>
                     <math>
@@ -90,7 +90,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "mathml-quadratic",
                 Name = "MathML Quadratic Formula",
-                Category = "New Features",
+                Category = "MathML",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <p style=""margin:0 0 8px;"">Quadratic formula:</p>
                     <math>
@@ -129,7 +129,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "form-checkbox-radio",
                 Name = "Checkbox and Radio Buttons",
-                Category = "New Features",
+                Category = "Form Controls",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <div style=""margin-bottom:8px;"">
                         <input type=""checkbox""> Unchecked
@@ -150,7 +150,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "form-text-inputs",
                 Name = "Text Input Fields",
-                Category = "New Features",
+                Category = "Form Controls",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <div style=""margin-bottom:8px;"">
                         <input type=""text"" value=""Hello World"" style=""width:200px;"">
@@ -171,7 +171,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "ruby-annotation",
                 Name = "Ruby Annotations",
-                Category = "New Features",
+                Category = "Internationalization",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <p style=""margin:0;"">
                         <ruby>

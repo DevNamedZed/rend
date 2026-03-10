@@ -190,7 +190,7 @@ class Program
         int failCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Fail);
         int errorCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Error);
 
-        Console.WriteLine($"Results: {sortedResults.Count} tests, {passCount} passed, {failCount} failed, {errorCount} errors, avg diff {avgDiff:F2}%");
+        Console.WriteLine($"Results: {sortedResults.Count} tests, {passCount} passed, {failCount} failed, {errorCount} errors, avg diff {avgDiff:F4}%");
         Console.WriteLine($"Duration: {totalSw.Elapsed.TotalSeconds:F1}s");
         Console.WriteLine($"Output:  {outputDir}");
         Console.WriteLine($"Report:  {reportPath}");
@@ -303,13 +303,13 @@ class Program
                 result.DiffImagePath = diffPath;
             }
 
-            result.Outcome = diffPercent <= testCase.Tolerance
+            result.Outcome = diffPercent < testCase.Tolerance
                 ? ComparisonOutcome.Pass
                 : ComparisonOutcome.Fail;
 
             sw.Stop();
             result.Duration = sw.Elapsed;
-            Console.WriteLine($"  {diffPercent,6:F2}%  {testCase.Id} -- {testCase}");
+            Console.WriteLine($"  {diffPercent,8:F4}%  {testCase.Id} -- {testCase}");
         }
         catch (Exception ex)
         {

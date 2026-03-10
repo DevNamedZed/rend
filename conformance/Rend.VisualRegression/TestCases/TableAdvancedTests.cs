@@ -12,7 +12,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "table-colspan",
                 Name = "Table Colspan",
-                Category = "Tables Advanced",
+                Category = "Tables",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#fff;"">
                     <table style=""border-collapse:collapse; width:100%;"">
                         <tr>
@@ -35,7 +35,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "table-rowspan",
                 Name = "Table Rowspan",
-                Category = "Tables Advanced",
+                Category = "Tables",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#fff;"">
                     <table style=""border-collapse:collapse; width:100%;"">
                         <tr>
@@ -58,7 +58,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "table-caption",
                 Name = "Table with Caption",
-                Category = "Tables Advanced",
+                Category = "Tables",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#fff;"">
                     <table style=""border-collapse:collapse; width:100%;"">
                         <caption style=""margin-bottom:6px; font-weight:bold; font-size:14px;"">Monthly Sales Data</caption>
@@ -82,7 +82,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "table-nested",
                 Name = "Nested Table",
-                Category = "Tables Advanced",
+                Category = "Tables",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:12px; background:#fff;"">
                     <table style=""border-collapse:collapse; width:100%;"">
                         <tr>
@@ -108,7 +108,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "table-border-spacing",
                 Name = "Table Border Spacing",
-                Category = "Tables Advanced",
+                Category = "Tables",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#fff;"">
                     <table style=""border-collapse:separate; border-spacing:8px; background:#ecf0f1;"">
                         <tr>

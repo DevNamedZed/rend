@@ -12,7 +12,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "inline-spans-nested",
                 Name = "Nested Inline Spans",
-                Category = "Inline Formatting",
+                Category = "Inline Layout",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.6; background:#fff;"">
                     <p style=""margin:0;"">Normal text <span style=""color:red; font-weight:bold;"">bold red</span>
                     then <span style=""background:#e8f4f8; padding:2px 4px; border-radius:3px;"">highlighted</span>
@@ -24,7 +24,7 @@ namespace Rend.VisualRegression.TestCases
             {
                 Id = "inline-badges",
                 Name = "Inline Badge Elements",
-                Category = "Inline Formatting",
+                Category = "Inline Layout",
                 Html = @"<html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;"">
                     <p style=""margin:0 0 8px;"">Status:
                         <span style=""background:#27ae60; color:#fff; padding:2px 8px; border-radius:10px; font-size:12px;"">Active</span>
