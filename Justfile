@@ -1,4 +1,4 @@
-dotnet := "~/.dotnet/dotnet"
+dotnet := "dotnet"
 
 # List available recipes
 default:
@@ -7,6 +7,10 @@ default:
 # Build the entire solution
 build:
     {{dotnet}} build Rend.sln
+
+# Build in Release mode
+build-release:
+    {{dotnet}} build Rend.sln -c Release
 
 # Run all unit tests
 test:
@@ -29,13 +33,26 @@ conformance:
 visual:
     {{dotnet}} run --project conformance/Rend.VisualRegression
 
+# Run visual regression with a filter (e.g., just visual-filter playground)
+visual-filter FILTER:
+    {{dotnet}} run --project conformance/Rend.VisualRegression -- --filter "{{FILTER}}"
+
+# Run visual regression and update checked-in results
+visual-update:
+    {{dotnet}} run --project conformance/Rend.VisualRegression
+    @echo "Copying results to conformance/results/..."
+    @cp conformance/Rend.VisualRegression/output/$$(ls -t conformance/Rend.VisualRegression/output/ | head -1)/report.html conformance/results/report.html
+    @cp conformance/Rend.VisualRegression/output/$$(ls -t conformance/Rend.VisualRegression/output/ | head -1)/results.json conformance/results/results.json
+    @echo "Done. Review conformance/results/ and commit."
+
 # Open the visual regression report in the default browser
 report:
-    open conformance/Rend.VisualRegression/output/report.html
+    open conformance/results/report.html
 
-# Clean build artifacts
+# Clean build artifacts including playground publish output
 clean:
     {{dotnet}} clean Rend.sln
+    {{dotnet}} clean Rend.sln -c Release
 
 # Restore NuGet packages
 restore:
@@ -49,3 +66,37 @@ count:
 # Watch and re-run tests on file changes
 watch:
     {{dotnet}} watch test --project tests/Rend.Tests
+
+# Build and publish the playground WASM app (full native recompile)
+playground-build:
+    rm -rf playground/Rend.Playground/bin playground/Rend.Playground/obj playground/release
+    {{dotnet}} publish playground/Rend.Playground/Rend.Playground.csproj -c Release -o playground/release
+
+# Quick republish playground (skips native recompile if wasm is cached)
+playground-publish:
+    {{dotnet}} publish playground/Rend.Playground/Rend.Playground.csproj -c Release -o playground/release
+
+# Serve the playground locally at http://localhost:8080
+playground-serve:
+    @echo "Serving playground at http://localhost:8080"
+    python3 -m http.server 8080 --directory playground/release/wwwroot
+
+# Full clean build and serve the playground
+playground: playground-build playground-serve
+
+# Generate PDF test outputs from playground examples
+pdf-generate:
+    {{dotnet}} build Rend.sln -c Release
+    {{dotnet}} test tests/Rend.Tests/Rend.Tests.csproj -c Release --filter "FullyQualifiedName~ComplexPdf" --no-build
+
+# Render PDF test outputs to PNGs for visual inspection
+pdf-render: pdf-generate
+    python3 -m pytest tests/pdf_integration/ -v
+
+# Run only the Python PDF validation tests (assumes test-output/ exists)
+pdf-validate:
+    python3 -m pytest tests/pdf_integration/ -v
+
+# Pack NuGet packages
+pack:
+    {{dotnet}} pack Rend.sln -c Release -o nupkg

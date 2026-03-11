@@ -36,11 +36,76 @@ namespace Rend.Css.Resolution.Internal
             // 1. Collect custom properties (--*) from winners and inherit from parent.
             var customProperties = CollectCustomProperties(winners, parentStyle);
 
-            // 2. Apply winning declarations.
+            // 2. Resolve font-size FIRST using parent font-size (CSS spec: em in font-size
+            //    is relative to parent's font-size). Then use the element's own computed
+            //    font-size for resolving em units in all other properties.
+            var resolvedCtx = _ctx; // _ctx.FontSize == parentFontSize
+            if (winners.TryGetValue("font-size", out var fontSizeDecl))
+            {
+                var fsProp = PropertyRegistry.GetByName("font-size");
+                if (fsProp != null)
+                {
+                    var fsValue = fontSizeDecl.Declaration.Value;
+                    bool fsDone = false;
+
+                    if (InheritanceResolver.IsInherit(fsValue))
+                    {
+                        if (parentValues != null) { values[fsProp.Id] = parentValues[fsProp.Id]; refValues[fsProp.Id] = parentRefValues![fsProp.Id]; }
+                        else { values[fsProp.Id] = InitialValues.Get(fsProp.Id); refValues[fsProp.Id] = InitialValues.GetRef(fsProp.Id); }
+                        fsDone = true;
+                    }
+                    else if (InheritanceResolver.IsInitial(fsValue))
+                    {
+                        values[fsProp.Id] = InitialValues.Get(fsProp.Id);
+                        refValues[fsProp.Id] = InitialValues.GetRef(fsProp.Id);
+                        fsDone = true;
+                    }
+                    else if (InheritanceResolver.IsUnset(fsValue) || InheritanceResolver.IsRevert(fsValue))
+                    {
+                        if (fsProp.Inherited && parentValues != null) { values[fsProp.Id] = parentValues[fsProp.Id]; refValues[fsProp.Id] = parentRefValues![fsProp.Id]; }
+                        else { values[fsProp.Id] = InitialValues.Get(fsProp.Id); refValues[fsProp.Id] = InitialValues.GetRef(fsProp.Id); }
+                        fsDone = true;
+                    }
+                    else
+                    {
+                        var fsSub = SubstituteVar(fsValue, customProperties);
+                        if (ValueResolver.TryResolve(fsSub, fsProp, _ctx, out var fsPv, out var fsRef))
+                        {
+                            if (!fsPv.IsSet && fsRef != null) fsPv.IsSet = true;
+                            values[fsProp.Id] = fsPv;
+                            refValues[fsProp.Id] = fsRef;
+                            fsDone = true;
+                        }
+                    }
+
+                    // Update context with element's own font-size for em resolution
+                    if (fsDone)
+                    {
+                        float elementFontSize = values[fsProp.Id].FloatValue;
+                        if (elementFontSize > 0 && elementFontSize != _ctx.FontSize)
+                        {
+                            resolvedCtx = new CssResolutionContext(
+                                elementFontSize,
+                                _ctx.RootFontSize,
+                                _ctx.ViewportWidth,
+                                _ctx.ViewportHeight,
+                                _ctx.PercentBase);
+                        }
+                    }
+                }
+            }
+
+            // 3. Apply winning declarations (all properties except font-size).
             foreach (var kvp in winners)
             {
                 // Skip custom properties (already collected).
                 if (kvp.Key.StartsWith("--"))
+                {
+                    continue;
+                }
+
+                // Skip font-size (already resolved above).
+                if (kvp.Key == "font-size")
                 {
                     continue;
                 }
@@ -91,8 +156,8 @@ namespace Rend.Css.Resolution.Internal
                 // Substitute var() references before resolving.
                 var resolvedValue = SubstituteVar(value, customProperties);
 
-                // Resolve the value
-                if (ValueResolver.TryResolve(resolvedValue, prop, _ctx, out var pv, out var refVal))
+                // Resolve the value using element's own font-size for em units
+                if (ValueResolver.TryResolve(resolvedValue, prop, resolvedCtx, out var pv, out var refVal))
                 {
                     // For String/Raw types, TryResolve sets refVal but not pv.IsSet.
                     // Mark IsSet so the inheritance resolver knows a value was declared.

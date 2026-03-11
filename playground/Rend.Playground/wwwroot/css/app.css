@@ -1,0 +1,81 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+.page { height: 100vh; display: flex; flex-direction: column; }
+
+.playground { display: flex; flex-direction: column; height: 100vh; background: #1e1e2e; color: #cdd6f4; }
+
+/* Toolbar */
+.toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 16px; background: #181825; border-bottom: 1px solid #313244;
+}
+.toolbar h1 { font-size: 16px; font-weight: 600; color: #cba6f7; }
+.toolbar-actions { display: flex; align-items: center; gap: 10px; }
+.toolbar select {
+    background: #313244; color: #cdd6f4; border: 1px solid #45475a;
+    padding: 6px 10px; border-radius: 6px; font-size: 13px;
+}
+.btn {
+    padding: 6px 16px; border: 1px solid #45475a; border-radius: 6px;
+    background: #313244; color: #cdd6f4; cursor: pointer; font-size: 13px;
+    transition: background 0.15s;
+}
+.btn:hover { background: #45475a; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: #6C5CE7; border-color: #6C5CE7; color: white; }
+.btn-primary:hover { background: #5a4bd1; }
+.toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.toggle input { cursor: pointer; }
+
+/* Editor + Preview */
+.editor-preview { display: flex; flex: 1; min-height: 0; }
+.editor-pane { flex: 1; display: flex; flex-direction: column; border-right: 1px solid #313244; }
+.editor-tabs {
+    display: flex; background: #181825; border-bottom: 1px solid #313244;
+}
+.editor-tab {
+    padding: 6px 16px; font-size: 13px; color: #6c7086; cursor: pointer;
+    border: none; background: none; border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+}
+.editor-tab:hover { color: #cdd6f4; }
+.editor-tab.active { color: #cba6f7; border-bottom-color: #cba6f7; }
+.editor-pane textarea {
+    flex: 1; width: 100%; resize: none; border: none; outline: none;
+    background: #1e1e2e; color: #cdd6f4; padding: 16px;
+    font-family: 'Consolas', 'Fira Code', 'Courier New', monospace;
+    font-size: 14px; line-height: 1.5; tab-size: 2;
+}
+.html-preview-frame {
+    flex: 1; width: 100%; border: none; background: white;
+}
+.preview-pane {
+    flex: 1; overflow: auto; background: #f5f5f5; display: flex;
+    align-items: flex-start; justify-content: center; padding: 16px;
+}
+.preview-pane img { max-width: 100%; height: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+.preview-pane .placeholder {
+    color: #999; font-size: 14px; margin-top: 80px;
+}
+.preview-pane .loading {
+    color: #6C5CE7; font-size: 14px; margin-top: 80px;
+}
+.preview-pane .error {
+    color: #e74c3c; background: #fff5f5; border: 1px solid #fcc; border-radius: 8px;
+    padding: 16px; margin: 16px; font-size: 13px; white-space: pre-wrap;
+    font-family: monospace; max-width: 100%;
+}
+
+/* Status bar */
+.status-bar {
+    padding: 4px 16px; background: #181825; border-top: 1px solid #313244;
+    font-size: 12px; color: #6c7086;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .editor-preview { flex-direction: column; }
+    .editor-pane { border-right: none; border-bottom: 1px solid #313244; min-height: 40vh; }
+}

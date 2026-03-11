@@ -67,6 +67,24 @@ DOCUMENTS = {
     "css-stress":    {"min_pages": 1, "text": ["CSS Feature", "GRADIENTS"]},
 }
 
+# Playground examples — rendered by ComplexPdfValidation.Playground_* tests
+PLAYGROUND_DOCUMENTS = {
+    "pg-hello":           {"min_pages": 1, "text": ["Hello from Rend", "WebAssembly"]},
+    "pg-card":            {"min_pages": 1, "text": []},
+    "pg-invoice":         {"min_pages": 1, "text": ["INVOICE", "$"]},
+    "pg-resume":          {"min_pages": 1, "text": ["Alex Morgan"]},
+    "pg-report":          {"min_pages": 1, "text": ["Revenue"]},
+    "pg-newsletter":      {"min_pages": 1, "text": ["Tech Weekly"]},
+    "pg-architecture":    {"min_pages": 1, "text": ["Architecture"]},
+    "pg-ecommerce":       {"min_pages": 1, "text": ["Headphones"]},
+    "pg-photo-gallery":   {"min_pages": 1, "text": []},
+    "pg-css-features":    {"min_pages": 1, "text": []},
+    "pg-css-stress":      {"min_pages": 1, "text": []},
+    "pg-large-table":     {"min_pages": 1, "text": ["Account"]},
+    "pg-abs-flex-center": {"min_pages": 1, "text": []},
+    "pg-grid-flex-center":{"min_pages": 1, "text": []},
+}
+
 
 # ── Structure ─────────────────────────────────────────────────
 
@@ -250,6 +268,61 @@ class TestCssStress:
     def test_file_size_reasonable(self):
         size = pdf_path("css-stress").stat().st_size
         assert size > 5000, f"CSS stress PDF suspiciously small: {size} bytes"
+
+
+# ── PNG output ────────────────────────────────────────────────
+
+# ── Playground PDF validation ────────────────────────────────
+
+@pytest.mark.parametrize("name,spec", PLAYGROUND_DOCUMENTS.items())
+class TestPlaygroundStructure:
+    def test_opens_without_error(self, name, spec):
+        doc = open_pdf(name)
+        assert doc.page_count >= 1
+        doc.close()
+
+    def test_page_count(self, name, spec):
+        doc = open_pdf(name)
+        assert doc.page_count >= spec["min_pages"], (
+            f"{name}: expected {spec['min_pages']}+ pages, got {doc.page_count}")
+        doc.close()
+
+    def test_expected_content(self, name, spec):
+        if not spec["text"]:
+            pytest.skip("no text assertions for this document")
+        doc = open_pdf(name)
+        all_text = "".join(page.get_text() for page in doc)
+        doc.close()
+        for term in spec["text"]:
+            assert term in all_text, f"{name}: expected '{term}' in text"
+
+
+@pytest.mark.parametrize("name,spec", PLAYGROUND_DOCUMENTS.items())
+class TestPlaygroundRendering:
+    """Render each playground PDF page to PNG for visual inspection."""
+
+    def test_render_pages_to_png(self, name, spec):
+        p = OUTPUT_DIR / f"{name}.pdf"
+        if not p.exists():
+            pytest.skip(f"{name}.pdf not found")
+        doc = fitz.open(str(p))
+        for i in range(doc.page_count):
+            pix = doc[i].get_pixmap(dpi=150)
+            png_path = OUTPUT_DIR / f"{name}_page{i + 1}.png"
+            pix.save(str(png_path))
+            assert pix.width > 0 and pix.height > 0
+            del pix
+        doc.close()
+
+    def test_page1_not_blank(self, name, spec):
+        p = OUTPUT_DIR / f"{name}.pdf"
+        if not p.exists():
+            pytest.skip(f"{name}.pdf not found")
+        doc = fitz.open(str(p))
+        pix = doc[0].get_pixmap(dpi=72)
+        doc.close()
+        dark = sum(1 for b in pix.samples if b < 240)
+        assert dark > 0, f"{name} page 1 renders completely blank"
 
 
 # ── PNG output ────────────────────────────────────────────────

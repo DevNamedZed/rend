@@ -1,0 +1,158 @@
+﻿
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    body { font-family: Georgia, 'Times New Roman', serif; color: #2d2d2d; line-height: 1.6; }
+    h1 { font-size: 26px; text-align: center; color: #1a1a2e; margin-bottom: 4px; }
+    h2 { font-size: 18px; color: #16213e; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 24px; }
+    h3 { font-size: 14px; color: #0f3460; }
+    .subtitle { text-align: center; font-size: 13px; color: #777; margin-bottom: 30px; }
+    p { font-size: 12px; text-align: justify; margin: 8px 0; }
+    .two-col-text { column-count: 2; column-gap: 24px; column-rule: 1px solid #ddd; }
+    blockquote { border-left: 3px solid #667eea; padding: 12px 16px; margin: 16px 0; background: #f8f9ff; font-style: italic; font-size: 13px; }
+    code { font-family: 'Courier New', monospace; background: #f4f4f4; padding: 1px 4px; font-size: 11px; border-radius: 2px; }
+    pre { background: #2d2d2d; color: #f8f8f2; padding: 16px; border-radius: 6px; font-family: 'Courier New', monospace; font-size: 11px; overflow: hidden; line-height: 1.5; }
+    ul, ol { font-size: 12px; padding-left: 24px; }
+    li { margin-bottom: 4px; }
+    .page-break { page-break-before: always; }
+    .highlight { background: linear-gradient(to right, #fff9c4, #fff176); padding: 8px 12px; border-radius: 4px; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 11px; }
+    th { background: #e8ecf8; padding: 8px; text-align: left; border: 1px solid #ccc; }
+    td { padding: 8px; border: 1px solid #ddd; }
+    .toc { background: #fafafa; padding: 20px; border: 1px solid #eee; margin-bottom: 24px; }
+    .toc a { color: #0f3460; text-decoration: none; }
+    .toc li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+    <h1>Technical Architecture Document</h1>
+    <div class='subtitle'>Version 2.1 — Prepared for Widget Industries LLC — January 2025</div>
+
+    <div class='toc'>
+        <h3 style='margin-top:0'>Table of Contents</h3>
+        <ol>
+            <li><a href='#'>System Overview</a></li>
+            <li><a href='#'>Architecture Principles</a></li>
+            <li><a href='#'>Component Design</a></li>
+            <li><a href='#'>Data Flow</a></li>
+            <li><a href='#'>API Specification</a></li>
+            <li><a href='#'>Deployment</a></li>
+        </ol>
+    </div>
+
+    <h2>1. System Overview</h2>
+    <div class='two-col-text'>
+        <p>The Widget Platform is a distributed system designed to handle high-throughput
+        data processing with real-time analytics capabilities. The architecture follows
+        a microservices pattern with event-driven communication between services.</p>
+        <p>Core design goals include horizontal scalability, fault tolerance, and
+        sub-second response times for 99th percentile queries. The system processes
+        an average of 50,000 events per second during peak hours.</p>
+        <p>The platform consists of five primary service clusters: ingestion, processing,
+        storage, query, and presentation. Each cluster can be independently scaled
+        based on workload characteristics and SLA requirements.</p>
+    </div>
+
+    <blockquote>
+        "The best architectures are those that emerge from the constraints of the problem,
+        not from the ambitions of the architect." — A wise engineer
+    </blockquote>
+
+    <h2>2. Architecture Principles</h2>
+    <ul>
+        <li><strong>Separation of concerns</strong> — each service owns its data and business logic</li>
+        <li><strong>Event sourcing</strong> — all state changes are captured as immutable events</li>
+        <li><strong>CQRS</strong> — read and write models are optimized independently</li>
+        <li><strong>Circuit breaker</strong> — cascading failures are prevented at service boundaries</li>
+        <li><strong>Idempotency</strong> — all operations can be safely retried</li>
+    </ul>
+
+    <div class='highlight'>
+        <strong>Key Decision:</strong> We chose event sourcing over traditional CRUD to support
+        full audit trails, temporal queries, and replay capabilities for disaster recovery.
+    </div>
+
+    <div class='page-break'></div>
+
+    <h2>3. Component Design</h2>
+    <h3>3.1 Ingestion Service</h3>
+    <p>The ingestion service accepts data via REST API, gRPC, and WebSocket connections.
+    Input validation and schema enforcement occur at this layer before events are published
+    to the message broker.</p>
+
+    <pre>
+// Example: Event ingestion endpoint
+public async Task&lt;IActionResult&gt; IngestEvent(EventPayload payload)
+{
+    await _validator.ValidateAsync(payload);
+    var envelope = EventEnvelope.Create(payload, _clock.UtcNow);
+    await _broker.PublishAsync("events.ingested", envelope);
+    return Accepted(new { EventId = envelope.Id });
+}
+    </pre>
+
+    <h3>3.2 Processing Pipeline</h3>
+    <table>
+        <tr><th>Stage</th><th>Technology</th><th>Throughput</th><th>Latency (p99)</th></tr>
+        <tr><td>Ingestion</td><td>ASP.NET Core + gRPC</td><td>50K events/sec</td><td>12ms</td></tr>
+        <tr><td>Enrichment</td><td>Apache Kafka Streams</td><td>45K events/sec</td><td>35ms</td></tr>
+        <tr><td>Aggregation</td><td>Apache Flink</td><td>40K events/sec</td><td>120ms</td></tr>
+        <tr><td>Storage</td><td>PostgreSQL + TimescaleDB</td><td>30K writes/sec</td><td>8ms</td></tr>
+        <tr><td>Query</td><td>Redis + Elasticsearch</td><td>100K reads/sec</td><td>5ms</td></tr>
+    </table>
+
+    <h2>4. Data Flow</h2>
+    <p>Events flow through the system in a strictly ordered pipeline. Each stage applies
+    transformations and enrichments before passing data downstream. The pipeline guarantees
+    at-least-once delivery with deduplication at the storage layer.</p>
+
+    <ol>
+        <li>Client sends event via API gateway</li>
+        <li>Ingestion service validates schema and publishes to Kafka</li>
+        <li>Enrichment consumer adds metadata (geo, device, user context)</li>
+        <li>Aggregation service computes rolling metrics and anomaly detection</li>
+        <li>Materialized views are updated in read-optimized stores</li>
+        <li>WebSocket push delivers real-time updates to connected dashboards</li>
+    </ol>
+
+    <div class='page-break'></div>
+
+    <h2>5. API Specification</h2>
+    <pre>
+GET  /api/v2/events?from=2024-01-01&amp;to=2024-01-31
+POST /api/v2/events/ingest
+GET  /api/v2/metrics/summary?period=7d
+GET  /api/v2/metrics/timeseries?metric=revenue&amp;granularity=1h
+POST /api/v2/reports/generate
+GET  /api/v2/health
+    </pre>
+
+    <h3>5.1 Authentication</h3>
+    <p>All API endpoints require Bearer token authentication using JWT. Tokens are issued
+    by the identity service with a 1-hour expiry and can be refreshed using refresh tokens.</p>
+
+    <h3>5.2 Rate Limiting</h3>
+    <table>
+        <tr><th>Plan</th><th>Requests/min</th><th>Burst</th><th>Concurrent</th></tr>
+        <tr><td>Free</td><td>60</td><td>10</td><td>2</td></tr>
+        <tr><td>Pro</td><td>600</td><td>100</td><td>10</td></tr>
+        <tr><td>Enterprise</td><td>6,000</td><td>1,000</td><td>50</td></tr>
+    </table>
+
+    <h2>6. Deployment</h2>
+    <p>The system runs on Kubernetes with automatic horizontal pod autoscaling.
+    Database clusters use managed services (RDS, ElastiCache) for operational simplicity.
+    CI/CD pipelines deploy via GitOps with Argo CD, ensuring declarative infrastructure.</p>
+
+    <div class='highlight'>
+        <strong>SLA Target:</strong> 99.95% uptime (21.9 minutes downtime/month).
+        Current trailing 90-day uptime: 99.98%.
+    </div>
+
+    <div style='margin-top:40px;text-align:center;font-size:10px;color:#999'>
+        Document Classification: Internal — Widget Industries LLC<br>
+        Last Updated: January 15, 2025 — Version 2.1
+    </div>
+</body>
+</html>

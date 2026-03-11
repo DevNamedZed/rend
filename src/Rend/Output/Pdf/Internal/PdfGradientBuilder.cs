@@ -48,23 +48,31 @@ namespace Rend.Output.Pdf.Internal
                 linear.X1 = cx + sin * halfDiag;
                 linear.Y1 = cy - cos * halfDiag;
 
-                linear.Stops = ConvertStops(gradient.Stops);
+                linear.Stops = gradient.Repeating
+                    ? ExpandRepeatingStops(gradient.Stops)
+                    : ConvertStops(gradient.Stops);
                 content.ApplyLinearGradient(linear);
             }
             else if (gradient.Type == GradientType.Radial)
             {
                 var radial = new PdfRadialGradient();
 
-                float cx = gradient.Center.X;
-                float cy = gradient.Center.Y;
+                // Center and radii are stored as fractions (0-1); convert to absolute page coordinates
+                float cx = x + gradient.Center.X * width;
+                float cy = y + gradient.Center.Y * height;
+                float rx = gradient.RadiusX * width;
+                float ry = gradient.RadiusY * height;
+
                 radial.X0 = cx;
                 radial.Y0 = cy;
                 radial.R0 = 0;
                 radial.X1 = cx;
                 radial.Y1 = cy;
-                radial.R1 = Math.Max(gradient.RadiusX, gradient.RadiusY);
+                radial.R1 = Math.Max(rx, ry);
 
-                radial.Stops = ConvertStops(gradient.Stops);
+                radial.Stops = gradient.Repeating
+                    ? ExpandRepeatingStops(gradient.Stops)
+                    : ConvertStops(gradient.Stops);
                 content.ApplyRadialGradient(radial);
             }
             else if (gradient.Type == GradientType.Conic)
@@ -77,7 +85,9 @@ namespace Rend.Output.Pdf.Internal
                 conic.StartAngle = gradient.Angle;
                 conic.Width = width;
                 conic.Height = height;
-                conic.Stops = ConvertStops(gradient.Stops);
+                conic.Stops = gradient.Repeating
+                    ? ExpandRepeatingStops(gradient.Stops)
+                    : ConvertStops(gradient.Stops);
 
                 content.ApplyConicGradient(conic);
             }
@@ -91,6 +101,55 @@ namespace Rend.Output.Pdf.Internal
                 result[i] = new PdfGradientColorStop(stops[i].Position, stops[i].Color);
             }
             return result;
+        }
+
+        /// <summary>
+        /// Expands repeating gradient stops to fill the full 0-1 range.
+        /// </summary>
+        private static PdfGradientColorStop[] ExpandRepeatingStops(GradientStop[] stops)
+        {
+            if (stops.Length < 2) return ConvertStops(stops);
+
+            float firstPos = stops[0].Position;
+            float lastPos = stops[stops.Length - 1].Position;
+            float range = lastPos - firstPos;
+
+            if (range < 0.0001f) return ConvertStops(stops);
+
+            var expanded = new System.Collections.Generic.List<PdfGradientColorStop>();
+
+            // Calculate how many repetitions before and after to cover [0, 1]
+            int repsBefore = (int)Math.Ceiling(firstPos / range);
+            int repsAfter = (int)Math.Ceiling((1f - lastPos) / range);
+
+            for (int rep = -repsBefore; rep <= repsAfter; rep++)
+            {
+                float offset = rep * range;
+                for (int i = 0; i < stops.Length; i++)
+                {
+                    float pos = stops[i].Position + offset;
+                    if (pos < -0.001f || pos > 1.001f) continue;
+                    pos = Math.Max(0f, Math.Min(1f, pos));
+                    expanded.Add(new PdfGradientColorStop(pos, stops[i].Color));
+                }
+            }
+
+            // Sort and deduplicate very close positions
+            expanded.Sort((a, b) => a.Position.CompareTo(b.Position));
+
+            // Ensure we have stops at exactly 0 and 1
+            if (expanded.Count > 0 && expanded[0].Position > 0.001f)
+            {
+                var first = expanded[0];
+                expanded.Insert(0, new PdfGradientColorStop(0f, first.R, first.G, first.B));
+            }
+            if (expanded.Count > 0 && expanded[expanded.Count - 1].Position < 0.999f)
+            {
+                var last = expanded[expanded.Count - 1];
+                expanded.Add(new PdfGradientColorStop(1f, last.R, last.G, last.B));
+            }
+
+            return expanded.ToArray();
         }
     }
 }

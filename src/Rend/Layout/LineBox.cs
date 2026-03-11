@@ -49,5 +49,11 @@ namespace Rend.Layout
             if (keepCount < _fragments.Count)
                 _fragments.RemoveRange(keepCount, _fragments.Count - keepCount);
         }
+
+        /// <summary>Replace the fragment at the given index.</summary>
+        internal void ReplaceFragment(int index, LineFragment fragment)
+        {
+            _fragments[index] = fragment;
+        }
     }
 }

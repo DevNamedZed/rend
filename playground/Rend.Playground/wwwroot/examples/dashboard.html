@@ -1,0 +1,80 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { box-sizing: border-box; margin: 0; }
+body { font-family: Arial, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }
+h1 { font-size: 20px; margin-bottom: 16px; color: #fff; }
+.kpis { display: flex; gap: 12px; margin-bottom: 20px; }
+.kpi { flex: 1; background: #16213e; border-radius: 10px; padding: 16px; border-left: 4px solid #667eea; }
+.kpi-value { font-size: 28px; font-weight: bold; color: #fff; }
+.kpi-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+.kpi-change { font-size: 12px; margin-top: 6px; }
+.up { color: #2ecc71; }
+.down { color: #e74c3c; }
+.charts { display: flex; gap: 16px; margin-bottom: 20px; }
+.chart-card { flex: 1; background: #16213e; border-radius: 10px; padding: 16px; }
+.chart-title { font-size: 13px; font-weight: bold; margin-bottom: 12px; color: #ccc; }
+.bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 120px; }
+.bar-group { flex: 1; display: flex; flex-direction: column; align-items: center; }
+.bar { width: 100%; border-radius: 4px 4px 0 0; min-height: 4px; }
+.bar-label { font-size: 9px; color: #888; margin-top: 6px; }
+.donut { width: 120px; height: 120px; border-radius: 50%; margin: 0 auto;
+  background: conic-gradient(#667eea 0% 42%, #e74c3c 42% 65%, #2ecc71 65% 88%, #f39c12 88% 100%);
+  display: flex; align-items: center; justify-content: center; }
+.donut-hole { width: 70px; height: 70px; border-radius: 50%; background: #16213e;
+  display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; color: #fff; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; justify-content: center; }
+.legend-item { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #aaa; }
+.dot { width: 8px; height: 8px; border-radius: 50%; }
+.stats-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+.stat-card { width: calc(25% - 9px); background: #16213e; border-radius: 10px; padding: 14px; }
+.stat-icon { width: 32px; height: 32px; border-radius: 8px; display: flex;
+  align-items: center; justify-content: center; font-size: 16px; margin-bottom: 8px; }
+.stat-num { font-size: 20px; font-weight: bold; color: #fff; }
+.stat-desc { font-size: 10px; color: #888; margin-top: 2px; }
+.progress-bar { height: 4px; background: #2a2a4a; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 2px; }
+</style>
+</head>
+<body>
+<h1>Analytics Dashboard</h1>
+<div class='kpis'>
+  <div class='kpi'><div class='kpi-value'>$48.2K</div><div class='kpi-label'>Revenue</div><div class='kpi-change up'>+12.5% vs last month</div></div>
+  <div class='kpi' style='border-color:#2ecc71'><div class='kpi-value'>2,847</div><div class='kpi-label'>Users</div><div class='kpi-change up'>+8.3% vs last month</div></div>
+  <div class='kpi' style='border-color:#e74c3c'><div class='kpi-value'>94.2%</div><div class='kpi-label'>Uptime</div><div class='kpi-change down'>-0.8% vs last month</div></div>
+  <div class='kpi' style='border-color:#f39c12'><div class='kpi-value'>1.4s</div><div class='kpi-label'>Avg Response</div><div class='kpi-change up'>-200ms improvement</div></div>
+</div>
+<div class='charts'>
+  <div class='chart-card'>
+    <div class='chart-title'>Weekly Traffic</div>
+    <div class='bar-chart'>
+      <div class='bar-group'><div class='bar' style='height:60%;background:#667eea'></div><div class='bar-label'>Mon</div></div>
+      <div class='bar-group'><div class='bar' style='height:80%;background:#667eea'></div><div class='bar-label'>Tue</div></div>
+      <div class='bar-group'><div class='bar' style='height:45%;background:#667eea'></div><div class='bar-label'>Wed</div></div>
+      <div class='bar-group'><div class='bar' style='height:90%;background:#667eea'></div><div class='bar-label'>Thu</div></div>
+      <div class='bar-group'><div class='bar' style='height:70%;background:#667eea'></div><div class='bar-label'>Fri</div></div>
+      <div class='bar-group'><div class='bar' style='height:40%;background:#667eea'></div><div class='bar-label'>Sat</div></div>
+      <div class='bar-group'><div class='bar' style='height:30%;background:#667eea'></div><div class='bar-label'>Sun</div></div>
+    </div>
+  </div>
+  <div class='chart-card'>
+    <div class='chart-title'>Traffic Sources</div>
+    <div class='donut'><div class='donut-hole'>4.2K</div></div>
+    <div class='legend'>
+      <div class='legend-item'><div class='dot' style='background:#667eea'></div>Direct 42%</div>
+      <div class='legend-item'><div class='dot' style='background:#e74c3c'></div>Search 23%</div>
+      <div class='legend-item'><div class='dot' style='background:#2ecc71'></div>Social 23%</div>
+      <div class='legend-item'><div class='dot' style='background:#f39c12'></div>Referral 12%</div>
+    </div>
+  </div>
+</div>
+<div class='stats-grid'>
+  <div class='stat-card'><div class='stat-icon' style='background:#667eea33;color:#667eea'>P</div><div class='stat-num'>324</div><div class='stat-desc'>Page Views / hr</div><div class='progress-bar'><div class='progress-fill' style='width:72%;background:#667eea'></div></div></div>
+  <div class='stat-card'><div class='stat-icon' style='background:#2ecc7133;color:#2ecc71'>S</div><div class='stat-num'>89%</div><div class='stat-desc'>Satisfaction</div><div class='progress-bar'><div class='progress-fill' style='width:89%;background:#2ecc71'></div></div></div>
+  <div class='stat-card'><div class='stat-icon' style='background:#e74c3c33;color:#e74c3c'>E</div><div class='stat-num'>12</div><div class='stat-desc'>Errors Today</div><div class='progress-bar'><div class='progress-fill' style='width:15%;background:#e74c3c'></div></div></div>
+  <div class='stat-card'><div class='stat-icon' style='background:#f39c1233;color:#f39c12'>T</div><div class='stat-num'>56</div><div class='stat-desc'>Active Tasks</div><div class='progress-bar'><div class='progress-fill' style='width:56%;background:#f39c12'></div></div></div>
+</div>
+</body>
+</html>

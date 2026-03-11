@@ -46,19 +46,17 @@ namespace Rend.Output.Pdf.Internal
             return ImageFormat.Png;
         }
 
-        [ThreadStatic] private static MD5? t_md5;
+        [ThreadStatic] private static SHA256? t_sha256;
 
         private static string ComputeHash(byte[] data)
         {
-#pragma warning disable CA5351 // MD5 is used only for content deduplication, not security
-            var md5 = t_md5 ??= MD5.Create();
-            byte[] hash = md5.ComputeHash(data);
+            var sha = t_sha256 ??= SHA256.Create();
+            byte[] hash = sha.ComputeHash(data);
 #if NET5_0_OR_GREATER
             return Convert.ToHexString(hash);
 #else
             return BitConverter.ToString(hash);
 #endif
-#pragma warning restore CA5351
         }
     }
 }

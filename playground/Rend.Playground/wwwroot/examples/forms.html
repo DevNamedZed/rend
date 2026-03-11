@@ -1,0 +1,102 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { box-sizing: border-box; margin: 0; }
+body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 24px; color: #333; }
+h1 { font-size: 22px; margin-bottom: 20px; color: #1a1a2e; }
+.grid { display: flex; gap: 20px; flex-wrap: wrap; }
+.panel { background: white; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 20px; flex: 1; min-width: 280px; }
+.panel-title { font-size: 14px; font-weight: bold; color: #667eea; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; border-bottom: 2px solid #f0f0f0; padding-bottom: 8px; }
+label { display: block; font-size: 12px; font-weight: bold; color: #555; margin-bottom: 4px; margin-top: 10px; }
+label:first-of-type { margin-top: 0; }
+input[type='text'], input[type='email'], input[type='password'], textarea, select {
+  width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;
+  font-family: Arial, sans-serif; background: #fafafa; }
+textarea { resize: vertical; min-height: 60px; }
+select { appearance: auto; }
+.checkbox-group, .radio-group { margin-top: 8px; }
+.checkbox-group label, .radio-group label { display: flex; align-items: center; gap: 6px;
+  font-weight: normal; font-size: 13px; margin-top: 6px; cursor: pointer; }
+.btn { display: inline-block; padding: 9px 20px; border-radius: 6px; font-size: 13px;
+  font-weight: bold; border: 2px solid transparent; cursor: pointer; text-align: center; }
+.btn-primary { background: #667eea; color: white; }
+.btn-secondary { background: white; color: #667eea; border-color: #667eea; }
+.btn-danger { background: #e74c3c; color: white; }
+.btn-disabled { background: #ccc; color: #888; cursor: not-allowed; }
+.btn-group { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+fieldset { border: 1px solid #ddd; border-radius: 8px; padding: 14px; margin-top: 12px; }
+legend { font-size: 13px; font-weight: bold; color: #667eea; padding: 0 6px; }
+.login-card { max-width: 320px; margin: 0 auto; background: white; border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12); padding: 28px; margin-top: 20px; }
+.login-title { text-align: center; font-size: 20px; font-weight: bold; color: #1a1a2e; margin-bottom: 4px; }
+.login-sub { text-align: center; font-size: 12px; color: #999; margin-bottom: 16px; }
+.login-card .btn-primary { width: 100%; margin-top: 16px; }
+.divider { display: flex; align-items: center; gap: 10px; margin: 14px 0; font-size: 11px; color: #aaa; }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #ddd; }
+.login-footer { text-align: center; font-size: 11px; color: #999; margin-top: 12px; }
+.login-footer a { color: #667eea; text-decoration: none; }
+</style>
+</head>
+<body>
+<h1>Form Controls</h1>
+<div class='grid'>
+  <div class='panel'>
+    <div class='panel-title'>Text Inputs</div>
+    <label>Full Name</label>
+    <input type='text' value='Jane Doe'>
+    <label>Email Address</label>
+    <input type='email' value='jane@example.com'>
+    <label>Password</label>
+    <input type='password' value='secretpass'>
+    <label>Bio</label>
+    <textarea>Senior engineer with 10 years of experience in web development and system design.</textarea>
+    <label>Country</label>
+    <select>
+      <option>United States</option>
+      <option selected>Canada</option>
+      <option>United Kingdom</option>
+    </select>
+  </div>
+  <div class='panel'>
+    <div class='panel-title'>Choices &amp; Buttons</div>
+    <fieldset>
+      <legend>Notifications</legend>
+      <div class='checkbox-group'>
+        <label><input type='checkbox' checked> Email alerts</label>
+        <label><input type='checkbox' checked> Push notifications</label>
+        <label><input type='checkbox'> SMS messages</label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Plan</legend>
+      <div class='radio-group'>
+        <label><input type='radio' name='plan'> Free</label>
+        <label><input type='radio' name='plan' checked> Pro ($9/mo)</label>
+        <label><input type='radio' name='plan'> Enterprise ($49/mo)</label>
+      </div>
+    </fieldset>
+    <div class='panel-title' style='margin-top:16px'>Buttons</div>
+    <div class='btn-group'>
+      <div class='btn btn-primary'>Primary</div>
+      <div class='btn btn-secondary'>Secondary</div>
+      <div class='btn btn-danger'>Delete</div>
+      <div class='btn btn-disabled'>Disabled</div>
+    </div>
+  </div>
+</div>
+
+<div class='login-card'>
+  <div class='login-title'>Welcome Back</div>
+  <div class='login-sub'>Sign in to your account</div>
+  <label>Email</label>
+  <input type='email' value='user@example.com'>
+  <label>Password</label>
+  <input type='password' value='password123'>
+  <div class='btn btn-primary'>Sign In</div>
+  <div class='divider'>or</div>
+  <div class='login-footer'>Don't have an account? <a href='#'>Sign up</a></div>
+</div>
+</body>
+</html>

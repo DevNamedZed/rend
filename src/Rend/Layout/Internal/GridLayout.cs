@@ -296,29 +296,8 @@ namespace Rend.Layout.Internal
                 }
             }
 
-            // Phase 3: Place items with definite column only
-            for (int i = 0; i < items.Count; i++)
-            {
-                var item = items[i];
-                if (item.Placed) continue;
-                if (item.ColStart >= 0)
-                {
-                    EnsureGridSize(ref occupied, ref maxRow, ref maxCol,
-                        maxRow, item.ColStart + item.ColSpan);
-                    int row = FindFreeRow(occupied, maxCol, maxRow, item.ColStart, item.RowSpan, 0);
-                    if (row < 0)
-                    {
-                        row = maxRow;
-                        EnsureGridSize(ref occupied, ref maxRow, ref maxCol,
-                            row + item.RowSpan, maxCol);
-                    }
-                    item.RowStart = row;
-                    MarkOccupied(occupied, maxCol, item.RowStart, item.ColStart, item.RowSpan, item.ColSpan);
-                    item.Placed = true;
-                }
-            }
-
-            // Phase 4: Auto-place remaining items
+            // Phase 3+4: Place items with definite column only AND fully auto items
+            // in source order (CSS Grid Level 1 §8.5).
             int autoRow = 0, autoCol = 0;
             for (int i = 0; i < items.Count; i++)
             {
@@ -332,12 +311,30 @@ namespace Rend.Layout.Internal
                 }
 
                 bool found = false;
-                if (flowColumn)
+
+                if (item.ColStart >= 0)
+                {
+                    // Definite column, auto row: find first free row in that column
+                    // Per spec, cursor row is used as starting point (not always 0)
+                    int searchRow = dense ? 0 : autoRow;
+                    EnsureGridSize(ref occupied, ref maxRow, ref maxCol,
+                        maxRow, item.ColStart + item.ColSpan);
+                    int row = FindFreeRow(occupied, maxCol, maxRow, item.ColStart, item.RowSpan, searchRow);
+                    if (row < 0)
+                    {
+                        row = maxRow;
+                        EnsureGridSize(ref occupied, ref maxRow, ref maxCol,
+                            row + item.RowSpan, maxCol);
+                    }
+                    item.RowStart = row;
+                    MarkOccupied(occupied, maxCol, item.RowStart, item.ColStart, item.RowSpan, item.ColSpan);
+                    item.Placed = true;
+                    autoRow = item.RowStart;
+                    autoCol = item.ColStart;
+                }
+                else if (flowColumn)
                 {
                     // Column-major auto-placement
-                    // Wrap at gridRows boundary (explicit or inferred row count).
-                    // Limit row start so spanning items don't create implicit rows;
-                    // they must wrap to the next column instead (CSS Grid Level 1 §8.5).
                     int rowLimit = gridRows - item.RowSpan + 1;
                     for (int c = autoCol; !found; c++)
                     {
@@ -364,9 +361,6 @@ namespace Rend.Layout.Internal
                 else
                 {
                     // Row-major auto-placement (default)
-                    // Wrap at gridCols boundary (explicit or inferred column count).
-                    // Limit column start so spanning items don't create implicit columns;
-                    // they must wrap to the next row instead (CSS Grid Level 1 §8.5).
                     int colLimit = gridCols - item.ColSpan + 1;
                     for (int r = autoRow; !found; r++)
                     {
@@ -577,6 +571,14 @@ namespace Rend.Layout.Internal
                     if (float.IsNaN(contentHeight))
                         contentHeight = CalculateAutoHeight(item.Box);
 
+                    // Apply min-height / max-height (same as BlockFormattingContext)
+                    float gridMinH = DimensionResolver.ResolvePercentHeight(item.StyledElement.Style.MinHeight, containerHeight);
+                    float gridMaxH = DimensionResolver.ResolvePercentHeight(item.StyledElement.Style.MaxHeight, containerHeight);
+                    if (!float.IsNaN(gridMaxH) && gridMaxH >= 0 && contentHeight > gridMaxH)
+                        contentHeight = gridMaxH;
+                    if (!float.IsNaN(gridMinH) && gridMinH >= 0 && contentHeight < gridMinH)
+                        contentHeight = gridMinH;
+
                     item.ContentWidth = contentWidth;
                     item.ContentHeight = contentHeight;
 
@@ -605,8 +607,10 @@ namespace Rend.Layout.Internal
                 }
                 else
                 {
-                    // For spanning items, distribute height evenly across rows
-                    float perRow = totalHeight / item.RowSpan;
+                    // For spanning items, subtract inter-row gaps then distribute evenly
+                    float gapTotal = (item.RowSpan - 1) * rowGap;
+                    float distributable = Math.Max(0, totalHeight - gapTotal);
+                    float perRow = distributable / item.RowSpan;
                     for (int r = item.RowStart; r < item.RowStart + item.RowSpan && r < finalRows; r++)
                     {
                         if (perRow > rowHeights[r])

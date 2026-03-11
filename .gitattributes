@@ -1,0 +1,2 @@
+conformance/results/*.png filter=lfs diff=lfs merge=lfs -text
+conformance/results/*.jpg filter=lfs diff=lfs merge=lfs -text

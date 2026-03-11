@@ -1,0 +1,95 @@
+﻿
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    body { font-family: Arial, sans-serif; color: #333; margin: 0; padding: 0; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
+    .company { font-size: 24px; font-weight: bold; color: #2c3e50; }
+    .company-info { font-size: 11px; color: #777; margin-top: 4px; }
+    .invoice-meta { text-align: right; }
+    .invoice-title { font-size: 28px; font-weight: bold; color: #e74c3c; margin-bottom: 8px; }
+    .invoice-detail { font-size: 11px; color: #555; }
+    .addresses { display: flex; gap: 40px; margin-bottom: 30px; }
+    .address-block { flex: 1; }
+    .address-label { font-size: 10px; text-transform: uppercase; color: #999; letter-spacing: 1px; margin-bottom: 6px; }
+    .address-name { font-weight: bold; margin-bottom: 2px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    thead th { background: #2c3e50; color: white; padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    tbody td { padding: 10px 12px; border-bottom: 1px solid #e0e0e0; font-size: 12px; }
+    tbody tr:nth-child(even) { background: #f9f9f9; }
+    .text-right { text-align: right; }
+    .totals { margin-left: auto; width: 280px; }
+    .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12px; border-bottom: 1px solid #eee; }
+    .totals-row.grand { font-size: 16px; font-weight: bold; color: #2c3e50; border-top: 2px solid #2c3e50; border-bottom: none; padding-top: 10px; }
+    .notes { margin-top: 40px; padding: 16px; background: #f0f4f8; border-left: 4px solid #3498db; font-size: 11px; color: #555; }
+    .footer-bar { margin-top: 40px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #ddd; padding-top: 12px; }
+</style>
+</head>
+<body>
+    <div class='header'>
+        <div>
+            <div class='company'>ACME CORP</div>
+            <div class='company-info'>123 Business Ave, Suite 100<br>San Francisco, CA 94102<br>contact@acmecorp.com</div>
+        </div>
+        <div class='invoice-meta'>
+            <div class='invoice-title'>INVOICE</div>
+            <div class='invoice-detail'>Invoice #: INV-2024-0042</div>
+            <div class='invoice-detail'>Date: January 15, 2024</div>
+            <div class='invoice-detail'>Due: February 14, 2024</div>
+        </div>
+    </div>
+
+    <div class='addresses'>
+        <div class='address-block'>
+            <div class='address-label'>Bill To</div>
+            <div class='address-name'>Widget Industries LLC</div>
+            <div>456 Manufacturing Blvd</div>
+            <div>Austin, TX 78701</div>
+            <div>billing@widgetindustries.com</div>
+        </div>
+        <div class='address-block'>
+            <div class='address-label'>Ship To</div>
+            <div class='address-name'>Widget Industries — Warehouse</div>
+            <div>789 Distribution Way</div>
+            <div>Dallas, TX 75201</div>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Description</th>
+                <th class='text-right'>Qty</th>
+                <th class='text-right'>Unit Price</th>
+                <th class='text-right'>Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>PRD-001</td><td>Enterprise Widget License (Annual)</td><td class='text-right'>5</td><td class='text-right'>$2,400.00</td><td class='text-right'>$12,000.00</td></tr>
+            <tr><td>PRD-002</td><td>Widget Premium Support Package</td><td class='text-right'>5</td><td class='text-right'>$600.00</td><td class='text-right'>$3,000.00</td></tr>
+            <tr><td>SVC-010</td><td>On-site Installation &amp; Configuration</td><td class='text-right'>2</td><td class='text-right'>$1,500.00</td><td class='text-right'>$3,000.00</td></tr>
+            <tr><td>SVC-011</td><td>Staff Training (half-day session)</td><td class='text-right'>3</td><td class='text-right'>$800.00</td><td class='text-right'>$2,400.00</td></tr>
+            <tr><td>SVC-020</td><td>Data Migration Service</td><td class='text-right'>1</td><td class='text-right'>$2,500.00</td><td class='text-right'>$2,500.00</td></tr>
+            <tr><td>HW-100</td><td>Widget Server Appliance (rack-mount)</td><td class='text-right'>1</td><td class='text-right'>$8,500.00</td><td class='text-right'>$8,500.00</td></tr>
+        </tbody>
+    </table>
+
+    <div class='totals'>
+        <div class='totals-row'><span>Subtotal</span><span>$31,400.00</span></div>
+        <div class='totals-row'><span>Tax (8.25%)</span><span>$2,590.50</span></div>
+        <div class='totals-row'><span>Shipping</span><span>$350.00</span></div>
+        <div class='totals-row grand'><span>Total Due</span><span>$34,340.50</span></div>
+    </div>
+
+    <div class='notes'>
+        <strong>Notes:</strong> Payment is due within 30 days. Please include the invoice number on your check or wire transfer.
+        Late payments are subject to a 1.5% monthly finance charge. For questions about this invoice, contact accounts@acmecorp.com.
+    </div>
+
+    <div class='footer-bar'>
+        ACME CORP &bull; Tax ID: 12-3456789 &bull; Thank you for your business!
+    </div>
+</body>
+</html>

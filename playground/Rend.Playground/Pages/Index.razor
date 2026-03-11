@@ -1,0 +1,308 @@
+@page "/"
+@inject HttpClient Http
+
+<PageTitle>Rend Playground</PageTitle>
+
+<div class="playground">
+    <div class="toolbar">
+        <h1>Rend Playground</h1>
+        <div class="toolbar-actions">
+            <select @bind="SelectedExample">
+                <option value="">-- Examples --</option>
+                @foreach (var name in ExampleNames)
+                {
+                    <option value="@name">@name</option>
+                }
+            </select>
+            <button class="btn btn-primary" @onclick="RenderNow" disabled="@IsRendering">
+                @(IsRendering ? "Rendering..." : "Render (Ctrl+Enter)")
+            </button>
+            <button class="btn" @onclick="DownloadPdf" disabled="@(PdfBytes == null)">
+                Download PDF
+            </button>
+        </div>
+    </div>
+
+    <div class="editor-preview">
+        <div class="editor-pane">
+            <div class="editor-tabs">
+                <button class="editor-tab @(LeftTab == "editor" ? "active" : "")" @onclick='() => LeftTab = "editor"'>Editor</button>
+                <button class="editor-tab @(LeftTab == "preview" ? "active" : "")" @onclick="ShowHtmlPreview">HTML Preview</button>
+            </div>
+            @if (LeftTab == "editor")
+            {
+                <textarea @bind="HtmlInput" @bind:event="oninput"
+                          @onkeydown="OnKeyDown"
+                          spellcheck="false"
+                          placeholder="Type HTML here..."></textarea>
+            }
+            else
+            {
+                <iframe class="html-preview-frame" srcdoc="@HtmlInput"></iframe>
+            }
+        </div>
+        <div class="preview-pane">
+            @if (!string.IsNullOrEmpty(ErrorMessage))
+            {
+                <div class="error">@ErrorMessage</div>
+            }
+            else if (IsRendering)
+            {
+                <div class="loading">Rendering...</div>
+            }
+            else if (PdfBytes != null)
+            {
+                <canvas id="pdfCanvas"></canvas>
+            }
+            else
+            {
+                <div class="placeholder">PDF output will appear here</div>
+            }
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span>@StatusText</span>
+    </div>
+</div>
+
+@code {
+    private string HtmlInput { get; set; } = DefaultHtml;
+    private byte[]? PdfBytes { get; set; }
+    private string? ErrorMessage { get; set; }
+    private bool IsRendering { get; set; }
+    private string StatusText { get; set; } = "Ready";
+    private string LeftTab { get; set; } = "editor";
+    private string _selectedExample = "";
+
+    private void ShowHtmlPreview()
+    {
+        LeftTab = "preview";
+    }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    // Map display name -> filename in wwwroot/examples/
+    private static readonly (string Name, string File)[] ExampleList = new[]
+    {
+        // Documents
+        ("Invoice", "invoice.html"),
+        ("Resume", "resume.html"),
+        ("Report", "report.html"),
+        ("Newsletter", "newsletter.html"),
+        ("Architecture Doc", "architecture.html"),
+        ("Print Document", "print-document.html"),
+        // Pages
+        ("Landing Page", "landing-page.html"),
+        ("E-Commerce", "ecommerce.html"),
+        ("Dashboard", "dashboard.html"),
+        ("Photo Gallery", "photo-gallery.html"),
+        // Components
+        ("Card", "card.html"),
+        ("Forms", "forms.html"),
+        ("Typography", "typography.html"),
+        // Layout
+        ("Flexbox Patterns", "flexbox-patterns.html"),
+        ("Grid Layouts", "grid-layouts.html"),
+        ("Abs + Flex Center", "abs-flex-center.html"),
+        ("Grid + Flex Center", "grid-flex-center.html"),
+        // Stress Tests
+        ("CSS Features", "css-features.html"),
+        ("CSS Stress Test", "css-stress.html"),
+        ("Large Table", "large-table.html"),
+    };
+
+    private static readonly string[] ExampleNames = ExampleList.Select(e => e.Name).ToArray();
+    private static readonly Dictionary<string, string> ExampleFileMap =
+        ExampleList.ToDictionary(e => e.Name, e => e.File);
+
+    private string SelectedExample
+    {
+        get => _selectedExample;
+        set
+        {
+            _selectedExample = value;
+            if (ExampleFileMap.TryGetValue(value, out var file))
+            {
+                _ = LoadAndRender(file);
+            }
+        }
+    }
+
+    private async Task LoadAndRender(string filename)
+    {
+        try
+        {
+            StatusText = "Loading example...";
+            StateHasChanged();
+            HtmlInput = await Http.GetStringAsync($"examples/{filename}");
+            StateHasChanged();
+            await DoRender();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load example: {ex.Message}";
+            StatusText = "Error";
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await DoRender();
+    }
+
+    private async Task RenderNow()
+    {
+        await DoRender();
+    }
+
+    private async Task DoRender()
+    {
+        if (string.IsNullOrWhiteSpace(HtmlInput)) return;
+
+        IsRendering = true;
+        ErrorMessage = null;
+        StatusText = "Rendering...";
+        StateHasChanged();
+
+        try
+        {
+            await Task.Yield();
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var options = new RenderOptions
+            {
+                PageSize = new Rend.Core.Values.SizeF(595.28f, 841.89f),
+                MarginTop = 36f,
+                MarginRight = 36f,
+                MarginBottom = 36f,
+                MarginLeft = 36f
+            };
+
+            PdfBytes = Rend.Render.ToPdf(HtmlInput, options);
+            StatusText = $"PDF generated: {PdfBytes.Length:N0} bytes in {sw.ElapsedMilliseconds}ms";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            StatusText = "Error";
+            PdfBytes = null;
+        }
+        finally
+        {
+            IsRendering = false;
+            StateHasChanged();
+        }
+
+        // After render + state update, display the PDF
+        if (PdfBytes != null)
+        {
+            await Task.Yield();
+            try
+            {
+                var base64 = Convert.ToBase64String(PdfBytes);
+                await JS.InvokeVoidAsync("renderPdf", base64);
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = $"PDF display error: {ex.Message}";
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.CtrlKey && e.Key == "Enter")
+        {
+            await DoRender();
+        }
+    }
+
+    private async Task DownloadPdf()
+    {
+        if (PdfBytes == null) return;
+        var base64 = Convert.ToBase64String(PdfBytes);
+        await JS.InvokeVoidAsync("downloadFile", "output.pdf", base64);
+    }
+
+    private const string DefaultHtml = @"<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body {
+    font-family: sans-serif;
+    padding: 20px;
+    background: #f5f5f5;
+  }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    max-width: 400px;
+    margin: 20px auto;
+  }
+  h1 {
+    color: #6C5CE7;
+    margin-top: 0;
+  }
+  .badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #6C5CE7, #a29bfe);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    vertical-align: middle;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .stat {
+    background: #f0f0f0;
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #2d3436;
+  }
+  .stat-label {
+    font-size: 12px;
+    color: #636e72;
+  }
+</style>
+</head>
+<body>
+  <div class=""card"">
+    <h1>Hello from Rend!</h1>
+    <p>Rendered entirely in your browser using <span class=""badge"">WebAssembly</span></p>
+    <div class=""grid"">
+      <div class=""stat"">
+        <div class=""stat-value"">100%</div>
+        <div class=""stat-label"">Client-side</div>
+      </div>
+      <div class=""stat"">
+        <div class=""stat-value"">0</div>
+        <div class=""stat-label"">Server calls</div>
+      </div>
+      <div class=""stat"">
+        <div class=""stat-value"">CSS3</div>
+        <div class=""stat-label"">Flexbox + Grid</div>
+      </div>
+      <div class=""stat"">
+        <div class=""stat-value"">PDF</div>
+        <div class=""stat-label"">+ Image output</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>";
+}

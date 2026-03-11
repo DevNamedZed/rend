@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rend Playground</title>
+    <!-- For GitHub Pages, update href to /repo-name/ e.g. /rend/ -->
+    <base href="/" />
+    <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+    <div id="app">
+        <div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#666">
+            <div style="text-align:center">
+                <div style="font-size:48px;margin-bottom:16px">&#9881;</div>
+                <div>Loading Rend Playground...</div>
+                <div style="font-size:13px;color:#999;margin-top:8px">First load downloads ~15MB of WebAssembly</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui" style="display:none;position:fixed;bottom:0;width:100%;background:#ffdddd;padding:8px;text-align:center;z-index:9999">
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss" style="cursor:pointer;margin-left:16px">Dismiss</a>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        async function renderPdf(base64) {
+            const data = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+            const pdf = await pdfjsLib.getDocument({ data }).promise;
+            const page = await pdf.getPage(1);
+            const canvas = document.getElementById('pdfCanvas');
+            if (!canvas) return;
+            const scale = window.devicePixelRatio || 2;
+            const viewport = page.getViewport({ scale });
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            canvas.style.width = (viewport.width / scale) + 'px';
+            canvas.style.height = (viewport.height / scale) + 'px';
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        }
+
+        function downloadFile(filename, base64) {
+            const link = document.createElement('a');
+            link.href = 'data:application/pdf;base64,' + base64;
+            link.download = filename;
+            link.click();
+        }
+    </script>
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+</html>

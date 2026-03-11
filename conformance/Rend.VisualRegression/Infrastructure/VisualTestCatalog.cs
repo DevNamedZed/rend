@@ -111,6 +111,8 @@ namespace Rend.VisualRegression.Infrastructure
                 typeof(TestCases.ResponsivePatternTests).TypeHandle);
             System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
                 typeof(TestCases.PixelPerfectTests).TypeHandle);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(
+                typeof(TestCases.ShowcaseTests).TypeHandle);
         }
     }
 }

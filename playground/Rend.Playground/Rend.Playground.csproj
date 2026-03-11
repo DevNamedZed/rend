@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <!-- Override Directory.Build.props multi-targeting -->
+    <TargetFrameworks>net8.0</TargetFrameworks>
+    <RootNamespace>Rend.Playground</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <StaticWebAssetBasePath>/</StaticWebAssetBasePath>
+    <!-- Required to link SkiaSharp/HarfBuzz native libs into WASM -->
+    <WasmBuildNative>true</WasmBuildNative>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Rend\Rend.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.0" PrivateAssets="all" />
+    <PackageReference Include="SkiaSharp.NativeAssets.WebAssembly" Version="3.116.1" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.WebAssembly" Version="7.3.0.2" />
+  </ItemGroup>
+  <!-- Clean the custom publish output folder -->
+  <Target Name="CleanPublishOutput" AfterTargets="Clean">
+    <RemoveDir Directories="$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../release'))" />
+  </Target>
+
+  <!-- Copy blazor.webassembly.js shim into publish output (not produced by .NET 8 SDK) -->
+  <Target Name="CopyBlazorShim" AfterTargets="Publish">
+    <Copy SourceFiles="wwwroot/_framework/blazor.webassembly.js"
+          DestinationFolder="$(PublishDir)wwwroot/_framework/"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

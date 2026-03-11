@@ -1,0 +1,134 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { box-sizing: border-box; margin: 0; }
+body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 16px; color: #333; }
+h2 { font-size: 14px; color: #667eea; text-transform: uppercase; letter-spacing: 1px; margin: 16px 0 8px; }
+h2:first-of-type { margin-top: 0; }
+.demo { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 12px; padding: 12px; overflow: hidden; }
+.cell { background: #667eea; color: white; font-size: 10px; font-weight: bold; padding: 8px;
+  border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+
+/* 12-Column Grid */
+.grid-12 { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
+.span-1 { grid-column: span 1; }
+.span-2 { grid-column: span 2; }
+.span-3 { grid-column: span 3; }
+.span-4 { grid-column: span 4; }
+.span-6 { grid-column: span 6; }
+.span-8 { grid-column: span 8; }
+.span-12 { grid-column: span 12; }
+
+/* Masonry-style */
+.masonry { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tall { grid-row: span 2; min-height: 100px; }
+.wide { grid-column: span 2; }
+
+/* Sidebar + Content */
+.sidebar-layout { display: grid; grid-template-columns: 120px 1fr; gap: 12px; min-height: 160px; }
+.sidebar { background: #2c3e50; color: #bdc3c7; border-radius: 6px; padding: 12px; font-size: 11px; }
+.sidebar-item { padding: 6px 0; border-bottom: 1px solid #34495e; }
+.main-area { background: #f8f9ff; border-radius: 6px; padding: 14px; font-size: 12px; color: #555; }
+
+/* Dashboard Grid */
+.dash-grid { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 60px 100px 60px; gap: 8px; }
+.dash-wide { grid-column: span 2; }
+.dash-tall { grid-row: span 2; }
+
+/* Auto-fill/Auto-fit */
+.auto-fill { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 6px; }
+.auto-fit { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 6px; }
+
+/* Named Grid Areas */
+.named-grid { display: grid; grid-template-columns: 1fr 2fr 1fr;
+  grid-template-rows: 36px 1fr 30px; grid-template-areas:
+    "header header header"
+    "nav    content aside"
+    "footer footer footer";
+  gap: 6px; min-height: 180px; }
+.g-header { grid-area: header; background: #2c3e50; }
+.g-nav { grid-area: nav; background: #34495e; }
+.g-content { grid-area: content; background: #667eea; }
+.g-aside { grid-area: aside; background: #764ba2; }
+.g-footer { grid-area: footer; background: #2c3e50; }
+</style>
+</head>
+<body>
+<h2>12-Column Grid</h2>
+<div class='demo'>
+  <div class='grid-12'>
+    <div class='cell span-12'>12</div>
+    <div class='cell span-6'>6</div><div class='cell span-6'>6</div>
+    <div class='cell span-4'>4</div><div class='cell span-4'>4</div><div class='cell span-4'>4</div>
+    <div class='cell span-3'>3</div><div class='cell span-3'>3</div><div class='cell span-3'>3</div><div class='cell span-3'>3</div>
+    <div class='cell span-8' style='background:#764ba2'>8</div><div class='cell span-4'>4</div>
+    <div class='cell span-2' style='background:#2ecc71'>2</div><div class='cell span-2' style='background:#2ecc71'>2</div><div class='cell span-2' style='background:#2ecc71'>2</div><div class='cell span-2' style='background:#2ecc71'>2</div><div class='cell span-2' style='background:#2ecc71'>2</div><div class='cell span-2' style='background:#2ecc71'>2</div>
+  </div>
+</div>
+
+<h2>Masonry-Style Grid</h2>
+<div class='demo'>
+  <div class='masonry'>
+    <div class='cell tall' style='background:#e74c3c'>Tall</div>
+    <div class='cell'>A</div>
+    <div class='cell'>B</div>
+    <div class='cell wide' style='background:#f39c12'>Wide</div>
+    <div class='cell tall' style='background:#2ecc71'>Tall</div>
+    <div class='cell'>C</div>
+    <div class='cell'>D</div>
+    <div class='cell wide' style='background:#764ba2'>Wide</div>
+  </div>
+</div>
+
+<h2>Sidebar + Content</h2>
+<div class='demo'>
+  <div class='sidebar-layout'>
+    <div class='sidebar'>
+      <div class='sidebar-item'>Dashboard</div>
+      <div class='sidebar-item'>Analytics</div>
+      <div class='sidebar-item'>Settings</div>
+      <div class='sidebar-item'>Users</div>
+      <div class='sidebar-item'>Reports</div>
+    </div>
+    <div class='main-area'>
+      <strong>Main Content Area</strong><br><br>
+      This layout uses CSS Grid with a fixed-width sidebar and a flexible content area using 1fr. The sidebar maintains its width while the content expands to fill remaining space.
+    </div>
+  </div>
+</div>
+
+<h2>Dashboard Grid</h2>
+<div class='demo'>
+  <div class='dash-grid'>
+    <div class='cell dash-wide' style='background:#2c3e50'>Revenue Overview</div>
+    <div class='cell dash-tall' style='background:#e74c3c'>Activity Feed</div>
+    <div class='cell'>Users</div>
+    <div class='cell' style='background:#2ecc71'>Sales</div>
+    <div class='cell' style='background:#f39c12'>Orders</div>
+    <div class='cell dash-wide' style='background:#764ba2'>Performance Chart</div>
+    <div class='cell'>Tasks</div>
+  </div>
+</div>
+
+<h2>Auto-Fill (fixed min, stretches)</h2>
+<div class='demo'>
+  <div class='auto-fill'>
+    <div class='cell'>1</div><div class='cell'>2</div><div class='cell'>3</div>
+    <div class='cell'>4</div><div class='cell'>5</div>
+  </div>
+</div>
+
+<h2>Named Grid Areas</h2>
+<div class='demo'>
+  <div class='named-grid'>
+    <div class='cell g-header'>Header</div>
+    <div class='cell g-nav'>Nav</div>
+    <div class='cell g-content'>Content</div>
+    <div class='cell g-aside'>Aside</div>
+    <div class='cell g-footer'>Footer</div>
+  </div>
+</div>
+</body>
+</html>

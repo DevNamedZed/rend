@@ -1,0 +1,125 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { box-sizing: border-box; margin: 0; }
+body { font-family: Georgia, serif; color: #333; padding: 30px; max-width: 700px; margin: 0 auto; background: #fff; }
+h1 { font-size: 36px; margin-bottom: 4px; color: #1a1a2e; letter-spacing: -1px; }
+h2 { font-size: 28px; color: #2c3e50; margin: 24px 0 8px; border-bottom: 2px solid #eee; padding-bottom: 6px; }
+h3 { font-size: 22px; color: #34495e; margin: 18px 0 6px; }
+h4 { font-size: 18px; color: #555; margin: 14px 0 4px; }
+h5 { font-size: 15px; color: #666; margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 1px; }
+h6 { font-size: 13px; color: #888; margin: 10px 0 4px; text-transform: uppercase; letter-spacing: 1.5px; }
+.subtitle { font-size: 14px; color: #888; margin-bottom: 20px; font-style: italic; }
+p { font-size: 15px; line-height: 1.7; margin-bottom: 12px; color: #444; }
+.lead { font-size: 18px; color: #333; line-height: 1.6; }
+blockquote { border-left: 4px solid #667eea; margin: 16px 0; padding: 12px 20px; background: #f8f9ff;
+  font-style: italic; color: #555; }
+blockquote cite { display: block; font-size: 12px; color: #999; margin-top: 8px; font-style: normal; }
+.columns { display: flex; gap: 24px; margin: 16px 0; }
+.col { flex: 1; }
+ul, ol { padding-left: 24px; margin-bottom: 12px; font-size: 14px; line-height: 1.8; color: #444; }
+ul ul, ol ol, ul ol, ol ul { margin-bottom: 0; margin-top: 4px; }
+.inline-demo { background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px; line-height: 2; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-family: Consolas, monospace; font-size: 13px; color: #e74c3c; }
+pre { background: #2c3e50; color: #ecf0f1; padding: 16px; border-radius: 8px; font-family: Consolas, monospace;
+  font-size: 13px; line-height: 1.6; margin: 12px 0; overflow: hidden; }
+.weights { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.weight-box { background: #f5f5f5; padding: 8px 14px; border-radius: 6px; font-size: 14px; }
+.sizes { margin: 12px 0; }
+.sizes span { display: inline-block; margin-right: 16px; color: #555; }
+hr { border: none; border-top: 1px solid #ddd; margin: 20px 0; }
+</style>
+</head>
+<body>
+<h1>Typography Showcase</h1>
+<div class='subtitle'>A demonstration of typographic elements and styles</div>
+
+<h2>Headings</h2>
+<h1>Heading Level 1</h1>
+<h2 style='border:none;margin-top:8px'>Heading Level 2</h2>
+<h3>Heading Level 3</h3>
+<h4>Heading Level 4</h4>
+<h5>Heading Level 5</h5>
+<h6>Heading Level 6</h6>
+
+<h2>Paragraph Text</h2>
+<p class='lead'>This is a lead paragraph with larger text, used to introduce a section or article with emphasis and visual weight.</p>
+<p>Regular body text provides comfortable reading at standard size. Good typography creates hierarchy, guides the eye, and makes content accessible. Line height and letter spacing contribute to readability.</p>
+
+<h2>Blockquotes</h2>
+<blockquote>
+  Typography is the craft of endowing human language with a durable visual form, and thus with an independent existence.
+  <cite>-- Robert Bringhurst, The Elements of Typographic Style</cite>
+</blockquote>
+
+<h2>Lists</h2>
+<div class='columns'>
+  <div class='col'>
+    <h4>Unordered List</h4>
+    <ul>
+      <li>Design principles
+        <ul>
+          <li>Hierarchy</li>
+          <li>Contrast</li>
+          <li>Alignment</li>
+        </ul>
+      </li>
+      <li>Color theory</li>
+      <li>Layout systems</li>
+    </ul>
+  </div>
+  <div class='col'>
+    <h4>Ordered List</h4>
+    <ol>
+      <li>Plan the structure
+        <ol>
+          <li>Define goals</li>
+          <li>Research audience</li>
+        </ol>
+      </li>
+      <li>Write content</li>
+      <li>Review and publish</li>
+    </ol>
+  </div>
+</div>
+
+<h2>Inline Styles</h2>
+<div class='inline-demo'>
+  <strong>Bold text</strong> for emphasis.
+  <em>Italic text</em> for titles or foreign words.
+  <u>Underlined text</u> for annotations.
+  <s>Strikethrough</s> for deletions.
+  Inline <code>code snippets</code> for technical terms.
+  <span style='font-size:11px;color:#999'>Small muted text</span> for captions.
+</div>
+
+<h2>Code Block</h2>
+<pre>function greet(name) {
+  const message = `Hello, ${name}!`;
+  console.log(message);
+  return message;
+}</pre>
+
+<h2>Font Weights</h2>
+<div class='weights'>
+  <div class='weight-box' style='font-weight:100'>Thin 100</div>
+  <div class='weight-box' style='font-weight:300'>Light 300</div>
+  <div class='weight-box' style='font-weight:400'>Regular 400</div>
+  <div class='weight-box' style='font-weight:600'>Semi 600</div>
+  <div class='weight-box' style='font-weight:700'>Bold 700</div>
+  <div class='weight-box' style='font-weight:900'>Black 900</div>
+</div>
+
+<h2>Font Sizes</h2>
+<div class='sizes'>
+  <span style='font-size:10px'>10px</span>
+  <span style='font-size:12px'>12px</span>
+  <span style='font-size:14px'>14px</span>
+  <span style='font-size:18px'>18px</span>
+  <span style='font-size:24px'>24px</span>
+  <span style='font-size:32px'>32px</span>
+</div>
+</body>
+</html>

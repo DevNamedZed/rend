@@ -1,0 +1,131 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { box-sizing: border-box; margin: 0; }
+body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 16px; color: #333; }
+h2 { font-size: 14px; color: #667eea; text-transform: uppercase; letter-spacing: 1px; margin: 16px 0 8px; }
+h2:first-of-type { margin-top: 0; }
+.demo { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 12px; overflow: hidden; }
+.box { background: #667eea; color: white; font-size: 11px; font-weight: bold; display: flex;
+  align-items: center; justify-content: center; border-radius: 4px; padding: 8px; }
+
+/* Holy Grail */
+.holy-grail { display: flex; flex-direction: column; height: 200px; }
+.hg-header, .hg-footer { background: #2c3e50; color: white; padding: 10px 16px; font-size: 12px; font-weight: bold; }
+.hg-body { display: flex; flex: 1; }
+.hg-nav { width: 80px; background: #34495e; color: #bdc3c7; padding: 10px; font-size: 10px; }
+.hg-main { flex: 1; background: #ecf0f1; padding: 10px; font-size: 11px; color: #555; }
+.hg-aside { width: 80px; background: #34495e; color: #bdc3c7; padding: 10px; font-size: 10px; }
+
+/* Centered */
+.center-demo { display: flex; align-items: center; justify-content: center; height: 100px; background: #f8f9ff; }
+.center-box { padding: 16px 28px; background: #667eea; color: white; border-radius: 8px; font-size: 13px; font-weight: bold; }
+
+/* Sticky Footer */
+.sticky-footer { display: flex; flex-direction: column; height: 160px; }
+.sf-content { flex: 1; padding: 12px; font-size: 11px; color: #666; background: white; }
+.sf-footer { background: #2c3e50; color: white; padding: 8px 12px; font-size: 10px; text-align: center; }
+
+/* Navbar */
+.navbar { display: flex; align-items: center; background: #2c3e50; padding: 0 16px; height: 40px; }
+.nav-brand { color: white; font-weight: bold; font-size: 14px; margin-right: auto; }
+.nav-link { color: #bdc3c7; font-size: 12px; padding: 0 10px; text-decoration: none; }
+.nav-btn { background: #667eea; color: white; font-size: 11px; padding: 6px 14px; border-radius: 4px; font-weight: bold; }
+
+/* Card Grid Equal Heights */
+.card-grid { display: flex; gap: 10px; padding: 12px; }
+.card-item { flex: 1; display: flex; flex-direction: column; background: #f8f9ff; border-radius: 6px;
+  border: 1px solid #e0e0e0; overflow: hidden; }
+.card-img { height: 50px; background: linear-gradient(135deg, #667eea, #764ba2); }
+.card-body { flex: 1; padding: 10px; font-size: 11px; color: #555; }
+.card-footer { padding: 8px 10px; border-top: 1px solid #eee; font-size: 10px; color: #999; }
+
+/* Media Object */
+.media-list { padding: 12px; }
+.media { display: flex; gap: 12px; margin-bottom: 10px; }
+.media:last-child { margin-bottom: 0; }
+.media-avatar { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; }
+.media-body h4 { font-size: 12px; margin-bottom: 2px; }
+.media-body p { font-size: 11px; color: #666; line-height: 1.4; }
+</style>
+</head>
+<body>
+<h2>Holy Grail Layout</h2>
+<div class='demo'>
+  <div class='holy-grail'>
+    <div class='hg-header'>Header</div>
+    <div class='hg-body'>
+      <div class='hg-nav'>Nav<br>Link 1<br>Link 2<br>Link 3</div>
+      <div class='hg-main'>Main content area. The holy grail layout has a header, footer, navigation sidebar, content area, and an optional aside column, all using flexbox.</div>
+      <div class='hg-aside'>Aside<br>Widget<br>Ad Space</div>
+    </div>
+    <div class='hg-footer'>Footer</div>
+  </div>
+</div>
+
+<h2>Perfectly Centered</h2>
+<div class='demo'>
+  <div class='center-demo'><div class='center-box'>Centered Content</div></div>
+</div>
+
+<h2>Sticky Footer</h2>
+<div class='demo'>
+  <div class='sticky-footer'>
+    <div class='sf-content'>This content area is short, but the footer sticks to the bottom using flex: 1 on the content area to push it down.</div>
+    <div class='sf-footer'>Footer always at the bottom</div>
+  </div>
+</div>
+
+<h2>Navigation Bar</h2>
+<div class='demo'>
+  <div class='navbar'>
+    <div class='nav-brand'>Brand</div>
+    <a class='nav-link'>Home</a>
+    <a class='nav-link'>Products</a>
+    <a class='nav-link'>About</a>
+    <div class='nav-btn'>Sign Up</div>
+  </div>
+</div>
+
+<h2>Card Grid with Equal Heights</h2>
+<div class='demo'>
+  <div class='card-grid'>
+    <div class='card-item'>
+      <div class='card-img'></div>
+      <div class='card-body'>Short card content.</div>
+      <div class='card-footer'>Jan 2024</div>
+    </div>
+    <div class='card-item'>
+      <div class='card-img' style='background:linear-gradient(135deg,#2ecc71,#27ae60)'></div>
+      <div class='card-body'>This card has more content to demonstrate that all cards in the row maintain equal height regardless of content length.</div>
+      <div class='card-footer'>Feb 2024</div>
+    </div>
+    <div class='card-item'>
+      <div class='card-img' style='background:linear-gradient(135deg,#e74c3c,#c0392b)'></div>
+      <div class='card-body'>Medium content here.</div>
+      <div class='card-footer'>Mar 2024</div>
+    </div>
+  </div>
+</div>
+
+<h2>Media Objects</h2>
+<div class='demo'>
+  <div class='media-list'>
+    <div class='media'>
+      <div class='media-avatar' style='background:linear-gradient(135deg,#667eea,#764ba2)'></div>
+      <div class='media-body'><h4>Alice Johnson</h4><p>Just shipped the new dashboard feature. The team did an amazing job on this release!</p></div>
+    </div>
+    <div class='media'>
+      <div class='media-avatar' style='background:linear-gradient(135deg,#2ecc71,#27ae60)'></div>
+      <div class='media-body'><h4>Bob Smith</h4><p>Great work everyone. Performance improvements are looking solid in staging.</p></div>
+    </div>
+    <div class='media'>
+      <div class='media-avatar' style='background:linear-gradient(135deg,#e74c3c,#c0392b)'></div>
+      <div class='media-body'><h4>Carol Davis</h4><p>Reminder: design review tomorrow at 2pm.</p></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

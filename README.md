@@ -4,6 +4,8 @@ Rend is an HTML/CSS rendering engine for .NET. It parses HTML, resolves CSS, com
 
 It implements the rendering pipeline itself: HTML5 parsing, CSS cascade and inheritance, block/inline/flex/grid/table layout, text shaping with HarfBuzz, and painting through pluggable backends. It does not rely on a browser, WebView, or external rendering engine.
 
+[Playground](https://devnamedzed.github.io/rend/) | [Visual Regression Report](https://devnamedzed.github.io/rend/report.html)
+
 ## Quick Start
 
 ```csharp
@@ -322,6 +324,27 @@ HTML string
 | `Rend` | Layout engine, rendering pipeline, text shaping, and public API |
 
 All projects target **netstandard2.0** (.NET Framework 4.6.1+, .NET Core 2.0+, .NET 5+).
+
+## Playground
+
+The [Playground](https://devnamedzed.github.io/rend/) runs Rend entirely in the browser via Blazor WebAssembly. Type HTML/CSS in the editor, hit Render, and see the PDF output instantly. No server required.
+
+## Visual Regression
+
+Rend is tested against Chrome using a pixel-level comparison suite of 825+ test cases covering layout, typography, gradients, shadows, tables, forms, and more.
+
+The [latest report](https://devnamedzed.github.io/rend/report.html) shows Chrome vs Rend screenshots with diff overlays for every test.
+
+Run the suite locally:
+
+```bash
+just visual            # run all tests
+just visual-filter foo # run tests matching "foo"
+just visual-update     # run and update checked-in results
+just report            # open the report
+```
+
+Results are saved to `conformance/results/` for check-in.
 
 ## Building
 

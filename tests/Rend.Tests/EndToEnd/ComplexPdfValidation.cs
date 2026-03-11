@@ -1871,5 +1871,181 @@ body { margin: 0; padding: 20px; font-family: Arial, sans-serif; background: #ff
             }
             return count;
         }
+
+        // ═══════════════════════════════════════════
+        // Playground examples: render to PDF for visual inspection
+        // ═══════════════════════════════════════════
+
+        private static string GetExamplesDir()
+        {
+            var dir = AppContext.BaseDirectory;
+            for (int i = 0; i < 10; i++)
+            {
+                var parent = Path.GetDirectoryName(dir);
+                if (parent == null) break;
+                if (Directory.Exists(Path.Combine(parent, ".git")) ||
+                    Directory.Exists(Path.Combine(parent, "src")))
+                {
+                    return Path.Combine(parent, "playground", "Rend.Playground", "wwwroot", "examples");
+                }
+                dir = parent;
+            }
+            return "";
+        }
+
+        private void RenderPlaygroundExample(string filename, string outputName)
+        {
+            var examplesDir = GetExamplesDir();
+            var htmlPath = Path.Combine(examplesDir, filename);
+            if (!File.Exists(htmlPath))
+            {
+                // Skip if playground examples not present
+                return;
+            }
+            var html = File.ReadAllText(htmlPath);
+            var options = new RenderOptions
+            {
+                PageSize = new SizeF(595.28f, 841.89f),
+                MarginTop = 36f,
+                MarginRight = 36f,
+                MarginBottom = 36f,
+                MarginLeft = 36f,
+            };
+            var pdf = Render.ToPdf(html, options);
+            SaveOutput(outputName, html, pdf, "pdf");
+            Assert.True(pdf.Length > 500, $"{outputName} PDF too small: {pdf.Length} bytes");
+        }
+
+        [Fact]
+        public void Playground_Card() => RenderPlaygroundExample("card.html", "pg-card");
+
+        [Fact]
+        public void Playground_Invoice() => RenderPlaygroundExample("invoice.html", "pg-invoice");
+
+        [Fact]
+        public void Playground_Resume() => RenderPlaygroundExample("resume.html", "pg-resume");
+
+        [Fact]
+        public void Playground_Report() => RenderPlaygroundExample("report.html", "pg-report");
+
+        [Fact]
+        public void Playground_Newsletter() => RenderPlaygroundExample("newsletter.html", "pg-newsletter");
+
+        [Fact]
+        public void Playground_Architecture() => RenderPlaygroundExample("architecture.html", "pg-architecture");
+
+        [Fact]
+        public void Playground_Ecommerce() => RenderPlaygroundExample("ecommerce.html", "pg-ecommerce");
+
+        [Fact]
+        public void Playground_PhotoGallery() => RenderPlaygroundExample("photo-gallery.html", "pg-photo-gallery");
+
+        [Fact]
+        public void Playground_CssFeatures() => RenderPlaygroundExample("css-features.html", "pg-css-features");
+
+        [Fact]
+        public void Playground_CssStress() => RenderPlaygroundExample("css-stress.html", "pg-css-stress");
+
+        [Fact]
+        public void Playground_LargeTable() => RenderPlaygroundExample("large-table.html", "pg-large-table");
+
+        [Fact]
+        public void Playground_AbsFlexCenter() => RenderPlaygroundExample("abs-flex-center.html", "pg-abs-flex-center");
+
+        [Fact]
+        public void Playground_GridFlexCenter() => RenderPlaygroundExample("grid-flex-center.html", "pg-grid-flex-center");
+
+        [Fact]
+        public void Playground_DefaultHello()
+        {
+            var html = @"<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body {
+    font-family: sans-serif;
+    padding: 20px;
+    background: #f5f5f5;
+  }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    max-width: 400px;
+    margin: 20px auto;
+  }
+  h1 {
+    color: #6C5CE7;
+    margin-top: 0;
+  }
+  .badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #6C5CE7, #a29bfe);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .stat {
+    background: #f0f0f0;
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #2d3436;
+  }
+  .stat-label {
+    font-size: 12px;
+    color: #636e72;
+  }
+</style>
+</head>
+<body>
+  <div class=""card"">
+    <h1>Hello from Rend!</h1>
+    <p>Rendered entirely in your browser using <span class=""badge"">WebAssembly</span></p>
+    <div class=""grid"">
+      <div class=""stat"">
+        <div class=""stat-value"">100%</div>
+        <div class=""stat-label"">Client-side</div>
+      </div>
+      <div class=""stat"">
+        <div class=""stat-value"">0</div>
+        <div class=""stat-label"">Server calls</div>
+      </div>
+      <div class=""stat"">
+        <div class=""stat-value"">CSS3</div>
+        <div class=""stat-label"">Flexbox + Grid</div>
+      </div>
+      <div class=""stat"">
+        <div class=""stat-value"">PDF</div>
+        <div class=""stat-label"">+ Image output</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>";
+            var options = new RenderOptions
+            {
+                PageSize = new SizeF(595.28f, 841.89f),
+                MarginTop = 36f,
+                MarginRight = 36f,
+                MarginBottom = 36f,
+                MarginLeft = 36f,
+            };
+            var pdf = Render.ToPdf(html, options);
+            SaveOutput("pg-hello", html, pdf, "pdf");
+            Assert.True(pdf.Length > 500, $"pg-hello PDF too small: {pdf.Length} bytes");
+        }
     }
 }

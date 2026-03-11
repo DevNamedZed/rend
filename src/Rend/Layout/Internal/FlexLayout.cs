@@ -185,7 +185,13 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < items.Count; i++)
             {
                 var item = items[i];
-                float itemMain = item.BaseSize + GetItemMainMargins(item, isColumn);
+                // CSS Flexbox §9.3: hypothetical main size = flex base size clamped by min/max.
+                float minMain = GetFlexItemMinMain(item, isColumn);
+                float maxMain = isColumn ? item.Style.MaxHeight : item.Style.MaxWidth;
+                float clampedBase = Math.Max(item.BaseSize, minMain);
+                if (!float.IsNaN(maxMain) && maxMain >= 0)
+                    clampedBase = Math.Min(clampedBase, maxMain);
+                float itemMain = clampedBase + GetItemMainMargins(item, isColumn);
                 // Include the gap that would precede this item on the current line.
                 float neededMain = itemMain + (currentLine.Items.Count > 0 ? gap : 0);
 

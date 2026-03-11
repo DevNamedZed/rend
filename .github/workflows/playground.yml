@@ -1,0 +1,65 @@
+name: Deploy Playground
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'playground/**'
+      - 'src/**'
+      - 'conformance/results/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install native dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1
+
+      - name: Publish Blazor WASM
+        run: dotnet publish playground/Rend.Playground/Rend.Playground.csproj -c Release -o release
+
+      # Blazor WASM on GitHub Pages needs .nojekyll, 404.html, and correct base href
+      - name: Prepare for GitHub Pages
+        run: |
+          touch release/wwwroot/.nojekyll
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          sed -i "s|<base href=\"/\"|<base href=\"/${REPO_NAME}/\"|g" release/wwwroot/index.html
+          cp release/wwwroot/index.html release/wwwroot/404.html
+          # Include visual regression report if it exists
+          if [ -f conformance/results/report.html ]; then
+            cp conformance/results/report.html release/wwwroot/report.html
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: release/wwwroot
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

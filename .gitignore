@@ -16,6 +16,12 @@ packages/
 ## Test output
 test-output/
 
+## Visual regression timestamped runs (checked-in results are in conformance/results/)
+conformance/Rend.VisualRegression/output/
+
+## Playground publish output
+playground/release/
+
 ## OS
 .DS_Store
 Thumbs.db

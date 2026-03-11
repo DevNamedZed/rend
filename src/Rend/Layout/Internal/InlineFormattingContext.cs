@@ -1474,6 +1474,12 @@ namespace Rend.Layout.Internal
 
             if (cursorX + totalWidth > startX + containingWidth && currentLine.Fragments.Count > 0)
             {
+                // Try to backtrack into the last text fragment: if it has a word break
+                // opportunity, split it so the trailing word moves to the next line along
+                // with the inline-block.  This matches Chrome's continuous inline layout
+                // where text + inline-block are considered as one flow.
+                LineFragment? overflowFrag = BacktrackLastTextFragment(ref cursorX, currentLine, context);
+
                 var parentStyle = parent.StyledNode as StyledElement;
                 var align = parentStyle?.Style.TextAlign ?? CssTextAlign.Left;
                 var dir = parentStyle?.Style.Direction ?? CssDirection.Ltr;
@@ -1485,6 +1491,16 @@ namespace Rend.Layout.Internal
                 cursorX = startX;
                 maxLineHeight = 0;
                 lineBaseline = 0;
+
+                // Place the backtracked trailing word on the new line
+                if (overflowFrag != null)
+                {
+                    overflowFrag.X = 0;
+                    currentLine.AddFragment(overflowFrag);
+                    cursorX = startX + overflowFrag.Width;
+                    UpdateLineMetrics(ref maxLineHeight, ref lineBaseline,
+                                      overflowFrag.Height, overflowFrag.Baseline);
+                }
             }
 
             if (ReplacedElementLayout.IsReplaced(element))
@@ -1789,6 +1805,144 @@ namespace Rend.Layout.Internal
                 StyleOverride = styleOverride
             };
             line.AddFragment(fragment);
+        }
+
+        /// <summary>
+        /// When an inline-block doesn't fit on the current line, try to split the last
+        /// text fragment at its last word-break opportunity.  This trims the trailing
+        /// word from the current line and returns an overflow fragment containing the
+        /// remaining text, which the caller places on the new line together with the
+        /// inline-block — matching Chrome's continuous inline layout.
+        /// </summary>
+        /// <returns>A fragment for the overflow text to place on the next line, or null if no backtrack was possible.</returns>
+        private static LineFragment? BacktrackLastTextFragment(
+            ref float cursorX, LineBox currentLine, LayoutContext context)
+        {
+            int fragCount = currentLine.Fragments.Count;
+            if (fragCount == 0) return null;
+
+            var lastFrag = currentLine.Fragments[fragCount - 1];
+            if (lastFrag.Text == null || lastFrag.ShapedRun == null) return null;
+
+            string text = lastFrag.Text;
+
+            // Skip trailing whitespace to find the last real word boundary.
+            // We need to split BEFORE the last word, so that the last word
+            // moves to the next line together with the inline-block.
+            int lastNonSpace = text.Length - 1;
+            while (lastNonSpace >= 0 && text[lastNonSpace] == ' ')
+                lastNonSpace--;
+
+            if (lastNonSpace < 0) return null; // all whitespace
+
+            // Find the space before this last word
+            int breakPos = -1;
+            for (int i = lastNonSpace; i >= 0; i--)
+            {
+                if (text[i] == ' ')
+                {
+                    breakPos = i;
+                    break;
+                }
+            }
+
+            if (breakPos < 0) return null; // single word, no break opportunity
+
+            string keepText = text.Substring(0, breakPos).TrimEnd();
+            string moveText = text.Substring(breakPos + 1).TrimEnd();
+
+            if (moveText.Length == 0) return null; // nothing to move
+
+            if (context.TextMeasurer == null) return null;
+
+            var run = lastFrag.ShapedRun;
+
+            // Glyph cluster ranges:
+            //   keep:  cluster < breakPos  (text before the space)
+            //   space: cluster == breakPos (dropped)
+            //   move:  cluster in [breakPos+1, breakPos+moveText.Length)
+            //   trailing whitespace: cluster >= breakPos+1+moveText.Length (dropped)
+            uint keepEnd = (uint)breakPos;
+            uint moveStart = (uint)(breakPos + 1);
+            uint moveEnd = moveStart + (uint)moveText.Length;
+
+            // Split glyphs into keep and move arrays
+            int keepCount = 0, moveCount = 0;
+            for (int i = 0; i < run.Glyphs.Length; i++)
+            {
+                if (run.Glyphs[i].Cluster < keepEnd) keepCount++;
+                else if (run.Glyphs[i].Cluster >= moveStart && run.Glyphs[i].Cluster < moveEnd) moveCount++;
+            }
+
+            var keepGlyphs = new ShapedGlyph[keepCount];
+            var moveGlyphs = new ShapedGlyph[moveCount];
+            byte[]?[]? keepOverrides = run.GlyphFontOverrides != null ? new byte[]?[keepCount] : null;
+            byte[]?[]? moveOverrides = run.GlyphFontOverrides != null ? new byte[]?[moveCount] : null;
+
+            int ki = 0, mi = 0;
+            for (int i = 0; i < run.Glyphs.Length; i++)
+            {
+                var g = run.Glyphs[i];
+                if (g.Cluster < keepEnd)
+                {
+                    keepGlyphs[ki] = g;
+                    if (keepOverrides != null) keepOverrides[ki] = run.GlyphFontOverrides![i];
+                    ki++;
+                }
+                else if (g.Cluster >= moveStart && g.Cluster < moveEnd)
+                {
+                    // Remap cluster indices so they start from 0 for the moved text
+                    moveGlyphs[mi] = new ShapedGlyph(
+                        g.GlyphId, g.Cluster - moveStart,
+                        g.XAdvance, g.YAdvance, g.XOffset, g.YOffset);
+                    if (moveOverrides != null) moveOverrides[mi] = run.GlyphFontOverrides![i];
+                    mi++;
+                }
+            }
+
+            if (keepText.Length == 0)
+            {
+                // Entire kept part is whitespace — remove the fragment entirely
+                currentLine.TruncateFragmentsAfter(fragCount - 1);
+                cursorX = currentLine.X;
+                for (int i = 0; i < currentLine.Fragments.Count; i++)
+                    cursorX = currentLine.X + currentLine.Fragments[i].X + currentLine.Fragments[i].Width;
+            }
+            else
+            {
+                var keepRun = new ShapedTextRun(keepGlyphs, keepText, run.FontSize, run.FontData, keepOverrides);
+                float widthReduction = lastFrag.Width - keepRun.TotalWidth;
+
+                var trimmedFrag = new LineFragment
+                {
+                    X = lastFrag.X,
+                    Width = keepRun.TotalWidth,
+                    Height = lastFrag.Height,
+                    ContentHeight = lastFrag.ContentHeight,
+                    Baseline = lastFrag.Baseline,
+                    Text = keepText,
+                    ShapedRun = keepRun,
+                    InlineElement = lastFrag.InlineElement,
+                    StyleOverride = lastFrag.StyleOverride,
+                };
+                currentLine.ReplaceFragment(fragCount - 1, trimmedFrag);
+                cursorX -= widthReduction;
+            }
+
+            // Build the overflow fragment for the moved text
+            var moveRun = new ShapedTextRun(moveGlyphs, moveText, run.FontSize, run.FontData, moveOverrides);
+            return new LineFragment
+            {
+                X = 0,
+                Width = moveRun.TotalWidth,
+                Height = lastFrag.Height,
+                ContentHeight = lastFrag.ContentHeight,
+                Baseline = lastFrag.Baseline,
+                Text = moveText,
+                ShapedRun = moveRun,
+                InlineElement = lastFrag.InlineElement,
+                StyleOverride = lastFrag.StyleOverride,
+            };
         }
 
         private static void UpdateLineMetrics(ref float maxLineHeight, ref float lineBaseline,
