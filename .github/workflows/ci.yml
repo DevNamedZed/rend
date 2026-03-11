@@ -21,6 +21,10 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Install native dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1
+
       - name: Restore
         run: dotnet restore Rend.sln
 
