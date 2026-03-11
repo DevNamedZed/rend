@@ -34,6 +34,9 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Install wasm-tools workload
+        run: dotnet workload install wasm-tools-net8
+
       - name: Install native dependencies
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1
 
