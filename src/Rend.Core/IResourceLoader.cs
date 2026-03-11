@@ -74,7 +74,7 @@ namespace Rend.Core
                 }
             }
             throw new FileNotFoundException(
-                $"No resource loader could load '{uri}'.", lastException?.ToString());
+                $"No resource loader could load '{uri}'.", uri?.ToString(), lastException);
         }
     }
 }

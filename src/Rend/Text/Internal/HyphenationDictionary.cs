@@ -140,8 +140,9 @@ namespace Rend.Text.Internal
                 return Array.Empty<bool>();
             }
 
-            // Prepend/append dots for word boundary matching
-            string work = "." + word.ToLowerInvariant() + ".";
+            // Prepend/append dots for word boundary matching.
+            // No ToLowerInvariant() needed — _patterns uses OrdinalIgnoreCase comparer.
+            string work = "." + word + ".";
             int workLen = work.Length;
 
             // Weights array: one per inter-character position in the work string
@@ -149,15 +150,17 @@ namespace Rend.Text.Internal
             // We track weights at positions 0..workLen (inclusive)
             var levels = new byte[workLen + 1];
 
-            // Slide each possible substring over the work string and look up patterns
+#if NET9_0_OR_GREATER
+            // Span-based lookup to avoid Substring allocations.
+            // Dictionary<string, byte[]> with OrdinalIgnoreCase supports GetAlternateLookup<ReadOnlySpan<char>> (.NET 9+).
+            var lookup = _patterns.GetAlternateLookup<ReadOnlySpan<char>>();
+            var workSpan = work.AsSpan();
             for (int i = 0; i < workLen; i++)
             {
                 for (int j = i + 1; j <= workLen; j++)
                 {
-                    string fragment = work.Substring(i, j - i);
-                    if (_patterns.TryGetValue(fragment, out byte[]? weights) && weights != null)
+                    if (lookup.TryGetValue(workSpan.Slice(i, j - i), out byte[]? weights) && weights != null)
                     {
-                        // Apply weights: weights[k] applies to position (i + k)
                         for (int k = 0; k < weights.Length && (i + k) <= workLen; k++)
                         {
                             if (weights[k] > levels[i + k])
@@ -168,6 +171,26 @@ namespace Rend.Text.Internal
                     }
                 }
             }
+#else
+            // Slide each possible substring over the work string and look up patterns
+            for (int i = 0; i < workLen; i++)
+            {
+                for (int j = i + 1; j <= workLen; j++)
+                {
+                    string fragment = work.Substring(i, j - i);
+                    if (_patterns.TryGetValue(fragment, out byte[]? weights) && weights != null)
+                    {
+                        for (int k = 0; k < weights.Length && (i + k) <= workLen; k++)
+                        {
+                            if (weights[k] > levels[i + k])
+                            {
+                                levels[i + k] = weights[k];
+                            }
+                        }
+                    }
+                }
+            }
+#endif
 
             // Convert to boolean array for the original word positions.
             // levels[0] corresponds to before the dot, levels[1] to before word[0], etc.

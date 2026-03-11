@@ -8,7 +8,7 @@ namespace Rend.Adapters
     /// <summary>
     /// Wraps an <see cref="Html.Element"/> as <see cref="IStylableElement"/> for the CSS cascade engine.
     /// </summary>
-    public sealed class StylableElementAdapter : IStylableElement
+    internal sealed class StylableElementAdapter : IStylableElement
     {
         private readonly Element _element;
 

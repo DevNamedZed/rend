@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using Rend.Css.Media.Internal;
 using Rend.Html;
 using Rend.Rendering;
 
@@ -15,13 +18,15 @@ namespace Rend.Internal
         private readonly IImageResolver? _imageResolver;
         private readonly Func<string, byte[]?>? _resourceLoader;
         private readonly Uri? _baseUrl;
+        private readonly MediaContext? _mediaContext;
 
         public InlineImageResolver(Uri? baseUrl = null, IImageResolver? imageResolver = null,
-            Func<string, byte[]?>? resourceLoader = null)
+            Func<string, byte[]?>? resourceLoader = null, MediaContext? mediaContext = null)
         {
             _baseUrl = baseUrl;
             _imageResolver = imageResolver;
             _resourceLoader = resourceLoader;
+            _mediaContext = mediaContext;
         }
 
         /// <summary>
@@ -67,7 +72,7 @@ namespace Rend.Internal
         /// Resolves the best image source for an &lt;img&gt; element, considering
         /// parent &lt;picture&gt; element's &lt;source&gt; children and srcset attribute.
         /// </summary>
-        private static string? ResolveImageSource(Element img)
+        private string? ResolveImageSource(Element img)
         {
             // Check if inside a <picture> element
             if (img.Parent is Element parent && parent.TagName == "picture")
@@ -80,6 +85,15 @@ namespace Rend.Internal
 
                     if (sibling is Element source && source.TagName == "source")
                     {
+                        // Check media attribute — skip if media query doesn't match
+                        string? media = source.GetAttribute("media");
+                        if (media != null && _mediaContext != null &&
+                            !MediaQueryEvaluator.Evaluate(media, _mediaContext))
+                        {
+                            sibling = sibling.NextSibling;
+                            continue;
+                        }
+
                         // Check type attribute — skip unsupported formats
                         string? type = source.GetAttribute("type");
                         if (type != null && !IsSupportedImageType(type))
@@ -164,6 +178,80 @@ namespace Rend.Internal
                    type == "image/gif" || type == "image/webp" || type == "image/svg+xml";
         }
 
+        /// <summary>
+        /// Asynchronously walk the DOM and resolve all img src attributes.
+        /// </summary>
+        public async Task<Dictionary<string, ImageData>> ResolveAsync(Document document, CancellationToken cancellationToken = default)
+        {
+            var images = new Dictionary<string, ImageData>();
+            await CollectImagesAsync(document, images, cancellationToken).ConfigureAwait(false);
+            return images;
+        }
+
+        private async Task CollectImagesAsync(Node node, Dictionary<string, ImageData> images, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (node is Element el && el.TagName == "img")
+            {
+                string? src = ResolveImageSource(el);
+                if (!string.IsNullOrEmpty(src) && !images.ContainsKey(src!))
+                {
+                    var imageData = await LoadImageAsync(src!, cancellationToken).ConfigureAwait(false);
+                    if (imageData != null)
+                        images[src!] = imageData;
+                }
+            }
+
+            var child = node.FirstChild;
+            while (child != null)
+            {
+                await CollectImagesAsync(child, images, cancellationToken).ConfigureAwait(false);
+                child = child.NextSibling;
+            }
+        }
+
+        /// <summary>
+        /// Asynchronously load an image on-demand by URL.
+        /// </summary>
+        public async Task<ImageData?> LoadImageAsync(string src, CancellationToken cancellationToken = default)
+        {
+            if (_cache.TryGetValue(src, out var cached))
+                return cached;
+
+            ImageData? result = null;
+
+            if (src.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            {
+                result = DecodeDataUri(src);
+            }
+            else
+            {
+                byte[]? data = await LoadFromResolverAsync(src, cancellationToken).ConfigureAwait(false)
+                    ?? LoadFromResourceLoader(src);
+                if (data != null && data.Length > 0)
+                {
+                    string format = DetectFormat(src, data);
+                    result = CreateImageData(data, format);
+                }
+            }
+
+            _cache[src] = result;
+            return result;
+        }
+
+        private async Task<byte[]?> LoadFromResolverAsync(string src, CancellationToken cancellationToken)
+        {
+            if (_imageResolver == null) return null;
+
+            using var stream = await _imageResolver.ResolveAsync(src, cancellationToken).ConfigureAwait(false);
+            if (stream == null) return null;
+
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms, 81920, cancellationToken).ConfigureAwait(false);
+            var bytes = ms.ToArray();
+            return bytes.Length > 0 ? bytes : null;
+        }
+
         private ImageData? LoadImage(string src)
         {
             if (_cache.TryGetValue(src, out var cached))
@@ -181,7 +269,7 @@ namespace Rend.Internal
                 if (data != null && data.Length > 0)
                 {
                     string format = DetectFormat(src, data);
-                    result = new ImageData(data, 0, 0, format);
+                    result = CreateImageData(data, format);
                 }
             }
 
@@ -193,7 +281,7 @@ namespace Rend.Internal
         {
             if (_imageResolver == null) return null;
 
-            using var stream = _imageResolver.Resolve(src);
+            using var stream = _imageResolver.ResolveAsync(src).GetAwaiter().GetResult();
             if (stream == null) return null;
 
             using var ms = new MemoryStream();
@@ -229,11 +317,72 @@ namespace Rend.Internal
                 else if (header.Contains("image/webp"))
                     format = "webp";
 
-                return new ImageData(bytes, 0, 0, format);
+                return CreateImageData(bytes, format);
             }
             catch
             {
                 return null;
+            }
+        }
+
+        private static ImageData CreateImageData(byte[] data, string format)
+        {
+            DetectDimensions(data, out int w, out int h);
+            return new ImageData(data, w, h, format);
+        }
+
+        private static void DetectDimensions(byte[] data, out int width, out int height)
+        {
+            width = 0;
+            height = 0;
+
+            if (data.Length < 8) return;
+
+            // PNG: IHDR chunk starts at offset 8, width at 16, height at 20 (big-endian)
+            if (data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47)
+            {
+                if (data.Length >= 24)
+                {
+                    width = (data[16] << 24) | (data[17] << 16) | (data[18] << 8) | data[19];
+                    height = (data[20] << 24) | (data[21] << 16) | (data[22] << 8) | data[23];
+                }
+                return;
+            }
+
+            // JPEG: scan for SOF0/SOF2 marker (0xFF 0xC0 or 0xFF 0xC2)
+            if (data[0] == 0xFF && data[1] == 0xD8)
+            {
+                int offset = 2;
+                while (offset + 4 < data.Length)
+                {
+                    if (data[offset] != 0xFF) break;
+                    byte marker = data[offset + 1];
+                    if (marker == 0xC0 || marker == 0xC2)
+                    {
+                        if (offset + 9 < data.Length)
+                        {
+                            height = (data[offset + 5] << 8) | data[offset + 6];
+                            width = (data[offset + 7] << 8) | data[offset + 8];
+                        }
+                        return;
+                    }
+                    // Skip to next marker
+                    if (offset + 3 < data.Length)
+                    {
+                        int segLen = (data[offset + 2] << 8) | data[offset + 3];
+                        offset += 2 + segLen;
+                    }
+                    else break;
+                }
+                return;
+            }
+
+            // GIF: width at offset 6, height at offset 8 (little-endian)
+            if (data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 && data.Length >= 10)
+            {
+                width = data[6] | (data[7] << 8);
+                height = data[8] | (data[9] << 8);
+                return;
             }
         }
 

@@ -71,6 +71,39 @@ namespace Rend.VisualRegression.TestCases
 
             VisualTestCatalog.Register(new VisualTestCase
             {
+                Id = "grid-flex-center",
+                Name = "Grid Items with Flex Centering",
+                Category = "Grid",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; width:360px;"">
+                        <div style=""height:60px; background:#3498db; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;"">Center</div>
+                        <div style=""height:60px; background:#e74c3c; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;"">Text</div>
+                        <div style=""height:60px; background:#2ecc71; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;"">Here</div>
+                    </div>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "grid-mosaic-flex",
+                Name = "Grid Mosaic with Flex Text",
+                Category = "Grid",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""display:grid; grid-template-columns:repeat(4, 1fr); grid-auto-rows:50px; gap:6px; width:360px;"">
+                        <div style=""grid-column:span 2; grid-row:span 2; background:#e74c3c; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;"">A</div>
+                        <div style=""background:#3498db; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;"">B</div>
+                        <div style=""background:#2ecc71; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;"">C</div>
+                        <div style=""grid-column:span 2; background:#f39c12; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;"">D</div>
+                        <div style=""grid-row:span 2; background:#9b59b6; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;"">E</div>
+                        <div style=""background:#1abc9c; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;"">F</div>
+                        <div style=""background:#3498db; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;"">G</div>
+                        <div style=""grid-column:span 2; background:#2ecc71; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;"">H</div>
+                    </div>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
                 Id = "grid-two-column",
                 Name = "Grid Two Column Equal",
                 Category = "Grid",

@@ -2,6 +2,8 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Rend.Pdf.Internal
 {
@@ -14,10 +16,12 @@ namespace Rend.Pdf.Internal
     {
         private const string ByteRangePlaceholder = "[0 0000000000 0000000000 0000000000]";
 
-        public static byte[] Sign(byte[] pdfBytes, PdfSignatureOptions options)
+        public static async Task<byte[]> SignAsync(byte[] pdfBytes, PdfSignatureOptions options, CancellationToken cancellationToken = default)
         {
             if (options.Signer == null)
                 throw new InvalidOperationException("PdfSignatureOptions.Signer must be set.");
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             int containerSize = options.Signer.EstimatedSignatureSize;
             string contentsPlaceholder = new string('0', containerSize * 2);
@@ -39,7 +43,7 @@ namespace Rend.Pdf.Internal
             PatchByteRange(pdfText, preparedPdf, beforeSigLength, afterSigStart, afterSigLength);
 
             byte[] dataToSign = CollectSignedData(preparedPdf, beforeSigLength, afterSigStart, afterSigLength);
-            byte[] signatureBytes = options.Signer.Sign(dataToSign);
+            byte[] signatureBytes = await options.Signer.SignAsync(dataToSign, cancellationToken).ConfigureAwait(false);
 
             PatchContents(preparedPdf, signatureBytes, contentsHexStart, contentsPlaceholder.Length, containerSize);
 

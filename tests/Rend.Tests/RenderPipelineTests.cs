@@ -11,16 +11,7 @@ namespace Rend.Tests
         [Fact]
         public void ToPdf_SimpleHtml_ReturnsNonEmptyPdfBytes()
         {
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<h1>Hello</h1>");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                // Skip on environments without native HarfBuzz/SkiaSharp binaries
-                return;
-            }
+            var result = Render.ToPdf("<h1>Hello</h1>");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0, "PDF output should not be empty");
@@ -44,15 +35,7 @@ namespace Rend.Tests
                 MarginBottom = 36f,
             };
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<p>Test content</p>", options);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<p>Test content</p>", options);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -68,15 +51,7 @@ namespace Rend.Tests
         [Fact]
         public void ToPdf_EmptyHtml_ReturnsValidPdf()
         {
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -86,14 +61,7 @@ namespace Rend.Tests
         public void ToPdf_WritesToStream()
         {
             using var stream = new MemoryStream();
-            try
-            {
-                Render.ToPdf("<p>Hello</p>", stream);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            Render.ToPdf("<p>Hello</p>", stream);
 
             Assert.True(stream.Length > 0);
             stream.Position = 0;
@@ -103,15 +71,7 @@ namespace Rend.Tests
         [Fact]
         public async Task ToPdfAsync_ReturnsValidPdf()
         {
-            byte[] result;
-            try
-            {
-                result = await Render.ToPdfAsync("<h1>Async Hello</h1>");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = await Render.ToPdfAsync("<h1>Async Hello</h1>");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -122,14 +82,7 @@ namespace Rend.Tests
         public async Task ToPdfAsync_WritesToStream()
         {
             using var stream = new MemoryStream();
-            try
-            {
-                await Render.ToPdfAsync("<p>Async stream</p>", stream);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            await Render.ToPdfAsync("<p>Async stream</p>", stream);
 
             Assert.True(stream.Length > 0);
         }
@@ -137,15 +90,7 @@ namespace Rend.Tests
         [Fact]
         public void ToImage_SimpleHtml_ReturnsNonEmptyBytes()
         {
-            byte[] result;
-            try
-            {
-                result = Render.ToImage("<p>Test</p>");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToImage("<p>Test</p>");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0, "Image output should not be empty");
@@ -161,14 +106,7 @@ namespace Rend.Tests
         public void ToImage_WritesToStream()
         {
             using var stream = new MemoryStream();
-            try
-            {
-                Render.ToImage("<p>Stream image</p>", stream);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            Render.ToImage("<p>Stream image</p>", stream);
 
             Assert.True(stream.Length > 0);
         }
@@ -176,15 +114,7 @@ namespace Rend.Tests
         [Fact]
         public async Task ToImageAsync_ReturnsNonEmptyBytes()
         {
-            byte[] result;
-            try
-            {
-                result = await Render.ToImageAsync("<p>Async image</p>");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = await Render.ToImageAsync("<p>Async image</p>");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -194,14 +124,7 @@ namespace Rend.Tests
         public async Task ToImageAsync_WritesToStream()
         {
             using var stream = new MemoryStream();
-            try
-            {
-                await Render.ToImageAsync("<p>Async stream image</p>", stream);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            await Render.ToImageAsync("<p>Async stream image</p>", stream);
 
             Assert.True(stream.Length > 0);
         }
@@ -229,15 +152,7 @@ namespace Rend.Tests
                 </body>
                 </html>";
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf(html);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf(html);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -250,61 +165,18 @@ namespace Rend.Tests
             using var cts = new CancellationTokenSource();
             cts.Cancel();
 
-            try
-            {
-                await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                    () => Render.ToPdfAsync("<p>Cancelled</p>", cancellationToken: cts.Token));
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => Render.ToPdfAsync("<p>Cancelled</p>", cancellationToken: cts.Token));
         }
 
         [Fact]
         public void ToPdf_DefaultOptions_UsedWhenNull()
         {
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<p>Default options</p>", null);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<p>Default options</p>", null);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
         }
 
-        /// <summary>
-        /// Checks if the exception is due to missing native libraries (HarfBuzz, SkiaSharp)
-        /// which may not be available in all test environments.
-        /// </summary>
-        private static bool IsNativeLibraryFailure(Exception ex)
-        {
-            if (ex is DllNotFoundException) return true;
-            if (ex is TypeInitializationException) return true;
-            if (ex is BadImageFormatException) return true;
-
-            // Check inner exceptions
-            var inner = ex.InnerException;
-            while (inner != null)
-            {
-                if (inner is DllNotFoundException) return true;
-                if (inner is TypeInitializationException) return true;
-                inner = inner.InnerException;
-            }
-
-            // Check message for common native library issues
-            string msg = ex.Message ?? "";
-            if (msg.Contains("libHarfBuzz", StringComparison.OrdinalIgnoreCase)) return true;
-            if (msg.Contains("libSkiaSharp", StringComparison.OrdinalIgnoreCase)) return true;
-            if (msg.Contains("HarfBuzzSharp", StringComparison.OrdinalIgnoreCase)) return true;
-            if (msg.Contains("SkiaSharp", StringComparison.OrdinalIgnoreCase)) return true;
-
-            return false;
-        }
     }
 }

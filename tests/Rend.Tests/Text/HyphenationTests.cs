@@ -303,18 +303,10 @@ namespace Rend.Tests.Text
         [Fact]
         public void HyphensAuto_ProducesValidPdf()
         {
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf(@"
-                    <div style='width: 60px; hyphens: auto;'>
-                        <p>Internationalization is important for development.</p>
-                    </div>");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf(@"
+                <div style='width: 60px; hyphens: auto;'>
+                    <p>Internationalization is important for development.</p>
+                </div>");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -323,19 +315,11 @@ namespace Rend.Tests.Text
         [Fact]
         public void HyphensNone_SuppressesSoftHyphens()
         {
-            byte[] result;
-            try
-            {
-                // With hyphens: none, soft hyphens should be stripped and NOT produce breaks
-                result = Render.ToPdf(@"
-                    <div style='width: 100px; hyphens: none;'>
-                        <p>Sup\u00ADer\u00ADcal\u00ADi\u00ADfrag\u00ADil\u00ADis\u00ADtic</p>
-                    </div>");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            // With hyphens: none, soft hyphens should be stripped and NOT produce breaks
+            var result = Render.ToPdf(@"
+                <div style='width: 100px; hyphens: none;'>
+                    <p>Sup\u00ADer\u00ADcal\u00ADi\u00ADfrag\u00ADil\u00ADis\u00ADtic</p>
+                </div>");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -344,18 +328,10 @@ namespace Rend.Tests.Text
         [Fact]
         public void HyphensAuto_NarrowContainer_ProducesValidPdf()
         {
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf(@"
-                    <div style='width: 50px; hyphens: auto; font-size: 12px;'>
-                        <p>Programming algorithms require development experience.</p>
-                    </div>");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf(@"
+                <div style='width: 50px; hyphens: auto; font-size: 12px;'>
+                    <p>Programming algorithms require development experience.</p>
+                </div>");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -364,19 +340,11 @@ namespace Rend.Tests.Text
         [Fact]
         public void HyphensManual_SoftHyphen_ProducesValidPdf()
         {
-            byte[] result;
-            try
-            {
-                // U+00AD is soft hyphen - should break at these points in a narrow container
-                result = Render.ToPdf(@"
-                    <div style='width: 80px; hyphens: manual;'>
-                        <p>Sup\u00ADer\u00ADcal\u00ADi\u00ADfrag\u00ADil\u00ADis\u00ADtic</p>
-                    </div>");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            // U+00AD is soft hyphen - should break at these points in a narrow container
+            var result = Render.ToPdf(@"
+                <div style='width: 80px; hyphens: manual;'>
+                    <p>Sup\u00ADer\u00ADcal\u00ADi\u00ADfrag\u00ADil\u00ADis\u00ADtic</p>
+                </div>");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -410,14 +378,6 @@ namespace Rend.Tests.Text
             }
             parts.Add(word.Substring(start));
             return parts.ToArray();
-        }
-
-        private static bool IsNativeLibraryFailure(Exception ex)
-        {
-            return ex is DllNotFoundException ||
-                   ex is TypeInitializationException ||
-                   (ex.InnerException is DllNotFoundException) ||
-                   ex.Message.Contains("native", StringComparison.OrdinalIgnoreCase);
         }
 
         #endregion

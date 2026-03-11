@@ -30,7 +30,7 @@ namespace Rend.Tests.EndToEnd
                 MarginBottom = 0,
                 MarginLeft = 0,
                 Dpi = 96,
-                ImageFormat = "png"
+                ImageFormat = ImageOutputFormat.Png
             };
         }
 

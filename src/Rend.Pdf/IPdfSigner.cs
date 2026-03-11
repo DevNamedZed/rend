@@ -1,3 +1,6 @@
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace Rend.Pdf
 {
     /// <summary>
@@ -8,11 +11,14 @@ namespace Rend.Pdf
     public interface IPdfSigner
     {
         /// <summary>
-        /// Produce a PKCS#7/CMS detached signature for the given data.
+        /// Asynchronously produce a PKCS#7/CMS detached signature for the given data.
+        /// For local signing (e.g. PKCS#12), return <see cref="Task.FromResult{TResult}"/>.
+        /// For HSM or cloud KMS, perform the remote signing call here.
         /// </summary>
         /// <param name="data">The PDF byte ranges to be signed (concatenated).</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>DER-encoded PKCS#7/CMS detached signature bytes.</returns>
-        byte[] Sign(byte[] data);
+        Task<byte[]> SignAsync(byte[] data, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Maximum size in bytes of the signature output.

@@ -350,10 +350,28 @@ namespace Rend.Rendering.Internal
         {
             if (fn.Name == "linear-gradient" || fn.Name == "-webkit-linear-gradient")
                 return ParseLinearGradient(fn, rect);
+            if (fn.Name == "repeating-linear-gradient")
+            {
+                var g = ParseLinearGradient(fn, rect);
+                if (g != null) g.Repeating = true;
+                return g;
+            }
             if (fn.Name == "radial-gradient" || fn.Name == "-webkit-radial-gradient")
                 return ParseRadialGradient(fn, rect);
+            if (fn.Name == "repeating-radial-gradient")
+            {
+                var g = ParseRadialGradient(fn, rect);
+                if (g != null) g.Repeating = true;
+                return g;
+            }
             if (fn.Name == "conic-gradient")
                 return ParseConicGradient(fn, rect);
+            if (fn.Name == "repeating-conic-gradient")
+            {
+                var g = ParseConicGradient(fn, rect);
+                if (g != null) g.Repeating = true;
+                return g;
+            }
             return null;
         }
 
@@ -391,7 +409,13 @@ namespace Rend.Rendering.Internal
                 }
             }
 
-            var stops = ParseColorStops(fn.Arguments, colorStartIdx);
+            // Compute gradient line length for resolving px stop positions
+            float angleRad = angle * (float)(Math.PI / 180.0);
+            float gradientLineLength = Math.Abs(rect.Width * (float)Math.Sin(angleRad))
+                                     + Math.Abs(rect.Height * (float)Math.Cos(angleRad));
+            if (gradientLineLength <= 0) gradientLineLength = 1;
+
+            var stops = ParseColorStops(fn.Arguments, colorStartIdx, gradientLineLength);
             if (stops == null || stops.Length < 2) return null;
 
             return new GradientInfo(GradientType.Linear, stops) { Angle = angle };
@@ -694,7 +718,7 @@ namespace Rend.Rendering.Internal
             }
         }
 
-        private static GradientStop[]? ParseColorStops(System.Collections.Generic.IReadOnlyList<CssValue> args, int startIdx)
+        private static GradientStop[]? ParseColorStops(System.Collections.Generic.IReadOnlyList<CssValue> args, int startIdx, float gradientLineLength = 0)
         {
             var stops = new System.Collections.Generic.List<GradientStop>();
 
@@ -736,7 +760,9 @@ namespace Rend.Rendering.Internal
                     }
                     else if (next is CssDimensionValue posDim)
                     {
-                        position = posDim.Value / 100f; // approximate
+                        // Convert px position to fraction of gradient line length
+                        float px = ResolveLengthValue(posDim);
+                        position = gradientLineLength > 0 ? px / gradientLineLength : px / 100f;
                         i++;
                     }
                 }

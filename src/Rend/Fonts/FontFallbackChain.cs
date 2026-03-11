@@ -6,7 +6,7 @@ namespace Rend.Fonts
     /// <summary>
     /// An ordered list of font family names to try when resolving a font.
     /// </summary>
-    public sealed class FontFallbackChain
+    internal sealed class FontFallbackChain
     {
         private readonly string[] _families;
 

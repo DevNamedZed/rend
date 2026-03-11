@@ -1,12 +1,12 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace Rend.Pdf.Tests
 {
     /// <summary>
     /// Tests for <see cref="PdfSigningService"/> and <see cref="IPdfSigningService"/> argument validation.
-    /// Functional signing tests are in SignatureTests.cs.
     /// </summary>
     public class SigningServiceTests
     {
@@ -20,75 +20,75 @@ namespace Rend.Pdf.Tests
             Assert.IsAssignableFrom<IPdfSigningService>(_service);
         }
 
-        // ── Sign(Stream, Stream, PdfSignatureOptions) validation ──
+        // ── SignAsync(Stream, Stream, PdfSignatureOptions) validation ──
 
         [Fact]
-        public void Sign_Stream_NullInput_Throws()
+        public async Task SignAsync_Stream_NullInput_Throws()
         {
             var options = new PdfSignatureOptions();
-            Assert.Throws<ArgumentNullException>(() =>
-                _service.Sign((Stream)null!, new MemoryStream(), options));
+            await Assert.ThrowsAsync<ArgumentNullException>(() =>
+                _service.SignAsync((Stream)null!, new MemoryStream(), options));
         }
 
         [Fact]
-        public void Sign_Stream_NullOutput_Throws()
+        public async Task SignAsync_Stream_NullOutput_Throws()
         {
             using var input = new MemoryStream(new byte[] { 1 });
             var options = new PdfSignatureOptions();
-            Assert.Throws<ArgumentNullException>(() =>
-                _service.Sign(input, null!, options));
+            await Assert.ThrowsAsync<ArgumentNullException>(() =>
+                _service.SignAsync(input, null!, options));
         }
 
         [Fact]
-        public void Sign_Stream_NullOptions_Throws()
+        public async Task SignAsync_Stream_NullOptions_Throws()
         {
             using var input = new MemoryStream(new byte[] { 1 });
             using var output = new MemoryStream();
-            Assert.Throws<ArgumentNullException>(() =>
-                _service.Sign(input, output, (PdfSignatureOptions)null!));
+            await Assert.ThrowsAsync<ArgumentNullException>(() =>
+                _service.SignAsync(input, output, (PdfSignatureOptions)null!));
         }
 
         [Fact]
-        public void Sign_Stream_NullSigner_Throws()
+        public async Task SignAsync_Stream_NullSigner_Throws()
         {
             using var input = new MemoryStream(new byte[] { 1 });
             using var output = new MemoryStream();
             var options = new PdfSignatureOptions { Signer = null! };
-            Assert.ThrowsAny<ArgumentException>(() =>
-                _service.Sign(input, output, options));
+            await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+                _service.SignAsync(input, output, options));
         }
 
-        // ── Sign(byte[], PdfSignatureOptions) validation ──
+        // ── SignAsync(byte[], PdfSignatureOptions) validation ──
 
         [Fact]
-        public void Sign_ByteArray_NullPdf_Throws()
+        public async Task SignAsync_ByteArray_NullPdf_Throws()
         {
             var options = new PdfSignatureOptions();
-            Assert.ThrowsAny<ArgumentException>(() =>
-                _service.Sign((byte[])null!, options));
+            await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+                _service.SignAsync((byte[])null!, options));
         }
 
         [Fact]
-        public void Sign_ByteArray_EmptyPdf_Throws()
+        public async Task SignAsync_ByteArray_EmptyPdf_Throws()
         {
             var options = new PdfSignatureOptions();
-            Assert.ThrowsAny<ArgumentException>(() =>
-                _service.Sign(Array.Empty<byte>(), options));
+            await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+                _service.SignAsync(Array.Empty<byte>(), options));
         }
 
         [Fact]
-        public void Sign_ByteArray_NullOptions_Throws()
+        public async Task SignAsync_ByteArray_NullOptions_Throws()
         {
-            Assert.Throws<ArgumentNullException>(() =>
-                _service.Sign(new byte[] { 1 }, (PdfSignatureOptions)null!));
+            await Assert.ThrowsAsync<ArgumentNullException>(() =>
+                _service.SignAsync(new byte[] { 1 }, (PdfSignatureOptions)null!));
         }
 
         [Fact]
-        public void Sign_ByteArray_NullSigner_Throws()
+        public async Task SignAsync_ByteArray_NullSigner_Throws()
         {
             var options = new PdfSignatureOptions { Signer = null! };
-            Assert.ThrowsAny<ArgumentException>(() =>
-                _service.Sign(new byte[] { 1 }, options));
+            await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+                _service.SignAsync(new byte[] { 1 }, options));
         }
 
         // ── PdfSignatureOptions model ──

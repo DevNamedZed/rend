@@ -5,7 +5,7 @@ namespace Rend.Layout
     /// <summary>
     /// The root of the layout output: the continuous box tree plus paginated pages.
     /// </summary>
-    public sealed class LayoutDocument
+    internal sealed class LayoutDocument
     {
         public LayoutDocument(LayoutBox rootBox, List<LayoutPage> pages)
         {

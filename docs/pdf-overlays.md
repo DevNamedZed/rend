@@ -10,7 +10,7 @@ using Rend.Pdf;
 using var input = File.OpenRead("template.pdf");
 using var output = File.Create("filled.pdf");
 
-PdfOverlays.Apply(input, output, new PdfOverlayElement[]
+await PdfOverlays.ApplyAsync(input, output, new PdfOverlayElement[]
 {
     new TextOverlay
     {
@@ -94,7 +94,7 @@ new ImageOverlay
 Elements can target any page in the document:
 
 ```csharp
-PdfOverlays.Apply(input, output, new PdfOverlayElement[]
+await PdfOverlays.ApplyAsync(input, output, new PdfOverlayElement[]
 {
     new TextOverlay { Page = 1, X = 72, Y = 100, Text = "Page 1 header" },
     new TextOverlay { Page = 3, X = 72, Y = 100, Text = "Page 3 header" },
@@ -117,7 +117,7 @@ public class FormFiller
 
     public FormFiller(IPdfOverlay overlay) => _overlay = overlay;
 
-    public void Fill(Stream template, Stream output, FormData data)
+    public async Task FillAsync(Stream template, Stream output, FormData data)
     {
         var elements = data.Fields.Select(f => new TextOverlay
         {
@@ -128,7 +128,7 @@ public class FormFiller
             FontSize = f.FontSize,
         });
 
-        _overlay.Apply(template, output, elements);
+        await _overlay.ApplyAsync(template, output, elements);
     }
 }
 ```

@@ -6,7 +6,7 @@ namespace Rend.Rendering
     /// <summary>
     /// Describes a gradient fill, including its type, color stops, and geometry parameters.
     /// </summary>
-    public sealed class GradientInfo
+    internal sealed class GradientInfo
     {
         /// <summary>Gets or sets the type of gradient.</summary>
         public GradientType Type { get; set; }
@@ -25,6 +25,9 @@ namespace Rend.Rendering
 
         /// <summary>Gets or sets the vertical radius for radial gradients.</summary>
         public float RadiusY { get; set; }
+
+        /// <summary>Whether this is a repeating gradient (repeating-linear-gradient, repeating-radial-gradient, etc.).</summary>
+        public bool Repeating { get; set; }
 
         /// <summary>
         /// Creates a new <see cref="GradientInfo"/> with default values.

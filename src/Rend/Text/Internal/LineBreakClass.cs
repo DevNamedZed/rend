@@ -3,7 +3,7 @@ namespace Rend.Text.Internal
     /// <summary>
     /// Unicode line break classes as defined by UAX #14.
     /// </summary>
-    public enum LineBreakClass : byte
+    internal enum LineBreakClass : byte
     {
         /// <summary>Mandatory Break (BK).</summary>
         BK,
@@ -92,7 +92,7 @@ namespace Rend.Text.Internal
     /// <summary>
     /// Provides simplified UAX #14 line break class lookups for common code point ranges.
     /// </summary>
-    public static class LineBreakClassifier
+    internal static class LineBreakClassifier
     {
         /// <summary>
         /// Returns the line break class for the given Unicode code point.

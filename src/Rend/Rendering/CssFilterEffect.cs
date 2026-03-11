@@ -5,7 +5,7 @@ namespace Rend.Rendering
     /// <summary>
     /// Represents a single CSS filter function (e.g., blur(5px), brightness(1.2)).
     /// </summary>
-    public struct CssFilterEffect
+    internal struct CssFilterEffect
     {
         public CssFilterType Type;
         public float Amount;
@@ -20,7 +20,7 @@ namespace Rend.Rendering
     /// <summary>
     /// CSS filter function types.
     /// </summary>
-    public enum CssFilterType
+    internal enum CssFilterType
     {
         Blur,
         Brightness,

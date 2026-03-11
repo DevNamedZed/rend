@@ -249,8 +249,7 @@ namespace Rend.Pdf.Tests
             Assert.True(firstPageObjNum > 0, "First page object number should be positive");
 
             // Verify that object actually exists in the output
-            // The library writes "N obj" (without generation number) for gen 0 objects
-            string objMarker = $"{firstPageObjNum} obj";
+            string objMarker = $"{firstPageObjNum} 0 obj";
             Assert.Contains(objMarker, pdfText);
         }
 

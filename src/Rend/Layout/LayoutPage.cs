@@ -5,7 +5,7 @@ namespace Rend.Layout
     /// <summary>
     /// A single page in the paginated layout output.
     /// </summary>
-    public sealed class LayoutPage
+    internal sealed class LayoutPage
     {
         public LayoutPage(float width, float height, LayoutBox rootBox)
         {

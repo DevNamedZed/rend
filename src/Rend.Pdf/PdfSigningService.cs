@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Rend.Pdf
 {
@@ -11,7 +13,7 @@ namespace Rend.Pdf
     public sealed class PdfSigningService : IPdfSigningService
     {
         /// <inheritdoc />
-        public void Sign(Stream input, Stream output, PdfSignatureOptions options)
+        public async Task SignAsync(Stream input, Stream output, PdfSignatureOptions options, CancellationToken cancellationToken = default)
         {
             if (input == null) throw new ArgumentNullException(nameof(input));
             if (output == null) throw new ArgumentNullException(nameof(output));
@@ -21,28 +23,28 @@ namespace Rend.Pdf
             byte[] pdfBytes;
             using (var ms = new MemoryStream())
             {
-                input.CopyTo(ms);
+                await input.CopyToAsync(ms, 81920, cancellationToken).ConfigureAwait(false);
                 pdfBytes = ms.ToArray();
             }
 
-            var signed = Internal.PdfSigner.Sign(pdfBytes, options);
-            output.Write(signed, 0, signed.Length);
+            var signed = await Internal.PdfSigner.SignAsync(pdfBytes, options, cancellationToken).ConfigureAwait(false);
+            await output.WriteAsync(signed, 0, signed.Length, cancellationToken).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
-        public byte[] Sign(byte[] pdfBytes, PdfSignatureOptions options)
+        public async Task<byte[]> SignAsync(byte[] pdfBytes, PdfSignatureOptions options, CancellationToken cancellationToken = default)
         {
-            if (pdfBytes == null || pdfBytes.Length == 0)
-                throw new ArgumentException("PDF data must not be null or empty.", nameof(pdfBytes));
+            if (pdfBytes == null) throw new ArgumentNullException(nameof(pdfBytes));
+            if (pdfBytes.Length == 0) throw new ArgumentException("PDF data must not be empty.", nameof(pdfBytes));
             if (options == null) throw new ArgumentNullException(nameof(options));
             if (options.Signer == null) throw new ArgumentException("Signer must be set.", nameof(options));
 
-            return Internal.PdfSigner.Sign(pdfBytes, options);
+            return await Internal.PdfSigner.SignAsync(pdfBytes, options, cancellationToken).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
-        public void Sign(Stream input, Stream output, X509Certificate2 certificate,
-            string? signerName = null, string? reason = null)
+        public Task SignAsync(Stream input, Stream output, X509Certificate2 certificate,
+            string? signerName = null, string? reason = null, CancellationToken cancellationToken = default)
         {
             var options = new PdfSignatureOptions
             {
@@ -50,12 +52,12 @@ namespace Rend.Pdf
                 SignerName = signerName,
                 Reason = reason
             };
-            Sign(input, output, options);
+            return SignAsync(input, output, options, cancellationToken);
         }
 
         /// <inheritdoc />
-        public byte[] Sign(byte[] pdfBytes, X509Certificate2 certificate,
-            string? signerName = null, string? reason = null)
+        public Task<byte[]> SignAsync(byte[] pdfBytes, X509Certificate2 certificate,
+            string? signerName = null, string? reason = null, CancellationToken cancellationToken = default)
         {
             var options = new PdfSignatureOptions
             {
@@ -63,7 +65,7 @@ namespace Rend.Pdf
                 SignerName = signerName,
                 Reason = reason
             };
-            return Sign(pdfBytes, options);
+            return SignAsync(pdfBytes, options, cancellationToken);
         }
     }
 }

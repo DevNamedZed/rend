@@ -52,7 +52,7 @@ namespace Rend.Tests.Rendering
             BackgroundPainter.Paint(box, target, null);
 
             Assert.Single(target.FilledRects);
-            var gradient = target.FilledRects[0].Brush.Gradient;
+            var gradient = target.FilledRects[0].Brush.Gradient!;
             Assert.Equal(3, gradient.Stops.Length);
             Assert.Equal(0f, gradient.Stops[0].Position, 0.01);
             Assert.Equal(0.5f, gradient.Stops[1].Position, 0.01);
@@ -71,7 +71,7 @@ namespace Rend.Tests.Rendering
 
             BackgroundPainter.Paint(box, target, null);
 
-            var gradient = target.FilledRects[0].Brush.Gradient;
+            var gradient = target.FilledRects[0].Brush.Gradient!;
             Assert.Equal(0f, gradient.Angle, 0.01);
         }
 
@@ -87,7 +87,7 @@ namespace Rend.Tests.Rendering
 
             BackgroundPainter.Paint(box, target, null);
 
-            var gradient = target.FilledRects[0].Brush.Gradient;
+            var gradient = target.FilledRects[0].Brush.Gradient!;
             Assert.Equal(0.5f, gradient.Center.X, 0.01);
             Assert.Equal(0.5f, gradient.Center.Y, 0.01);
         }
@@ -110,7 +110,7 @@ namespace Rend.Tests.Rendering
 
             BackgroundPainter.Paint(box, target, null);
 
-            var gradient = target.FilledRects[0].Brush.Gradient;
+            var gradient = target.FilledRects[0].Brush.Gradient!;
             Assert.Equal(45f, gradient.Angle, 0.01);
             Assert.Equal(GradientType.Conic, gradient.Type);
         }
@@ -129,7 +129,7 @@ namespace Rend.Tests.Rendering
 
             BackgroundPainter.Paint(box, target, null);
 
-            var gradient = target.FilledRects[0].Brush.Gradient;
+            var gradient = target.FilledRects[0].Brush.Gradient!;
             Assert.Equal(90f, gradient.Angle, 0.01);
         }
 
@@ -152,7 +152,7 @@ namespace Rend.Tests.Rendering
 
             BackgroundPainter.Paint(box, target, null);
 
-            var gradient = target.FilledRects[0].Brush.Gradient;
+            var gradient = target.FilledRects[0].Brush.Gradient!;
             Assert.Equal(0.25f, gradient.Center.X, 0.01);
             Assert.Equal(0.75f, gradient.Center.Y, 0.01);
         }
@@ -172,7 +172,7 @@ namespace Rend.Tests.Rendering
 
             BackgroundPainter.Paint(box, target, null);
 
-            var gradient = target.FilledRects[0].Brush.Gradient;
+            var gradient = target.FilledRects[0].Brush.Gradient!;
             Assert.Equal(0f, gradient.Center.X, 0.01);
             Assert.Equal(0f, gradient.Center.Y, 0.01);
         }
@@ -198,7 +198,7 @@ namespace Rend.Tests.Rendering
 
             BackgroundPainter.Paint(box, target, null);
 
-            var gradient = target.FilledRects[0].Brush.Gradient;
+            var gradient = target.FilledRects[0].Brush.Gradient!;
             Assert.Equal(180f, gradient.Angle, 0.01);
             Assert.Equal(0f, gradient.Center.X, 0.01);
             Assert.Equal(1f, gradient.Center.Y, 0.01);
@@ -223,7 +223,7 @@ namespace Rend.Tests.Rendering
 
             BackgroundPainter.Paint(box, target, null);
 
-            var gradient = target.FilledRects[0].Brush.Gradient;
+            var gradient = target.FilledRects[0].Brush.Gradient!;
             Assert.Equal(3, gradient.Stops.Length);
             Assert.Equal(0.30f, gradient.Stops[0].Position, 0.01);
             Assert.Equal(0.70f, gradient.Stops[1].Position, 0.01);
@@ -262,7 +262,7 @@ namespace Rend.Tests.Rendering
             BackgroundPainter.Paint(box, target, null);
 
             Assert.Single(target.FilledRects);
-            var gradient = target.FilledRects[0].Brush.Gradient;
+            var gradient = target.FilledRects[0].Brush.Gradient!;
             Assert.Equal(GradientType.Conic, gradient.Type);
             Assert.Equal(2, gradient.Stops.Length);
             Assert.Equal(255, gradient.Stops[0].Color.R);

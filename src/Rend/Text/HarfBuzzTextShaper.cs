@@ -10,7 +10,7 @@ namespace Rend.Text
     /// Text shaper implementation using HarfBuzzSharp for OpenType text shaping.
     /// Caches HarfBuzz Face and Font objects by font data reference to avoid re-parsing.
     /// </summary>
-    public sealed class HarfBuzzTextShaper : ITextShaper, IDisposable
+    internal sealed class HarfBuzzTextShaper : ITextShaper, IDisposable
     {
         private readonly object _cacheLock = new object();
         private readonly Dictionary<int, CachedFont> _fontCache = new Dictionary<int, CachedFont>();

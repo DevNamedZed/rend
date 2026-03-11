@@ -40,29 +40,33 @@ namespace Rend.Layout.Internal
             // Multi-page: find break points
             var breakPoints = FindBreakPoints(rootBox, contentHeight);
 
-            float currentY = rootBox.ContentRect.Y;
+            float documentStartY = rootBox.ContentRect.Y;
+            float documentEndY = documentStartY + totalHeight;
             int pageIndex = 0;
 
             for (int i = 0; i <= breakPoints.Count; i++)
             {
-                float breakY = (i < breakPoints.Count) ? breakPoints[i] : currentY + totalHeight;
-                float pageContentHeight = breakY - currentY;
+                float startY = (i == 0) ? documentStartY : breakPoints[i - 1];
+                float endY = (i < breakPoints.Count) ? breakPoints[i] : documentEndY;
 
-                // Create a page box that clips to the page region
+                // Skip degenerate pages
+                if (endY - startY < 1f) continue;
+
+                float offsetY = pageStyle.MarginTop - startY;
+                float pageContentHeight = Math.Min(endY - startY, contentHeight);
+
+                // Create a page box that contains the sliced content
                 var pageBox = new LayoutBox(null, BoxType.Block);
                 pageBox.ContentRect = new RectF(
                     pageStyle.MarginLeft,
                     pageStyle.MarginTop,
                     pageWidth - pageStyle.MarginLeft - pageStyle.MarginRight,
-                    Math.Min(pageContentHeight, contentHeight));
+                    pageContentHeight);
 
-                // Reference the original root box (painting will clip to page bounds)
-                pageBox.AddChild(CreatePageSlice(rootBox, currentY, breakY, pageStyle.MarginTop - currentY));
+                pageBox.AddChild(CreatePageSlice(rootBox, startY, endY, offsetY));
 
                 var page = new LayoutPage(pageWidth, pageHeight, pageBox) { PageIndex = pageIndex++ };
                 pages.Add(page);
-
-                currentY = breakY;
             }
 
             if (pages.Count == 0)
@@ -95,7 +99,18 @@ namespace Rend.Layout.Internal
 
             CollectBreakPoints(rootBox, breakPoints, ref currentPageEnd, pageContentHeight, startY);
 
-            return breakPoints;
+            // Sort and deduplicate break points to prevent overlapping pages
+            breakPoints.Sort();
+            var deduped = new List<float>();
+            for (int i = 0; i < breakPoints.Count; i++)
+            {
+                if (i == 0 || breakPoints[i] - deduped[deduped.Count - 1] > 1f)
+                {
+                    deduped.Add(breakPoints[i]);
+                }
+            }
+
+            return deduped;
         }
 
         private static void CollectBreakPoints(LayoutBox box, List<float> breakPoints,
@@ -153,7 +168,7 @@ namespace Rend.Layout.Internal
                     currentPageEnd = childBottom + pageContentHeight;
                 }
 
-                // Recurse
+                // Recurse into children
                 CollectBreakPoints(child, breakPoints, ref currentPageEnd, pageContentHeight, startY);
             }
         }
@@ -263,9 +278,13 @@ namespace Rend.Layout.Internal
             return currentPageEnd;
         }
 
+        /// <summary>
+        /// Creates a page slice of the layout tree for a specific Y range.
+        /// Copies box properties and offsets Y coordinates into page-local space.
+        /// Line boxes are shared by reference with LineBoxOffsetY applied during painting.
+        /// </summary>
         private static LayoutBox CreatePageSlice(LayoutBox original, float startY, float endY, float offsetY)
         {
-            // Create a wrapper that offsets the content for this page
             var slice = new LayoutBox(original.StyledNode, original.BoxType);
             slice.ContentRect = new RectF(
                 original.ContentRect.X,
@@ -285,6 +304,15 @@ namespace Rend.Layout.Internal
             slice.MarginBottom = original.MarginBottom;
             slice.MarginLeft = original.MarginLeft;
             slice.LineBoxes = original.LineBoxes;
+            slice.LineBoxOffsetY = offsetY;
+            slice.CollapsedBorderCell = original.CollapsedBorderCell;
+            slice.CollapsedBorderTopColor = original.CollapsedBorderTopColor;
+            slice.CollapsedBorderRightColor = original.CollapsedBorderRightColor;
+            slice.CollapsedBorderBottomColor = original.CollapsedBorderBottomColor;
+            slice.CollapsedBorderLeftColor = original.CollapsedBorderLeftColor;
+            slice.ColumnRules = original.ColumnRules;
+            slice.EstablishesStackingContext = original.EstablishesStackingContext;
+            slice.ZIndex = original.ZIndex;
 
             for (int i = 0; i < original.Children.Count; i++)
             {

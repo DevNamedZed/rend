@@ -15,7 +15,7 @@ namespace Rend.Rendering
     /// painting order: backgrounds, borders, block children, floats, inline
     /// content, and positioned/stacking context children.
     /// </summary>
-    public sealed class Painter
+    internal sealed class Painter
     {
         private readonly ImageResolverDelegate? _imageResolver;
         private readonly bool _generateLinks;
@@ -97,7 +97,24 @@ namespace Rend.Rendering
                 if (headerFooterRenderer != null)
                     headerFooterRenderer.RenderHeader(target, i + 1, totalPages, page.Width, page.Height);
 
+                // For paginated pages (wrapper box with no StyledNode), clip to
+                // the page content area to prevent off-page content from bleeding
+                // into the content stream. The wrapper box's ContentRect defines
+                // the page content area.
+                bool needsPageClip = page.RootBox.StyledNode == null
+                    && page.RootBox.ContentRect.Width > 0
+                    && page.RootBox.ContentRect.Height > 0;
+                if (needsPageClip)
+                {
+                    target.PushClipRect(page.RootBox.ContentRect);
+                }
+
                 PaintBox(page.RootBox, target);
+
+                if (needsPageClip)
+                {
+                    target.PopClip();
+                }
 
                 // Render footer in bottom margin
                 if (headerFooterRenderer != null)
@@ -114,11 +131,24 @@ namespace Rend.Rendering
         private static void PaintCanvasBackground(LayoutPage page, IRenderTarget target)
         {
             var rootBox = page.RootBox;
+
+            // For paginated pages, the page's RootBox is a wrapper with no StyledNode.
+            // The actual root element (html) is the first child.
+            if (rootBox?.StyledNode == null && rootBox?.Children.Count > 0)
+            {
+                rootBox = rootBox.Children[0];
+            }
+
             if (rootBox?.StyledNode == null) return;
 
             var rootStyle = rootBox.StyledNode.Style;
-            // If root has its own background, no propagation needed.
-            if (rootStyle.BackgroundColor.A > 0) return;
+            // If root has its own background, paint it on the full canvas.
+            if (rootStyle.BackgroundColor.A > 0)
+            {
+                target.FillRect(new RectF(0, 0, page.Width, page.Height),
+                    BrushInfo.Solid(rootStyle.BackgroundColor));
+                return;
+            }
 
             // Find the body element among root's children.
             var rootElement = rootBox.StyledNode as StyledElement;
@@ -340,16 +370,38 @@ namespace Rend.Rendering
                 return;
             }
 
+            float offsetY = box.LineBoxOffsetY;
+
             for (int i = 0; i < lineBoxes.Count; i++)
             {
                 LineBox lineBox = lineBoxes[i];
-                PaintLineBox(lineBox, target, box);
+
+                // When paginating, skip line boxes that are outside the page.
+                // The box's ContentRect.Y is in page-local space; line boxes are in
+                // document space. After adding offsetY, the line box Y is in page-local space.
+                // Skip if the line box falls entirely above or below the box's visible area.
+                if (offsetY != 0f)
+                {
+                    float effectiveTop = lineBox.Y + offsetY;
+                    float effectiveBottom = effectiveTop + lineBox.Height;
+                    float boxTop = box.ContentRect.Y - box.PaddingTop;
+                    float boxBottom = box.ContentRect.Y + box.ContentRect.Height + box.PaddingBottom;
+
+                    if (effectiveBottom < boxTop || effectiveTop > boxBottom)
+                        continue;
+                }
+
+                PaintLineBox(lineBox, target, box, offsetY);
             }
         }
 
-        private void PaintLineBox(LineBox lineBox, IRenderTarget target, LayoutBox parentBox)
+        private void PaintLineBox(LineBox lineBox, IRenderTarget target, LayoutBox parentBox,
+            float lineBoxOffsetY = 0f)
         {
             IReadOnlyList<LineFragment> fragments = lineBox.Fragments;
+
+            // Apply pagination offset to line box Y (line boxes share original document coords)
+            float effectiveLineY = lineBox.Y + lineBoxOffsetY;
 
             // First pass: paint inline element backgrounds (behind text)
             for (int i = 0; i < fragments.Count; i++)
@@ -362,7 +414,7 @@ namespace Rend.Rendering
 
                 float fx = lineBox.X + fragment.X;
                 // Snap line-box Y to pixel boundary (matching Chrome's PixelSnappedIntRect)
-                float fy = (float)Math.Round(lineBox.Y + fragment.Y);
+                float fy = (float)Math.Round(effectiveLineY + fragment.Y);
 
                 // Include inline padding in the background rectangle
                 float padL = float.IsNaN(inlineStyle.PaddingLeft) ? 0 : inlineStyle.PaddingLeft;
@@ -415,7 +467,7 @@ namespace Rend.Rendering
                     continue;
                 }
 
-                TextPainter.Paint(fragment, lineBox.X, lineBox.Y, lineBox.Baseline, target, style, lineBox.IsVertical);
+                TextPainter.Paint(fragment, lineBox.X, effectiveLineY, lineBox.Baseline, target, style, lineBox.IsVertical);
 
                 // Detect inline link annotations from fragment's inline element.
                 if (_generateLinks && fragment.InlineElement != null)
@@ -424,7 +476,7 @@ namespace Rend.Rendering
                     if (href != null)
                     {
                         float fx = lineBox.X + fragment.X;
-                        float fy = lineBox.Y;
+                        float fy = effectiveLineY;
                         var fragmentRect = new RectF(fx, fy, fragment.Width, lineBox.Height);
                         target.AddLink(fragmentRect, href);
                     }

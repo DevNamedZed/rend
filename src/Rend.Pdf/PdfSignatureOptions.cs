@@ -10,7 +10,7 @@ namespace Rend.Pdf
         /// Use <see cref="Pkcs12Signer"/> for local certificate signing,
         /// or implement <see cref="IPdfSigner"/> for external signing (HSM, cloud KMS).
         /// </summary>
-        public IPdfSigner Signer { get; set; } = null!;
+        public IPdfSigner? Signer { get; set; }
 
         /// <summary>Signer name (displayed in signature field).</summary>
         public string? SignerName { get; set; }

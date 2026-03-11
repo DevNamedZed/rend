@@ -18,7 +18,7 @@ static class FormDiagnostic
         var collection = new FontCollection();
         collection.RegisterFontDirectory("/mnt/c/Windows/Fonts");
         Rend.Fonts.IFontProvider fontProvider = collection;
-        var shaper = new Rend.Output.Image.SkiaTextShaper(new Rend.Output.Image.Internal.SkiaFontMapper());
+        var shaper = new Rend.Output.Image.SkiaTextShaper(new Rend.Output.Image.SkiaFontMapper());
         var measurer = new TextMeasurer(fontProvider, shaper);
 
         var monoFont = new FontDescriptor("monospace", 400f);

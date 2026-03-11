@@ -10,7 +10,16 @@ namespace Rend.Pdf
     public abstract class PdfOverlayElement
     {
         /// <summary>Page number (1-based).</summary>
-        public int Page { get; set; } = 1;
+        private int _page = 1;
+        public int Page
+        {
+            get => _page;
+            set
+            {
+                if (value < 1) throw new ArgumentOutOfRangeException(nameof(value), "Page number must be at least 1.");
+                _page = value;
+            }
+        }
 
         /// <summary>X position from the left edge of the page in points.</summary>
         public float X { get; set; }

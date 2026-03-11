@@ -6,7 +6,7 @@ namespace Rend.Style
     /// Abstract base for a node in the styled tree.
     /// Each node is either a styled element or a styled text run.
     /// </summary>
-    public abstract class StyledNode
+    internal abstract class StyledNode
     {
         /// <summary>Whether this is a text node.</summary>
         public abstract bool IsText { get; }

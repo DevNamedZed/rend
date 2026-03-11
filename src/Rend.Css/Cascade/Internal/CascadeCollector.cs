@@ -92,11 +92,17 @@ namespace Rend.Css.Cascade.Internal
             int idx = selectorText.LastIndexOf("::", StringComparison.Ordinal);
             if (idx < 0) return null;
 
-            // Extract the pseudo-element name after ::
-            string pseudo = selectorText.Substring(idx + 2).Trim().ToLowerInvariant();
+            // Compare directly without Substring/ToLowerInvariant allocations.
+            var span = selectorText.AsSpan(idx + 2).Trim();
 
-            if (pseudo == "before" || pseudo == "after" || pseudo == "first-letter" || pseudo == "first-line")
-                return pseudo;
+            if (span.Length == 6 && span.Equals("before".AsSpan(), StringComparison.OrdinalIgnoreCase))
+                return "before";
+            if (span.Length == 5 && span.Equals("after".AsSpan(), StringComparison.OrdinalIgnoreCase))
+                return "after";
+            if (span.Length == 12 && span.Equals("first-letter".AsSpan(), StringComparison.OrdinalIgnoreCase))
+                return "first-letter";
+            if (span.Length == 10 && span.Equals("first-line".AsSpan(), StringComparison.OrdinalIgnoreCase))
+                return "first-line";
 
             return null;
         }

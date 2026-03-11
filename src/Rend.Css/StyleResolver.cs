@@ -20,6 +20,10 @@ namespace Rend.Css
         private readonly MediaContext _mediaContext;
         private readonly List<Stylesheet> _authorStylesheets = new List<Stylesheet>();
         private Stylesheet? _filteredUserAgent;
+        private readonly CascadeCollector _collector;
+        private readonly List<CascadedDeclaration> _declarations = new List<CascadedDeclaration>();
+        private readonly List<Stylesheet> _filteredSheets = new List<Stylesheet>();
+        private bool _sheetsFiltered;
 
         public StyleResolver(ISelectorMatcher matcher, StyleResolverOptions? options = null)
         {
@@ -30,6 +34,7 @@ namespace Rend.Css
                 PrefersColorSchemeDark = _options.PrefersColorSchemeDark,
                 PrefersReducedMotion = _options.PrefersReducedMotion
             };
+            _collector = new CascadeCollector(_matcher);
         }
 
         /// <summary>
@@ -39,6 +44,7 @@ namespace Rend.Css
         public void AddStylesheet(Stylesheet stylesheet)
         {
             _authorStylesheets.Add(stylesheet);
+            _sheetsFiltered = false;
         }
 
         /// <summary>
@@ -47,6 +53,16 @@ namespace Rend.Css
         public void AddStylesheets(IEnumerable<Stylesheet> stylesheets)
         {
             _authorStylesheets.AddRange(stylesheets);
+            _sheetsFiltered = false;
+        }
+
+        private void EnsureFilteredSheets()
+        {
+            if (_sheetsFiltered) return;
+            _filteredSheets.Clear();
+            for (int i = 0; i < _authorStylesheets.Count; i++)
+                _filteredSheets.Add(FilterMediaRules(_authorStylesheets[i]));
+            _sheetsFiltered = true;
         }
 
         /// <summary>
@@ -56,28 +72,28 @@ namespace Rend.Css
         /// <param name="parentStyle">The parent element's computed style, or null for root.</param>
         public ComputedStyle Resolve(IStylableElement element, ComputedStyle? parentStyle = null)
         {
-            var collector = new CascadeCollector(_matcher);
-            var declarations = new List<CascadedDeclaration>();
+            _collector.ResetSourceOrder();
+            _declarations.Clear();
+            EnsureFilteredSheets();
 
             // 1. User-agent stylesheet (lowest priority)
             if (_options.ApplyUserAgentStyles)
             {
                 var ua = GetFilteredUserAgentStylesheet();
-                collector.Collect(element, ua, CascadeOrigin.UserAgent, declarations);
+                _collector.Collect(element, ua, CascadeOrigin.UserAgent, _declarations);
             }
 
-            // 2. Author stylesheets
-            foreach (var sheet in _authorStylesheets)
+            // 2. Author stylesheets (pre-filtered)
+            for (int i = 0; i < _filteredSheets.Count; i++)
             {
-                var filtered = FilterMediaRules(sheet);
-                collector.Collect(element, filtered, CascadeOrigin.Author, declarations);
+                _collector.Collect(element, _filteredSheets[i], CascadeOrigin.Author, _declarations);
             }
 
             // 3. Inline styles (highest specificity for author origin)
-            collector.CollectInlineStyle(element, declarations);
+            _collector.CollectInlineStyle(element, _declarations);
 
             // 4. Resolve cascade winners
-            var winners = CascadeSorter.ResolveWinners(declarations);
+            var winners = CascadeSorter.ResolveWinners(_declarations);
 
             // 5. Build computed style with inheritance
             float parentFontSize = parentStyle?.FontSize ?? _options.DefaultFontSize;
@@ -102,28 +118,28 @@ namespace Rend.Css
         /// <param name="elementStyle">The parent element's computed style.</param>
         public ComputedStyle? ResolvePseudoElement(IStylableElement element, string pseudoElement, ComputedStyle elementStyle)
         {
-            var collector = new CascadeCollector(_matcher);
-            var declarations = new List<CascadedDeclaration>();
+            _collector.ResetSourceOrder();
+            _declarations.Clear();
+            EnsureFilteredSheets();
 
             // 1. User-agent stylesheet
             if (_options.ApplyUserAgentStyles)
             {
                 var ua = GetFilteredUserAgentStylesheet();
-                collector.CollectPseudoElement(element, ua, CascadeOrigin.UserAgent, pseudoElement, declarations);
+                _collector.CollectPseudoElement(element, ua, CascadeOrigin.UserAgent, pseudoElement, _declarations);
             }
 
-            // 2. Author stylesheets
-            foreach (var sheet in _authorStylesheets)
+            // 2. Author stylesheets (pre-filtered)
+            for (int i = 0; i < _filteredSheets.Count; i++)
             {
-                var filtered = FilterMediaRules(sheet);
-                collector.CollectPseudoElement(element, filtered, CascadeOrigin.Author, pseudoElement, declarations);
+                _collector.CollectPseudoElement(element, _filteredSheets[i], CascadeOrigin.Author, pseudoElement, _declarations);
             }
 
             // No pseudo-element rules found
-            if (declarations.Count == 0) return null;
+            if (_declarations.Count == 0) return null;
 
             // 3. Resolve cascade winners
-            var winners = CascadeSorter.ResolveWinners(declarations);
+            var winners = CascadeSorter.ResolveWinners(_declarations);
 
             // 4. Check if content property is set (required for ::before/::after to generate)
             //    ::first-letter and ::first-line don't need content — they style existing text

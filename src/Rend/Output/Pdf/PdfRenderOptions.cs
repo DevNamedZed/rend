@@ -3,7 +3,7 @@ namespace Rend.Output.Pdf
     /// <summary>
     /// Configuration options for PDF rendering output.
     /// </summary>
-    public sealed class PdfRenderOptions
+    internal sealed class PdfRenderOptions
     {
         /// <summary>Gets or sets whether to generate bookmarks from heading elements.</summary>
         public bool GenerateBookmarks { get; set; } = true;

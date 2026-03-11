@@ -1,7 +1,8 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
+using System.Text;
 
 namespace Rend.Pdf.Internal
 {
@@ -104,7 +105,7 @@ namespace Rend.Pdf.Internal
                 // Build the object stream content:
                 // Header: "objNum1 offset1 objNum2 offset2 ..."
                 // Body: serialized objects concatenated
-                var headerParts = new List<string>();
+                var headerSb = new StringBuilder(count * 10);
                 var bodyMs = new MemoryStream();
                 var bodyWriter = new PdfWriter(bodyMs);
 
@@ -113,7 +114,10 @@ namespace Rend.Pdf.Internal
                     int idx = compressibleIndices[batch + j];
                     var entry = _objects[idx];
 
-                    headerParts.Add($"{entry.ObjectNumber} {bodyWriter.Position}");
+                    if (j > 0) headerSb.Append(' ');
+                    headerSb.Append(entry.ObjectNumber);
+                    headerSb.Append(' ');
+                    headerSb.Append(bodyWriter.Position);
 
                     bodyWriter.CurrentObjectNumber = entry.ObjectNumber;
                     bodyWriter.CurrentGeneration = 0;
@@ -128,23 +132,20 @@ namespace Rend.Pdf.Internal
                 }
 
                 bodyWriter.Flush();
-                string header = string.Join(" ", headerParts) + " ";
-                byte[] headerBytes = System.Text.Encoding.ASCII.GetBytes(header);
-                byte[] bodyBytes = bodyMs.ToArray();
+                headerSb.Append(' ');
+                int headerLen = headerSb.Length;
+                long bodyLen = bodyMs.Length;
+
+                // Write header + body into a single buffer without extra copies
+                byte[] rawData = new byte[headerLen + bodyLen];
+                for (int ci = 0; ci < headerLen; ci++)
+                    rawData[ci] = (byte)headerSb[ci]; // ASCII only
+                bodyMs.Position = 0;
+                bodyMs.Read(rawData, headerLen, (int)bodyLen);
                 bodyWriter.Dispose();
+                int headerBytes_Length = headerLen; // used below for First value
 
-                // Combine header + body and compress
-                byte[] rawData = new byte[headerBytes.Length + bodyBytes.Length];
-                Buffer.BlockCopy(headerBytes, 0, rawData, 0, headerBytes.Length);
-                Buffer.BlockCopy(bodyBytes, 0, rawData, headerBytes.Length, bodyBytes.Length);
-
-                byte[] compressed;
-                using (var cMs = new MemoryStream())
-                {
-                    using (var ds = new DeflateStream(cMs, CompressionLevel.Optimal, true))
-                        ds.Write(rawData, 0, rawData.Length);
-                    compressed = cMs.ToArray();
-                }
+                byte[] compressed = FlateHelper.Compress(rawData);
 
                 // Write the ObjStm as an indirect object
                 long objStmOffset = writer.Position;
@@ -152,7 +153,7 @@ namespace Rend.Pdf.Internal
                 var dict = new PdfDictionary(6);
                 dict[PdfName.Type] = PdfName.ObjStm;
                 dict[PdfName.N_Name] = new PdfInteger(count);
-                dict[PdfName.First] = new PdfInteger(headerBytes.Length);
+                dict[PdfName.First] = new PdfInteger(headerBytes_Length);
                 dict[PdfName.Filter] = PdfName.FlateDecode;
                 dict[PdfName.Length] = new PdfInteger(compressed.Length);
 
@@ -362,13 +363,7 @@ namespace Rend.Pdf.Internal
                                   1, xrefOffset, 0);
 
             // Compress the xref data
-            byte[] compressedData;
-            using (var ms = new MemoryStream())
-            {
-                using (var ds = new DeflateStream(ms, CompressionLevel.Optimal, true))
-                    ds.Write(data, 0, data.Length);
-                compressedData = ms.ToArray();
-            }
+            byte[] compressedData = FlateHelper.Compress(data);
 
             // Build the xref stream dictionary (doubles as the trailer)
             var dict = new PdfDictionary(12);
@@ -451,7 +446,7 @@ namespace Rend.Pdf.Internal
         {
             // Format: 0000000009 00000 n \n  (exactly 20 bytes including \n)
             // 10-digit offset, space, 5-digit generation, space, type, space, \n
-            var digits = new byte[20];
+            Span<byte> digits = stackalloc byte[20];
             long o = offset;
             for (int i = 9; i >= 0; i--)
             {
@@ -470,7 +465,7 @@ namespace Rend.Pdf.Internal
             digits[18] = (byte)' ';
             digits[19] = (byte)'\n';
 
-            writer.WriteRaw(digits);
+            writer.WriteSpan(digits);
         }
 
         private struct IndirectObject

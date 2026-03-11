@@ -10,7 +10,7 @@ namespace Rend.Fonts
     /// <summary>
     /// Implements font matching per CSS Fonts Level 4 section 5.2.
     /// </summary>
-    public static class FontMatchingAlgorithm
+    internal static class FontMatchingAlgorithm
     {
         /// <summary>
         /// Finds the best matching font entry for the requested descriptor from the candidate list.
@@ -19,74 +19,69 @@ namespace Rend.Fonts
         // Generic CSS family name → concrete font family fallback lists.
 #if NET8_0_OR_GREATER
         private static readonly FrozenDictionary<string, string[]> GenericFamilyMap =
-            new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["sans-serif"] = new[] { "Helvetica", "Helvetica Neue", "Arial", "Segoe UI", "DejaVu Sans", "Liberation Sans", "FreeSans", "Noto Sans" },
-                ["serif"] = new[] { "Times New Roman", "Times", "Georgia", "DejaVu Serif", "Liberation Serif", "FreeSerif", "Noto Serif" },
-                ["monospace"] = new[] { "Consolas", "Courier New", "Courier", "Menlo", "DejaVu Sans Mono", "Liberation Mono", "FreeMono", "Noto Sans Mono" },
-                ["cursive"] = new[] { "Comic Sans MS", "Apple Chancery", "Snell Roundhand" },
-                ["fantasy"] = new[] { "Impact", "Papyrus" },
-                ["system-ui"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },
-                ["ui-sans-serif"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },
-                ["ui-serif"] = new[] { "New York", "Georgia", "Times New Roman" },
-                ["ui-monospace"] = new[] { "SF Mono", "Menlo", "Consolas", "Courier New" },
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            GenericFontFamilies.FallbackMap.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 #else
-        private static readonly Dictionary<string, string[]> GenericFamilyMap = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["sans-serif"] = new[] { "Helvetica", "Helvetica Neue", "Arial", "Segoe UI", "DejaVu Sans", "Liberation Sans", "FreeSans", "Noto Sans" },
-            ["serif"] = new[] { "Times New Roman", "Times", "Georgia", "DejaVu Serif", "Liberation Serif", "FreeSerif", "Noto Serif" },
-            ["monospace"] = new[] { "Consolas", "Courier New", "Courier", "Menlo", "DejaVu Sans Mono", "Liberation Mono", "FreeMono", "Noto Sans Mono" },
-            ["cursive"] = new[] { "Comic Sans MS", "Apple Chancery", "Snell Roundhand" },
-            ["fantasy"] = new[] { "Impact", "Papyrus" },
-            ["system-ui"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },
-            ["ui-sans-serif"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },
-            ["ui-serif"] = new[] { "New York", "Georgia", "Times New Roman" },
-            ["ui-monospace"] = new[] { "SF Mono", "Menlo", "Consolas", "Courier New" },
-        };
+        private static readonly Dictionary<string, string[]> GenericFamilyMap = GenericFontFamilies.FallbackMap;
 #endif
+
+        // Reusable scratch lists to reduce per-call allocations.
+        // FontMatchingAlgorithm is only called from the render pipeline (single-threaded),
+        // so thread-static gives us safe reuse without locking.
+        [ThreadStatic] private static List<FontEntry>? t_scratchA;
+        [ThreadStatic] private static List<FontEntry>? t_scratchB;
 
         public static FontEntry? FindBestMatch(FontDescriptor requested, IReadOnlyList<FontEntry> candidates)
         {
             if (candidates == null || candidates.Count == 0)
                 return null;
 
-            // CSS font-family may be a comma-separated list (e.g. "Arial, sans-serif").
-            // Try each family in order until one matches.
-            var families = ParseFontFamilyList(requested.Family);
+            var scratchA = t_scratchA ??= new List<FontEntry>();
+            var scratchB = t_scratchB ??= new List<FontEntry>();
 
-            List<FontEntry> familyCandidates = new List<FontEntry>();
-            foreach (var family in families)
+            try
             {
-                familyCandidates = FilterByFamily(family, candidates);
-                if (familyCandidates.Count > 0) break;
+                // CSS font-family may be a comma-separated list (e.g. "Arial, sans-serif").
+                // Try each family in order until one matches.
+                var families = ParseFontFamilyList(requested.Family);
 
-                // Try generic CSS family name fallbacks for this family.
-                if (GenericFamilyMap.TryGetValue(family, out var fallbacks))
+                scratchA.Clear();
+                foreach (var family in families)
                 {
-                    for (int f = 0; f < fallbacks.Length && familyCandidates.Count == 0; f++)
+                    FilterByFamily(family, candidates, scratchA);
+                    if (scratchA.Count > 0) break;
+
+                    // Try generic CSS family name fallbacks for this family.
+                    if (GenericFamilyMap.TryGetValue(family, out var fallbacks))
                     {
-                        familyCandidates = FilterByFamily(fallbacks[f], candidates);
+                        for (int f = 0; f < fallbacks.Length && scratchA.Count == 0; f++)
+                        {
+                            FilterByFamily(fallbacks[f], candidates, scratchA);
+                        }
+                        if (scratchA.Count > 0) break;
                     }
-                    if (familyCandidates.Count > 0) break;
                 }
+
+                if (scratchA.Count == 0)
+                    return null;
+
+                // Step 2: Match style — filter scratchA into scratchB.
+                scratchB.Clear();
+                MatchStyle(requested.Style, scratchA, scratchB);
+                var styleCandidates = scratchB.Count > 0 ? scratchB : scratchA;
+
+                // Step 3: Match weight — allocates internally only when needed.
+                var weightCandidates = MatchWeight(requested.Weight, styleCandidates);
+                if (weightCandidates.Count == 0)
+                    weightCandidates = styleCandidates;
+
+                // Step 4: Match stretch (prefer closest).
+                return MatchStretch(requested.Stretch, weightCandidates);
             }
-
-            if (familyCandidates.Count == 0)
-                return null;
-
-            // Step 2: Match style.
-            var styleCandidates = MatchStyle(requested.Style, familyCandidates);
-            if (styleCandidates.Count == 0)
-                styleCandidates = familyCandidates;
-
-            // Step 3: Match weight.
-            var weightCandidates = MatchWeight(requested.Weight, styleCandidates);
-            if (weightCandidates.Count == 0)
-                weightCandidates = styleCandidates;
-
-            // Step 4: Match stretch (prefer closest).
-            return MatchStretch(requested.Stretch, weightCandidates);
+            finally
+            {
+                scratchA.Clear();
+                scratchB.Clear();
+            }
         }
 
         /// <summary>
@@ -111,54 +106,52 @@ namespace Rend.Fonts
             return result;
         }
 
-        private static List<FontEntry> FilterByFamily(string familyName, IReadOnlyList<FontEntry> candidates)
+        private static void FilterByFamily(string familyName, IReadOnlyList<FontEntry> candidates, List<FontEntry> result)
         {
-            var result = new List<FontEntry>();
+            result.Clear();
             for (int i = 0; i < candidates.Count; i++)
             {
                 if (string.Equals(candidates[i].FamilyName, familyName, StringComparison.OrdinalIgnoreCase))
                     result.Add(candidates[i]);
             }
-            return result;
         }
 
-        private static List<FontEntry> MatchStyle(CssFontStyle requestedStyle, List<FontEntry> candidates)
+        private static void MatchStyle(CssFontStyle requestedStyle, List<FontEntry> candidates, List<FontEntry> result)
         {
             // Prefer exact match.
-            var exact = FilterByStyle(candidates, requestedStyle);
-            if (exact.Count > 0) return exact;
+            FilterByStyle(candidates, requestedStyle, result);
+            if (result.Count > 0) return;
 
             // Fallback: oblique -> italic, italic -> oblique.
             switch (requestedStyle)
             {
                 case CssFontStyle.Italic:
                 {
-                    var oblique = FilterByStyle(candidates, CssFontStyle.Oblique);
-                    if (oblique.Count > 0) return oblique;
+                    FilterByStyle(candidates, CssFontStyle.Oblique, result);
+                    if (result.Count > 0) return;
                     break;
                 }
                 case CssFontStyle.Oblique:
                 {
-                    var italic = FilterByStyle(candidates, CssFontStyle.Italic);
-                    if (italic.Count > 0) return italic;
+                    FilterByStyle(candidates, CssFontStyle.Italic, result);
+                    if (result.Count > 0) return;
                     break;
                 }
             }
 
             // Final fallback: normal.
-            var normal = FilterByStyle(candidates, CssFontStyle.Normal);
-            return normal.Count > 0 ? normal : candidates;
+            FilterByStyle(candidates, CssFontStyle.Normal, result);
+            // If nothing matched, result stays empty and caller falls back to candidates.
         }
 
-        private static List<FontEntry> FilterByStyle(List<FontEntry> candidates, CssFontStyle style)
+        private static void FilterByStyle(List<FontEntry> candidates, CssFontStyle style, List<FontEntry> result)
         {
-            var result = new List<FontEntry>();
+            result.Clear();
             for (int i = 0; i < candidates.Count; i++)
             {
                 if (candidates[i].Descriptor.Style == style)
                     result.Add(candidates[i]);
             }
-            return result;
         }
 
         private static List<FontEntry> MatchWeight(float requestedWeight, List<FontEntry> candidates)

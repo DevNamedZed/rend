@@ -59,7 +59,7 @@ Render.ToImage(html, output, options);
 ```csharp
 var fonts = new FontCollection();
 fonts.RegisterFromResolver(new SystemFontResolver());
-fonts.RegisterFromResolver(new DirectoryFontResolver("/path/to/fonts"));
+fonts.RegisterFontDirectory("/path/to/fonts");
 
 var options = new RenderOptions
 {
@@ -74,9 +74,9 @@ Use a custom resolver to control how images are loaded for `<img>`, `background-
 ```csharp
 public class S3ImageResolver : IImageResolver
 {
-    public Stream? Resolve(string url)
+    public async Task<Stream?> ResolveAsync(string url, CancellationToken cancellationToken = default)
     {
-        return _s3Client.GetObjectStream(url);
+        return await _s3Client.GetObjectStreamAsync(url, cancellationToken);
     }
 }
 
@@ -85,7 +85,7 @@ var options = new RenderOptions
     ImageResolver = new S3ImageResolver()
 };
 
-Render.ToPdf(html, output, options);
+await Render.ToPdfAsync(html, output, options);
 ```
 
 ### Progress Reporting
@@ -112,7 +112,7 @@ var signer = new Pkcs12Signer(File.ReadAllBytes("cert.pfx"), "password");
 using var input = File.OpenRead("document.pdf");
 using var output = File.Create("signed.pdf");
 
-PdfSigning.Sign(input, output, new PdfSignatureOptions
+await PdfSigning.SignAsync(input, output, new PdfSignatureOptions
 {
     Signer = signer,
     SignerName = "John Doe",
@@ -128,13 +128,13 @@ public class AzureKeyVaultSigner : IPdfSigner
 {
     public int EstimatedSignatureSize => 8192;
 
-    public byte[] Sign(byte[] data)
+    public async Task<byte[]> SignAsync(byte[] data, CancellationToken cancellationToken = default)
     {
-        return _keyVaultClient.SignCms(data);
+        return await _keyVaultClient.SignCmsAsync(data, cancellationToken);
     }
 }
 
-PdfSigning.Sign(input, output, new PdfSignatureOptions
+await PdfSigning.SignAsync(input, output, new PdfSignatureOptions
 {
     Signer = new AzureKeyVaultSigner(),
 });
@@ -144,7 +144,7 @@ There is also a convenience overload for simple cases:
 
 ```csharp
 var cert = new X509Certificate2("cert.pfx", "password");
-PdfSigning.Sign(input, output, cert);
+await PdfSigning.SignAsync(input, output, cert);
 ```
 
 For DI, use `IPdfSigningService` and `PdfSigningService`:
@@ -163,7 +163,7 @@ using Rend.Pdf;
 using var input = File.OpenRead("template.pdf");
 using var output = File.Create("filled.pdf");
 
-PdfOverlays.Apply(input, output, new PdfOverlayElement[]
+await PdfOverlays.ApplyAsync(input, output, new PdfOverlayElement[]
 {
     new TextOverlay
     {
@@ -330,6 +330,18 @@ Requires the .NET 8 SDK.
 ```bash
 dotnet build Rend.sln
 dotnet test Rend.sln
+```
+
+## Benchmarks
+
+```bash
+dotnet run -c Release --project benchmarks/Rend.Benchmarks -- --filter "*"
+```
+
+Run a specific benchmark class:
+
+```bash
+dotnet run -c Release --project benchmarks/Rend.Benchmarks -- --filter "*RenderBenchmarks*"
 ```
 
 ## License

@@ -22,7 +22,7 @@ namespace Rend.Pdf
         public float Height { get; }
 
         /// <summary>Zero-based page index.</summary>
-        public int PageIndex { get; }
+        public int PageIndex { get; internal set; }
 
         /// <summary>The content stream for drawing on this page.</summary>
         public PdfContentStream Content { get; }

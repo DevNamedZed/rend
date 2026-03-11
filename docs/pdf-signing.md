@@ -14,7 +14,7 @@ var signer = new Pkcs12Signer(File.ReadAllBytes("cert.pfx"), "password");
 using var input = File.OpenRead("document.pdf");
 using var output = File.Create("signed.pdf");
 
-PdfSigning.Sign(input, output, new PdfSignatureOptions
+await PdfSigning.SignAsync(input, output, new PdfSignatureOptions
 {
     Signer = signer,
     SignerName = "Jane Smith",
@@ -28,7 +28,7 @@ Or use the convenience overload if you just need a quick signature:
 
 ```csharp
 var cert = new X509Certificate2("cert.pfx", "password");
-PdfSigning.Sign(input, output, cert);
+await PdfSigning.SignAsync(input, output, cert);
 ```
 
 ## External Signing (HSM, Cloud KMS)
@@ -38,7 +38,7 @@ When the private key isn't directly accessible (hardware security module, AWS Cl
 ```csharp
 public interface IPdfSigner
 {
-    byte[] Sign(byte[] data);
+    Task<byte[]> SignAsync(byte[] data, CancellationToken cancellationToken = default);
     int EstimatedSignatureSize { get; }
 }
 ```
@@ -47,7 +47,7 @@ public interface IPdfSigner
 
 1. Rend prepares the PDF with a signature placeholder
 2. Rend computes the byte ranges that need to be signed
-3. Your `IPdfSigner.Sign()` receives the concatenated byte range data
+3. Your `IPdfSigner.SignAsync()` receives the concatenated byte range data
 4. You return a DER-encoded PKCS#7/CMS detached signature
 5. Rend patches the signature into the PDF
 
@@ -62,7 +62,7 @@ public class KeyVaultSigner : IPdfSigner
 
     public int EstimatedSignatureSize => 8192;
 
-    public byte[] Sign(byte[] data)
+    public async Task<byte[]> SignAsync(byte[] data, CancellationToken cancellationToken = default)
     {
         // 1. Hash the data
         byte[] hash;
@@ -70,11 +70,11 @@ public class KeyVaultSigner : IPdfSigner
             hash = sha256.ComputeHash(data);
 
         // 2. Sign the hash with the HSM-stored key
-        var result = _cryptoClient.Sign(SignatureAlgorithm.RS256, hash);
+        var result = await _cryptoClient.SignAsync(SignatureAlgorithm.RS256, hash, cancellationToken);
 
         // 3. Build the CMS/PKCS#7 envelope
         //    (Use your preferred CMS library — BouncyCastle, .NET SignedCms, etc.)
-        return BuildCmsSignature(data, result.Signature, GetCertificateChain());
+        return BuildCmsSignature(data, result.Signature, await GetCertificateChainAsync(cancellationToken));
     }
 }
 ```
@@ -85,7 +85,7 @@ The `EstimatedSignatureSize` property tells Rend how many bytes to reserve in th
 
 - **8192** is a safe default for most certificate chains
 - If your chain includes many intermediate certificates or timestamps, use a larger value (e.g., 16384)
-- If the signature exceeds the reserved space, `Sign()` throws an `InvalidOperationException`
+- If the signature exceeds the reserved space, `SignAsync()` throws an `InvalidOperationException`
 
 ## Signing Rend-Generated PDFs
 
@@ -122,9 +122,9 @@ public class DocumentService
 
     public DocumentService(IPdfSigningService signing) => _signing = signing;
 
-    public void SignDocument(Stream input, Stream output, X509Certificate2 cert)
+    public async Task SignDocumentAsync(Stream input, Stream output, X509Certificate2 cert)
     {
-        _signing.Sign(input, output, cert);
+        await _signing.SignAsync(input, output, cert);
     }
 }
 ```

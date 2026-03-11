@@ -10,11 +10,18 @@
     <NoWarn>CS1591</NoWarn>
   </PropertyGroup>
 
+  <!-- Deterministic and reproducible builds -->
+  <PropertyGroup>
+    <Deterministic>true</Deterministic>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <Authors>Ziad Elmalki</Authors>
     <Company>Rend</Company>
-    <Copyright>Copyright (c) Ziad Elmalki</Copyright>
+    <Copyright>Copyright (c) 2026 Ziad Elmalki</Copyright>
     <Description>HTML/CSS rendering engine for .NET. Renders to PDF and images.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/ArtifactCoding/rend</PackageProjectUrl>
@@ -23,6 +30,11 @@
     <PackageTags>html;css;pdf;render;image;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <!-- SourceLink for NuGet debugging -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
 
   <!-- Include README in package -->
   <ItemGroup>

@@ -32,7 +32,7 @@ namespace Rend.Tests.Layout
                 MarginBottom = 0,
                 MarginLeft = 0,
                 Dpi = 96,
-                ImageFormat = "png",
+                ImageFormat = ImageOutputFormat.Png,
             };
 
             byte[] imageData;
@@ -75,7 +75,7 @@ namespace Rend.Tests.Layout
                 MarginBottom = 0,
                 MarginLeft = 0,
                 Dpi = 96,
-                ImageFormat = "png",
+                ImageFormat = ImageOutputFormat.Png,
             };
 
             byte[] imageData;
@@ -125,7 +125,7 @@ namespace Rend.Tests.Layout
                 MarginBottom = 0,
                 MarginLeft = 0,
                 Dpi = 96,
-                ImageFormat = "png",
+                ImageFormat = ImageOutputFormat.Png,
             };
 
             byte[] imageData;

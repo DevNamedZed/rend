@@ -65,7 +65,9 @@ namespace Rend.Tests.EndToEnd
 
                     try
                     {
-                        using var ms = new MemoryStream(streamData);
+                        // Skip zlib header (2 bytes) if present — streams are zlib-wrapped
+                        int skip = (streamData.Length >= 2 && streamData[0] == 0x78) ? 2 : 0;
+                        using var ms = new MemoryStream(streamData, skip, streamData.Length - skip);
                         using var deflate = new DeflateStream(ms, CompressionMode.Decompress);
                         using var output = new MemoryStream();
                         deflate.CopyTo(output);
@@ -90,14 +92,14 @@ namespace Rend.Tests.EndToEnd
         // ===============================================
 
         [Fact]
-        public void ParagraphText_ProducesBtEtTfTdOperators()
+        public void ParagraphText_ProducesBtEtTfTmOperators()
         {
             var pdf = RenderPdf("<html><body><p>Hello World</p></body></html>");
             var content = ExtractContentStreams(pdf);
             Assert.Contains("BT", content);
             Assert.Contains("ET", content);
             Assert.Contains("Tf", content);
-            Assert.Contains("Td", content);
+            Assert.Contains("Tm", content);
         }
 
         [Fact]
@@ -136,11 +138,11 @@ namespace Rend.Tests.EndToEnd
         }
 
         [Fact]
-        public void TextPositionTdOperators_Present()
+        public void TextPositionTmOperators_Present()
         {
             var pdf = RenderPdf("<html><body><p>Positioned text</p></body></html>");
             var content = ExtractContentStreams(pdf);
-            Assert.Matches(@"[\d.]+\s+[\d.]+\s+Td", content);
+            Assert.Matches(@"[\d.]+\s+[\d.]+\s+Tm", content);
         }
 
         [Fact]
@@ -752,12 +754,13 @@ namespace Rend.Tests.EndToEnd
         // ===============================================
 
         [Fact]
-        public void StrokeColor_UsesUppercase_RG()
+        public void UnderlineColor_UsesFillColor()
         {
             var pdf = RenderPdf("<html><body><p style='text-decoration:underline;color:red'>Underlined</p></body></html>");
             var content = ExtractContentStreams(pdf);
-            // Stroke color for underline uses RG (uppercase)
-            Assert.Contains("RG", content);
+            // Underlines are painted as filled rectangles (re + f), using fill color (rg)
+            Assert.Contains("1 0 0 rg", content); // red fill color
+            Assert.Contains("re\n", content);      // rectangle
         }
 
         [Fact]
@@ -809,13 +812,14 @@ namespace Rend.Tests.EndToEnd
         }
 
         [Fact]
-        public void Underline_UsesStrokeOperator()
+        public void Underline_UsesFillRect()
         {
             var pdf = RenderPdf("<html><body><p style='text-decoration:underline'>Underlined</p></body></html>");
             var content = ExtractContentStreams(pdf);
-            // Underline uses moveto (m), lineto (l), and stroke (S)
-            Assert.Contains("S\n", content);
-            Assert.Contains("w\n", content);
+            // Underline is painted as a pixel-snapped filled rectangle (re + f),
+            // matching Chrome's FillRect approach for solid text decorations
+            Assert.Contains("re\n", content);
+            Assert.Contains("f\n", content);
         }
 
         [Fact]
@@ -912,13 +916,13 @@ namespace Rend.Tests.EndToEnd
             });
             var contentWithMargin = ExtractContentStreams(pdfWithMargin);
 
-            // Both should have text
-            Assert.Contains("Td", contentNoMargin);
-            Assert.Contains("Td", contentWithMargin);
+            // Both should have text positioned with Tm
+            Assert.Contains("Tm", contentNoMargin);
+            Assert.Contains("Tm", contentWithMargin);
 
-            // Extract Td coordinates - margin version should have larger offset
-            var noMarginMatch = Regex.Match(contentNoMargin, @"([\d.]+)\s+([\d.]+)\s+Td");
-            var withMarginMatch = Regex.Match(contentWithMargin, @"([\d.]+)\s+([\d.]+)\s+Td");
+            // Extract Tm coordinates (last two values are x,y) - margin version should have larger offset
+            var noMarginMatch = Regex.Match(contentNoMargin, @"[\d.-]+\s+[\d.-]+\s+[\d.-]+\s+[\d.-]+\s+([\d.]+)\s+([\d.]+)\s+Tm");
+            var withMarginMatch = Regex.Match(contentWithMargin, @"[\d.-]+\s+[\d.-]+\s+[\d.-]+\s+[\d.-]+\s+([\d.]+)\s+([\d.]+)\s+Tm");
             Assert.True(noMarginMatch.Success);
             Assert.True(withMarginMatch.Success);
             float noMarginX = float.Parse(noMarginMatch.Groups[1].Value);

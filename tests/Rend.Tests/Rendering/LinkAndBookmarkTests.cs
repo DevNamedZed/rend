@@ -288,15 +288,7 @@ namespace Rend.Tests.Rendering
         [Fact]
         public void ToPdf_WithLink_ContainsAnnotation()
         {
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<a href=\"https://example.com\">Click here</a>");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<a href=\"https://example.com\">Click here</a>");
 
             string pdf = Encoding.ASCII.GetString(result);
             Assert.Contains("/URI", pdf);
@@ -306,15 +298,7 @@ namespace Rend.Tests.Rendering
         [Fact]
         public void ToPdf_WithHeadings_ContainsOutlines()
         {
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<h1>Title</h1><h2>Section</h2><p>Content</p>");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<h1>Title</h1><h2>Section</h2><p>Content</p>");
 
             string pdf = Encoding.ASCII.GetString(result);
             Assert.Contains("/Outlines", pdf);
@@ -325,15 +309,7 @@ namespace Rend.Tests.Rendering
         {
             var options = new RenderOptions { GenerateLinks = false };
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<a href=\"https://example.com\">Click</a>", options);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<a href=\"https://example.com\">Click</a>", options);
 
             string pdf = Encoding.ASCII.GetString(result);
             Assert.DoesNotContain("/URI", pdf);
@@ -344,15 +320,7 @@ namespace Rend.Tests.Rendering
         {
             var options = new RenderOptions { GenerateBookmarks = false };
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<h1>Title</h1>", options);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<h1>Title</h1>", options);
 
             string pdf = Encoding.ASCII.GetString(result);
             Assert.DoesNotContain("/Outlines", pdf);
@@ -361,15 +329,7 @@ namespace Rend.Tests.Rendering
         [Fact]
         public void ToPdf_PointerEventsNone_NoAnnotation()
         {
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<a href=\"https://example.com\" style=\"pointer-events: none;\">No Link</a>");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<a href=\"https://example.com\" style=\"pointer-events: none;\">No Link</a>");
 
             string pdf = Encoding.ASCII.GetString(result);
             Assert.DoesNotContain("/URI", pdf);
@@ -378,15 +338,7 @@ namespace Rend.Tests.Rendering
         [Fact]
         public void ToPdf_PointerEventsAuto_HasAnnotation()
         {
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<a href=\"https://example.com\" style=\"pointer-events: auto;\">Has Link</a>");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<a href=\"https://example.com\" style=\"pointer-events: auto;\">Has Link</a>");
 
             string pdf = Encoding.ASCII.GetString(result);
             Assert.Contains("/URI", pdf);
@@ -403,27 +355,5 @@ namespace Rend.Tests.Rendering
             return Encoding.ASCII.GetString(ms.ToArray());
         }
 
-        private static bool IsNativeLibraryFailure(Exception ex)
-        {
-            if (ex is DllNotFoundException) return true;
-            if (ex is TypeInitializationException) return true;
-            if (ex is BadImageFormatException) return true;
-
-            var inner = ex.InnerException;
-            while (inner != null)
-            {
-                if (inner is DllNotFoundException) return true;
-                if (inner is TypeInitializationException) return true;
-                inner = inner.InnerException;
-            }
-
-            string msg = ex.Message ?? "";
-            if (msg.Contains("libHarfBuzz", StringComparison.OrdinalIgnoreCase)) return true;
-            if (msg.Contains("libSkiaSharp", StringComparison.OrdinalIgnoreCase)) return true;
-            if (msg.Contains("HarfBuzzSharp", StringComparison.OrdinalIgnoreCase)) return true;
-            if (msg.Contains("SkiaSharp", StringComparison.OrdinalIgnoreCase)) return true;
-
-            return false;
-        }
     }
 }

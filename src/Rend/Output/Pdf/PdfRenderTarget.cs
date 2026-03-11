@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using Rend.Core.Values;
 using Rend.Fonts;
 using Rend.Output.Pdf.Internal;
@@ -14,7 +15,7 @@ namespace Rend.Output.Pdf
     /// An <see cref="IRenderTarget"/> implementation that produces PDF output
     /// by bridging drawing commands to a <see cref="PdfDocument"/>.
     /// </summary>
-    public sealed class PdfRenderTarget : IRenderTarget
+    internal sealed class PdfRenderTarget : IRenderTarget
     {
         private readonly PdfRenderOptions _options;
         private readonly PdfDocument _doc;
@@ -179,8 +180,9 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void SetMaskBlur(float sigma, bool inner = false)
         {
-            // PDF does not support mask blur directly; box shadows degrade gracefully
+            _maskBlurSigma = sigma;
         }
+        private float _maskBlurSigma;
 
         /// <inheritdoc />
         public void PushClipRect(RectF rect)
@@ -217,9 +219,34 @@ namespace Rend.Output.Pdf
             EnsurePage();
             var content = _currentPage!.Content;
 
-            SetFillFromBrush(brush, content, rect.X, rect.Y, rect.Width, rect.Height);
-            content.Rectangle(rect.X, rect.Y, rect.Width, rect.Height);
-            content.Fill();
+            // Approximate Gaussian blur for outer box shadows
+            if (_maskBlurSigma > 0)
+            {
+                PaintBlurredOuterShadow(rect, brush, content);
+                return;
+            }
+
+            if (brush.Gradient != null && brush.Gradient.Stops.Length > 0
+                && PdfGradientBuilder.IsSupported(brush.Gradient))
+            {
+                // PDF shading (sh) fills the entire current clip region.
+                // Clip to the rect first, then paint the gradient.
+                content.SaveState();
+                content.Rectangle(rect.X, rect.Y, rect.Width, rect.Height);
+                content.Clip();
+                content.EndPath();
+                PdfGradientBuilder.Apply(brush.Gradient, content, rect.X, rect.Y, rect.Width, rect.Height);
+                content.RestoreState();
+            }
+            else
+            {
+                bool hasAlpha = BrushHasAlpha(brush);
+                if (hasAlpha) content.SaveState();
+                SetFillFromBrush(brush, content, rect.X, rect.Y, rect.Width, rect.Height);
+                content.Rectangle(rect.X, rect.Y, rect.Width, rect.Height);
+                content.Fill();
+                if (hasAlpha) content.RestoreState();
+            }
         }
 
         /// <inheritdoc />
@@ -228,9 +255,12 @@ namespace Rend.Output.Pdf
             EnsurePage();
             var content = _currentPage!.Content;
 
+            bool hasAlpha = pen.Color.A < 255;
+            if (hasAlpha) content.SaveState();
             SetStrokeFromPen(pen, content);
             content.Rectangle(rect.X, rect.Y, rect.Width, rect.Height);
             content.Stroke();
+            if (hasAlpha) content.RestoreState();
         }
 
         /// <inheritdoc />
@@ -251,13 +281,45 @@ namespace Rend.Output.Pdf
         {
             EnsurePage();
             var content = _currentPage!.Content;
+            var bounds = path.GetBounds();
 
-            SetFillFromBrush(brush, content);
-            WritePath(path, content);
-            if (path.FillType == Rendering.PathFillType.EvenOdd)
-                content.FillEvenOdd();
+            // Approximate Gaussian blur for shadow paths
+            if (_maskBlurSigma > 0)
+            {
+                if (path.FillType == Rendering.PathFillType.EvenOdd)
+                    PaintBlurredInsetShadow(path, brush, content);
+                else
+                    PaintBlurredOuterShadow(bounds, brush, content);
+                return;
+            }
+
+            if (brush.Gradient != null && brush.Gradient.Stops.Length > 0
+                && PdfGradientBuilder.IsSupported(brush.Gradient))
+            {
+                // PDF shading (sh) fills the entire current clip region.
+                // Clip to the path first, then paint the gradient.
+                content.SaveState();
+                WritePath(path, content);
+                if (path.FillType == Rendering.PathFillType.EvenOdd)
+                    content.ClipEvenOdd();
+                else
+                    content.Clip();
+                content.EndPath();
+                PdfGradientBuilder.Apply(brush.Gradient, content, bounds.X, bounds.Y, bounds.Width, bounds.Height);
+                content.RestoreState();
+            }
             else
-                content.Fill();
+            {
+                bool hasAlpha = BrushHasAlpha(brush);
+                if (hasAlpha) content.SaveState();
+                SetFillFromBrush(brush, content, bounds.X, bounds.Y, bounds.Width, bounds.Height);
+                WritePath(path, content);
+                if (path.FillType == Rendering.PathFillType.EvenOdd)
+                    content.FillEvenOdd();
+                else
+                    content.Fill();
+                if (hasAlpha) content.RestoreState();
+            }
         }
 
         /// <inheritdoc />
@@ -278,7 +340,12 @@ namespace Rend.Output.Pdf
             var content = _currentPage!.Content;
 
             PdfImage pdfImage = _imageCache.GetOrAdd(image.Data, image.Format, _doc);
-            content.DrawImage(pdfImage, destRect);
+
+            // Counter-flip Y for images. The page CTM flips Y, so we negate height
+            // and shift Y by height to draw the image right-side-up.
+            content.DrawImage(pdfImage,
+                destRect.Width, 0f, 0f, -destRect.Height,
+                destRect.X, destRect.Y + destRect.Height);
         }
 
         /// <inheritdoc />
@@ -292,8 +359,11 @@ namespace Rend.Output.Pdf
 
             PdfFont pdfFont = ResolvePdfFont(style.Font);
 
+            bool hasAlpha = style.Color.A < 255;
+            if (hasAlpha) content.SaveState();
             style.Color.ToFloatRgb(out float r, out float g, out float b);
             content.SetFillColor(r, g, b);
+            if (hasAlpha) content.SetFillOpacity(style.Color.A / 255f);
 
             content.BeginText();
             content.SetFont(pdfFont, style.FontSize);
@@ -303,7 +373,9 @@ namespace Rend.Output.Pdf
             if (style.WordSpacing != 0)
                 content.SetWordSpacing(style.WordSpacing);
 
-            content.MoveTextPosition(x, y);
+            // Counter-flip Y in text matrix to cancel the page-level Y-flip CTM.
+            // CTM is [1 0 0 -1 0 h], so text matrix needs [1 0 0 -1 x y] → combined Y = 1 (upright).
+            content.SetTextMatrix(1f, 0f, 0f, -1f, x, y);
             content.ShowText(pdfFont, text);
 
             if (style.LetterSpacing != 0)
@@ -312,6 +384,7 @@ namespace Rend.Output.Pdf
                 content.SetWordSpacing(0);
 
             content.EndText();
+            if (hasAlpha) content.RestoreState();
         }
 
         /// <inheritdoc />
@@ -322,18 +395,24 @@ namespace Rend.Output.Pdf
 
             PdfFont pdfFont = ResolvePdfFont(font);
 
+            bool hasAlpha = color.A < 255;
+            if (hasAlpha) content.SaveState();
             color.ToFloatRgb(out float r, out float g, out float b);
             content.SetFillColor(r, g, b);
+            if (hasAlpha) content.SetFillOpacity(color.A / 255f);
 
             content.BeginText();
             content.SetFont(pdfFont, run.FontSize);
-            content.MoveTextPosition(x, y);
+
+            // Counter-flip Y in text matrix to cancel the page-level Y-flip CTM.
+            content.SetTextMatrix(1f, 0f, 0f, -1f, x, y);
 
             // Use the original text for encoding. The PdfFont.Encode method handles
             // glyph mapping internally, so passing the original text ensures correct
             // CID encoding for embedded fonts.
             content.ShowText(pdfFont, run.OriginalText);
             content.EndText();
+            if (hasAlpha) content.RestoreState();
         }
 
         public (float UnderlinePosition, float UnderlineThickness,
@@ -441,6 +520,8 @@ namespace Rend.Output.Pdf
                 {
                     brush.Gradient.Stops[0].Color.ToFloatRgb(out float gr, out float gg, out float gb);
                     content.SetFillColor(gr, gg, gb);
+                    if (brush.Gradient.Stops[0].Color.A < 255)
+                        content.SetFillOpacity(brush.Gradient.Stops[0].Color.A / 255f);
                 }
                 else
                 {
@@ -451,6 +532,8 @@ namespace Rend.Output.Pdf
             {
                 brush.Color.ToFloatRgb(out float r, out float g, out float b);
                 content.SetFillColor(r, g, b);
+                if (brush.Color.A < 255)
+                    content.SetFillOpacity(brush.Color.A / 255f);
             }
         }
 
@@ -458,12 +541,409 @@ namespace Rend.Output.Pdf
         {
             pen.Color.ToFloatRgb(out float r, out float g, out float b);
             content.SetStrokeColor(r, g, b);
+            if (pen.Color.A < 255)
+                content.SetStrokeOpacity(pen.Color.A / 255f);
             content.SetLineWidth(pen.Width);
 
             if (pen.DashPattern != null && pen.DashPattern.Length > 0)
             {
                 content.SetDashPattern(pen.DashPattern, pen.DashOffset);
             }
+        }
+
+        private static bool BrushHasAlpha(BrushInfo brush)
+        {
+            if (brush.Gradient != null && brush.Gradient.Stops.Length > 0)
+            {
+                for (int i = 0; i < brush.Gradient.Stops.Length; i++)
+                    if (brush.Gradient.Stops[i].Color.A < 255) return true;
+                return false;
+            }
+            return brush.Color.A < 255;
+        }
+
+        /// <summary>
+        /// Renders a Gaussian-blurred outer box shadow by rasterizing it as a PNG image
+        /// and embedding it in the PDF. This produces smooth, artifact-free shadows.
+        /// </summary>
+        private void PaintBlurredOuterShadow(RectF rect, BrushInfo brush, PdfContentStream content)
+        {
+            float sigma = _maskBlurSigma;
+            float pad = (float)System.Math.Ceiling(sigma * 3f);
+
+            CssColor baseColor = brush.Color;
+            byte r = baseColor.R, g = baseColor.G, b = baseColor.B, a = baseColor.A;
+
+            // Image covers rect + padding on all sides
+            // Use 1 CSS px = 1 image pixel (sufficient for blurred content)
+            int imgW = (int)System.Math.Ceiling(rect.Width + pad * 2);
+            int imgH = (int)System.Math.Ceiling(rect.Height + pad * 2);
+            if (imgW < 1 || imgH < 1) return;
+
+            // Clamp image size to prevent excessive memory usage
+            if (imgW > 2000) imgW = 2000;
+            if (imgH > 2000) imgH = 2000;
+
+            float scaleX = (rect.Width + pad * 2) / imgW;
+            float scaleY = (rect.Height + pad * 2) / imgH;
+
+            // Create RGBA pixel buffer: fill rect area with shadow color, then blur alpha
+            byte[] pixels = new byte[imgW * imgH * 4];
+
+            // Rect bounds in image coordinates
+            int rx0 = (int)(pad / scaleX);
+            int ry0 = (int)(pad / scaleY);
+            int rx1 = (int)((pad + rect.Width) / scaleX);
+            int ry1 = (int)((pad + rect.Height) / scaleY);
+            if (rx1 > imgW) rx1 = imgW;
+            if (ry1 > imgH) ry1 = imgH;
+
+            // Fill the rectangle area with full alpha
+            for (int y = ry0; y < ry1; y++)
+            {
+                for (int x = rx0; x < rx1; x++)
+                {
+                    int idx = (y * imgW + x) * 4;
+                    pixels[idx] = r;
+                    pixels[idx + 1] = g;
+                    pixels[idx + 2] = b;
+                    pixels[idx + 3] = a;
+                }
+            }
+
+            // Apply separable Gaussian blur on alpha channel
+            GaussianBlurAlpha(pixels, imgW, imgH, sigma / scaleX);
+
+            // Set RGB on all pixels (blur only affected alpha)
+            for (int i = 0; i < pixels.Length; i += 4)
+            {
+                if (pixels[i + 3] > 0)
+                {
+                    pixels[i] = r;
+                    pixels[i + 1] = g;
+                    pixels[i + 2] = b;
+                }
+            }
+
+            // Encode as PNG and embed
+            byte[] pngBytes = EncodePngRgba(pixels, imgW, imgH);
+            var image = _doc.AddImage(pngBytes, ImageFormat.Png);
+
+            // Draw at the shadow position (rect - padding)
+            var destRect = new RectF(
+                rect.X - pad,
+                rect.Y - pad,
+                rect.Width + pad * 2,
+                rect.Height + pad * 2);
+            content.DrawImage(image, destRect);
+        }
+
+        /// <summary>
+        /// Renders a Gaussian-blurred inset box shadow by rasterizing it as a PNG image.
+        /// Inset shadow: shadow color fills outside the inner rect, blurs inward.
+        /// The result is drawn over the entire outer rect (element area), clipped to it.
+        /// </summary>
+        private void PaintBlurredInsetShadow(PathData path, BrushInfo brush, PdfContentStream content)
+        {
+            float sigma = _maskBlurSigma;
+
+            var segs = path.GetSegments();
+            if (segs.Count < 10)
+            {
+                WritePath(path, content);
+                content.FillEvenOdd();
+                return;
+            }
+
+            // Extract outer rect (element boundary) from first sub-path
+            float ox = segs[0].X, oy = segs[0].Y;
+            float ox2 = segs[1].X, oy2 = segs[2].Y;
+            var outerRect = new RectF(ox, oy, ox2 - ox, oy2 - oy);
+
+            // Extract inner rect (the hole / non-shadow area) from second sub-path
+            float ix = segs[5].X, iy = segs[5].Y;
+            float ix2 = segs[6].X, iy2 = segs[7].Y;
+            var innerRect = new RectF(ix, iy, ix2 - ix, iy2 - iy);
+
+            CssColor baseColor = brush.Color;
+            byte r = baseColor.R, g = baseColor.G, b = baseColor.B, a = baseColor.A;
+
+            // Image covers the outer rect (element) plus padding so blur doesn't clip at edges
+            int padPx = (int)System.Math.Ceiling(sigma * 3f);
+            int imgW = (int)System.Math.Ceiling(outerRect.Width) + padPx * 2;
+            int imgH = (int)System.Math.Ceiling(outerRect.Height) + padPx * 2;
+            if (imgW < 1 || imgH < 1) return;
+            if (imgW > 2000) imgW = 2000;
+            if (imgH > 2000) imgH = 2000;
+
+            float scaleX = (outerRect.Width + padPx * 2) / imgW;
+            float scaleY = (outerRect.Height + padPx * 2) / imgH;
+
+            byte[] pixels = new byte[imgW * imgH * 4];
+
+            // Fill everything with shadow color (the "wall" surrounding the element)
+            for (int i = 0; i < pixels.Length; i += 4)
+            {
+                pixels[i] = r;
+                pixels[i + 1] = g;
+                pixels[i + 2] = b;
+                pixels[i + 3] = a;
+            }
+
+            // Clear the inner rect (the hole) — this is the non-shadow center area
+            // Convert innerRect from page coords to image coords
+            int hx0 = (int)((innerRect.X - outerRect.X + padPx) / scaleX);
+            int hy0 = (int)((innerRect.Y - outerRect.Y + padPx) / scaleY);
+            int hx1 = (int)((innerRect.X + innerRect.Width - outerRect.X + padPx) / scaleX);
+            int hy1 = (int)((innerRect.Y + innerRect.Height - outerRect.Y + padPx) / scaleY);
+            if (hx0 < 0) hx0 = 0;
+            if (hy0 < 0) hy0 = 0;
+            if (hx1 > imgW) hx1 = imgW;
+            if (hy1 > imgH) hy1 = imgH;
+
+            for (int y = hy0; y < hy1; y++)
+            {
+                for (int x = hx0; x < hx1; x++)
+                {
+                    int idx = (y * imgW + x) * 4;
+                    pixels[idx + 3] = 0;
+                }
+            }
+
+            // Blur alpha channel
+            GaussianBlurAlpha(pixels, imgW, imgH, sigma / scaleX);
+
+            // Set RGB on all blurred pixels
+            for (int i = 0; i < pixels.Length; i += 4)
+            {
+                if (pixels[i + 3] > 0)
+                {
+                    pixels[i] = r;
+                    pixels[i + 1] = g;
+                    pixels[i + 2] = b;
+                }
+            }
+
+            // Crop to the outer rect area (strip the padding)
+            int cropW = (int)System.Math.Ceiling(outerRect.Width);
+            int cropH = (int)System.Math.Ceiling(outerRect.Height);
+            if (cropW > imgW) cropW = imgW;
+            if (cropH > imgH) cropH = imgH;
+            int cropX0 = padPx;
+            int cropY0 = padPx;
+
+            byte[] cropped = new byte[cropW * cropH * 4];
+            for (int y = 0; y < cropH; y++)
+            {
+                int srcY = cropY0 + y;
+                if (srcY >= imgH) break;
+                int copyLen = cropW * 4;
+                int srcOff = (srcY * imgW + cropX0) * 4;
+                int dstOff = y * cropW * 4;
+                if (srcOff + copyLen <= pixels.Length && dstOff + copyLen <= cropped.Length)
+                    Buffer.BlockCopy(pixels, srcOff, cropped, dstOff, copyLen);
+            }
+
+            byte[] pngBytes = EncodePngRgba(cropped, cropW, cropH);
+            var image = _doc.AddImage(pngBytes, ImageFormat.Png);
+
+            // Draw clipped to the outer rect (the element boundary)
+            content.SaveState();
+            content.Rectangle(outerRect.X, outerRect.Y, outerRect.Width, outerRect.Height);
+            content.Clip();
+            content.EndPath();
+            content.DrawImage(image, outerRect);
+            content.RestoreState();
+        }
+
+        /// <summary>
+        /// Separable Gaussian blur on the alpha channel of an RGBA pixel buffer.
+        /// </summary>
+        private static void GaussianBlurAlpha(byte[] pixels, int w, int h, float sigma)
+        {
+            if (sigma < 0.5f) return;
+
+            // Build 1D Gaussian kernel
+            int radius = (int)System.Math.Ceiling(sigma * 3f);
+            if (radius < 1) radius = 1;
+            float[] kernel = new float[radius * 2 + 1];
+            float sum = 0;
+            for (int i = -radius; i <= radius; i++)
+            {
+                float v = (float)System.Math.Exp(-(i * i) / (2f * sigma * sigma));
+                kernel[i + radius] = v;
+                sum += v;
+            }
+            for (int i = 0; i < kernel.Length; i++)
+                kernel[i] /= sum;
+
+            // Horizontal pass: alpha channel only
+            byte[] temp = new byte[w * h];
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    float acc = 0;
+                    for (int k = -radius; k <= radius; k++)
+                    {
+                        int sx = x + k;
+                        if (sx < 0) sx = 0;
+                        else if (sx >= w) sx = w - 1;
+                        acc += pixels[(y * w + sx) * 4 + 3] * kernel[k + radius];
+                    }
+                    temp[y * w + x] = (byte)(acc + 0.5f);
+                }
+            }
+
+            // Vertical pass
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    float acc = 0;
+                    for (int k = -radius; k <= radius; k++)
+                    {
+                        int sy = y + k;
+                        if (sy < 0) sy = 0;
+                        else if (sy >= h) sy = h - 1;
+                        acc += temp[sy * w + x] * kernel[k + radius];
+                    }
+                    int val = (int)(acc + 0.5f);
+                    if (val > 255) val = 255;
+                    pixels[(y * w + x) * 4 + 3] = (byte)val;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Minimal PNG encoder for RGBA pixel data.
+        /// </summary>
+        private static byte[] EncodePngRgba(byte[] rgba, int width, int height)
+        {
+            using (var ms = new MemoryStream())
+            {
+                // PNG signature
+                ms.Write(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, 0, 8);
+
+                // IHDR
+                byte[] ihdr = new byte[13];
+                WriteBigEndian32(ihdr, 0, width);
+                WriteBigEndian32(ihdr, 4, height);
+                ihdr[8] = 8;  // bit depth
+                ihdr[9] = 6;  // RGBA
+                ihdr[10] = 0; // compression
+                ihdr[11] = 0; // filter
+                ihdr[12] = 0; // interlace
+                WritePngChunk(ms, "IHDR", ihdr);
+
+                // IDAT — deflate-compressed scanlines with filter byte 0 (None) per row
+                byte[] rawData;
+                using (var dataMs = new MemoryStream())
+                {
+                    using (var deflate = new DeflateStream(dataMs, CompressionLevel.Fastest, leaveOpen: true))
+                    {
+                        byte[] filterByte = new byte[] { 0 };
+                        int stride = width * 4;
+                        for (int y = 0; y < height; y++)
+                        {
+                            deflate.Write(filterByte, 0, 1);
+                            deflate.Write(rgba, y * stride, stride);
+                        }
+                    }
+                    rawData = dataMs.ToArray();
+                }
+
+                // Wrap in zlib: header (0x78 0x01) + deflate data + Adler32
+                byte[] zlibData;
+                using (var zlibMs = new MemoryStream())
+                {
+                    zlibMs.WriteByte(0x78);
+                    zlibMs.WriteByte(0x01);
+                    zlibMs.Write(rawData, 0, rawData.Length);
+
+                    // Compute Adler-32 of uncompressed data
+                    uint adler = Adler32(rgba, width, height);
+                    byte[] adlerBytes = new byte[4];
+                    WriteBigEndian32(adlerBytes, 0, (int)adler);
+                    zlibMs.Write(adlerBytes, 0, 4);
+                    zlibData = zlibMs.ToArray();
+                }
+
+                WritePngChunk(ms, "IDAT", zlibData);
+
+                // IEND
+                WritePngChunk(ms, "IEND", Array.Empty<byte>());
+
+                return ms.ToArray();
+            }
+        }
+
+        private static uint Adler32(byte[] rgba, int width, int height)
+        {
+            uint a = 1, b = 0;
+            int stride = width * 4;
+            for (int y = 0; y < height; y++)
+            {
+                // filter byte = 0
+                a = (a + 0) % 65521;
+                b = (b + a) % 65521;
+                // row data
+                for (int x = 0; x < stride; x++)
+                {
+                    a = (a + rgba[y * stride + x]) % 65521;
+                    b = (b + a) % 65521;
+                }
+            }
+            return (b << 16) | a;
+        }
+
+        private static void WritePngChunk(Stream s, string type, byte[] data)
+        {
+            byte[] lenBytes = new byte[4];
+            WriteBigEndian32(lenBytes, 0, data.Length);
+            s.Write(lenBytes, 0, 4);
+
+            byte[] typeBytes = System.Text.Encoding.ASCII.GetBytes(type);
+            s.Write(typeBytes, 0, 4);
+            s.Write(data, 0, data.Length);
+
+            // CRC32 over type + data
+            uint crc = Crc32(typeBytes, data);
+            byte[] crcBytes = new byte[4];
+            WriteBigEndian32(crcBytes, 0, (int)crc);
+            s.Write(crcBytes, 0, 4);
+        }
+
+        private static void WriteBigEndian32(byte[] buf, int offset, int value)
+        {
+            buf[offset] = (byte)((value >> 24) & 0xFF);
+            buf[offset + 1] = (byte)((value >> 16) & 0xFF);
+            buf[offset + 2] = (byte)((value >> 8) & 0xFF);
+            buf[offset + 3] = (byte)(value & 0xFF);
+        }
+
+        private static uint Crc32(byte[] type, byte[] data)
+        {
+            // CRC-32 per PNG spec (ISO 3309)
+            uint crc = 0xFFFFFFFF;
+            for (int i = 0; i < type.Length; i++)
+                crc = Crc32Update(crc, type[i]);
+            for (int i = 0; i < data.Length; i++)
+                crc = Crc32Update(crc, data[i]);
+            return crc ^ 0xFFFFFFFF;
+        }
+
+        private static uint Crc32Update(uint crc, byte b)
+        {
+            crc ^= b;
+            for (int j = 0; j < 8; j++)
+            {
+                if ((crc & 1) != 0)
+                    crc = (crc >> 1) ^ 0xEDB88320;
+                else
+                    crc >>= 1;
+            }
+            return crc;
         }
 
         private static void WritePath(PathData path, PdfContentStream content)

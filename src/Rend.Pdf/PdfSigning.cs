@@ -1,5 +1,7 @@
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Rend.Pdf
 {
@@ -11,22 +13,22 @@ namespace Rend.Pdf
     {
         private static readonly PdfSigningService Instance = new PdfSigningService();
 
-        /// <inheritdoc cref="IPdfSigningService.Sign(Stream, Stream, PdfSignatureOptions)"/>
-        public static void Sign(Stream input, Stream output, PdfSignatureOptions options)
-            => Instance.Sign(input, output, options);
+        /// <inheritdoc cref="IPdfSigningService.SignAsync(Stream, Stream, PdfSignatureOptions, CancellationToken)"/>
+        public static Task SignAsync(Stream input, Stream output, PdfSignatureOptions options, CancellationToken cancellationToken = default)
+            => Instance.SignAsync(input, output, options, cancellationToken);
 
-        /// <inheritdoc cref="IPdfSigningService.Sign(byte[], PdfSignatureOptions)"/>
-        public static byte[] Sign(byte[] pdfBytes, PdfSignatureOptions options)
-            => Instance.Sign(pdfBytes, options);
+        /// <inheritdoc cref="IPdfSigningService.SignAsync(byte[], PdfSignatureOptions, CancellationToken)"/>
+        public static Task<byte[]> SignAsync(byte[] pdfBytes, PdfSignatureOptions options, CancellationToken cancellationToken = default)
+            => Instance.SignAsync(pdfBytes, options, cancellationToken);
 
-        /// <inheritdoc cref="IPdfSigningService.Sign(Stream, Stream, X509Certificate2, string?, string?)"/>
-        public static void Sign(Stream input, Stream output, X509Certificate2 certificate,
-            string? signerName = null, string? reason = null)
-            => Instance.Sign(input, output, certificate, signerName, reason);
+        /// <inheritdoc cref="IPdfSigningService.SignAsync(Stream, Stream, X509Certificate2, string?, string?, CancellationToken)"/>
+        public static Task SignAsync(Stream input, Stream output, X509Certificate2 certificate,
+            string? signerName = null, string? reason = null, CancellationToken cancellationToken = default)
+            => Instance.SignAsync(input, output, certificate, signerName, reason, cancellationToken);
 
-        /// <inheritdoc cref="IPdfSigningService.Sign(byte[], X509Certificate2, string?, string?)"/>
-        public static byte[] Sign(byte[] pdfBytes, X509Certificate2 certificate,
-            string? signerName = null, string? reason = null)
-            => Instance.Sign(pdfBytes, certificate, signerName, reason);
+        /// <inheritdoc cref="IPdfSigningService.SignAsync(byte[], X509Certificate2, string?, string?, CancellationToken)"/>
+        public static Task<byte[]> SignAsync(byte[] pdfBytes, X509Certificate2 certificate,
+            string? signerName = null, string? reason = null, CancellationToken cancellationToken = default)
+            => Instance.SignAsync(pdfBytes, certificate, signerName, reason, cancellationToken);
     }
 }

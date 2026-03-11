@@ -2,6 +2,11 @@ using System;
 using System.Buffers;
 using System.IO;
 using System.Runtime.CompilerServices;
+#if NET8_0_OR_GREATER
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
+#endif
 
 namespace Rend.Pdf.Internal
 {
@@ -23,6 +28,17 @@ namespace Rend.Pdf.Internal
         }
 
         public int Length => _position;
+
+        /// <summary>
+        /// Get the content stream data as a read-only span (zero-copy).
+        /// Valid only until the builder is modified or disposed.
+        /// </summary>
+        public ReadOnlySpan<byte> AsSpan() => _buffer.AsSpan(0, _position);
+
+        /// <summary>
+        /// Get the underlying buffer and length for direct access (zero-copy).
+        /// </summary>
+        internal (byte[] Buffer, int Length) GetBuffer() => (_buffer, _position);
 
         /// <summary>
         /// Get the content stream data as a byte array (copies).
@@ -354,18 +370,96 @@ namespace Rend.Pdf.Internal
         }
 
         /// <summary>Tj — Show text string (hex-encoded for CIDFont).</summary>
-        public void ShowTextHex(byte[] encodedBytes)
+        public void ShowTextHex(byte[] encodedBytes) => ShowTextHex(encodedBytes, encodedBytes.Length);
+
+        /// <summary>Tj — Show text string (hex-encoded for CIDFont), using only the first <paramref name="length"/> bytes.</summary>
+        public void ShowTextHex(byte[] encodedBytes, int length)
         {
-            WriteByte((byte)'<');
-            for (int i = 0; i < encodedBytes.Length; i++)
-            {
-                EnsureCapacity(2);
-                byte b = encodedBytes[i];
-                _buffer[_position++] = HexChar(b >> 4);
-                _buffer[_position++] = HexChar(b & 0x0F);
-            }
-            WriteOp("> Tj\n");
+            // 1 byte for '<' + 2 bytes per input byte + 5 bytes for "> Tj\n"
+            int needed = length * 2 + 6;
+            EnsureCapacity(needed);
+            _buffer[_position++] = (byte)'<';
+            HexEncode(encodedBytes, length, _buffer, ref _position);
+            _buffer[_position++] = (byte)'>';
+            _buffer[_position++] = (byte)' ';
+            _buffer[_position++] = (byte)'T';
+            _buffer[_position++] = (byte)'j';
+            _buffer[_position++] = (byte)'\n';
         }
+
+        /// <summary>
+        /// High-performance hex encoding. Uses SSSE3 SIMD on .NET 8+ for 16-byte blocks,
+        /// falls back to lookup table on .NET Standard 2.0.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void HexEncode(byte[] src, int srcLen, byte[] dst, ref int dstPos)
+        {
+#if NET8_0_OR_GREATER
+            if (Ssse3.IsSupported && srcLen >= 16)
+            {
+                HexEncodeSsse3(src, srcLen, dst, ref dstPos);
+                return;
+            }
+#endif
+            HexEncodeScalar(src, srcLen, dst, ref dstPos);
+        }
+
+        private static void HexEncodeScalar(byte[] src, int srcLen, byte[] dst, ref int dstPos)
+        {
+            for (int i = 0; i < srcLen; i++)
+            {
+                byte b = src[i];
+                dst[dstPos++] = HexTable[b >> 4];
+                dst[dstPos++] = HexTable[b & 0x0F];
+            }
+        }
+
+#if NET8_0_OR_GREATER
+        private static void HexEncodeSsse3(byte[] src, int srcLen, byte[] dst, ref int dstPos)
+        {
+            // SSSE3 vectorized hex encoding: process 16 input bytes → 32 hex bytes at a time
+            var hexLut = Vector128.Create(
+                (byte)'0', (byte)'1', (byte)'2', (byte)'3',
+                (byte)'4', (byte)'5', (byte)'6', (byte)'7',
+                (byte)'8', (byte)'9', (byte)'A', (byte)'B',
+                (byte)'C', (byte)'D', (byte)'E', (byte)'F');
+            var mask0F = Vector128.Create((byte)0x0F);
+
+            int i = 0;
+            ref byte srcRef = ref MemoryMarshal.GetArrayDataReference(src);
+            ref byte dstRef = ref MemoryMarshal.GetArrayDataReference(dst);
+
+            for (; i + 16 <= srcLen; i += 16)
+            {
+                var input = Vector128.LoadUnsafe(ref srcRef, (nuint)i);
+
+                // Split each byte into high and low nibbles
+                var hi = Sse2.ShiftRightLogical(input.AsUInt16(), 4).AsByte() & mask0F;
+                var lo = input & mask0F;
+
+                // Lookup hex chars
+                var hexHi = Ssse3.Shuffle(hexLut, hi);
+                var hexLo = Ssse3.Shuffle(hexLut, lo);
+
+                // Interleave: hi0 lo0 hi1 lo1 ...
+                var lower = Sse2.UnpackLow(hexHi, hexLo);
+                var upper = Sse2.UnpackHigh(hexHi, hexLo);
+
+                lower.StoreUnsafe(ref dstRef, (nuint)dstPos);
+                dstPos += 16;
+                upper.StoreUnsafe(ref dstRef, (nuint)dstPos);
+                dstPos += 16;
+            }
+
+            // Scalar tail
+            for (; i < srcLen; i++)
+            {
+                byte b = src[i];
+                dst[dstPos++] = HexTable[b >> 4];
+                dst[dstPos++] = HexTable[b & 0x0F];
+            }
+        }
+#endif
 
         /// <summary>Tj — Show text string (literal, for Standard 14 / simple fonts).</summary>
         public void ShowTextLiteral(string text)
@@ -646,9 +740,10 @@ namespace Rend.Pdf.Internal
             }
         }
 
+        private static ReadOnlySpan<byte> HexTable => "0123456789ABCDEF"u8;
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static byte HexChar(int nibble) =>
-            (byte)(nibble < 10 ? '0' + nibble : 'A' + nibble - 10);
+        private static byte HexChar(int nibble) => HexTable[nibble];
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void EnsureCapacity(int needed)

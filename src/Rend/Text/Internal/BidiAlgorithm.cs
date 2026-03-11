@@ -7,7 +7,7 @@ namespace Rend.Text.Internal
     /// Implements a simplified Unicode Bidirectional Algorithm (UAX #9).
     /// Determines embedding levels and visual reordering for bidirectional text.
     /// </summary>
-    public sealed class BidiAlgorithm
+    internal sealed class BidiAlgorithm
     {
         private const int MaxExplicitDepth = 125;
 

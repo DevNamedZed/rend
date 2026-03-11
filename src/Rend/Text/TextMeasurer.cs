@@ -6,7 +6,7 @@ namespace Rend.Text
     /// <summary>
     /// Provides text measurement capabilities by combining font resolution with text shaping.
     /// </summary>
-    public sealed class TextMeasurer
+    internal sealed class TextMeasurer
     {
         private readonly IFontProvider _fontProvider;
         private readonly ITextShaper _textShaper;

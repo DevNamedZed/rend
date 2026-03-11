@@ -5,7 +5,7 @@ namespace Rend.Rendering
     /// <summary>
     /// Holds raw image data along with its dimensions and format.
     /// </summary>
-    public sealed class ImageData
+    internal sealed class ImageData
     {
         /// <summary>Gets the raw image bytes.</summary>
         public byte[] Data { get; }

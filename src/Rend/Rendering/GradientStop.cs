@@ -6,7 +6,7 @@ namespace Rend.Rendering
     /// <summary>
     /// Represents a color stop within a gradient, defined by a color and a position from 0 to 1.
     /// </summary>
-    public readonly struct GradientStop : IEquatable<GradientStop>
+    internal readonly struct GradientStop : IEquatable<GradientStop>
     {
         /// <summary>Gets the color at this stop.</summary>
         public CssColor Color { get; }

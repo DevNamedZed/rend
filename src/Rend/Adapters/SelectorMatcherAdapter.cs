@@ -10,7 +10,7 @@ namespace Rend.Adapters
     /// Converts <see cref="IStylableElement"/> back to the underlying <see cref="Element"/>
     /// for matching, and computes specificity via the Html selector parser.
     /// </summary>
-    public sealed class SelectorMatcherAdapter : ISelectorMatcher
+    internal sealed class SelectorMatcherAdapter : ISelectorMatcher
     {
         private readonly Dictionary<string, SelectorList> _cache = new Dictionary<string, SelectorList>();
 

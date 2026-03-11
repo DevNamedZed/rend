@@ -27,14 +27,15 @@ namespace Rend.Tests.Fonts
         [Fact]
         public void GetLineHeight_ComputesCorrectly()
         {
-            // LineHeight = fontSize * (Ascent - Descent + LineGap) / UnitsPerEm
-            // = 16 * (800 - (-200) + 90) / 1000
-            // = 16 * 1090 / 1000
-            // = 17.44
+            // Chrome rounds each component individually (lroundf):
+            // ascent = round(16 * 800 / 1000) = round(12.8) = 13
+            // descent = round(16 * 200 / 1000) = round(3.2) = 3
+            // lineGap = round(16 * 90 / 1000) = round(1.44) = 1
+            // total = 13 + 3 + 1 = 17
             var metrics = new FontMetricsInfo(800, -200, 90, 1000, 700, 500);
             float lineHeight = metrics.GetLineHeight(16f);
 
-            Assert.Equal(17.44f, lineHeight, 2);
+            Assert.Equal(17f, lineHeight, 2);
         }
 
         [Fact]
@@ -50,14 +51,15 @@ namespace Rend.Tests.Fonts
         [Fact]
         public void GetLineHeight_WithUnitsPerEm2048()
         {
-            // Common for TrueType: unitsPerEm = 2048
-            // LineHeight = 12 * (1854 - (-434) + 0) / 2048
-            // = 12 * 2288 / 2048
-            // = 13.40625
+            // Chrome rounds each component individually (lroundf):
+            // ascent = round(12 * 1854 / 2048) = round(10.863) = 11
+            // descent = round(12 * 434 / 2048) = round(2.543) = 3
+            // lineGap = 0
+            // total = 11 + 3 = 14
             var metrics = new FontMetricsInfo(1854, -434, 0, 2048, 1490, 1062);
             float lineHeight = metrics.GetLineHeight(12f);
 
-            Assert.Equal(13.40625f, lineHeight, 4);
+            Assert.Equal(14f, lineHeight, 4);
         }
 
         [Fact]
@@ -72,11 +74,11 @@ namespace Rend.Tests.Fonts
         [Fact]
         public void GetAscent_ComputesCorrectly()
         {
-            // Ascent = fontSize * Ascent / UnitsPerEm = 16 * 800 / 1000 = 12.8
+            // round(16 * 800 / 1000) = round(12.8) = 13
             var metrics = new FontMetricsInfo(800, -200, 0, 1000, 700, 500);
             float ascent = metrics.GetAscent(16f);
 
-            Assert.Equal(12.8f, ascent, 2);
+            Assert.Equal(13f, ascent, 2);
         }
 
         [Fact]
@@ -91,12 +93,11 @@ namespace Rend.Tests.Fonts
         [Fact]
         public void GetDescent_ComputesCorrectly_ReturnsPositive()
         {
-            // Descent = fontSize * -Descent / UnitsPerEm = 16 * 200 / 1000 = 3.2
-            // Note: Descent is typically negative, so the method negates it
+            // round(16 * 200 / 1000) = round(3.2) = 3
             var metrics = new FontMetricsInfo(800, -200, 0, 1000, 700, 500);
             float descent = metrics.GetDescent(16f);
 
-            Assert.Equal(3.2f, descent, 2);
+            Assert.Equal(3f, descent, 2);
         }
 
         [Fact]
@@ -114,8 +115,8 @@ namespace Rend.Tests.Fonts
             var metrics = new FontMetricsInfo(800, -200, 0, 1000, 700, 500);
             float ascent = metrics.GetAscent(72f);
 
-            // 72 * 800 / 1000 = 57.6
-            Assert.Equal(57.6f, ascent, 2);
+            // round(72 * 800 / 1000) = round(57.6) = 58
+            Assert.Equal(58f, ascent, 2);
         }
 
         [Fact]
@@ -124,22 +125,27 @@ namespace Rend.Tests.Fonts
             var metrics = new FontMetricsInfo(800, -200, 0, 1000, 700, 500);
             float descent = metrics.GetDescent(72f);
 
-            // 72 * 200 / 1000 = 14.4
-            Assert.Equal(14.4f, descent, 2);
+            // round(72 * 200 / 1000) = round(14.4) = 14
+            Assert.Equal(14f, descent, 2);
         }
 
         [Fact]
-        public void GetLineHeight_EqualsAscentPlusDescentPlusLineGapScaled()
+        public void GetLineHeight_EqualsRoundedComponentsSum()
         {
+            // Chrome rounds each component individually, so lineHeight = round(a) + round(d) + round(lg)
             var metrics = new FontMetricsInfo(800, -200, 90, 1000, 700, 500);
             float fontSize = 24f;
 
             float lineHeight = metrics.GetLineHeight(fontSize);
-            float ascent = metrics.GetAscent(fontSize);
-            float descent = metrics.GetDescent(fontSize);
-            float lineGapScaled = fontSize * metrics.LineGap / metrics.UnitsPerEm;
+            // round(24*800/1000) = round(19.2) = 19
+            // round(24*200/1000) = round(4.8) = 5
+            // round(24*90/1000) = round(2.16) = 2
+            // total = 19 + 5 + 2 = 26
+            Assert.Equal(26f, lineHeight, 4);
 
-            Assert.Equal(lineHeight, ascent + descent + lineGapScaled, 4);
+            // GetAscent uses WinAscent (0 here, so falls back to Ascent=800)
+            float ascent = metrics.GetAscent(fontSize);
+            Assert.Equal(19f, ascent, 4);
         }
     }
 }

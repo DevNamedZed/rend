@@ -2,7 +2,7 @@ using Rend.Core.Values;
 
 namespace Rend.Rendering
 {
-    public enum StrokeCap
+    internal enum StrokeCap
     {
         Butt,
         Round,
@@ -12,7 +12,7 @@ namespace Rend.Rendering
     /// <summary>
     /// Describes a stroke operation with color, width, and optional dash pattern.
     /// </summary>
-    public readonly struct PenInfo
+    internal readonly struct PenInfo
     {
         /// <summary>Gets the stroke color.</summary>
         public CssColor Color { get; }

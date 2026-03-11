@@ -1433,14 +1433,7 @@ namespace Rend.Tests.Layout
         /// </summary>
         private static byte[]? RenderOrSkip(string html)
         {
-            try
-            {
-                return Render.ToPdf(html);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return null;
-            }
+            return Render.ToPdf(html);
         }
 
         /// <summary>
@@ -1454,12 +1447,5 @@ namespace Rend.Tests.Layout
             Assert.StartsWith("%PDF-", header);
         }
 
-        private static bool IsNativeLibraryFailure(Exception ex)
-        {
-            return ex is DllNotFoundException ||
-                   ex is TypeInitializationException ||
-                   (ex.InnerException is DllNotFoundException) ||
-                   ex.Message.Contains("native", StringComparison.OrdinalIgnoreCase);
-        }
     }
 }

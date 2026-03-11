@@ -6,7 +6,7 @@ namespace Rend.Rendering
     /// <summary>
     /// Describes the visual style for rendering text, including font, size, color, and emphasis.
     /// </summary>
-    public sealed class TextStyle
+    internal sealed class TextStyle
     {
         /// <summary>Gets or sets the font descriptor.</summary>
         public FontDescriptor Font { get; set; }

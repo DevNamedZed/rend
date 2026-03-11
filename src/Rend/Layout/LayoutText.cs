@@ -7,7 +7,7 @@ namespace Rend.Layout
     /// <summary>
     /// A text content box with positioned glyphs from text shaping.
     /// </summary>
-    public sealed class LayoutText : LayoutBox
+    internal sealed class LayoutText : LayoutBox
     {
         public LayoutText(StyledText styledText)
             : base(styledText, BoxType.Inline)

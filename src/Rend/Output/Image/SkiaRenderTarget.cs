@@ -14,7 +14,7 @@ namespace Rend.Output.Image
     /// An <see cref="IRenderTarget"/> implementation that produces raster image output
     /// using SkiaSharp for drawing operations.
     /// </summary>
-    public sealed class SkiaRenderTarget : IRenderTarget, IDisposable
+    internal sealed class SkiaRenderTarget : IRenderTarget, IDisposable
     {
         // Shared cache for MatchCharacter fallback typefaces across all threads.
         private static readonly Dictionary<int, SKTypeface?> s_charFallbackCache = new();
@@ -980,7 +980,7 @@ namespace Rend.Output.Image
                 }
                 else
                 {
-                    segTypeface = Internal.SkiaFontMapper.GetOrCreateSharedTypeface(currentFontData);
+                    segTypeface = SkiaFontMapper.GetOrCreateSharedTypeface(currentFontData);
                     disposeTypeface = false;
                 }
 
@@ -1125,18 +1125,14 @@ namespace Rend.Output.Image
 
 
 
-        private static SKEncodedImageFormat ParseFormat(string format)
+        private static SKEncodedImageFormat ParseFormat(ImageOutputFormat format)
         {
-            if (string.Equals(format, "jpeg", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(format, "jpg", StringComparison.OrdinalIgnoreCase))
+            return format switch
             {
-                return SKEncodedImageFormat.Jpeg;
-            }
-            if (string.Equals(format, "webp", StringComparison.OrdinalIgnoreCase))
-            {
-                return SKEncodedImageFormat.Webp;
-            }
-            return SKEncodedImageFormat.Png;
+                ImageOutputFormat.Jpeg => SKEncodedImageFormat.Jpeg,
+                ImageOutputFormat.WebP => SKEncodedImageFormat.Webp,
+                _ => SKEncodedImageFormat.Png,
+            };
         }
 
         private void ApplyBrush(SKPaint paint, BrushInfo brush, RectF bounds)

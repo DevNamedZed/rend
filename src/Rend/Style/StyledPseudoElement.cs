@@ -6,7 +6,7 @@ namespace Rend.Style
     /// A pseudo-element node (::before or ::after) in the styled tree.
     /// Contains the generated content text and its own computed style.
     /// </summary>
-    public sealed class StyledPseudoElement : StyledNode
+    internal sealed class StyledPseudoElement : StyledNode
     {
         public StyledPseudoElement(string pseudoType, string content, ComputedStyle style)
             : base(style)

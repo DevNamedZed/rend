@@ -840,6 +840,15 @@ namespace Rend.Layout.Internal
                         BlockFormattingContext.LayoutChildren(item.Box, context);
                         context.ParentGridContext = savedCtx;
                     }
+                    else if (itemDisplay == CssDisplay.Flex || itemDisplay == CssDisplay.InlineFlex)
+                    {
+                        // Re-layout flex container with stretched dimensions so that
+                        // cross-axis alignment (align-items: center) works correctly.
+                        item.Box.ClearChildren();
+                        item.Box.LineBoxes = null;
+                        item.Box.ContentRect = new RectF(0, 0, finalWidth, finalHeight);
+                        BlockFormattingContext.LayoutChildren(item.Box, context);
+                    }
                 }
 
                 float newX = x + xOffset + item.Box.MarginLeft + item.Box.BorderLeftWidth + item.Box.PaddingLeft;

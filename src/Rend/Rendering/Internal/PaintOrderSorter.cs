@@ -10,6 +10,15 @@ namespace Rend.Rendering.Internal
     /// </summary>
     internal static class PaintOrderSorter
     {
+        // ThreadStatic cached lists to avoid allocating 6 temporary lists per call.
+        // These are cleared and reused across calls on the same thread.
+        [System.ThreadStatic] private static List<LayoutBox>? t_negativeZIndex;
+        [System.ThreadStatic] private static List<LayoutBox>? t_blockNonPositioned;
+        [System.ThreadStatic] private static List<LayoutBox>? t_floats;
+        [System.ThreadStatic] private static List<LayoutBox>? t_inlines;
+        [System.ThreadStatic] private static List<LayoutBox>? t_positionedZeroAuto;
+        [System.ThreadStatic] private static List<LayoutBox>? t_positiveZIndex;
+
         /// <summary>
         /// Returns the children of the given box in CSS 2.1 Appendix E paint order:
         /// <list type="number">
@@ -26,23 +35,65 @@ namespace Rend.Rendering.Internal
         /// <returns>A list of child boxes in paint order.</returns>
         public static List<LayoutBox> GetPaintOrder(LayoutBox root)
         {
-            var negativeZIndex = new List<LayoutBox>();
-            var blockNonPositioned = new List<LayoutBox>();
-            var floats = new List<LayoutBox>();
-            var inlines = new List<LayoutBox>();
-            var positionedZeroAuto = new List<LayoutBox>();
-            var positiveZIndex = new List<LayoutBox>();
-
-            for (int i = 0; i < root.Children.Count; i++)
+            // Fast path: check if all children are simple block non-positioned (most common case).
+            // If so, return children directly without any classification.
+            bool allSimpleBlock = true;
+            var children = root.Children;
+            for (int i = 0; i < children.Count; i++)
             {
-                LayoutBox child = root.Children[i];
-                ClassifyChild(child, negativeZIndex, blockNonPositioned, floats,
+                var child = children[i];
+                if (child.EstablishesStackingContext)
+                {
+                    allSimpleBlock = false;
+                    break;
+                }
+                var style = child.StyledNode?.Style;
+                if (style != null)
+                {
+                    if (style.Position != CssPosition.Static || style.Float != CssFloat.None)
+                    {
+                        allSimpleBlock = false;
+                        break;
+                    }
+                }
+                if (IsInlineLevel(child))
+                {
+                    allSimpleBlock = false;
+                    break;
+                }
+            }
+
+            if (allSimpleBlock)
+            {
+                // All children are block non-positioned — paint order = tree order.
+                // Return a new list (caller may iterate/modify).
+                return new List<LayoutBox>(children);
+            }
+
+            // General path: classify into buckets using thread-static lists.
+            var negativeZIndex = t_negativeZIndex ??= new List<LayoutBox>();
+            var blockNonPositioned = t_blockNonPositioned ??= new List<LayoutBox>();
+            var floats = t_floats ??= new List<LayoutBox>();
+            var inlines = t_inlines ??= new List<LayoutBox>();
+            var positionedZeroAuto = t_positionedZeroAuto ??= new List<LayoutBox>();
+            var positiveZIndex = t_positiveZIndex ??= new List<LayoutBox>();
+
+            negativeZIndex.Clear();
+            blockNonPositioned.Clear();
+            floats.Clear();
+            inlines.Clear();
+            positionedZeroAuto.Clear();
+            positiveZIndex.Clear();
+
+            for (int i = 0; i < children.Count; i++)
+            {
+                ClassifyChild(children[i], negativeZIndex, blockNonPositioned, floats,
                               inlines, positionedZeroAuto, positiveZIndex);
             }
 
             // Sort stacking contexts by z-index.
-            negativeZIndex.Sort(CompareByZIndex);
-            positiveZIndex.Sort(CompareByZIndex);
+            if (negativeZIndex.Count > 1) negativeZIndex.Sort(CompareByZIndex);
+            if (positiveZIndex.Count > 1) positiveZIndex.Sort(CompareByZIndex);
 
             int totalCount = negativeZIndex.Count + blockNonPositioned.Count +
                              floats.Count + inlines.Count +

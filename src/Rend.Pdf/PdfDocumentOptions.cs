@@ -113,37 +113,55 @@ namespace Rend.Pdf
     /// <summary>The 14 standard PDF fonts that don't require embedding.</summary>
     public enum StandardFont
     {
-#pragma warning disable CS1591
+        /// <summary>Helvetica (sans-serif, regular).</summary>
         Helvetica,
+        /// <summary>Helvetica Bold.</summary>
         HelveticaBold,
+        /// <summary>Helvetica Oblique (italic).</summary>
         HelveticaOblique,
+        /// <summary>Helvetica Bold Oblique.</summary>
         HelveticaBoldOblique,
+        /// <summary>Times Roman (serif, regular).</summary>
         TimesRoman,
+        /// <summary>Times Bold.</summary>
         TimesBold,
+        /// <summary>Times Italic.</summary>
         TimesItalic,
+        /// <summary>Times Bold Italic.</summary>
         TimesBoldItalic,
+        /// <summary>Courier (monospace, regular).</summary>
         Courier,
+        /// <summary>Courier Bold.</summary>
         CourierBold,
+        /// <summary>Courier Oblique (italic).</summary>
         CourierOblique,
+        /// <summary>Courier Bold Oblique.</summary>
         CourierBoldOblique,
+        /// <summary>Symbol (mathematical and Greek symbols).</summary>
         Symbol,
+        /// <summary>Zapf Dingbats (decorative symbols).</summary>
         ZapfDingbats
-#pragma warning restore CS1591
     }
 
     /// <summary>Text rendering mode for content streams.</summary>
     public enum TextRenderingMode
     {
-#pragma warning disable CS1591
+        /// <summary>Fill text (default).</summary>
         Fill = 0,
+        /// <summary>Stroke text outlines.</summary>
         Stroke = 1,
+        /// <summary>Fill and stroke text.</summary>
         FillAndStroke = 2,
+        /// <summary>Invisible text (used for searchable OCR layers).</summary>
         Invisible = 3,
+        /// <summary>Fill text and add to clipping path.</summary>
         FillAndClip = 4,
+        /// <summary>Stroke text and add to clipping path.</summary>
         StrokeAndClip = 5,
+        /// <summary>Fill, stroke, and add to clipping path.</summary>
         FillStrokeAndClip = 6,
+        /// <summary>Add text to clipping path only.</summary>
         Clip = 7
-#pragma warning restore CS1591
     }
 
     /// <summary>Line cap style for path stroking.</summary>

@@ -181,10 +181,13 @@ namespace Rend.Layout.Internal
                     // the element's own border and padding (since this is the content rect Y).
                     float staticY = cursorY + MarginCollapsing.Collapse(prevMarginBottom, posBox.MarginTop)
                                   + posBox.BorderTopWidth + posBox.PaddingTop;
-                    posBox.ContentRect = new RectF(parent.ContentRect.X, staticY, posWidth, 0);
+                    // Pre-resolve explicit height so flex/grid children can use it for
+                    // cross-axis alignment (align-items: center needs container height).
+                    float preHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, posBox);
+                    if (float.IsNaN(preHeight)) preHeight = 0;
+                    posBox.ContentRect = new RectF(parent.ContentRect.X, staticY, posWidth, preHeight);
                     LayoutChildren(posBox, context);
-                    float posHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, posBox);
-                    if (float.IsNaN(posHeight)) posHeight = CalculateAutoHeight(posBox);
+                    float posHeight = preHeight > 0 ? preHeight : CalculateAutoHeight(posBox);
                     posBox.ContentRect = new RectF(posBox.ContentRect.X, posBox.ContentRect.Y, posWidth, posHeight);
                     parent.AddChild(posBox);
                     continue;

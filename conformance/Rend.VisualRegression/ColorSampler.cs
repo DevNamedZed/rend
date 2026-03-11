@@ -28,7 +28,7 @@ public static class ColorSampler
             {
                 PageSize = new Rend.Core.Values.SizeF(400, 300),
                 MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
-                Dpi = 96, ImageFormat = "png",
+                Dpi = 96, ImageFormat = Rend.ImageOutputFormat.Png,
             });
             Rend.Layout.Internal.TableLayout._debugTable = false;
             Rend.Rendering.Internal.TextPainter._debugText = false;
@@ -49,7 +49,7 @@ public static class ColorSampler
             {
                 PageSize = new Rend.Core.Values.SizeF(400, 300),
                 MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
-                Dpi = 96, ImageFormat = "png",
+                Dpi = 96, ImageFormat = Rend.ImageOutputFormat.Png,
             });
             Rend.Layout.Internal.TableLayout._debugTable = false;
             Console.WriteLine();

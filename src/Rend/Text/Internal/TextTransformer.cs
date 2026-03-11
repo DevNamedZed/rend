@@ -7,7 +7,7 @@ namespace Rend.Text.Internal
     /// <summary>
     /// Transforms text according to CSS text-transform property values.
     /// </summary>
-    public static class TextTransformer
+    internal static class TextTransformer
     {
         /// <summary>
         /// Transforms the given text according to the specified CSS text-transform mode.

@@ -5,7 +5,7 @@ namespace Rend.Text.Internal
     /// <summary>
     /// Represents the type of line break opportunity at a given position.
     /// </summary>
-    public enum LineBreakOpportunity : byte
+    internal enum LineBreakOpportunity : byte
     {
         /// <summary>No break is allowed at this position.</summary>
         Forbidden,
@@ -18,7 +18,7 @@ namespace Rend.Text.Internal
     /// <summary>
     /// Finds line break opportunities in text per a simplified UAX #14 algorithm.
     /// </summary>
-    public sealed class LineBreaker
+    internal sealed class LineBreaker
     {
         /// <summary>
         /// Finds line break opportunities between each pair of adjacent characters.

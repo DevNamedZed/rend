@@ -13,8 +13,6 @@ namespace Rend.Layout.Internal
     /// </summary>
     internal static class FlexLayout
     {
-        internal static bool _debugFlex;
-
         public static void Layout(LayoutBox parent, LayoutContext context)
         {
             var styledElement = parent.StyledNode as StyledElement;
@@ -74,7 +72,10 @@ namespace Rend.Layout.Internal
 
                     var textBox = new LayoutBox(anonStyled, BoxType.Block);
                     textBox.ContentRect = new RectF(0, 0, containerWidth, 0);
+                    var savedFloatCtx2 = context.FloatContext;
+                    context.FloatContext = null;
                     InlineFormattingContext.Layout(textBox, context);
+                    context.FloatContext = savedFloatCtx2;
                     float textHeight = 0;
                     if (textBox.LineBoxes != null && textBox.LineBoxes.Count > 0)
                     {
@@ -143,10 +144,15 @@ namespace Rend.Layout.Internal
                     var posBox = new LayoutBox(childElement, BoxType.Block);
                     BoxModelCalculator.ApplyBoxModel(posBox, childElement.Style, containerWidth);
                     float posWidth = DimensionResolver.ResolveWidth(childElement.Style, containerWidth, posBox);
-                    posBox.ContentRect = new RectF(parent.ContentRect.X, parent.ContentRect.Y, posWidth, 0);
-                    BlockFormattingContext.LayoutChildren(posBox, context);
-                    float posHeight = DimensionResolver.ResolveHeight(childElement.Style, float.NaN, posBox);
+                    // Pre-resolve explicit height so flex/grid children can center.
+                    float posHeight = DimensionResolver.ResolveHeight(childElement.Style, containerHeight, posBox);
                     if (float.IsNaN(posHeight)) posHeight = 0;
+                    posBox.ContentRect = new RectF(parent.ContentRect.X, parent.ContentRect.Y, posWidth, posHeight);
+                    var savedFc = context.FloatContext;
+                    context.FloatContext = null;
+                    BlockFormattingContext.LayoutChildren(posBox, context);
+                    context.FloatContext = savedFc;
+                    if (posHeight <= 0) posHeight = CalculateAutoHeight(posBox);
                     posBox.ContentRect = new RectF(posBox.ContentRect.X, posBox.ContentRect.Y, posWidth, posHeight);
                     parent.AddChild(posBox);
                     continue;
@@ -458,8 +464,34 @@ namespace Rend.Layout.Internal
                             contentMain, contentCross);
                     }
 
-                    // Layout item contents
-                    BlockFormattingContext.LayoutChildren(box, context);
+                    // Layout item contents.
+                    // For anonymous text items (which already have line boxes from initial
+                    // inline layout), skip re-layout but offset line boxes to match the
+                    // positioned ContentRect. Re-running IFC would use ContentRect.X as
+                    // startX, double-counting the flex offset.
+                    if (box.LineBoxes != null && box.LineBoxes.Count > 0)
+                    {
+                        // Offset existing line boxes to match the new ContentRect position
+                        float lbDx = box.ContentRect.X;
+                        float lbDy = box.ContentRect.Y;
+                        if (lbDx != 0 || lbDy != 0)
+                        {
+                            for (int lbi = 0; lbi < box.LineBoxes.Count; lbi++)
+                            {
+                                box.LineBoxes[lbi].X += lbDx;
+                                box.LineBoxes[lbi].Y += lbDy;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Flex items establish independent formatting contexts — clear the
+                        // parent float context so it doesn't leak absolute coordinates.
+                        var savedFloatCtx = context.FloatContext;
+                        context.FloatContext = null;
+                        BlockFormattingContext.LayoutChildren(box, context);
+                        context.FloatContext = savedFloatCtx;
+                    }
 
                     // Resolve auto cross size
                     if (isColumn)
@@ -986,7 +1018,35 @@ namespace Rend.Layout.Internal
             values[PropertyId.MinHeight] = autoVal;
             values[PropertyId.MaxWidth] = autoVal;
             values[PropertyId.MaxHeight] = autoVal;
+
+            // Anonymous boxes must not inherit the parent's visual decoration properties.
+            // CSS 2.1 §9.2.1.1: anonymous boxes inherit inheritable properties from their
+            // enclosing non-anonymous box, but non-inheritable decorations (box-shadow,
+            // border, background, etc.) must not be duplicated onto the wrapper.
             var refValues = (object?[])source.GetRefValues().Clone();
+            refValues[PropertyId.BoxShadow] = null;
+            refValues[PropertyId.BackgroundImage] = null;
+            var zero = PropertyValue.FromLength(0);
+            var transparent = PropertyValue.FromColor(new CssColor(0, 0, 0, 0));
+            values[PropertyId.BackgroundColor] = transparent;
+            values[PropertyId.BorderTopWidth] = zero;
+            values[PropertyId.BorderRightWidth] = zero;
+            values[PropertyId.BorderBottomWidth] = zero;
+            values[PropertyId.BorderLeftWidth] = zero;
+            values[PropertyId.BorderTopLeftRadius] = zero;
+            values[PropertyId.BorderTopRightRadius] = zero;
+            values[PropertyId.BorderBottomRightRadius] = zero;
+            values[PropertyId.BorderBottomLeftRadius] = zero;
+            values[PropertyId.PaddingTop] = zero;
+            values[PropertyId.PaddingRight] = zero;
+            values[PropertyId.PaddingBottom] = zero;
+            values[PropertyId.PaddingLeft] = zero;
+            values[PropertyId.MarginTop] = zero;
+            values[PropertyId.MarginRight] = zero;
+            values[PropertyId.MarginBottom] = zero;
+            values[PropertyId.MarginLeft] = zero;
+            // Anonymous boxes are always in normal flow — don't inherit positioned status.
+            values[PropertyId.Position] = PropertyValue.FromInt((int)CssPosition.Static);
             return new ComputedStyle(values, refValues);
         }
     }

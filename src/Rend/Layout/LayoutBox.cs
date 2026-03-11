@@ -8,7 +8,7 @@ namespace Rend.Layout
     /// A positioned box in the layout tree. Contains content, padding, border, and margin rectangles,
     /// plus references to the styled node and child boxes.
     /// </summary>
-    public class LayoutBox
+    internal class LayoutBox
     {
         private readonly List<LayoutBox> _children = new List<LayoutBox>();
 
@@ -87,6 +87,13 @@ namespace Rend.Layout
 
         /// <summary>Line boxes for inline formatting contexts.</summary>
         public List<LineBox>? LineBoxes { get; set; }
+
+        /// <summary>
+        /// Y offset to apply to line boxes during painting. Used by the paginator
+        /// when line boxes are shared from the original (unpaginated) layout —
+        /// the offset shifts line box coordinates into page-local space.
+        /// </summary>
+        internal float LineBoxOffsetY { get; set; }
 
         /// <summary>Whether this box establishes a new stacking context.</summary>
         public bool EstablishesStackingContext { get; set; }

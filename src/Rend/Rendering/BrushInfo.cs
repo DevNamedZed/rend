@@ -5,7 +5,7 @@ namespace Rend.Rendering
     /// <summary>
     /// Describes a fill operation. May be a solid color, gradient, or image fill.
     /// </summary>
-    public sealed class BrushInfo
+    internal sealed class BrushInfo
     {
         /// <summary>Gets or sets the solid fill color.</summary>
         public CssColor Color { get; set; }

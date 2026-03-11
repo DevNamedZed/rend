@@ -192,12 +192,12 @@ static class TextDiagnostic
 
         // Render the HTML with Rend and get layout info
         Console.WriteLine("\n--- Rend Layout Output ---");
-        using var fontMapper = new Rend.Output.Image.Internal.SkiaFontMapper();
+        using var fontMapper = new Rend.Output.Image.SkiaFontMapper();
         var renderOptions = new RenderOptions
         {
             PageSize = new SizeF(400, 300),
             MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
-            Dpi = 96, ImageFormat = "png",
+            Dpi = 96, ImageFormat = Rend.ImageOutputFormat.Png,
             FontProvider = fontProvider,
             TextShaper = textShaper,
             FontMapper = fontMapper,

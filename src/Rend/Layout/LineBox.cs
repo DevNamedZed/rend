@@ -6,7 +6,7 @@ namespace Rend.Layout
     /// A line within an inline formatting context.
     /// Contains fragments of inline content that fit on a single line.
     /// </summary>
-    public sealed class LineBox
+    internal sealed class LineBox
     {
         private readonly List<LineFragment> _fragments = new List<LineFragment>();
 

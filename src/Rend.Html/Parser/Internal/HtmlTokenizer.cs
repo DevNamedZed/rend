@@ -1861,7 +1861,7 @@ namespace Rend.Html.Parser.Internal
 
         private static bool IsHtmlWhitespace(char c)
         {
-            return IsHtmlWhitespace(c);
+            return c == '\t' || c == '\n' || c == '\f' || c == ' ';
         }
 
         private static char AsciiLower(char c)

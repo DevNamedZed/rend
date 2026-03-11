@@ -5,7 +5,7 @@ namespace Rend.Fonts.Internal
     /// <summary>
     /// Identifies font file formats from raw data.
     /// </summary>
-    public enum FontFileFormat
+    internal enum FontFileFormat
     {
         /// <summary>Unknown or unsupported format.</summary>
         Unknown = 0,
@@ -29,7 +29,7 @@ namespace Rend.Fonts.Internal
     /// <summary>
     /// Detects font file format from magic bytes.
     /// </summary>
-    public static class FontFileDetector
+    internal static class FontFileDetector
     {
         /// <summary>
         /// Detects the format of the given font data by examining magic bytes.

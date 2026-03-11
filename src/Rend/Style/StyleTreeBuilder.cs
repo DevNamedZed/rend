@@ -11,7 +11,7 @@ namespace Rend.Style
     /// Walks the DOM tree, resolves ComputedStyle for each element via the CSS cascade,
     /// and produces a StyledTree for layout.
     /// </summary>
-    public sealed class StyleTreeBuilder
+    internal sealed class StyleTreeBuilder
     {
         private readonly StyleResolver _resolver;
         private readonly IFontProvider? _fontProvider;

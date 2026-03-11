@@ -26,15 +26,7 @@ namespace Rend.Tests
                 Progress = new SyncProgress<RenderProgress>(p => reports.Add(p))
             };
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<p>Hello</p>", options);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return; // Skip on environments without native binaries
-            }
+            var result = Render.ToPdf("<p>Hello</p>", options);
 
             // Should have received progress reports
             Assert.True(reports.Count >= 5, $"Expected at least 5 progress reports, got {reports.Count}");
@@ -58,15 +50,8 @@ namespace Rend.Tests
         [Fact]
         public void ToPdf_WithoutProgress_NoError()
         {
-            try
-            {
-                var result = Render.ToPdf("<p>Test</p>");
-                Assert.NotNull(result);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<p>Test</p>");
+            Assert.NotNull(result);
         }
 
         [Fact]
@@ -88,11 +73,5 @@ namespace Rend.Tests
             Assert.Equal(stages.Length, set.Count);
         }
 
-        private static bool IsNativeLibraryFailure(Exception ex)
-        {
-            return ex is DllNotFoundException ||
-                   ex is TypeInitializationException ||
-                   (ex.InnerException != null && IsNativeLibraryFailure(ex.InnerException));
-        }
     }
 }

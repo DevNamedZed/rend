@@ -14,20 +14,6 @@ namespace Rend.Tests
     {
         private readonly HtmlRenderer _renderer = new HtmlRenderer();
 
-        private static bool IsNativeLibraryFailure(Exception ex)
-        {
-            if (ex is DllNotFoundException || ex is TypeInitializationException || ex is BadImageFormatException)
-                return true;
-            var inner = ex.InnerException;
-            while (inner != null)
-            {
-                if (inner is DllNotFoundException || inner is TypeInitializationException)
-                    return true;
-                inner = inner.InnerException;
-            }
-            return false;
-        }
-
         // ── IRenderer interface contract ──
 
         [Fact]
@@ -41,9 +27,7 @@ namespace Rend.Tests
         [Fact]
         public void ToPdf_String_ReturnsValidPdf()
         {
-            byte[] result;
-            try { result = _renderer.ToPdf("<h1>Hello</h1>"); }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            var result = _renderer.ToPdf("<h1>Hello</h1>");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -53,19 +37,13 @@ namespace Rend.Tests
         [Fact]
         public void ToPdf_String_NullThrows()
         {
-            try
-            {
-                Assert.Throws<ArgumentNullException>(() => _renderer.ToPdf((string)null!));
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            Assert.Throws<ArgumentNullException>(() => _renderer.ToPdf((string)null!));
         }
 
         [Fact]
         public void ToPdf_String_EmptyHtml_ReturnsValidPdf()
         {
-            byte[] result;
-            try { result = _renderer.ToPdf(""); }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            var result = _renderer.ToPdf("");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -75,9 +53,7 @@ namespace Rend.Tests
         public void ToPdf_String_WithOptions()
         {
             var options = new RenderOptions { Title = "Test", Author = "Author" };
-            byte[] result;
-            try { result = _renderer.ToPdf("<p>content</p>", options); }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            var result = _renderer.ToPdf("<p>content</p>", options);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -89,8 +65,7 @@ namespace Rend.Tests
         public void ToPdf_StringToStream_WritesData()
         {
             using var stream = new MemoryStream();
-            try { _renderer.ToPdf("<p>Hello</p>", stream); }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            _renderer.ToPdf("<p>Hello</p>", stream);
 
             Assert.True(stream.Length > 0);
             stream.Position = 0;
@@ -102,8 +77,7 @@ namespace Rend.Tests
         {
             var options = new RenderOptions { MarginTop = 36f };
             using var stream = new MemoryStream();
-            try { _renderer.ToPdf("<p>Hello</p>", stream, options); }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            _renderer.ToPdf("<p>Hello</p>", stream, options);
 
             Assert.True(stream.Length > 0);
         }
@@ -113,13 +87,8 @@ namespace Rend.Tests
         [Fact]
         public void ToPdf_TextReader_ReturnsValidPdf()
         {
-            byte[] result;
-            try
-            {
-                using var reader = new StringReader("<h1>TextReader test</h1>");
-                result = _renderer.ToPdf(reader);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            using var reader = new StringReader("<h1>TextReader test</h1>");
+            var result = _renderer.ToPdf(reader);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -130,12 +99,8 @@ namespace Rend.Tests
         public void ToPdf_TextReaderToStream_WritesData()
         {
             using var stream = new MemoryStream();
-            try
-            {
-                using var reader = new StringReader("<p>TextReader stream</p>");
-                _renderer.ToPdf(reader, stream);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            using var reader = new StringReader("<p>TextReader stream</p>");
+            _renderer.ToPdf(reader, stream);
 
             Assert.True(stream.Length > 0);
         }
@@ -145,9 +110,7 @@ namespace Rend.Tests
         [Fact]
         public void ToImage_String_ReturnsNonEmpty()
         {
-            byte[] result;
-            try { result = _renderer.ToImage("<p>Image test</p>"); }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            var result = _renderer.ToImage("<p>Image test</p>");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -156,19 +119,14 @@ namespace Rend.Tests
         [Fact]
         public void ToImage_String_NullThrows()
         {
-            try
-            {
-                Assert.Throws<ArgumentNullException>(() => _renderer.ToImage((string)null!));
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            Assert.Throws<ArgumentNullException>(() => _renderer.ToImage((string)null!));
         }
 
         [Fact]
         public void ToImage_StringToStream_WritesData()
         {
             using var stream = new MemoryStream();
-            try { _renderer.ToImage("<p>Stream image</p>", stream); }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            _renderer.ToImage("<p>Stream image</p>", stream);
 
             Assert.True(stream.Length > 0);
         }
@@ -178,13 +136,8 @@ namespace Rend.Tests
         [Fact]
         public void ToImage_TextReader_ReturnsNonEmpty()
         {
-            byte[] result;
-            try
-            {
-                using var reader = new StringReader("<p>TextReader image</p>");
-                result = _renderer.ToImage(reader);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            using var reader = new StringReader("<p>TextReader image</p>");
+            var result = _renderer.ToImage(reader);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -194,12 +147,8 @@ namespace Rend.Tests
         public void ToImage_TextReaderToStream_WritesData()
         {
             using var stream = new MemoryStream();
-            try
-            {
-                using var reader = new StringReader("<p>TextReader stream image</p>");
-                _renderer.ToImage(reader, stream);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            using var reader = new StringReader("<p>TextReader stream image</p>");
+            _renderer.ToImage(reader, stream);
 
             Assert.True(stream.Length > 0);
         }
@@ -209,9 +158,7 @@ namespace Rend.Tests
         [Fact]
         public async Task ToPdfAsync_String_ReturnsValidPdf()
         {
-            byte[] result;
-            try { result = await _renderer.ToPdfAsync("<h1>Async</h1>"); }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            var result = await _renderer.ToPdfAsync("<h1>Async</h1>");
 
             Assert.NotNull(result);
             AssertPdfHeader(result);
@@ -221,8 +168,7 @@ namespace Rend.Tests
         public async Task ToPdfAsync_StringToStream_WritesData()
         {
             using var stream = new MemoryStream();
-            try { await _renderer.ToPdfAsync("<p>Async stream</p>", stream); }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            await _renderer.ToPdfAsync("<p>Async stream</p>", stream);
 
             Assert.True(stream.Length > 0);
         }
@@ -230,13 +176,8 @@ namespace Rend.Tests
         [Fact]
         public async Task ToPdfAsync_TextReader_ReturnsValidPdf()
         {
-            byte[] result;
-            try
-            {
-                using var reader = new StringReader("<p>Async reader</p>");
-                result = await _renderer.ToPdfAsync(reader);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            using var reader = new StringReader("<p>Async reader</p>");
+            var result = await _renderer.ToPdfAsync(reader);
 
             Assert.NotNull(result);
             AssertPdfHeader(result);
@@ -246,12 +187,8 @@ namespace Rend.Tests
         public async Task ToPdfAsync_TextReaderToStream_WritesData()
         {
             using var stream = new MemoryStream();
-            try
-            {
-                using var reader = new StringReader("<p>Async reader stream</p>");
-                await _renderer.ToPdfAsync(reader, stream);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            using var reader = new StringReader("<p>Async reader stream</p>");
+            await _renderer.ToPdfAsync(reader, stream);
 
             Assert.True(stream.Length > 0);
         }
@@ -262,12 +199,8 @@ namespace Rend.Tests
             using var cts = new CancellationTokenSource();
             cts.Cancel();
 
-            try
-            {
-                await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                    () => _renderer.ToPdfAsync("<p>Cancelled</p>", cancellationToken: cts.Token));
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => _renderer.ToPdfAsync("<p>Cancelled</p>", cancellationToken: cts.Token));
         }
 
         // ── Async ToImage ──
@@ -275,9 +208,7 @@ namespace Rend.Tests
         [Fact]
         public async Task ToImageAsync_String_ReturnsNonEmpty()
         {
-            byte[] result;
-            try { result = await _renderer.ToImageAsync("<p>Async image</p>"); }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            var result = await _renderer.ToImageAsync("<p>Async image</p>");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -287,8 +218,7 @@ namespace Rend.Tests
         public async Task ToImageAsync_StringToStream_WritesData()
         {
             using var stream = new MemoryStream();
-            try { await _renderer.ToImageAsync("<p>Async stream image</p>", stream); }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            await _renderer.ToImageAsync("<p>Async stream image</p>", stream);
 
             Assert.True(stream.Length > 0);
         }
@@ -296,13 +226,8 @@ namespace Rend.Tests
         [Fact]
         public async Task ToImageAsync_TextReader_ReturnsNonEmpty()
         {
-            byte[] result;
-            try
-            {
-                using var reader = new StringReader("<p>Async reader image</p>");
-                result = await _renderer.ToImageAsync(reader);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            using var reader = new StringReader("<p>Async reader image</p>");
+            var result = await _renderer.ToImageAsync(reader);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -312,12 +237,8 @@ namespace Rend.Tests
         public async Task ToImageAsync_TextReaderToStream_WritesData()
         {
             using var stream = new MemoryStream();
-            try
-            {
-                using var reader = new StringReader("<p>Async reader stream image</p>");
-                await _renderer.ToImageAsync(reader, stream);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            using var reader = new StringReader("<p>Async reader stream image</p>");
+            await _renderer.ToImageAsync(reader, stream);
 
             Assert.True(stream.Length > 0);
         }
@@ -328,12 +249,8 @@ namespace Rend.Tests
             using var cts = new CancellationTokenSource();
             cts.Cancel();
 
-            try
-            {
-                await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                    () => _renderer.ToImageAsync("<p>Cancelled</p>", cancellationToken: cts.Token));
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => _renderer.ToImageAsync("<p>Cancelled</p>", cancellationToken: cts.Token));
         }
 
         // ── Consistency: string vs TextReader produce same output ──
@@ -342,14 +259,9 @@ namespace Rend.Tests
         public void ToPdf_StringAndTextReader_ProduceSameOutput()
         {
             const string html = "<p>Consistency test</p>";
-            byte[] fromString, fromReader;
-            try
-            {
-                fromString = _renderer.ToPdf(html);
-                using var reader = new StringReader(html);
-                fromReader = _renderer.ToPdf(reader);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            var fromString = _renderer.ToPdf(html);
+            using var reader = new StringReader(html);
+            var fromReader = _renderer.ToPdf(reader);
 
             Assert.Equal(fromString.Length, fromReader.Length);
         }
@@ -358,14 +270,9 @@ namespace Rend.Tests
         public void ToImage_StringAndTextReader_ProduceSameOutput()
         {
             const string html = "<p>Consistency test</p>";
-            byte[] fromString, fromReader;
-            try
-            {
-                fromString = _renderer.ToImage(html);
-                using var reader = new StringReader(html);
-                fromReader = _renderer.ToImage(reader);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex)) { return; }
+            var fromString = _renderer.ToImage(html);
+            using var reader = new StringReader(html);
+            var fromReader = _renderer.ToImage(reader);
 
             Assert.Equal(fromString, fromReader);
         }

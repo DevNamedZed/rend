@@ -79,7 +79,7 @@ namespace Rend.Css.Tests
             var rule = sheet.Rules[0] as SupportsRule;
             Assert.NotNull(rule);
             Assert.Equal("(display: flex)", rule!.ConditionText);
-            Assert.Equal(1, rule.Rules.Count);
+            Assert.Single(rule.Rules);
         }
 
         [Fact]

@@ -5,7 +5,7 @@ namespace Rend.Layout
     /// <summary>
     /// Configuration options for the layout engine.
     /// </summary>
-    public sealed class LayoutOptions
+    internal sealed class LayoutOptions
     {
         /// <summary>Page size in points. Defaults to A4.</summary>
         public SizeF PageSize { get; set; } = Rend.Core.Values.PageSize.A4;

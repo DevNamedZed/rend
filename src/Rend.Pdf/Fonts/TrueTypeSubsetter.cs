@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 
@@ -82,8 +83,8 @@ namespace Rend.Pdf.Fonts
                 subsetTables["loca"] = newLoca;
             }
 
-            // cmap — build minimal Format 4 table for BMP characters
-            subsetTables["cmap"] = BuildMinimalCmap();
+            // cmap — pre-built static minimal Format 4 table
+            subsetTables["cmap"] = MinimalCmap;
 
             // name — keep basic name records
             if (tables.ContainsKey("name"))
@@ -93,8 +94,8 @@ namespace Rend.Pdf.Fonts
             if (tables.ContainsKey("OS/2"))
                 subsetTables["OS/2"] = CopyTable(originalFont, tables["OS/2"]);
 
-            // post — minimal version 3.0 (no glyph names)
-            subsetTables["post"] = BuildMinimalPost();
+            // post — pre-built static minimal version 3.0
+            subsetTables["post"] = MinimalPost;
 
             // cvt, fpgm, prep — copy if present (hinting)
             foreach (var tag in new[] { "cvt ", "fpgm", "prep" })
@@ -237,61 +238,105 @@ namespace Rend.Pdf.Fonts
             bool longLoca = locaFormat == 1;
             int origNumGlyphs = ReadUInt16BE(font, (int)maxpRange.Offset + 4);
 
-            // Collect glyph data
-            using (var glyfStream = new MemoryStream())
+            // Pass 1: Calculate total size needed for glyf table
+            int totalGlyfSize = 0;
+            for (int i = 0; i < newToOld.Count; i++)
             {
-                // Long loca format for simplicity (4 bytes per entry)
-                var locaOffsets = new uint[newToOld.Count + 1];
+                ushort oldGid = newToOld[i];
+                if (oldGid >= origNumGlyphs) continue;
 
-                for (int i = 0; i < newToOld.Count; i++)
+                long offset = GetGlyphOffset(font, locaRange, longLoca, oldGid);
+                long nextOffset = (oldGid + 1 <= origNumGlyphs)
+                    ? GetGlyphOffset(font, locaRange, longLoca, (ushort)(oldGid + 1))
+                    : offset;
+
+                int glyphLen = (int)(nextOffset - offset);
+                if (glyphLen <= 0) continue;
+
+                int srcStart = (int)(glyfRange.Offset + offset);
+                if (srcStart + glyphLen > font.Length) continue;
+
+                totalGlyfSize += glyphLen + ((4 - (glyphLen % 4)) % 4); // padded
+            }
+
+            // Pass 2: Write glyph data directly into pre-allocated array
+            newGlyf = new byte[totalGlyfSize];
+            var locaOffsets = new uint[newToOld.Count + 1];
+            int writePos = 0;
+
+            for (int i = 0; i < newToOld.Count; i++)
+            {
+                locaOffsets[i] = (uint)writePos;
+                ushort oldGid = newToOld[i];
+
+                if (oldGid >= origNumGlyphs) continue;
+
+                long offset = GetGlyphOffset(font, locaRange, longLoca, oldGid);
+                long nextOffset = (oldGid + 1 <= origNumGlyphs)
+                    ? GetGlyphOffset(font, locaRange, longLoca, (ushort)(oldGid + 1))
+                    : offset;
+
+                int glyphLen = (int)(nextOffset - offset);
+                if (glyphLen <= 0) continue;
+
+                int srcStart = (int)(glyfRange.Offset + offset);
+                if (srcStart + glyphLen > font.Length) continue;
+
+                // Copy glyph data directly into output
+                Buffer.BlockCopy(font, srcStart, newGlyf, writePos, glyphLen);
+
+                // If composite, remap component glyph IDs in-place
+                short numberOfContours = (short)((newGlyf[writePos] << 8) | newGlyf[writePos + 1]);
+                if (numberOfContours < 0)
                 {
-                    locaOffsets[i] = (uint)glyfStream.Position;
-                    ushort oldGid = newToOld[i];
-
-                    if (oldGid >= origNumGlyphs)
-                    {
-                        continue; // empty glyph
-                    }
-
-                    long offset = GetGlyphOffset(font, locaRange, longLoca, oldGid);
-                    long nextOffset = (oldGid + 1 <= origNumGlyphs)
-                        ? GetGlyphOffset(font, locaRange, longLoca, (ushort)(oldGid + 1))
-                        : offset;
-
-                    int glyphLen = (int)(nextOffset - offset);
-                    if (glyphLen <= 0) continue;
-
-                    int srcStart = (int)(glyfRange.Offset + offset);
-                    if (srcStart + glyphLen > font.Length) continue;
-
-                    // Copy glyph data
-                    byte[] glyphData = new byte[glyphLen];
-                    Buffer.BlockCopy(font, srcStart, glyphData, 0, glyphLen);
-
-                    // If composite, remap component glyph IDs
-                    short numberOfContours = (short)((glyphData[0] << 8) | glyphData[1]);
-                    if (numberOfContours < 0)
-                    {
-                        RemapCompositeGlyph(glyphData, oldToNew);
-                    }
-
-                    glyfStream.Write(glyphData, 0, glyphData.Length);
-
-                    // Pad to 4-byte boundary
-                    int padding = (4 - (glyphLen % 4)) % 4;
-                    for (int p = 0; p < padding; p++)
-                        glyfStream.WriteByte(0);
+                    RemapCompositeGlyphInPlace(newGlyf, writePos, glyphLen, oldToNew);
                 }
 
-                locaOffsets[newToOld.Count] = (uint)glyfStream.Position;
-                newGlyf = glyfStream.ToArray();
+                writePos += glyphLen;
 
-                // Build long-format loca table
-                newLoca = new byte[(newToOld.Count + 1) * 4];
-                for (int i = 0; i <= newToOld.Count; i++)
+                // Pad to 4-byte boundary (array is zero-initialized)
+                int padding = (4 - (glyphLen % 4)) % 4;
+                writePos += padding;
+            }
+
+            locaOffsets[newToOld.Count] = (uint)writePos;
+
+            // Build long-format loca table
+            newLoca = new byte[(newToOld.Count + 1) * 4];
+            for (int i = 0; i <= newToOld.Count; i++)
+            {
+                WriteUInt32BE(newLoca, i * 4, locaOffsets[i]);
+            }
+        }
+
+        private static void RemapCompositeGlyphInPlace(byte[] data, int glyphStart, int glyphLen, Dictionary<ushort, ushort> oldToNew)
+        {
+            int pos = glyphStart + 10; // skip header
+            int end = glyphStart + glyphLen;
+            const ushort ARG_1_AND_2_ARE_WORDS = 0x0001;
+            const ushort MORE_COMPONENTS = 0x0020;
+
+            while (pos + 4 <= end)
+            {
+                ushort flags = (ushort)((data[pos] << 8) | data[pos + 1]);
+                ushort oldComponentGid = (ushort)((data[pos + 2] << 8) | data[pos + 3]);
+
+                if (oldToNew.TryGetValue(oldComponentGid, out ushort newGid))
                 {
-                    WriteUInt32BE(newLoca, i * 4, locaOffsets[i]);
+                    data[pos + 2] = (byte)(newGid >> 8);
+                    data[pos + 3] = (byte)(newGid & 0xFF);
                 }
+
+                pos += 4;
+
+                if ((flags & ARG_1_AND_2_ARE_WORDS) != 0) pos += 4;
+                else pos += 2;
+
+                if ((flags & 0x0008) != 0) pos += 2;
+                else if ((flags & 0x0040) != 0) pos += 4;
+                else if ((flags & 0x0080) != 0) pos += 8;
+
+                if ((flags & MORE_COMPONENTS) == 0) break;
             }
         }
 
@@ -326,51 +371,27 @@ namespace Rend.Pdf.Fonts
             }
         }
 
-        private static byte[] BuildMinimalCmap()
+        // Pre-built minimal cmap: Format 4 with one segment (0xFFFF terminator only).
+        // Actual character mapping uses Identity-H CMap + ToUnicode.
+        private static readonly byte[] MinimalCmap =
         {
-            // Minimal cmap with format 4 subtable mapping only .notdef
-            // The actual character mapping is handled via Identity-H CMap + ToUnicode
-            var ms = new MemoryStream();
-            void W16(ushort v) { ms.WriteByte((byte)(v >> 8)); ms.WriteByte((byte)(v & 0xFF)); }
-            void W32(uint v) { W16((ushort)(v >> 16)); W16((ushort)(v & 0xFFFF)); }
+            // cmap header: version=0, numSubtables=1
+            0, 0, 0, 1,
+            // Subtable entry: platform=3 (Windows), encoding=1 (BMP), offset=12
+            0, 3, 0, 1, 0, 0, 0, 12,
+            // Format 4: format=4, length=14, language=0, segCountX2=2, searchRange=2, entrySelector=0, rangeShift=0
+            0, 4, 0, 14, 0, 0, 0, 2, 0, 2, 0, 0, 0, 0,
+            // endCode=0xFFFF, reservedPad=0, startCode=0xFFFF, idDelta=1, idRangeOffset=0
+            0xFF, 0xFF, 0, 0, 0xFF, 0xFF, 0, 1, 0, 0
+        };
 
-            // cmap header
-            W16(0);     // version
-            W16(1);     // numSubtables
-
-            // Subtable entry: platform 3 (Windows), encoding 1 (BMP)
-            W16(3);     // platformId
-            W16(1);     // encodingId
-            W32(12);    // offset to subtable (header=4 + entry=8 = 12)
-
-            // Format 4 subtable — minimal with one segment (0xFFFF terminator only)
-            int subtableStart = (int)ms.Position;
-            W16(4);     // format
-            W16(14);    // length of this subtable
-            W16(0);     // language
-            W16(2);     // segCountX2 (1 segment * 2)
-            W16(2);     // searchRange
-            W16(0);     // entrySelector
-            W16(0);     // rangeShift
-            W16(0xFFFF);// endCode[0]
-            W16(0);     // reservedPad
-            W16(0xFFFF);// startCode[0]
-            W16(1);     // idDelta[0]
-            W16(0);     // idRangeOffset[0]
-
-            return ms.ToArray();
-        }
-
-        private static byte[] BuildMinimalPost()
+        // Pre-built minimal post table version 3.0 — no glyph names, all zeros except version.
+        private static readonly byte[] MinimalPost =
         {
-            // post table version 3.0 — no glyph names
-            var data = new byte[32];
-            // version = 3.0 (0x00030000)
-            data[0] = 0; data[1] = 3; data[2] = 0; data[3] = 0;
-            // italicAngle = 0 (fixed point)
-            // underlinePosition, underlineThickness, isFixedPitch, minMemType42, etc. = 0
-            return data;
-        }
+            0, 3, 0, 0, // version 3.0
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        };
 
         private static byte[] AssembleFont(uint sfVersion, Dictionary<string, byte[]> tables)
         {
@@ -503,42 +524,45 @@ namespace Rend.Pdf.Fonts
         {
             uint sum = 0;
             int len = data.Length;
-            int nLongs = (len + 3) / 4;
-            for (int i = 0; i < nLongs; i++)
+            int fullLongs = len / 4;
+
+            // Process 4-byte aligned blocks without per-byte bounds checks
+            for (int i = 0; i < fullLongs; i++)
             {
-                int offset = i * 4;
+                int off = i * 4;
+                sum += ((uint)data[off] << 24) | ((uint)data[off + 1] << 16) |
+                       ((uint)data[off + 2] << 8) | data[off + 3];
+            }
+
+            // Handle remaining 1-3 bytes
+            int tail = fullLongs * 4;
+            if (tail < len)
+            {
                 uint val = 0;
-                if (offset < len) val |= (uint)data[offset] << 24;
-                if (offset + 1 < len) val |= (uint)data[offset + 1] << 16;
-                if (offset + 2 < len) val |= (uint)data[offset + 2] << 8;
-                if (offset + 3 < len) val |= data[offset + 3];
+                if (tail < len) val |= (uint)data[tail] << 24;
+                if (tail + 1 < len) val |= (uint)data[tail + 1] << 16;
+                if (tail + 2 < len) val |= (uint)data[tail + 2] << 8;
                 sum += val;
             }
+
             return sum;
         }
 
         private static ushort ReadUInt16BE(byte[] data, int offset)
-            => (ushort)((data[offset] << 8) | data[offset + 1]);
+            => BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(offset));
 
         private static short ReadInt16BE(byte[] data, int offset)
-            => (short)((data[offset] << 8) | data[offset + 1]);
+            => BinaryPrimitives.ReadInt16BigEndian(data.AsSpan(offset));
 
         private static uint ReadUInt32BE(byte[] data, int offset)
-            => ((uint)data[offset] << 24) | ((uint)data[offset + 1] << 16)
-             | ((uint)data[offset + 2] << 8) | data[offset + 3];
+            => BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(offset));
 
         private static void WriteUInt16BE(byte[] data, int offset, ushort value)
-        {
-            data[offset] = (byte)(value >> 8);
-            data[offset + 1] = (byte)(value & 0xFF);
-        }
+            => BinaryPrimitives.WriteUInt16BigEndian(data.AsSpan(offset), value);
 
         private static void WriteUInt32BE(byte[] data, int offset, uint value)
         {
-            data[offset] = (byte)(value >> 24);
-            data[offset + 1] = (byte)((value >> 16) & 0xFF);
-            data[offset + 2] = (byte)((value >> 8) & 0xFF);
-            data[offset + 3] = (byte)(value & 0xFF);
+            BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(offset), value);
         }
     }
 }

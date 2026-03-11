@@ -3,7 +3,7 @@ namespace Rend.Layout
     /// <summary>
     /// The formatting context type for a layout box.
     /// </summary>
-    public enum BoxType : byte
+    internal enum BoxType : byte
     {
         Block,
         Inline,

@@ -3,7 +3,7 @@ namespace Rend.Rendering
     /// <summary>
     /// Identifies the type of a path segment.
     /// </summary>
-    public enum PathSegmentType : byte
+    internal enum PathSegmentType : byte
     {
         MoveTo,
         LineTo,
@@ -15,7 +15,7 @@ namespace Rend.Rendering
     /// <summary>
     /// Represents a single segment within a drawing path.
     /// </summary>
-    public readonly struct PathSegment
+    internal readonly struct PathSegment
     {
         /// <summary>Gets the segment type.</summary>
         public PathSegmentType Type { get; }

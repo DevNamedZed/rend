@@ -6,7 +6,7 @@ namespace Rend.Style
     /// A text node in the styled tree: contains text content with the inherited style
     /// from the parent element.
     /// </summary>
-    public sealed class StyledText : StyledNode
+    internal sealed class StyledText : StyledNode
     {
         public StyledText(string text, ComputedStyle style)
             : base(style)

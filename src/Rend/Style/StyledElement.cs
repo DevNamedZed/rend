@@ -8,7 +8,7 @@ namespace Rend.Style
     /// An element node in the styled tree: wraps an HTML Element with its resolved ComputedStyle
     /// and styled children (elements and text nodes).
     /// </summary>
-    public sealed class StyledElement : StyledNode
+    internal sealed class StyledElement : StyledNode
     {
         private readonly List<StyledNode> _children;
 

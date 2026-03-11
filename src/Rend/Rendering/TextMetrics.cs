@@ -3,7 +3,7 @@ namespace Rend.Rendering
     /// <summary>
     /// Contains the measured dimensions of a text run.
     /// </summary>
-    public readonly struct TextMetrics
+    internal readonly struct TextMetrics
     {
         /// <summary>Gets the total width of the text run.</summary>
         public float Width { get; }

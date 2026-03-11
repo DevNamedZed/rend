@@ -14,15 +14,7 @@ namespace Rend.Tests
                 HeaderHtml = "<div style='text-align:center;font-size:10px;'>My Header</div>"
             };
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<p>Body content</p>", options);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<p>Body content</p>", options);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -37,15 +29,7 @@ namespace Rend.Tests
                 FooterHtml = "<div style='text-align:center;font-size:10px;'>Page Footer</div>"
             };
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<p>Body content</p>", options);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<p>Body content</p>", options);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -60,15 +44,7 @@ namespace Rend.Tests
                 FooterHtml = "<div>Footer</div>"
             };
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<h1>Title</h1><p>Content</p>", options);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<h1>Title</h1><p>Content</p>", options);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -82,15 +58,7 @@ namespace Rend.Tests
                 FooterHtml = "<div style='text-align:center;font-size:9px;'>Page {pageNumber} of {totalPages}</div>"
             };
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<p>Content with page number footer</p>", options);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<p>Content with page number footer</p>", options);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -104,15 +72,7 @@ namespace Rend.Tests
                 HeaderHtml = "<div>{date}</div>"
             };
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<p>Content</p>", options);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<p>Content</p>", options);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -132,15 +92,7 @@ namespace Rend.Tests
                 </div>"
             };
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<h1>Report</h1><p>Important content</p>", options);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<h1>Report</h1><p>Important content</p>", options);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -150,15 +102,7 @@ namespace Rend.Tests
         public void ToPdf_WithoutHeaderFooter_StillWorks()
         {
             // Verify that the pipeline still works without headers/footers
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf("<p>No header or footer</p>");
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf("<p>No header or footer</p>");
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0);
@@ -187,19 +131,5 @@ namespace Rend.Tests
             Assert.Contains(DateTime.Now.ToString("yyyy-MM-dd"), result);
         }
 
-        private static bool IsNativeLibraryFailure(Exception ex)
-        {
-            if (ex is DllNotFoundException) return true;
-            if (ex is TypeInitializationException) return true;
-            if (ex is BadImageFormatException) return true;
-            var inner = ex.InnerException;
-            while (inner != null)
-            {
-                if (inner is DllNotFoundException) return true;
-                if (inner is TypeInitializationException) return true;
-                inner = inner.InnerException;
-            }
-            return false;
-        }
     }
 }

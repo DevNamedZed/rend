@@ -108,7 +108,7 @@ namespace Rend.Tests.Rendering
         }
 
         [Fact]
-        public void Paint_WithSpacingAndShapedRun_FallsBackToDrawText()
+        public void Paint_WithSpacingAndShapedRun_UsesDrawGlyphsWithAdjustedAdvances()
         {
             var target = new TextRecordingTarget();
             var shapedRun = new ShapedTextRun(
@@ -123,10 +123,14 @@ namespace Rend.Tests.Rendering
 
             TextPainter.Paint(fragment, 0, 0, 10f, target, style);
 
-            // Spacing set → should fall back to DrawText even with ShapedRun
-            Assert.Single(target.TextCalls);
-            Assert.Equal("Hi", target.TextCalls[0].Text);
-            Assert.Equal(2f, target.TextCalls[0].Style.LetterSpacing);
+            // Letter-spacing is applied to glyph advances (ApplySpacingToRun),
+            // preserving HarfBuzz shaping quality instead of falling back to DrawText
+            Assert.Single(target.GlyphCalls);
+            Assert.Empty(target.TextCalls);
+            // Each glyph advance should be increased by letter-spacing (2px)
+            var glyphs = target.GlyphCalls[0].Run.Glyphs;
+            Assert.Equal(12f, glyphs[0].XAdvance); // 10 + 2
+            Assert.Equal(12f, glyphs[1].XAdvance); // 10 + 2
         }
 
         [Fact]

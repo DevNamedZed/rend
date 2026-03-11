@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+    <PackageReference Include="QuestPDF" Version="2026.2.3" />
+    <PackageReference Include="PDFsharp" Version="6.2.4" />
+    <PackageReference Include="itext7" Version="9.5.0" />
+    <PackageReference Include="itext7.bouncy-castle-adapter" Version="9.5.0" />
+    <PackageReference Include="itext7.pdfhtml" Version="6.3.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Rend\Rend.csproj" />
+    <ProjectReference Include="..\..\src\Rend.Html\Rend.Html.csproj" />
+    <ProjectReference Include="..\..\src\Rend.Css\Rend.Css.csproj" />
+    <ProjectReference Include="..\..\src\Rend.Pdf\Rend.Pdf.csproj" />
+  </ItemGroup>
+</Project>

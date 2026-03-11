@@ -63,10 +63,36 @@ namespace Rend.Output.Image.Internal
             float halfLen = (Math.Abs(bounds.Width * (float)Math.Sin(angleRad))
                            + Math.Abs(bounds.Height * (float)Math.Cos(angleRad))) / 2f;
 
-            var start = new SKPoint(cx - dx * halfLen, cy - dy * halfLen);
-            var end = new SKPoint(cx + dx * halfLen, cy + dy * halfLen);
+            var tileMode = gradient.Repeating ? SKShaderTileMode.Repeat : SKShaderTileMode.Clamp;
 
-            return SKShader.CreateLinearGradient(start, end, colors, positions, SKShaderTileMode.Clamp);
+            if (gradient.Repeating && positions.Length >= 2)
+            {
+                // For repeating gradients, the shader start/end points span only the
+                // first-to-last stop distance, not the full gradient line. Skia's Repeat
+                // tile mode then tiles this pattern across the entire surface.
+                float firstPos = positions[0];
+                float lastPos = positions[positions.Length - 1];
+                float range = lastPos - firstPos;
+                if (range > 0.0001f)
+                {
+                    // Remap positions to 0-1 within the repeat range
+                    var remapped = new float[positions.Length];
+                    for (int i = 0; i < positions.Length; i++)
+                        remapped[i] = (positions[i] - firstPos) / range;
+
+                    // Compute shader points spanning only the repeat distance
+                    float startOffset = -halfLen + firstPos * 2f * halfLen;
+                    float endOffset = -halfLen + lastPos * 2f * halfLen;
+                    var start = new SKPoint(cx + dx * startOffset, cy + dy * startOffset);
+                    var end = new SKPoint(cx + dx * endOffset, cy + dy * endOffset);
+
+                    return SKShader.CreateLinearGradient(start, end, colors, remapped, tileMode);
+                }
+            }
+
+            var defaultStart = new SKPoint(cx - dx * halfLen, cy - dy * halfLen);
+            var defaultEnd = new SKPoint(cx + dx * halfLen, cy + dy * halfLen);
+            return SKShader.CreateLinearGradient(defaultStart, defaultEnd, colors, positions, tileMode);
         }
 
         private static SKShader CreateRadialShader(GradientInfo gradient, RectF bounds,
@@ -88,11 +114,13 @@ namespace Rend.Output.Image.Internal
             float radius = Math.Max(rx, ry);
             if (radius <= 0f) radius = 1f;
 
+            var tileMode = gradient.Repeating ? SKShaderTileMode.Repeat : SKShaderTileMode.Clamp;
+
             if (Math.Abs(rx - ry) < 0.5f)
             {
                 // Nearly circular — no scaling needed
                 return SKShader.CreateRadialGradient(
-                    new SKPoint(cx, cy), radius, colors, positions, SKShaderTileMode.Clamp);
+                    new SKPoint(cx, cy), radius, colors, positions, tileMode);
             }
 
             // Scale the shorter axis to create an ellipse
@@ -111,7 +139,7 @@ namespace Rend.Output.Image.Internal
             }
 
             return SKShader.CreateRadialGradient(
-                new SKPoint(cx, cy), radius, colors, positions, SKShaderTileMode.Clamp, matrix);
+                new SKPoint(cx, cy), radius, colors, positions, tileMode, matrix);
         }
 
         private static SKShader CreateSweepShader(GradientInfo gradient, RectF bounds,

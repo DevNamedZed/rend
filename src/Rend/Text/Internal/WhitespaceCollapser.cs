@@ -7,7 +7,7 @@ namespace Rend.Text.Internal
     /// <summary>
     /// Collapses and transforms whitespace in text according to CSS white-space property rules.
     /// </summary>
-    public static class WhitespaceCollapser
+    internal static class WhitespaceCollapser
     {
         /// <summary>
         /// Collapses whitespace in the given text according to the specified CSS white-space mode.

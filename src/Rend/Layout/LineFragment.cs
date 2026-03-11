@@ -8,7 +8,7 @@ namespace Rend.Layout
     /// A fragment of content within a <see cref="LineBox"/>.
     /// Can be a text run or an inline element.
     /// </summary>
-    public sealed class LineFragment
+    internal sealed class LineFragment
     {
         /// <summary>X offset within the line box.</summary>
         public float X { get; set; }

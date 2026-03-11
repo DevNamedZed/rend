@@ -66,10 +66,11 @@ namespace Rend.Tests.EndToEnd
                     var streamData = new byte[len];
                     Buffer.BlockCopy(pdf, dataStart, streamData, 0, len);
 
-                    // Try to deflate-decompress
+                    // Try to deflate-decompress (skip zlib header if present)
                     try
                     {
-                        using var ms = new MemoryStream(streamData);
+                        int skip = (streamData.Length >= 2 && streamData[0] == 0x78) ? 2 : 0;
+                        using var ms = new MemoryStream(streamData, skip, streamData.Length - skip);
                         using var deflate = new DeflateStream(ms, CompressionMode.Decompress);
                         using var output = new MemoryStream();
                         deflate.CopyTo(output);
@@ -1065,21 +1066,14 @@ namespace Rend.Tests.EndToEnd
         [Fact]
         public void ImageOutput_ProducesValidPng()
         {
-            try
-            {
-                var img = Render.ToImage("<html><body><p>Test</p></body></html>",
-                    new RenderOptions { PageSize = new SizeF(200, 100) });
-                Assert.NotNull(img);
-                Assert.True(img.Length > 100, $"Image too small: {img.Length}");
-                // PNG signature: 89 50 4E 47
-                Assert.Equal(0x89, img[0]);
-                Assert.Equal(0x50, img[1]);
-                _output.WriteLine($"Image output: {img.Length} bytes, valid PNG header");
-            }
-            catch (Exception ex) when (ex.Message.Contains("native") || ex.Message.Contains("SkiaSharp") || ex.Message.Contains("libSkia"))
-            {
-                _output.WriteLine($"Skipping image test - native library not available: {ex.Message}");
-            }
+            var img = Render.ToImage("<html><body><p>Test</p></body></html>",
+                new RenderOptions { PageSize = new SizeF(200, 100) });
+            Assert.NotNull(img);
+            Assert.True(img.Length > 100, $"Image too small: {img.Length}");
+            // PNG signature: 89 50 4E 47
+            Assert.Equal(0x89, img[0]);
+            Assert.Equal(0x50, img[1]);
+            _output.WriteLine($"Image output: {img.Length} bytes, valid PNG header");
         }
 
         // ═══════════════════════════════════════════
@@ -1119,7 +1113,7 @@ namespace Rend.Tests.EndToEnd
             {
                 PageSize = new SizeF(400, 300),
                 MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
-                Dpi = 96, ImageFormat = "png"
+                Dpi = 96, ImageFormat = ImageOutputFormat.Png
             });
             using var bitmap = SkiaSharp.SKBitmap.Decode(png);
 
@@ -1517,10 +1511,8 @@ namespace Rend.Tests.EndToEnd
                     typeface = SkiaSharp.SKTypeface.Default;
                 }
 
-                using var paint = new SkiaSharp.SKPaint();
-                paint.TextSize = fontSize;
-                paint.Typeface = typeface;
-                var skMetrics = paint.FontMetrics;
+                using var font = new SkiaSharp.SKFont(typeface, fontSize);
+                var skMetrics = font.Metrics;
 
                 float ourAscent = ourMetrics.GetAscent(fontSize);
                 float ourDescent = ourMetrics.GetDescent(fontSize);

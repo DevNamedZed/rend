@@ -1,4 +1,3 @@
-using System;
 using Xunit;
 
 namespace Rend.Tests.Layout
@@ -14,15 +13,7 @@ namespace Rend.Tests.Layout
                     <p>Hidden content that should not appear</p>
                 </details>";
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf(html);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf(html);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0, "PDF output should not be empty");
@@ -39,15 +30,7 @@ namespace Rend.Tests.Layout
                     <p>More visible content</p>
                 </details>";
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf(html);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf(html);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0, "PDF output should not be empty");
@@ -71,16 +54,8 @@ namespace Rend.Tests.Layout
                     <p>More visible content with additional text that should render.</p>
                 </details>";
 
-            byte[] closedResult, openResult;
-            try
-            {
-                closedResult = Render.ToPdf(closedHtml);
-                openResult = Render.ToPdf(openHtml);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var closedResult = Render.ToPdf(closedHtml);
+            var openResult = Render.ToPdf(openHtml);
 
             Assert.NotNull(closedResult);
             Assert.NotNull(openResult);
@@ -97,15 +72,7 @@ namespace Rend.Tests.Layout
                     <p>Content inside fieldset</p>
                 </fieldset>";
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf(html);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf(html);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0, "PDF output should not be empty");
@@ -122,15 +89,7 @@ namespace Rend.Tests.Layout
                     <p>Email: john@example.com</p>
                 </fieldset>";
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf(html);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf(html);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0, "PDF output should not be empty");
@@ -145,15 +104,7 @@ namespace Rend.Tests.Layout
                 <hr>
                 <p>After</p>";
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf(html);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf(html);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0, "PDF output should not be empty");
@@ -170,15 +121,7 @@ namespace Rend.Tests.Layout
                     <p>This content should be hidden</p>
                 </details>";
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf(html);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf(html);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0, "PDF output should not be empty");
@@ -195,42 +138,12 @@ namespace Rend.Tests.Layout
                     <p>Content</p>
                 </fieldset>";
 
-            byte[] result;
-            try
-            {
-                result = Render.ToPdf(html);
-            }
-            catch (Exception ex) when (IsNativeLibraryFailure(ex))
-            {
-                return;
-            }
+            var result = Render.ToPdf(html);
 
             Assert.NotNull(result);
             Assert.True(result.Length > 0, "PDF output should not be empty");
             Assert.Equal((byte)'%', result[0]);
         }
 
-        private static bool IsNativeLibraryFailure(Exception ex)
-        {
-            if (ex is DllNotFoundException) return true;
-            if (ex is TypeInitializationException) return true;
-            if (ex is BadImageFormatException) return true;
-
-            var inner = ex.InnerException;
-            while (inner != null)
-            {
-                if (inner is DllNotFoundException) return true;
-                if (inner is TypeInitializationException) return true;
-                inner = inner.InnerException;
-            }
-
-            string msg = ex.Message ?? "";
-            if (msg.Contains("libHarfBuzz", StringComparison.OrdinalIgnoreCase)) return true;
-            if (msg.Contains("libSkiaSharp", StringComparison.OrdinalIgnoreCase)) return true;
-            if (msg.Contains("HarfBuzzSharp", StringComparison.OrdinalIgnoreCase)) return true;
-            if (msg.Contains("SkiaSharp", StringComparison.OrdinalIgnoreCase)) return true;
-
-            return false;
-        }
     }
 }

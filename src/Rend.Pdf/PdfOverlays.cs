@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Rend.Pdf
 {
@@ -11,12 +13,12 @@ namespace Rend.Pdf
     {
         private static readonly PdfOverlay Instance = new PdfOverlay();
 
-        /// <inheritdoc cref="IPdfOverlay.Apply(Stream, Stream, IEnumerable{PdfOverlayElement})"/>
-        public static void Apply(Stream input, Stream output, IEnumerable<PdfOverlayElement> elements)
-            => Instance.Apply(input, output, elements);
+        /// <inheritdoc cref="IPdfOverlay.ApplyAsync(Stream, Stream, IEnumerable{PdfOverlayElement}, CancellationToken)"/>
+        public static Task ApplyAsync(Stream input, Stream output, IEnumerable<PdfOverlayElement> elements, CancellationToken cancellationToken = default)
+            => Instance.ApplyAsync(input, output, elements, cancellationToken);
 
-        /// <inheritdoc cref="IPdfOverlay.Apply(byte[], IEnumerable{PdfOverlayElement})"/>
-        public static byte[] Apply(byte[] pdfBytes, IEnumerable<PdfOverlayElement> elements)
-            => Instance.Apply(pdfBytes, elements);
+        /// <inheritdoc cref="IPdfOverlay.ApplyAsync(byte[], IEnumerable{PdfOverlayElement}, CancellationToken)"/>
+        public static Task<byte[]> ApplyAsync(byte[] pdfBytes, IEnumerable<PdfOverlayElement> elements, CancellationToken cancellationToken = default)
+            => Instance.ApplyAsync(pdfBytes, elements, cancellationToken);
     }
 }

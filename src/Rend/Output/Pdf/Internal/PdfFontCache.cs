@@ -32,10 +32,7 @@ namespace Rend.Output.Pdf.Internal
             PdfFont pdfFont;
             if (fontData != null && fontData.Length > 0)
             {
-                using (var stream = new MemoryStream(fontData))
-                {
-                    pdfFont = doc.AddFont(stream, FontEmbedMode.Subset);
-                }
+                pdfFont = doc.AddFont(fontData, FontEmbedMode.Subset);
             }
             else
             {

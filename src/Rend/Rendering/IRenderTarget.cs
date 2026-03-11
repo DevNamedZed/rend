@@ -9,7 +9,7 @@ namespace Rend.Rendering
     /// The central rendering abstraction. Implementations translate drawing commands
     /// into a specific output format (PDF, image, etc.).
     /// </summary>
-    public interface IRenderTarget
+    internal interface IRenderTarget
     {
         /// <summary>Begins a new page with the specified dimensions.</summary>
         /// <param name="width">The page width in pixels.</param>

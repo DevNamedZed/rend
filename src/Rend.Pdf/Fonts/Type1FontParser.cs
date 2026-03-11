@@ -213,6 +213,59 @@ namespace Rend.Pdf.Fonts
                                type1Trailer: TrailerSegment);
         }
 
+        /// <summary>
+        /// Create a PdfFontData from the parsed Type 1 data, for caching and reuse.
+        /// </summary>
+        public PdfFontData ToPdfFontData(byte[] rawFontBytes)
+        {
+            string baseFontName = SanitizeFontName(FontName);
+
+            float unitsPerEm = 1000f;
+            float ascent = FontBBox.Length >= 4 ? FontBBox[3] : 800f;
+            float descent = FontBBox.Length >= 4 ? FontBBox[1] : -200f;
+            float capHeight = ascent * 0.7f;
+            float xHeight = ascent * 0.5f;
+            float stemV = IsFixedPitch ? 120f : 80f;
+
+            var bBox = FontBBox.Length >= 4
+                ? new RectF(FontBBox[0], FontBBox[1], FontBBox[2] - FontBBox[0], FontBBox[3] - FontBBox[1])
+                : new RectF(0, -200, 1000, 1000);
+
+            int flags = ComputeFontFlags(IsFixedPitch, ItalicAngle);
+
+            var metrics = new FontMetrics(
+                ascent: ascent, descent: descent, capHeight: capHeight, xHeight: xHeight,
+                stemV: stemV, italicAngle: ItalicAngle, bBox: bBox,
+                unitsPerEm: unitsPerEm, flags: flags);
+
+            var charToGlyph = new ushort[256];
+            var advanceWidths = new float[256];
+
+            float defaultWidth = 600f;
+            if (CharWidths.TryGetValue("space", out int spaceWidth) && spaceWidth > 0)
+                defaultWidth = spaceWidth;
+
+            for (int i = 0; i < 256; i++)
+            {
+                charToGlyph[i] = (ushort)i;
+                advanceWidths[i] = defaultWidth;
+            }
+
+            foreach (var kvp in CharWidths)
+            {
+                int code = GlyphNameToWinAnsiCode(kvp.Key);
+                if (code >= 0 && code < 256)
+                    advanceWidths[code] = kvp.Value;
+            }
+
+            return new PdfFontData(baseFontName, metrics, charToGlyph, advanceWidths,
+                                   supplementaryMap: null, kerningPairs: null,
+                                   isCff: false, cffTableData: null,
+                                   embedMode: FontEmbedMode.Full, rawFontBytes: rawFontBytes,
+                                   isType1: true, type1Header: HeaderSegment,
+                                   type1Encrypted: EncryptedSegment, type1Trailer: TrailerSegment);
+        }
+
         // ═══════════════════════════════════════════
         // PFB Segment Extraction
         // ═══════════════════════════════════════════

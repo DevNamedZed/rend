@@ -14,7 +14,7 @@ namespace Rend
         /// <summary>Human-readable description of the current stage.</summary>
         public string Description { get; }
 
-        public RenderProgress(int percentage, RenderStage stage, string description)
+        internal RenderProgress(int percentage, RenderStage stage, string description)
         {
             Percentage = percentage;
             Stage = stage;

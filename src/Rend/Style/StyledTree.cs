@@ -6,7 +6,7 @@ namespace Rend.Style
     /// The root of a styled tree: a DOM tree with resolved computed styles for every node.
     /// Produced by <see cref="StyleTreeBuilder"/> and consumed by the layout engine.
     /// </summary>
-    public sealed class StyledTree
+    internal sealed class StyledTree
     {
         public StyledTree(StyledElement root, PageStyleInfo pageStyle)
         {
@@ -24,7 +24,7 @@ namespace Rend.Style
     /// <summary>
     /// Page style information extracted from @page CSS rules.
     /// </summary>
-    public sealed class PageStyleInfo
+    internal sealed class PageStyleInfo
     {
         /// <summary>Page size in points. Defaults to A4.</summary>
         public SizeF PageSize { get; set; } = Rend.Core.Values.PageSize.A4;

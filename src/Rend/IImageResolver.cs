@@ -1,4 +1,6 @@
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Rend
 {
@@ -10,12 +12,13 @@ namespace Rend
     public interface IImageResolver
     {
         /// <summary>
-        /// Resolve an image URL to a readable stream of image bytes.
+        /// Asynchronously resolve an image URL to a readable stream of image bytes.
         /// Return null to skip the image or fall back to the default resource loader.
         /// The caller will dispose the returned stream.
         /// </summary>
         /// <param name="url">The image URL (absolute or relative).</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A stream containing the image data, or null.</returns>
-        Stream? Resolve(string url);
+        Task<Stream?> ResolveAsync(string url, CancellationToken cancellationToken = default);
     }
 }

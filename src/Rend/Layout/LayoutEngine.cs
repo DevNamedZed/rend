@@ -11,7 +11,7 @@ namespace Rend.Layout
     /// <summary>
     /// Public entry point for layout: takes a StyledTree + options → produces a LayoutDocument.
     /// </summary>
-    public sealed class LayoutEngine
+    internal sealed class LayoutEngine
     {
         private readonly IFontProvider? _fontProvider;
         private readonly ITextShaper? _textShaper;

@@ -673,7 +673,9 @@ namespace Rend.Css.Parser.Internal
                 if (p is CssUrlValue || p is CssFunctionValue fn &&
                     (fn.Name == "linear-gradient" || fn.Name == "radial-gradient" ||
                      fn.Name == "conic-gradient" || fn.Name == "-webkit-linear-gradient" ||
-                     fn.Name == "-webkit-radial-gradient"))
+                     fn.Name == "-webkit-radial-gradient" ||
+                     fn.Name == "repeating-linear-gradient" || fn.Name == "repeating-radial-gradient" ||
+                     fn.Name == "repeating-conic-gradient"))
                 {
                     bgImage = p;
                 }
@@ -1171,9 +1173,9 @@ namespace Rend.Css.Parser.Internal
                 ["border-right"] = new[] { "border-right-width", "border-right-style", "border-right-color" },
                 ["border-bottom"] = new[] { "border-bottom-width", "border-bottom-style", "border-bottom-color" },
                 ["border-left"] = new[] { "border-left-width", "border-left-style", "border-left-color" },
-            }.ToFrozenDictionary();
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 #else
-        private static readonly Dictionary<string, string[]> ShorthandLonghands = new()
+        private static readonly Dictionary<string, string[]> ShorthandLonghands = new(StringComparer.OrdinalIgnoreCase)
         {
             ["margin"] = new[] { "margin-top", "margin-right", "margin-bottom", "margin-left" },
             ["padding"] = new[] { "padding-top", "padding-right", "padding-bottom", "padding-left" },

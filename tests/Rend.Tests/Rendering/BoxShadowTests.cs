@@ -113,7 +113,7 @@ namespace Rend.Tests.Rendering
             BoxShadowPainter.Paint(box, target);
 
             // Single rect with mask blur (SetMaskBlur called)
-            Assert.Equal(1, target.FilledRects.Count);
+            Assert.Single(target.FilledRects);
             Assert.True(target.MaskBlurSet, "SetMaskBlur should have been called");
         }
 

@@ -71,7 +71,7 @@ namespace Rend.Tests
         public void DefaultValues_ImageFormatPng()
         {
             var options = new RenderOptions();
-            Assert.Equal("png", options.ImageFormat);
+            Assert.Equal(ImageOutputFormat.Png, options.ImageFormat);
         }
 
         [Fact]
@@ -155,9 +155,9 @@ namespace Rend.Tests
         public void CanSetImageFormat()
         {
             var options = new RenderOptions();
-            options.ImageFormat = "jpeg";
+            options.ImageFormat = ImageOutputFormat.Jpeg;
 
-            Assert.Equal("jpeg", options.ImageFormat);
+            Assert.Equal(ImageOutputFormat.Jpeg, options.ImageFormat);
         }
 
         [Fact]
@@ -185,7 +185,7 @@ namespace Rend.Tests
 
             Assert.Equal(72f, defaults.MarginTop);
             Assert.Equal(96f, defaults.Dpi);
-            Assert.Equal("png", defaults.ImageFormat);
+            Assert.Equal(ImageOutputFormat.Png, defaults.ImageFormat);
             Assert.Equal(90, defaults.ImageQuality);
             Assert.Equal(16f, defaults.DefaultFontSize);
             Assert.True(defaults.GenerateBookmarks);

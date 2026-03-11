@@ -3,7 +3,7 @@ namespace Rend.Text.Internal
     /// <summary>
     /// Unicode Bidirectional character classes as defined by UAX #9.
     /// </summary>
-    public enum BidiClass : byte
+    internal enum BidiClass : byte
     {
         /// <summary>Left-to-Right.</summary>
         L,
@@ -56,7 +56,7 @@ namespace Rend.Text.Internal
     /// <summary>
     /// Provides simplified UAX #9 Bidi class lookups for common code point ranges.
     /// </summary>
-    public static class BidiClassifier
+    internal static class BidiClassifier
     {
         /// <summary>
         /// Returns the bidirectional class for the given Unicode code point.

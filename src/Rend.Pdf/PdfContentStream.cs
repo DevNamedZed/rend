@@ -406,8 +406,9 @@ namespace Rend.Pdf
             }
             else
             {
-                byte[] encoded = font.Encode(text);
-                _builder.ShowTextHex(encoded);
+                var (buffer, length) = font.EncodeRented(text);
+                _builder.ShowTextHex(buffer, length);
+                System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
             }
         }
 
@@ -420,18 +421,20 @@ namespace Rend.Pdf
             EnsureInTextObject();
             if (entries == null || entries.Length == 0) return;
 
-            // Convert entries to the byte[][] + float[] format expected by ContentStreamBuilder
-            var textSegments = new System.Collections.Generic.List<byte[]>();
-            var adjustments = new System.Collections.Generic.List<float>();
+            // Pre-size arrays to avoid List allocations
+            var textSegments = new byte[entries.Length][];
+            var adjustments = new float[entries.Length];
+            int segCount = 0;
+            int adjCount = 0;
 
-            foreach (var entry in entries)
+            for (int e = 0; e < entries.Length; e++)
             {
+                var entry = entries[e];
                 if (entry.HasText)
                 {
                     byte[] encoded;
                     if (font.IsStandard14 || font.IsType1)
                     {
-                        // Standard14 and Type 1 fonts use literal encoding (1 byte per char)
                         var text = entry.Text!;
                         encoded = new byte[text.Length];
                         for (int i = 0; i < text.Length; i++)
@@ -441,15 +444,21 @@ namespace Rend.Pdf
                     {
                         encoded = font.Encode(entry.Text!);
                     }
-                    textSegments.Add(encoded);
+                    textSegments[segCount++] = encoded;
                 }
                 if (entry.HasAdjustment)
                 {
-                    adjustments.Add(entry.Adjustment);
+                    adjustments[adjCount++] = entry.Adjustment;
                 }
             }
 
-            _builder.ShowTextWithPositioning(textSegments.ToArray(), adjustments.ToArray());
+            // Pass exact-size slices
+            if (segCount < textSegments.Length)
+                System.Array.Resize(ref textSegments, segCount);
+            if (adjCount < adjustments.Length)
+                System.Array.Resize(ref adjustments, adjCount);
+
+            _builder.ShowTextWithPositioning(textSegments, adjustments);
         }
 
         /// <summary>
@@ -461,13 +470,15 @@ namespace Rend.Pdf
             EnsureInTextObject();
             if (glyphIds.Length == 0) return;
 
-            var encoded = new byte[glyphIds.Length * 2];
+            var encoded = System.Buffers.ArrayPool<byte>.Shared.Rent(glyphIds.Length * 2);
+            int length = glyphIds.Length * 2;
             for (int i = 0; i < glyphIds.Length; i++)
             {
                 font.RecordGlyphUsage(glyphIds[i]);
                 PdfFont.EncodeGlyphId(glyphIds[i], encoded, i * 2);
             }
-            _builder.ShowTextHex(encoded);
+            _builder.ShowTextHex(encoded, length);
+            System.Buffers.ArrayPool<byte>.Shared.Return(encoded);
         }
 
         /// <summary>
@@ -479,23 +490,27 @@ namespace Rend.Pdf
             EnsureInTextObject();
             if (glyphs.Length == 0) return;
 
-            var textSegments = new System.Collections.Generic.List<byte[]>();
-            var adjustments = new System.Collections.Generic.List<float>();
+            var textSegments = new byte[glyphs.Length][];
+            var adjustments = new float[glyphs.Length];
+            int adjCount = 0;
 
             for (int i = 0; i < glyphs.Length; i++)
             {
                 font.RecordGlyphUsage(glyphs[i].GlyphId);
                 var encoded = new byte[2];
                 PdfFont.EncodeGlyphId(glyphs[i].GlyphId, encoded, 0);
-                textSegments.Add(encoded);
+                textSegments[i] = encoded;
 
                 if (glyphs[i].XAdvanceAdjustment != 0)
                 {
-                    adjustments.Add(glyphs[i].XAdvanceAdjustment);
+                    adjustments[adjCount++] = glyphs[i].XAdvanceAdjustment;
                 }
             }
 
-            _builder.ShowTextWithPositioning(textSegments.ToArray(), adjustments.ToArray());
+            if (adjCount < adjustments.Length)
+                System.Array.Resize(ref adjustments, adjCount);
+
+            _builder.ShowTextWithPositioning(textSegments, adjustments);
         }
 
         /// <summary>Set character spacing (PDF operator: Tc).</summary>

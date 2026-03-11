@@ -16,7 +16,7 @@ namespace Rend.Pdf.Internal
         public static readonly byte[] Bytes_false = { (byte)'f', (byte)'a', (byte)'l', (byte)'s', (byte)'e' };
         public static readonly byte[] Bytes_null = { (byte)'n', (byte)'u', (byte)'l', (byte)'l' };
         public static readonly byte[] Bytes_ObjRef = { (byte)' ', (byte)'R' };
-        public static readonly byte[] Bytes_ObjStart = { (byte)' ', (byte)'o', (byte)'b', (byte)'j', (byte)'\n' };
+        public static readonly byte[] Bytes_ObjStart = { (byte)' ', (byte)'0', (byte)' ', (byte)'o', (byte)'b', (byte)'j', (byte)'\n' };
         public static readonly byte[] Bytes_ObjEnd = { (byte)'\n', (byte)'e', (byte)'n', (byte)'d', (byte)'o', (byte)'b', (byte)'j', (byte)'\n' };
         public static readonly byte[] Bytes_DictOpen = { (byte)'<', (byte)'<', (byte)'\n' };
         public static readonly byte[] Bytes_DictClose = { (byte)'>', (byte)'>' };
@@ -101,6 +101,25 @@ namespace Rend.Pdf.Internal
             EnsureCapacity(count);
             Buffer.BlockCopy(bytes, offset, _buffer, _bufferPos, count);
             _bufferPos += count;
+        }
+
+        public void WriteSpan(ReadOnlySpan<byte> data)
+        {
+            if (data.Length > _buffer.Length / 2)
+            {
+                Flush();
+#if NET6_0_OR_GREATER
+                _output.Write(data);
+#else
+                var temp = data.ToArray();
+                _output.Write(temp, 0, temp.Length);
+#endif
+                _totalBytesWritten += data.Length;
+                return;
+            }
+            EnsureCapacity(data.Length);
+            data.CopyTo(_buffer.AsSpan(_bufferPos));
+            _bufferPos += data.Length;
         }
 
         /// <summary>

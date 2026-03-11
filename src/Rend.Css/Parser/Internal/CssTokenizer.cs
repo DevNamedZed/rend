@@ -596,7 +596,7 @@ namespace Rend.Css.Parser.Internal
                     if (StartsValidEscape(_pos))
                     {
                         Advance(); // skip backslash
-                        _sb.Append(ConsumeEscapedCodePoint());
+                        ConsumeEscapedCodePoint(_sb);
                     }
                     else
                     {
@@ -632,7 +632,7 @@ namespace Rend.Css.Parser.Internal
                 if (StartsValidEscape(_pos))
                 {
                     Advance();
-                    ConsumeEscapedCodePoint();
+                    ConsumeEscapedCodePoint(_sb); // discard — just advancing past the escape
                 }
                 else
                 {
@@ -687,7 +687,7 @@ namespace Rend.Css.Parser.Internal
                         continue;
                     }
                     // Escaped code point
-                    _sb.Append(ConsumeEscapedCodePoint());
+                    ConsumeEscapedCodePoint(_sb);
                     continue;
                 }
 
@@ -704,10 +704,17 @@ namespace Rend.Css.Parser.Internal
 
         #region §4.3.7 Consume an escaped code point
 
-        private char ConsumeEscapedCodePoint()
+        /// <summary>
+        /// Consumes an escaped code point per CSS §4.3.7 and appends it to <paramref name="sb"/>.
+        /// Supports supplementary Unicode code points (U+10000–U+10FFFF) via surrogate pairs.
+        /// </summary>
+        private void ConsumeEscapedCodePoint(StringBuilder sb)
         {
             if (_pos >= _input.Length)
-                return '\uFFFD'; // replacement character
+            {
+                sb.Append('\uFFFD'); // replacement character
+                return;
+            }
 
             char c = Peek();
 
@@ -727,19 +734,25 @@ namespace Rend.Css.Parser.Internal
                     Advance();
 
                 if (value == 0 || value > 0x10FFFF || (value >= 0xD800 && value <= 0xDFFF))
-                    return '\uFFFD';
+                {
+                    sb.Append('\uFFFD');
+                    return;
+                }
 
-                // If the value is a supplementary character we return the BMP replacement
-                // (CSS tokenizer works at code point level but we produce chars)
+                // Supplementary code point — emit surrogate pair
                 if (value > 0xFFFF)
-                    return '\uFFFD'; // Simplification: BMP only for now
+                {
+                    sb.Append(char.ConvertFromUtf32(value));
+                    return;
+                }
 
-                return (char)value;
+                sb.Append((char)value);
+                return;
             }
 
-            // Any other character — return it literally
+            // Any other character — append it literally
+            sb.Append(c);
             Advance();
-            return c;
         }
 
         #endregion
@@ -781,7 +794,7 @@ namespace Rend.Css.Parser.Internal
                 else if (StartsValidEscape(_pos))
                 {
                     Advance(); // skip backslash
-                    _sb.Append(ConsumeEscapedCodePoint());
+                    ConsumeEscapedCodePoint(_sb);
                 }
                 else
                 {

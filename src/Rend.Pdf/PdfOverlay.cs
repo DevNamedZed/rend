@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Rend.Pdf
 {
@@ -11,7 +13,7 @@ namespace Rend.Pdf
     public sealed class PdfOverlay : IPdfOverlay
     {
         /// <inheritdoc />
-        public void Apply(Stream input, Stream output, IEnumerable<PdfOverlayElement> elements)
+        public async Task ApplyAsync(Stream input, Stream output, IEnumerable<PdfOverlayElement> elements, CancellationToken cancellationToken = default)
         {
             if (input == null) throw new ArgumentNullException(nameof(input));
             if (output == null) throw new ArgumentNullException(nameof(output));
@@ -20,22 +22,25 @@ namespace Rend.Pdf
             byte[] pdfBytes;
             using (var ms = new MemoryStream())
             {
-                input.CopyTo(ms);
+                await input.CopyToAsync(ms, 81920, cancellationToken).ConfigureAwait(false);
                 pdfBytes = ms.ToArray();
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             var result = Internal.PdfOverlayWriter.Apply(pdfBytes, elements);
-            output.Write(result, 0, result.Length);
+            await output.WriteAsync(result, 0, result.Length, cancellationToken).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
-        public byte[] Apply(byte[] pdfBytes, IEnumerable<PdfOverlayElement> elements)
+        public Task<byte[]> ApplyAsync(byte[] pdfBytes, IEnumerable<PdfOverlayElement> elements, CancellationToken cancellationToken = default)
         {
-            if (pdfBytes == null || pdfBytes.Length == 0)
-                throw new ArgumentException("PDF data must not be null or empty.", nameof(pdfBytes));
+            if (pdfBytes == null) throw new ArgumentNullException(nameof(pdfBytes));
+            if (pdfBytes.Length == 0) throw new ArgumentException("PDF data must not be empty.", nameof(pdfBytes));
             if (elements == null) throw new ArgumentNullException(nameof(elements));
 
-            return Internal.PdfOverlayWriter.Apply(pdfBytes, elements);
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = Internal.PdfOverlayWriter.Apply(pdfBytes, elements);
+            return Task.FromResult(result);
         }
     }
 }

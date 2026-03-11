@@ -49,7 +49,7 @@ All methods are also available on `HtmlRenderer`, which implements `IRenderer` f
 ```csharp
 public interface IImageResolver
 {
-    Stream? Resolve(string url);
+    Task<Stream?> ResolveAsync(string url, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -115,8 +115,8 @@ Loads all font files (.ttf, .otf, .woff, .woff2) from a directory.
 Static entry point for signing any PDF document.
 
 ```csharp
-PdfSigning.Sign(input, output, options);
-PdfSigning.Sign(input, output, certificate);
+await PdfSigning.SignAsync(input, output, options);
+await PdfSigning.SignAsync(input, output, certificate);
 ```
 
 All methods are also available on `PdfSigningService`, which implements `IPdfSigningService` for dependency injection and testing.
@@ -136,12 +136,12 @@ All methods are also available on `PdfSigningService`, which implements `IPdfSig
 ```csharp
 public interface IPdfSigner
 {
-    byte[] Sign(byte[] data);
+    Task<byte[]> SignAsync(byte[] data, CancellationToken cancellationToken = default);
     int EstimatedSignatureSize { get; }
 }
 ```
 
-Implement this for external signing (HSM, cloud KMS). `Sign()` receives the concatenated PDF byte ranges and must return a DER-encoded PKCS#7/CMS detached signature. `EstimatedSignatureSize` is used to reserve space in the PDF (typical value: 8192).
+Implement this for external signing (HSM, cloud KMS). `SignAsync()` receives the concatenated PDF byte ranges and must return a DER-encoded PKCS#7/CMS detached signature. `EstimatedSignatureSize` is used to reserve space in the PDF (typical value: 8192). For local signing, return `Task.FromResult(...)`.
 
 ### `Pkcs12Signer`
 
@@ -161,7 +161,7 @@ var signer = new Pkcs12Signer(certificate);
 Static entry point for drawing text and images onto existing PDF pages.
 
 ```csharp
-PdfOverlays.Apply(input, output, elements);
+await PdfOverlays.ApplyAsync(input, output, elements);
 ```
 
 All methods are also available on `PdfOverlay`, which implements `IPdfOverlay` for dependency injection and testing.

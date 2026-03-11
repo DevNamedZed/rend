@@ -135,10 +135,10 @@ class Program
         await using var browserPool = new BrowserPool(chromeExePath, workerCount);
 
         // Per-worker render resources (SkiaTextShaper is not thread-safe).
-        var renderResources = new ThreadLocal<(Rend.Output.Image.Internal.SkiaFontMapper mapper, Rend.Output.Image.SkiaTextShaper shaper)>(
+        var renderResources = new ThreadLocal<(Rend.Output.Image.SkiaFontMapper mapper, Rend.Output.Image.SkiaTextShaper shaper)>(
             () =>
             {
-                var mapper = new Rend.Output.Image.Internal.SkiaFontMapper();
+                var mapper = new Rend.Output.Image.SkiaFontMapper();
                 var shaper = new Rend.Output.Image.SkiaTextShaper(mapper);
                 return (mapper, shaper);
             },
@@ -204,7 +204,7 @@ class Program
         BrowserPool browserPool,
         Rend.Fonts.IFontProvider fontProvider,
         Rend.Output.Image.SkiaTextShaper textShaper,
-        Rend.Output.Image.Internal.SkiaFontMapper fontMapper,
+        Rend.Output.Image.SkiaFontMapper fontMapper,
         string outputDir)
     {
         var sw = Stopwatch.StartNew();
@@ -266,7 +266,7 @@ class Program
                     PageSize = new SizeF(testCase.ViewportWidth, testCase.ViewportHeight),
                     MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
                     Dpi = 96,
-                    ImageFormat = "png",
+                    ImageFormat = Rend.ImageOutputFormat.Png,
                     FontProvider = fontProvider,
                     TextShaper = textShaper,
                     FontMapper = fontMapper,

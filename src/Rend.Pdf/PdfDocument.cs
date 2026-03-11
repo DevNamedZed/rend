@@ -29,6 +29,8 @@ namespace Rend.Pdf
     /// </example>
     public sealed class PdfDocument : IDisposable
     {
+        private static readonly byte[] BinaryMarker = { (byte)'%', 0xE2, 0xE3, 0xCF, 0xD3, (byte)'\n' };
+
         private readonly PdfDocumentOptions _options;
         private readonly PdfObjectTable _objectTable = new PdfObjectTable();
         private readonly List<PdfPage> _pages = new List<PdfPage>();
@@ -74,6 +76,9 @@ namespace Rend.Pdf
         /// <summary>Number of pages in the document.</summary>
         public int PageCount => _pages.Count;
 
+        /// <summary>The pages in this document, in order.</summary>
+        public IReadOnlyList<PdfPage> Pages => _pages;
+
         // ═══════════════════════════════════════════
         // Pages
         // ═══════════════════════════════════════════
@@ -81,6 +86,9 @@ namespace Rend.Pdf
         /// <summary>Add a new page with the specified dimensions (in points).</summary>
         public PdfPage AddPage(float widthPt, float heightPt)
         {
+            if (widthPt <= 0) throw new ArgumentOutOfRangeException(nameof(widthPt), "Page width must be positive.");
+            if (heightPt <= 0) throw new ArgumentOutOfRangeException(nameof(heightPt), "Page height must be positive.");
+
             bool compress = _options.Compression != PdfCompression.None;
             var level = MapCompressionLevel(_options.Compression);
             var page = new PdfPage(widthPt, heightPt, _pages.Count, _objectTable, compress,
@@ -95,16 +103,18 @@ namespace Rend.Pdf
         /// <summary>Insert a page at the specified index.</summary>
         public PdfPage InsertPage(int index, float widthPt, float heightPt)
         {
+            if (index < 0 || index > _pages.Count)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            if (widthPt <= 0) throw new ArgumentOutOfRangeException(nameof(widthPt), "Page width must be positive.");
+            if (heightPt <= 0) throw new ArgumentOutOfRangeException(nameof(heightPt), "Page height must be positive.");
+
             bool compress = _options.Compression != PdfCompression.None;
             var level = MapCompressionLevel(_options.Compression);
             var page = new PdfPage(widthPt, heightPt, index, _objectTable, compress,
                                    _options.ContentStreamBufferSize, level);
             _pages.Insert(index, page);
-            // Re-index subsequent pages
             for (int i = index + 1; i < _pages.Count; i++)
-            {
-                // PageIndex is read-only on PdfPage, but insertion is rare — acceptable
-            }
+                _pages[i].PageIndex = i;
             return page;
         }
 
@@ -135,6 +145,14 @@ namespace Rend.Pdf
                 fontBytes = ms.ToArray();
             }
 
+            return AddFont(fontBytes, mode);
+        }
+
+        /// <summary>Add a TrueType, OpenType, or Type 1 font from a byte array.</summary>
+        public PdfFont AddFont(byte[] fontBytes, FontEmbedMode mode = FontEmbedMode.Subset)
+        {
+            if (fontBytes == null) throw new ArgumentNullException(nameof(fontBytes));
+
             PdfFont pdfFont;
             if (Type1FontParser.IsType1Font(fontBytes))
             {
@@ -148,6 +166,21 @@ namespace Rend.Pdf
 
             _embeddedFonts.Add(pdfFont);
             _fontRawData[pdfFont] = fontBytes;
+            return pdfFont;
+        }
+
+        /// <summary>
+        /// Add a font from pre-parsed PdfFontData. This is nearly free — no font parsing.
+        /// Use <see cref="PdfFontData.FromFile"/> or <see cref="PdfFontData.FromBytes"/> to parse once,
+        /// then reuse across multiple documents.
+        /// </summary>
+        public PdfFont AddFont(PdfFontData fontData)
+        {
+            if (fontData == null) throw new ArgumentNullException(nameof(fontData));
+
+            var pdfFont = TrueTypeParser.CreatePdfFont(fontData, _fontCounter++);
+            _embeddedFonts.Add(pdfFont);
+            _fontRawData[pdfFont] = fontData.RawFontBytes;
             return pdfFont;
         }
 
@@ -383,30 +416,37 @@ namespace Rend.Pdf
         {
             if (output == null) throw new ArgumentNullException(nameof(output));
 
-            // Build the PDF into a memory buffer first (needed for linearization and signing)
-            byte[] pdfBytes;
-            using (var ms = new MemoryStream())
+            bool needsPostProcessing = _options.Linearize || _options.Signature != null;
+
+            if (needsPostProcessing)
             {
-                using var writer = new PdfWriter(ms);
+                // Build into memory buffer for linearization/signing
+                byte[] pdfBytes;
+                using (var ms = new MemoryStream())
+                {
+                    using var writer = new PdfWriter(ms);
+                    WriteHeader(writer);
+                    BuildAndWriteObjects(writer);
+                    writer.Flush();
+                    pdfBytes = ms.ToArray();
+                }
+
+                if (_options.Linearize)
+                    pdfBytes = PdfLinearizer.Linearize(pdfBytes);
+
+                if (_options.Signature != null)
+                    pdfBytes = PdfSigner.SignAsync(pdfBytes, _options.Signature).GetAwaiter().GetResult();
+
+                output.Write(pdfBytes, 0, pdfBytes.Length);
+            }
+            else
+            {
+                // Write directly to output stream — no intermediate copy
+                using var writer = new PdfWriter(output);
                 WriteHeader(writer);
                 BuildAndWriteObjects(writer);
                 writer.Flush();
-                pdfBytes = ms.ToArray();
             }
-
-            // Apply linearization if requested
-            if (_options.Linearize)
-            {
-                pdfBytes = PdfLinearizer.Linearize(pdfBytes);
-            }
-
-            // Apply signing if requested
-            if (_options.Signature != null)
-            {
-                pdfBytes = PdfSigner.Sign(pdfBytes, _options.Signature);
-            }
-
-            output.Write(pdfBytes, 0, pdfBytes.Length);
         }
 
         /// <summary>Save the PDF document to a file.</summary>
@@ -438,9 +478,11 @@ namespace Rend.Pdf
                 default: version = "1.7"; break;
             }
 
-            writer.WriteAscii($"%PDF-{version}\n");
+            writer.WriteAscii("%PDF-");
+            writer.WriteAscii(version);
+            writer.WriteByte((byte)'\n');
             // Binary comment marker (bytes > 127) to signal binary content
-            writer.WriteRawBytes(new byte[] { (byte)'%', 0xE2, 0xE3, 0xCF, 0xD3, (byte)'\n' }, 0, 6);
+            writer.WriteRaw(BinaryMarker);
         }
 
         private void BuildAndWriteObjects(PdfWriter writer)
@@ -837,58 +879,70 @@ namespace Rend.Pdf
             return widthsArray;
         }
 
+        private static readonly char[] HexChars = "0123456789ABCDEF".ToCharArray();
+
         private byte[]? BuildToUnicodeCMap(PdfFont font)
         {
             if (font.GlyphToUnicode.Count == 0) return null;
 
-            using (var ms = new MemoryStream())
-            using (var sw = new StreamWriter(ms, System.Text.Encoding.ASCII))
+            // Estimate: ~20 bytes per entry + ~200 bytes header/footer
+            var sb = new StringBuilder(font.GlyphToUnicode.Count * 24 + 256);
+            sb.Append("/CIDInit /ProcSet findresource begin\n");
+            sb.Append("12 dict begin\n");
+            sb.Append("begincmap\n");
+            sb.Append("/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n");
+            sb.Append("/CMapName /Adobe-Identity-UCS def\n");
+            sb.Append("/CMapType 2 def\n");
+            sb.Append("1 begincodespacerange\n");
+            sb.Append("<0000> <FFFF>\n");
+            sb.Append("endcodespacerange\n");
+
+            var entries = new List<KeyValuePair<ushort, int>>(font.GlyphToUnicode);
+            entries.Sort((a, b) => a.Key.CompareTo(b.Key));
+
+            // Write in batches of 100 (PDF limit per beginbfchar block)
+            int idx = 0;
+            while (idx < entries.Count)
             {
-                sw.Write("/CIDInit /ProcSet findresource begin\n");
-                sw.Write("12 dict begin\n");
-                sw.Write("begincmap\n");
-                sw.Write("/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n");
-                sw.Write("/CMapName /Adobe-Identity-UCS def\n");
-                sw.Write("/CMapType 2 def\n");
-                sw.Write("1 begincodespacerange\n");
-                sw.Write("<0000> <FFFF>\n");
-                sw.Write("endcodespacerange\n");
-
-                var entries = new List<KeyValuePair<ushort, int>>(font.GlyphToUnicode);
-                entries.Sort((a, b) => a.Key.CompareTo(b.Key));
-
-                // Write in batches of 100 (PDF limit per beginbfchar block)
-                int idx = 0;
-                while (idx < entries.Count)
+                int batchSize = Math.Min(100, entries.Count - idx);
+                sb.Append(batchSize).Append(" beginbfchar\n");
+                for (int j = 0; j < batchSize; j++)
                 {
-                    int batchSize = Math.Min(100, entries.Count - idx);
-                    sw.Write($"{batchSize} beginbfchar\n");
-                    for (int j = 0; j < batchSize; j++)
+                    var entry = entries[idx + j];
+                    sb.Append('<');
+                    AppendHex4(sb, entry.Key);
+                    sb.Append("> <");
+                    if (entry.Value <= 0xFFFF)
                     {
-                        var entry = entries[idx + j];
-                        if (entry.Value <= 0xFFFF)
-                        {
-                            sw.Write($"<{entry.Key:X4}> <{entry.Value:X4}>\n");
-                        }
-                        else
-                        {
-                            // Supplementary character: encode as UTF-16 surrogate pair
-                            int hi = 0xD800 + ((entry.Value - 0x10000) >> 10);
-                            int lo = 0xDC00 + ((entry.Value - 0x10000) & 0x3FF);
-                            sw.Write($"<{entry.Key:X4}> <{hi:X4}{lo:X4}>\n");
-                        }
+                        AppendHex4(sb, entry.Value);
                     }
-                    sw.Write("endbfchar\n");
-                    idx += batchSize;
+                    else
+                    {
+                        // Supplementary character: encode as UTF-16 surrogate pair
+                        int hi = 0xD800 + ((entry.Value - 0x10000) >> 10);
+                        int lo = 0xDC00 + ((entry.Value - 0x10000) & 0x3FF);
+                        AppendHex4(sb, hi);
+                        AppendHex4(sb, lo);
+                    }
+                    sb.Append(">\n");
                 }
-
-                sw.Write("endcmap\n");
-                sw.Write("CMapName currentdict /CMap defineresource pop\n");
-                sw.Write("end end\n");
-                sw.Flush();
-
-                return ms.ToArray();
+                sb.Append("endbfchar\n");
+                idx += batchSize;
             }
+
+            sb.Append("endcmap\n");
+            sb.Append("CMapName currentdict /CMap defineresource pop\n");
+            sb.Append("end end\n");
+
+            return System.Text.Encoding.ASCII.GetBytes(sb.ToString());
+        }
+
+        private static void AppendHex4(StringBuilder sb, int value)
+        {
+            sb.Append(HexChars[(value >> 12) & 0xF]);
+            sb.Append(HexChars[(value >> 8) & 0xF]);
+            sb.Append(HexChars[(value >> 4) & 0xF]);
+            sb.Append(HexChars[value & 0xF]);
         }
 
         private PdfReference BuildPageTree(Dictionary<string, PdfReference> fontRefs,

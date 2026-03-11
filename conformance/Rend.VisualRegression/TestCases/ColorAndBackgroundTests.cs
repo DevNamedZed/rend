@@ -45,6 +45,63 @@ namespace Rend.VisualRegression.TestCases
                 </body></html>",
             });
 
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "color-repeating-gradient",
+                Name = "Repeating Linear Gradient",
+                Category = "Color & Background",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""height:80px; margin-bottom:8px; border-radius:6px; background:repeating-linear-gradient(45deg, #606dbc, #606dbc 10px, #465298 10px, #465298 20px);""></div>
+                    <div style=""height:80px; border-radius:6px; background:repeating-linear-gradient(90deg, #e74c3c 0px, #e74c3c 5px, #fff 5px, #fff 10px);""></div>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "color-radial-gradient",
+                Name = "Radial Gradient",
+                Category = "Color & Background",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""height:80px; margin-bottom:8px; border-radius:6px; background:radial-gradient(circle at 30% 30%, #f093fb 0%, #f5576c 100%);""></div>
+                    <div style=""height:80px; border-radius:6px; background:radial-gradient(ellipse at center, #667eea 0%, #764ba2 100%);""></div>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "color-multi-stop-gradient",
+                Name = "Multi-Stop Gradient",
+                Category = "Color & Background",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""height:80px; border-radius:6px; background:linear-gradient(45deg, #FF6B6B, #FFA07A, #FFD700, #90EE90, #87CEEB, #9370DB);""></div>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "color-opacity-overlap",
+                Name = "Opacity Overlapping Positioned",
+                Category = "Color & Background",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""position:relative; height:100px;"">
+                        <div style=""position:absolute; left:10px; top:10px; width:100px; height:60px; background:rgba(231,76,60,0.8); border-radius:6px;""></div>
+                        <div style=""position:absolute; left:70px; top:20px; width:100px; height:60px; background:rgba(52,152,219,0.8); border-radius:6px;""></div>
+                        <div style=""position:absolute; left:130px; top:5px; width:100px; height:60px; background:rgba(46,204,113,0.8); border-radius:6px;""></div>
+                        <div style=""position:absolute; left:190px; top:30px; width:100px; height:60px; background:rgba(243,156,18,0.8); border-radius:6px;""></div>
+                    </div>
+                </body></html>",
+            });
+
+            VisualTestCatalog.Register(new VisualTestCase
+            {
+                Id = "color-bg-image-tile",
+                Name = "Background Image Tiling",
+                Category = "Color & Background",
+                Html = @"<html><body style=""margin:0; padding:10px; background:#fff;"">
+                    <div style=""height:120px; border:1px solid #ddd; border-radius:6px; background-image:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAMklEQVQYV2N89+7dfwYGBgZGRkYGBgYmBjIBE5maCRpIdCBxBhI0kKiBRA0kaiBRAwEAmYQLGFJt11IAAAAASUVORK5CYII=); background-size:20px 20px;""></div>
+                </body></html>",
+            });
+
             // Opacity test with explicit heights to avoid vertical drift
             // High tolerance because opacity blending with body background differs due to font metrics
             VisualTestCatalog.Register(new VisualTestCase

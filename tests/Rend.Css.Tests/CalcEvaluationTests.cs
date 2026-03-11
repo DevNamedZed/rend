@@ -214,6 +214,10 @@ namespace Rend.Css.Tests
             var prop = PropertyRegistry.GetByName("width")!;
             if (ValueResolver.TryResolve(value, prop, ctx, out var pv, out var refVal))
             {
+                // Deferred calc: sentinel means percentages need layout-time resolution
+                if (float.IsNegativeInfinity(pv.FloatValue) && refVal is CssFunctionValue calcFn)
+                    return ValueResolver.EvaluateDeferredCalc(calcFn, percentBase);
+
                 return pv.FloatValue;
             }
 

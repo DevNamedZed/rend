@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using HarfBuzzSharp;
-using Rend.Output.Image.Internal;
 using Rend.Text;
 using SkiaSharp;
 
@@ -24,7 +23,7 @@ namespace Rend.Output.Image
     ///
     /// Key insight: Chrome uses 16.16 fixed-point (1 shl 16 = 65536), NOT 26.6 (1 shl 6 = 64).
     /// </summary>
-    public sealed class SkiaTextShaper : ITextShaper, IDisposable
+    internal sealed class SkiaTextShaper : ITextShaper, IDisposable
     {
         private bool _disposed;
         private readonly object _cacheLock = new object();
@@ -384,7 +383,7 @@ namespace Rend.Output.Image
                 // Use shared global typeface to ensure deterministic rendering.
                 // SKTypeface.FromData() creates different native objects with subtly
                 // different SubpixelAntialias behavior per instance.
-                typeface = Internal.SkiaFontMapper.GetOrCreateSharedTypeface(fontData);
+                typeface = SkiaFontMapper.GetOrCreateSharedTypeface(fontData);
 
                 skFont = new SKFont(typeface, fontSize);
                 skFont.Subpixel = true;

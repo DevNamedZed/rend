@@ -7,7 +7,7 @@ The `IImageResolver` interface gives you full control over how images are loaded
 ```csharp
 public interface IImageResolver
 {
-    Stream? Resolve(string url);
+    Task<Stream?> ResolveAsync(string url, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -24,13 +24,13 @@ public class DatabaseImageResolver : IImageResolver
 
     public DatabaseImageResolver(IDbConnection db) => _db = db;
 
-    public Stream? Resolve(string url)
+    public async Task<Stream?> ResolveAsync(string url, CancellationToken cancellationToken = default)
     {
         // Extract image ID from URL
         if (!url.StartsWith("/images/")) return null;
         string id = url.Substring(8);
 
-        byte[]? data = _db.QuerySingleOrDefault<byte[]>(
+        byte[]? data = await _db.QuerySingleOrDefaultAsync<byte[]>(
             "SELECT data FROM images WHERE id = @id", new { id });
 
         return data != null ? new MemoryStream(data) : null;
@@ -42,14 +42,14 @@ var options = new RenderOptions
     ImageResolver = new DatabaseImageResolver(connection),
 };
 
-Render.ToPdf(html, output, options);
+await Render.ToPdfAsync(html, output, options);
 ```
 
 ## Priority
 
 When both `ImageResolver` and `ResourceLoader` are set:
 
-1. `IImageResolver.Resolve()` is called first
+1. `IImageResolver.ResolveAsync()` is called first
 2. If it returns `null`, `IResourceLoader.LoadAsync()` is used as fallback
 3. Data URIs (`data:image/...;base64,...`) are always decoded directly, bypassing both
 
@@ -76,10 +76,10 @@ public class S3ImageResolver : IImageResolver
     private readonly IAmazonS3 _s3;
     private readonly string _bucket;
 
-    public Stream? Resolve(string url)
+    public async Task<Stream?> ResolveAsync(string url, CancellationToken cancellationToken = default)
     {
         string key = new Uri(url).AbsolutePath.TrimStart('/');
-        var response = _s3.GetObject(_bucket, key);
+        var response = await _s3.GetObjectAsync(_bucket, key, cancellationToken);
         return response.ResponseStream;
     }
 }
@@ -95,18 +95,23 @@ public class CachedImageResolver : IImageResolver
 
     public CachedImageResolver(IImageResolver inner) => _inner = inner;
 
-    public Stream? Resolve(string url)
+    public async Task<Stream?> ResolveAsync(string url, CancellationToken cancellationToken = default)
     {
-        var data = _cache.GetOrAdd(url, u =>
-        {
-            using var stream = _inner.Resolve(u);
-            if (stream == null) return null;
-            using var ms = new MemoryStream();
-            stream.CopyTo(ms);
-            return ms.ToArray();
-        });
+        if (_cache.TryGetValue(url, out var cached))
+            return cached != null ? new MemoryStream(cached) : null;
 
-        return data != null ? new MemoryStream(data) : null;
+        using var stream = await _inner.ResolveAsync(url, cancellationToken);
+        if (stream == null)
+        {
+            _cache[url] = null;
+            return null;
+        }
+
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms, 81920, cancellationToken);
+        var data = ms.ToArray();
+        _cache[url] = data;
+        return new MemoryStream(data);
     }
 }
 ```
@@ -125,10 +130,11 @@ public class EmbeddedImageResolver : IImageResolver
         _prefix = resourcePrefix;
     }
 
-    public Stream? Resolve(string url)
+    public Task<Stream?> ResolveAsync(string url, CancellationToken cancellationToken = default)
     {
         string resourceName = _prefix + "." + Path.GetFileName(url);
-        return _assembly.GetManifestResourceStream(resourceName);
+        Stream? stream = _assembly.GetManifestResourceStream(resourceName);
+        return Task.FromResult(stream);
     }
 }
 ```

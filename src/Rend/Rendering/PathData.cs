@@ -7,7 +7,7 @@ namespace Rend.Rendering
     /// <summary>
     /// Specifies the fill rule for a path.
     /// </summary>
-    public enum PathFillType
+    internal enum PathFillType
     {
         /// <summary>Non-zero winding fill rule (default).</summary>
         Winding,
@@ -20,7 +20,7 @@ namespace Rend.Rendering
     /// This enables backends to use native rounded rect operations (e.g. Skia's SkRRect)
     /// instead of bezier approximations, matching Chrome's rendering exactly.
     /// </summary>
-    public sealed class RoundedRectInfo
+    internal sealed class RoundedRectInfo
     {
         public RectF Rect { get; }
         public float TlRx { get; }
@@ -46,7 +46,7 @@ namespace Rend.Rendering
     /// <summary>
     /// Builds and stores a sequence of path segments for drawing operations.
     /// </summary>
-    public sealed class PathData
+    internal sealed class PathData
     {
         private readonly List<PathSegment> _segments = new List<PathSegment>();
 
@@ -286,6 +286,49 @@ namespace Rend.Rendering
         public IReadOnlyList<PathSegment> GetSegments()
         {
             return _segments;
+        }
+
+        /// <summary>
+        /// Computes the axis-aligned bounding box of all points in the path.
+        /// </summary>
+        public RectF GetBounds()
+        {
+            if (_segments.Count == 0)
+                return default;
+
+            float minX = float.MaxValue, minY = float.MaxValue;
+            float maxX = float.MinValue, maxY = float.MinValue;
+
+            for (int i = 0; i < _segments.Count; i++)
+            {
+                var seg = _segments[i];
+                if (seg.Type == PathSegmentType.Close)
+                    continue;
+
+                if (seg.X < minX) minX = seg.X;
+                if (seg.Y < minY) minY = seg.Y;
+                if (seg.X > maxX) maxX = seg.X;
+                if (seg.Y > maxY) maxY = seg.Y;
+
+                if (seg.Type == PathSegmentType.CubicBezierTo || seg.Type == PathSegmentType.QuadraticBezierTo)
+                {
+                    if (seg.X1 < minX) minX = seg.X1;
+                    if (seg.Y1 < minY) minY = seg.Y1;
+                    if (seg.X1 > maxX) maxX = seg.X1;
+                    if (seg.Y1 > maxY) maxY = seg.Y1;
+                }
+
+                if (seg.Type == PathSegmentType.CubicBezierTo)
+                {
+                    if (seg.X2 < minX) minX = seg.X2;
+                    if (seg.Y2 < minY) minY = seg.Y2;
+                    if (seg.X2 > maxX) maxX = seg.X2;
+                    if (seg.Y2 > maxY) maxY = seg.Y2;
+                }
+            }
+
+            if (minX > maxX) return default;
+            return new RectF(minX, minY, maxX - minX, maxY - minY);
         }
     }
 }

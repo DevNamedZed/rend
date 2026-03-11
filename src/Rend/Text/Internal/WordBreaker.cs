@@ -6,7 +6,7 @@ namespace Rend.Text.Internal
     /// <summary>
     /// Finds word boundaries in text per a simplified UAX #29 algorithm.
     /// </summary>
-    public static class WordBreaker
+    internal static class WordBreaker
     {
         /// <summary>
         /// Returns the indices of word boundaries in the given text.

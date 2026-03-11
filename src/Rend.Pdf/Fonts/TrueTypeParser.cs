@@ -17,6 +17,23 @@ namespace Rend.Pdf.Fonts
         public static PdfFont Parse(byte[] fontData, int fontIndex,
                                      FontEmbedMode embedMode = FontEmbedMode.Subset)
         {
+            var fd = ParseToFontData(fontData, embedMode);
+            return CreatePdfFont(fd, fontIndex);
+        }
+
+        /// <summary>
+        /// Parse a TrueType/OpenType font file into reusable PdfFontData.
+        /// The result can be shared across multiple PdfDocument instances.
+        /// </summary>
+        internal static PdfFontData ParseToFontData(byte[] fontData,
+                                                     FontEmbedMode embedMode = FontEmbedMode.Subset)
+        {
+            if (Type1FontParser.IsType1Font(fontData))
+            {
+                var parsed = Type1FontParser.Parse(fontData);
+                return parsed.ToPdfFontData(fontData);
+            }
+
             var reader = new FontReader(fontData);
 
             // Read offset table
@@ -67,7 +84,7 @@ namespace Rend.Pdf.Fonts
                 kerningPairs = ParseKern(fontData, tables["kern"]);
 
             // Build font name
-            string baseFontName = SanitizeFontName(nameStr.PostScriptName ?? nameStr.FamilyName ?? $"Font{fontIndex}");
+            string baseFontName = SanitizeFontName(nameStr.PostScriptName ?? nameStr.FamilyName ?? "UnknownFont");
 
             // Build char-to-glyph mapping (BMP)
             var charToGlyph = new ushort[65536];
@@ -106,10 +123,23 @@ namespace Rend.Pdf.Fonts
                 flags: ComputeFontFlags(isFixedPitch, italicAngle)
             );
 
-            return new PdfFont(baseFontName, metrics, charToGlyph, hmtx, supplementaryMap,
-                               isStandard14: false, kerningPairs: kerningPairs,
-                               embedMode: isCff ? FontEmbedMode.Full : embedMode,
-                               isCff: isCff, cffTableData: cffTableData);
+            return new PdfFontData(baseFontName, metrics, charToGlyph, hmtx, supplementaryMap,
+                                   kerningPairs, isCff, cffTableData,
+                                   isCff ? FontEmbedMode.Full : embedMode, fontData);
+        }
+
+        /// <summary>
+        /// Create a fresh PdfFont from pre-parsed PdfFontData. Very cheap — no parsing.
+        /// </summary>
+        internal static PdfFont CreatePdfFont(PdfFontData data, int fontIndex)
+        {
+            return new PdfFont(data.BaseFontName, data.Metrics, data.CharToGlyph,
+                               data.AdvanceWidths, data.SupplementaryMap,
+                               isStandard14: false, kerningPairs: data.KerningPairs,
+                               embedMode: data.EmbedMode,
+                               isCff: data.IsCff, cffTableData: data.CffTableData,
+                               isType1: data.IsType1, type1Header: data.Type1Header,
+                               type1Encrypted: data.Type1Encrypted, type1Trailer: data.Type1Trailer);
         }
 
         private static string SanitizeFontName(string name)

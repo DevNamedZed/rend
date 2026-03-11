@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 
 namespace Rend.Pdf
@@ -131,7 +132,30 @@ namespace Rend.Pdf
         /// </summary>
         public byte[] Encode(string text)
         {
-            var bytes = new byte[text.Length * 2]; // worst case: all BMP
+            int maxBytes = text.Length * 2;
+            var rented = ArrayPool<byte>.Shared.Rent(maxBytes);
+            int bytePos = EncodeInto(text, rented);
+
+            var result = new byte[bytePos];
+            Buffer.BlockCopy(rented, 0, result, 0, bytePos);
+            ArrayPool<byte>.Shared.Return(rented);
+            return result;
+        }
+
+        /// <summary>
+        /// Encode a Unicode string into a rented buffer. Returns the number of bytes written.
+        /// The caller is responsible for returning the rented buffer.
+        /// </summary>
+        internal (byte[] Buffer, int Length) EncodeRented(string text)
+        {
+            int maxBytes = text.Length * 2;
+            var rented = ArrayPool<byte>.Shared.Rent(maxBytes);
+            int bytePos = EncodeInto(text, rented);
+            return (rented, bytePos);
+        }
+
+        private int EncodeInto(string text, byte[] bytes)
+        {
             int bytePos = 0;
 
             for (int i = 0; i < text.Length; i++)
@@ -161,13 +185,7 @@ namespace Rend.Pdf
                 bytes[bytePos++] = (byte)(glyphId & 0xFF);
             }
 
-            if (bytePos != bytes.Length)
-            {
-                var result = new byte[bytePos];
-                Buffer.BlockCopy(bytes, 0, result, 0, bytePos);
-                return result;
-            }
-            return bytes;
+            return bytePos;
         }
 
         /// <summary>

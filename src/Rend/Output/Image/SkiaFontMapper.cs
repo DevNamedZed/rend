@@ -3,12 +3,41 @@ using System.Collections.Generic;
 #if NET8_0_OR_GREATER
 using System.Collections.Frozen;
 #endif
+using System.Linq;
 using Rend.Css;
 using Rend.Fonts;
 using SkiaSharp;
 
-namespace Rend.Output.Image.Internal
+namespace Rend.Output.Image
 {
+    /// <summary>
+    /// Content-based key for font data bytes. Uses length plus sampled byte hash
+    /// so that identical font content always maps to the same cache entry,
+    /// regardless of array identity.
+    /// </summary>
+    internal readonly struct FontDataKey : IEquatable<FontDataKey>
+    {
+        private readonly int _hash;
+        private readonly int _length;
+
+        public FontDataKey(byte[] data)
+        {
+            _length = data.Length;
+            unchecked
+            {
+                int hash = data.Length;
+                int step = Math.Max(1, data.Length / 16);
+                for (int i = 0; i < data.Length; i += step)
+                    hash = hash * 31 + data[i];
+                _hash = hash;
+            }
+        }
+
+        public override int GetHashCode() => _hash;
+        public override bool Equals(object? obj) => obj is FontDataKey other && Equals(other);
+        public bool Equals(FontDataKey other) => _hash == other._hash && _length == other._length;
+    }
+
     /// <summary>
     /// Maps <see cref="FontDescriptor"/> to <see cref="SKTypeface"/> instances,
     /// creating typefaces from raw font byte data when available.
@@ -20,7 +49,7 @@ namespace Rend.Output.Image.Internal
         // SKTypeface.FromData() produces subtly different SubpixelAntialias rendering
         // for each native instance, even from identical font bytes. Sharing a single
         // SKTypeface per font ensures deterministic rendering across threads.
-        private static readonly Dictionary<int, SKTypeface> s_globalTypefaceCache = new();
+        private static readonly Dictionary<FontDataKey, SKTypeface> s_globalTypefaceCache = new();
         private static readonly object s_typefaceLock = new();
         private bool _disposed;
 
@@ -43,7 +72,7 @@ namespace Rend.Output.Image.Internal
                 // Use global cache so all threads share the same SKTypeface instance
                 // for each font. SKTypeface.FromData() creates different native objects
                 // that produce subtly different SubpixelAntialias rendering.
-                int dataKey = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(fontData);
+                var dataKey = new FontDataKey(fontData);
                 lock (s_typefaceLock)
                 {
                     if (!s_globalTypefaceCache.TryGetValue(dataKey, out typeface!))
@@ -72,34 +101,12 @@ namespace Rend.Output.Image.Internal
             return typeface;
         }
 
-        // Generic CSS family → concrete family names (mirrors FontMatchingAlgorithm).
+        // Generic CSS family → concrete family names (shared with FontMatchingAlgorithm).
 #if NET8_0_OR_GREATER
         private static readonly FrozenDictionary<string, string[]> GenericFamilyMap =
-            new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["sans-serif"] = new[] { "Helvetica", "Helvetica Neue", "Arial", "Segoe UI", "DejaVu Sans" },
-                ["serif"] = new[] { "Times New Roman", "Times", "Georgia", "DejaVu Serif" },
-                ["monospace"] = new[] { "Consolas", "Courier New", "Courier", "Menlo", "DejaVu Sans Mono" },
-                ["cursive"] = new[] { "Comic Sans MS", "Apple Chancery" },
-                ["fantasy"] = new[] { "Impact", "Papyrus" },
-                ["system-ui"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },
-                ["ui-sans-serif"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue" },
-                ["ui-serif"] = new[] { "New York", "Georgia", "Times New Roman" },
-                ["ui-monospace"] = new[] { "SF Mono", "Menlo", "Consolas", "Courier New" },
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            GenericFontFamilies.FallbackMap.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 #else
-        private static readonly Dictionary<string, string[]> GenericFamilyMap = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["sans-serif"] = new[] { "Helvetica", "Helvetica Neue", "Arial", "Segoe UI", "DejaVu Sans" },
-            ["serif"] = new[] { "Times New Roman", "Times", "Georgia", "DejaVu Serif" },
-            ["monospace"] = new[] { "Consolas", "Courier New", "Courier", "Menlo", "DejaVu Sans Mono" },
-            ["cursive"] = new[] { "Comic Sans MS", "Apple Chancery" },
-            ["fantasy"] = new[] { "Impact", "Papyrus" },
-            ["system-ui"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue", "Helvetica", "Arial" },
-            ["ui-sans-serif"] = new[] { ".AppleSystemUIFont", "Segoe UI", "Roboto", "Helvetica Neue" },
-            ["ui-serif"] = new[] { "New York", "Georgia", "Times New Roman" },
-            ["ui-monospace"] = new[] { "SF Mono", "Menlo", "Consolas", "Courier New" },
-        };
+        private static readonly Dictionary<string, string[]> GenericFamilyMap = GenericFontFamilies.FallbackMap;
 #endif
 
         /// <summary>
@@ -108,7 +115,7 @@ namespace Rend.Output.Image.Internal
         /// </summary>
         internal static SKTypeface GetOrCreateSharedTypeface(byte[] fontData)
         {
-            int dataKey = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(fontData);
+            var dataKey = new FontDataKey(fontData);
             lock (s_typefaceLock)
             {
                 if (s_globalTypefaceCache.TryGetValue(dataKey, out var existing))
@@ -211,23 +218,51 @@ namespace Rend.Output.Image.Internal
             return true;
         }
 
+        /// <summary>
+        /// Disposes all cached typefaces in the static global and family caches,
+        /// then clears them. Call this in long-running services to reclaim native memory.
+        /// </summary>
+        public static void ClearCache()
+        {
+            lock (s_typefaceLock)
+            {
+                foreach (var kvp in s_globalTypefaceCache)
+                {
+                    if (kvp.Value != null && kvp.Value != SKTypeface.Default)
+                        kvp.Value.Dispose();
+                }
+                s_globalTypefaceCache.Clear();
+
+                foreach (var kvp in s_familyTypefaceCache)
+                {
+                    if (kvp.Value != null && kvp.Value != SKTypeface.Default)
+                        kvp.Value.Dispose();
+                }
+                s_familyTypefaceCache.Clear();
+            }
+        }
+
         /// <inheritdoc />
         public void Dispose()
         {
             if (!_disposed)
             {
                 _disposed = true;
-                // Don't dispose any shared typefaces (from global data cache or family cache).
+                // Build a HashSet of shared typefaces for O(1) lookups
+                // instead of O(n) ContainsValue per cache entry.
+                HashSet<SKTypeface> sharedTypefaces;
                 lock (s_typefaceLock)
                 {
-                    foreach (var kvp in _cache)
+                    sharedTypefaces = new HashSet<SKTypeface>(
+                        s_globalTypefaceCache.Values.Concat(s_familyTypefaceCache.Values));
+                }
+
+                foreach (var kvp in _cache)
+                {
+                    if (kvp.Value != SKTypeface.Default
+                        && !sharedTypefaces.Contains(kvp.Value))
                     {
-                        if (kvp.Value != SKTypeface.Default
-                            && !s_globalTypefaceCache.ContainsValue(kvp.Value)
-                            && !s_familyTypefaceCache.ContainsValue(kvp.Value))
-                        {
-                            kvp.Value.Dispose();
-                        }
+                        kvp.Value.Dispose();
                     }
                 }
                 _cache.Clear();
