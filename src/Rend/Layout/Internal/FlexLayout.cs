@@ -1053,6 +1053,10 @@ namespace Rend.Layout.Internal
             values[PropertyId.MarginLeft] = zero;
             // Anonymous boxes are always in normal flow — don't inherit positioned status.
             values[PropertyId.Position] = PropertyValue.FromInt((int)CssPosition.Static);
+            // Anonymous flex text items must not inherit text-align from the parent.
+            // Flex layout's justify-content handles horizontal centering; text-align
+            // would double-center text against the initial (oversized) line width.
+            values[PropertyId.TextAlign] = PropertyValue.FromInt((int)CssTextAlign.Left);
             return new ComputedStyle(values, refValues);
         }
     }

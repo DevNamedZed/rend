@@ -21,6 +21,7 @@ namespace Rend.Output.Pdf
         private readonly PdfDocument _doc;
         private readonly PdfFontCache _fontCache = new PdfFontCache();
         private readonly PdfImageCache _imageCache = new PdfImageCache();
+        private IFontProvider? _fontProvider;
 
         private PdfPage? _currentPage;
         private float _currentPageHeight;
@@ -393,7 +394,10 @@ namespace Rend.Output.Pdf
             EnsurePage();
             var content = _currentPage!.Content;
 
-            PdfFont pdfFont = ResolvePdfFont(font);
+            // Use font data from the shaped run (carried from layout) for PDF embedding.
+            PdfFont pdfFont = run.FontData != null
+                ? ResolvePdfFont(font, run.FontData)
+                : ResolvePdfFont(font);
 
             bool hasAlpha = color.A < 255;
             if (hasAlpha) content.SaveState();
@@ -503,12 +507,30 @@ namespace Rend.Output.Pdf
             }
         }
 
+        /// <summary>
+        /// Sets the font provider for resolving font data when embedding fonts in PDF.
+        /// Called by the render pipeline after construction.
+        /// </summary>
+        internal void SetFontProvider(IFontProvider fontProvider)
+        {
+            _fontProvider = fontProvider;
+        }
+
         private PdfFont ResolvePdfFont(FontDescriptor descriptor)
         {
-            // Attempt to resolve font data from the descriptor.
-            // For now, we pass null font data and let the cache fall back to Helvetica.
-            // A full implementation would integrate with IFontProvider to supply font bytes.
-            return _fontCache.GetOrAdd(descriptor, null, _doc);
+            byte[]? fontData = null;
+            if (_fontProvider != null)
+            {
+                var entry = _fontProvider.ResolveFont(descriptor);
+                if (entry != null)
+                    fontData = entry.FontData;
+            }
+            return _fontCache.GetOrAdd(descriptor, fontData, _doc);
+        }
+
+        private PdfFont ResolvePdfFont(FontDescriptor descriptor, byte[]? fontData)
+        {
+            return _fontCache.GetOrAdd(descriptor, fontData, _doc);
         }
 
         private static void SetFillFromBrush(BrushInfo brush, PdfContentStream content,

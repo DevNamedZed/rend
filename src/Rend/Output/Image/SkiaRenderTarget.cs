@@ -1049,6 +1049,16 @@ namespace Rend.Output.Image
             // Bookmarks are not applicable to raster image output.
         }
 
+        /// <summary>
+        /// Returns all rendered pages as encoded image byte arrays.
+        /// Must be called after painting is complete.
+        /// </summary>
+        public IReadOnlyList<byte[]> GetAllPages()
+        {
+            FinishCurrentPage();
+            return _renderedPages;
+        }
+
         /// <inheritdoc />
         public void Finish(Stream output)
         {

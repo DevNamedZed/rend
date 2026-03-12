@@ -27,6 +27,20 @@ namespace Rend.Tests.EndToEnd
             });
         }
 
+        /// <summary>
+        /// Renders PDF with an empty font provider, forcing Standard14 fallback.
+        /// Use for tests that verify Standard14-specific PDF structure.
+        /// </summary>
+        private byte[] RenderPdfStandard14(string html, float w = 400, float h = 300)
+        {
+            return Render.ToPdf(html, new RenderOptions
+            {
+                PageSize = new SizeF(w, h),
+                MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
+                FontProvider = new Rend.Fonts.FontCollection()
+            });
+        }
+
         private string PdfText(byte[] pdf) => Encoding.ASCII.GetString(pdf);
 
         /// <summary>
@@ -148,7 +162,7 @@ namespace Rend.Tests.EndToEnd
         [Fact]
         public void TextContent_AppearsWithTjOperator()
         {
-            var pdf = RenderPdf("<html><body><p>Hello World</p></body></html>");
+            var pdf = RenderPdfStandard14("<html><body><p>Hello World</p></body></html>");
             var content = ExtractContentStreams(pdf);
             Assert.Contains("Tj", content);
             Assert.Contains("(Hello World)", content);
@@ -394,7 +408,7 @@ namespace Rend.Tests.EndToEnd
         [Fact]
         public void ContentStream_HasSaveRestoreState()
         {
-            var pdf = RenderPdf("<html><body><p>Hello</p></body></html>");
+            var pdf = RenderPdfStandard14("<html><body><p>Hello</p></body></html>");
             var content = ExtractContentStreams(pdf);
             Assert.StartsWith("q\n", content);
             Assert.Contains("\nQ\n", content);
@@ -604,7 +618,7 @@ namespace Rend.Tests.EndToEnd
         [Fact]
         public void StandardFont_HelveticaReferenced()
         {
-            var pdf = RenderPdf("<html><body><p>Hello</p></body></html>");
+            var pdf = RenderPdfStandard14("<html><body><p>Hello</p></body></html>");
             var text = PdfText(pdf);
             Assert.Contains("/BaseFont /Helvetica", text);
         }
@@ -620,7 +634,7 @@ namespace Rend.Tests.EndToEnd
         [Fact]
         public void Font_HasType1Subtype()
         {
-            var pdf = RenderPdf("<html><body><p>Hello</p></body></html>");
+            var pdf = RenderPdfStandard14("<html><body><p>Hello</p></body></html>");
             var text = PdfText(pdf);
             Assert.Contains("/Subtype /Type1", text);
         }
@@ -628,7 +642,7 @@ namespace Rend.Tests.EndToEnd
         [Fact]
         public void Font_HasWinAnsiEncoding()
         {
-            var pdf = RenderPdf("<html><body><p>Hello</p></body></html>");
+            var pdf = RenderPdfStandard14("<html><body><p>Hello</p></body></html>");
             var text = PdfText(pdf);
             Assert.Contains("/Encoding /WinAnsiEncoding", text);
         }
@@ -722,7 +736,7 @@ namespace Rend.Tests.EndToEnd
         [Fact]
         public void TextContent_StringAppearsInParentheses()
         {
-            var pdf = RenderPdf("<html><body><p>Test string</p></body></html>");
+            var pdf = RenderPdfStandard14("<html><body><p>Test string</p></body></html>");
             var content = ExtractContentStreams(pdf);
             Assert.Contains("(Test string)", content);
         }

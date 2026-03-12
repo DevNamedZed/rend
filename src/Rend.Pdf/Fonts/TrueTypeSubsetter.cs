@@ -36,16 +36,13 @@ namespace Rend.Pdf.Fonts
                 ResolveCompositeGlyphs(originalFont, tables, glyphSet);
             }
 
-            // Build the old-to-new glyph ID mapping
-            var oldToNew = new Dictionary<ushort, ushort>();
-            var newToOld = new List<ushort>();
+            // Preserve original glyph IDs (no remapping).
+            // CIDToGIDMap = Identity means CIDs in the text stream ARE glyph IDs,
+            // so the subset must keep glyphs at their original positions.
+            ushort maxGid = 0;
             foreach (var gid in glyphSet)
-            {
-                oldToNew[gid] = (ushort)newToOld.Count;
-                newToOld.Add(gid);
-            }
-
-            int newGlyphCount = newToOld.Count;
+                if (gid > maxGid) maxGid = gid;
+            int totalSlots = maxGid + 1;
 
             // Build subset tables
             var subsetTables = new Dictionary<string, byte[]>();
@@ -58,7 +55,7 @@ namespace Rend.Pdf.Fonts
             if (tables.ContainsKey("hhea"))
             {
                 var hhea = CopyTable(originalFont, tables["hhea"]);
-                WriteUInt16BE(hhea, hhea.Length - 2, (ushort)newGlyphCount);
+                WriteUInt16BE(hhea, hhea.Length - 2, (ushort)totalSlots);
                 subsetTables["hhea"] = hhea;
             }
 
@@ -66,19 +63,19 @@ namespace Rend.Pdf.Fonts
             if (tables.ContainsKey("maxp"))
             {
                 var maxp = CopyTable(originalFont, tables["maxp"]);
-                WriteUInt16BE(maxp, 4, (ushort)newGlyphCount);
+                WriteUInt16BE(maxp, 4, (ushort)totalSlots);
                 subsetTables["maxp"] = maxp;
             }
 
-            // hmtx — subset to only kept glyphs
+            // hmtx — preserve glyph IDs, zero-fill unused slots
             if (tables.ContainsKey("hmtx"))
-                subsetTables["hmtx"] = SubsetHmtx(originalFont, tables, newToOld);
+                subsetTables["hmtx"] = SubsetHmtxPreserveIds(originalFont, tables, glyphSet, totalSlots);
 
-            // loca + glyf — subset glyph outlines
+            // loca + glyf — preserve glyph IDs, empty entries for unused slots
             if (tables.ContainsKey("glyf") && tables.ContainsKey("loca"))
             {
-                SubsetGlyfLoca(originalFont, tables, newToOld, oldToNew,
-                               out byte[] newGlyf, out byte[] newLoca);
+                SubsetGlyfLocaPreserveIds(originalFont, tables, glyphSet, totalSlots,
+                                          out byte[] newGlyf, out byte[] newLoca);
                 subsetTables["glyf"] = newGlyf;
                 subsetTables["loca"] = newLoca;
             }
@@ -187,6 +184,40 @@ namespace Rend.Pdf.Fonts
             }
         }
 
+        private static byte[] SubsetHmtxPreserveIds(byte[] font, Dictionary<string, TableRange> tables,
+                                                      SortedSet<ushort> glyphSet, int totalSlots)
+        {
+            var hmtxRange = tables["hmtx"];
+            int hmtxStart = (int)hmtxRange.Offset;
+
+            var hheaRange = tables["hhea"];
+            int origHMetrics = ReadUInt16BE(font, (int)hheaRange.Offset + hheaRange.Length - 2);
+
+            // Each slot gets 4 bytes (advanceWidth + lsb). Unused slots are zero-filled.
+            var result = new byte[totalSlots * 4];
+            for (int gid = 0; gid < totalSlots; gid++)
+            {
+                if (!glyphSet.Contains((ushort)gid))
+                    continue; // leave as zeros
+
+                int srcOffset;
+                if (gid < origHMetrics)
+                    srcOffset = hmtxStart + gid * 4;
+                else
+                    srcOffset = hmtxStart + (origHMetrics - 1) * 4;
+
+                if (srcOffset + 3 < font.Length)
+                {
+                    result[gid * 4] = font[srcOffset];
+                    result[gid * 4 + 1] = font[srcOffset + 1];
+                    result[gid * 4 + 2] = font[srcOffset + 2];
+                    result[gid * 4 + 3] = font[srcOffset + 3];
+                }
+            }
+
+            return result;
+        }
+
         private static byte[] SubsetHmtx(byte[] font, Dictionary<string, TableRange> tables,
                                            List<ushort> newToOld)
         {
@@ -223,6 +254,81 @@ namespace Rend.Pdf.Fonts
             }
 
             return result;
+        }
+
+        private static void SubsetGlyfLocaPreserveIds(byte[] font, Dictionary<string, TableRange> tables,
+                                                       SortedSet<ushort> glyphSet, int totalSlots,
+                                                       out byte[] newGlyf, out byte[] newLoca)
+        {
+            var locaRange = tables["loca"];
+            var glyfRange = tables["glyf"];
+            var headRange = tables["head"];
+            var maxpRange = tables["maxp"];
+
+            short locaFormat = ReadInt16BE(font, (int)headRange.Offset + 50);
+            bool longLoca = locaFormat == 1;
+            int origNumGlyphs = ReadUInt16BE(font, (int)maxpRange.Offset + 4);
+
+            // Pass 1: Calculate total glyf size
+            int totalGlyfSize = 0;
+            for (int gid = 0; gid < totalSlots; gid++)
+            {
+                if (!glyphSet.Contains((ushort)gid) || gid >= origNumGlyphs)
+                    continue;
+
+                long offset = GetGlyphOffset(font, locaRange, longLoca, (ushort)gid);
+                long nextOffset = (gid + 1 <= origNumGlyphs)
+                    ? GetGlyphOffset(font, locaRange, longLoca, (ushort)(gid + 1))
+                    : offset;
+
+                int glyphLen = (int)(nextOffset - offset);
+                if (glyphLen <= 0) continue;
+
+                int srcStart = (int)(glyfRange.Offset + offset);
+                if (srcStart + glyphLen > font.Length) continue;
+
+                totalGlyfSize += glyphLen + ((4 - (glyphLen % 4)) % 4);
+            }
+
+            // Pass 2: Write glyph data, preserving original glyph ID positions
+            newGlyf = new byte[totalGlyfSize];
+            var locaOffsets = new uint[totalSlots + 1];
+            int writePos = 0;
+
+            for (int gid = 0; gid < totalSlots; gid++)
+            {
+                locaOffsets[gid] = (uint)writePos;
+
+                if (!glyphSet.Contains((ushort)gid) || gid >= origNumGlyphs)
+                    continue; // empty entry — loca points to same offset as next
+
+                long offset = GetGlyphOffset(font, locaRange, longLoca, (ushort)gid);
+                long nextOffset = (gid + 1 <= origNumGlyphs)
+                    ? GetGlyphOffset(font, locaRange, longLoca, (ushort)(gid + 1))
+                    : offset;
+
+                int glyphLen = (int)(nextOffset - offset);
+                if (glyphLen <= 0) continue;
+
+                int srcStart = (int)(glyfRange.Offset + offset);
+                if (srcStart + glyphLen > font.Length) continue;
+
+                // Copy glyph data (no remapping needed — glyph IDs are preserved)
+                Buffer.BlockCopy(font, srcStart, newGlyf, writePos, glyphLen);
+                writePos += glyphLen;
+
+                int padding = (4 - (glyphLen % 4)) % 4;
+                writePos += padding;
+            }
+
+            locaOffsets[totalSlots] = (uint)writePos;
+
+            // Build long-format loca table
+            newLoca = new byte[(totalSlots + 1) * 4];
+            for (int i = 0; i <= totalSlots; i++)
+            {
+                WriteUInt32BE(newLoca, i * 4, locaOffsets[i]);
+            }
         }
 
         private static void SubsetGlyfLoca(byte[] font, Dictionary<string, TableRange> tables,

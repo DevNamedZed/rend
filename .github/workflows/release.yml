@@ -28,18 +28,18 @@ jobs:
         run: dotnet restore Rend.sln
 
       - name: Build
-        run: dotnet build Rend.sln --no-restore --configuration Release -p:Version=${{ steps.version.outputs.VERSION }}
+        run: dotnet build Rend.sln --no-restore --configuration Release -p:VersionPrefix=${{ steps.version.outputs.VERSION }}
 
       - name: Test
         run: dotnet test Rend.sln --no-build --configuration Release --verbosity normal
 
       - name: Pack
         run: |
-          dotnet pack src/Rend.Core/Rend.Core.csproj --no-build --configuration Release -p:Version=${{ steps.version.outputs.VERSION }} --output ./nupkg
-          dotnet pack src/Rend.Css/Rend.Css.csproj --no-build --configuration Release -p:Version=${{ steps.version.outputs.VERSION }} --output ./nupkg
-          dotnet pack src/Rend.Html/Rend.Html.csproj --no-build --configuration Release -p:Version=${{ steps.version.outputs.VERSION }} --output ./nupkg
-          dotnet pack src/Rend.Pdf/Rend.Pdf.csproj --no-build --configuration Release -p:Version=${{ steps.version.outputs.VERSION }} --output ./nupkg
-          dotnet pack src/Rend/Rend.csproj --no-build --configuration Release -p:Version=${{ steps.version.outputs.VERSION }} --output ./nupkg
+          dotnet pack src/Rend.Core/Rend.Core.csproj --no-build --configuration Release -p:VersionPrefix=${{ steps.version.outputs.VERSION }} --output ./nupkg
+          dotnet pack src/Rend.Css/Rend.Css.csproj --no-build --configuration Release -p:VersionPrefix=${{ steps.version.outputs.VERSION }} --output ./nupkg
+          dotnet pack src/Rend.Html/Rend.Html.csproj --no-build --configuration Release -p:VersionPrefix=${{ steps.version.outputs.VERSION }} --output ./nupkg
+          dotnet pack src/Rend.Pdf/Rend.Pdf.csproj --no-build --configuration Release -p:VersionPrefix=${{ steps.version.outputs.VERSION }} --output ./nupkg
+          dotnet pack src/Rend/Rend.csproj --no-build --configuration Release -p:VersionPrefix=${{ steps.version.outputs.VERSION }} --output ./nupkg
 
       - name: Verify packages
         shell: bash

@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Rend Playground</title>
-    <!-- For GitHub Pages, update href to /repo-name/ e.g. /rend/ -->
     <base href="/" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>R</text></svg>" />
     <link rel="stylesheet" href="css/app.css" />
 </head>
 <body>
@@ -32,16 +32,25 @@
         async function renderPdf(base64) {
             const data = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
             const pdf = await pdfjsLib.getDocument({ data }).promise;
-            const page = await pdf.getPage(1);
-            const canvas = document.getElementById('pdfCanvas');
-            if (!canvas) return;
+            const container = document.getElementById('pdfPages');
+            if (!container) return;
+            container.innerHTML = '';
+
             const scale = window.devicePixelRatio || 2;
-            const viewport = page.getViewport({ scale });
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            canvas.style.width = (viewport.width / scale) + 'px';
-            canvas.style.height = (viewport.height / scale) + 'px';
-            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale });
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                canvas.style.width = (viewport.width / scale) + 'px';
+                canvas.style.height = (viewport.height / scale) + 'px';
+                canvas.style.display = 'block';
+                canvas.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                if (i > 1) canvas.style.marginTop = '12px';
+                container.appendChild(canvas);
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            }
         }
 
         function downloadFile(filename, base64) {
@@ -51,6 +60,6 @@
             link.click();
         }
     </script>
-    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="_framework/blazor.webassembly.js" autostart="true"></script>
 </body>
 </html>

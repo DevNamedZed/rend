@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -41,7 +41,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1
 
       - name: Publish Blazor WASM
-        run: dotnet publish playground/Rend.Playground/Rend.Playground.csproj -c Release -o release
+        run: |
+          dotnet clean playground/Rend.Playground/Rend.Playground.csproj -c Release
+          dotnet publish playground/Rend.Playground/Rend.Playground.csproj -c Release -o release
 
       # Blazor WASM on GitHub Pages needs .nojekyll, 404.html, and correct base href
       - name: Prepare for GitHub Pages

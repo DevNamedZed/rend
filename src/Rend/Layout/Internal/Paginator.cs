@@ -141,23 +141,35 @@ namespace Rend.Layout.Internal
                 // Check if child overflows current page
                 if (childBottom > currentPageEnd)
                 {
-                    // Check orphans/widows for elements with line boxes
+                    // Check orphans/widows for elements with multiple line boxes
                     if (child.LineBoxes != null && child.LineBoxes.Count > 1)
                     {
                         float breakY = FindOrphansWidowsBreak(child, currentPageEnd, pageContentHeight, style);
                         breakPoints.Add(breakY);
                         currentPageEnd = breakY + pageContentHeight;
                     }
-                    else if (!avoidBreakInside)
-                    {
-                        breakPoints.Add(currentPageEnd);
-                        currentPageEnd += pageContentHeight;
-                    }
-                    else
+                    else if (avoidBreakInside)
                     {
                         // Try to keep together — break before if possible
                         breakPoints.Add(childTop);
                         currentPageEnd = childTop + pageContentHeight;
+                    }
+                    else if (child.Children.Count > 0)
+                    {
+                        // Has block children — find the best break point between them
+                        // instead of breaking at the raw page boundary (which clips text mid-line).
+                        float bestBreak = FindBestBreakInside(child, currentPageEnd);
+                        breakPoints.Add(bestBreak);
+                        currentPageEnd = bestBreak + pageContentHeight;
+                    }
+                    else
+                    {
+                        // Leaf element (image, empty box, single-line text) —
+                        // break at the page boundary. The element will be clipped on
+                        // this page and continue on the next page. Breaking BEFORE
+                        // the element would push it entirely off this page.
+                        breakPoints.Add(currentPageEnd);
+                        currentPageEnd += pageContentHeight;
                     }
                 }
 
@@ -171,6 +183,66 @@ namespace Rend.Layout.Internal
                 // Recurse into children
                 CollectBreakPoints(child, breakPoints, ref currentPageEnd, pageContentHeight, startY);
             }
+        }
+
+        /// <summary>
+        /// Finds the best break point inside a box near the page boundary.
+        /// Prefers breaking between block children, then between text lines.
+        /// Falls back to the page boundary if no better break is found.
+        /// This avoids clipping text mid-line and produces cleaner page breaks.
+        /// </summary>
+        private static float FindBestBreakInside(LayoutBox box, float pageEnd)
+        {
+            // If box has line boxes, break between lines
+            if (box.LineBoxes != null && box.LineBoxes.Count > 0)
+            {
+                for (int l = box.LineBoxes.Count - 1; l >= 0; l--)
+                {
+                    float lineBottom = box.LineBoxes[l].Y + box.LineBoxes[l].Height;
+                    if (lineBottom <= pageEnd)
+                        return lineBottom;
+                }
+                // No line fits — break at box top if it's before pageEnd
+                float top = box.BorderRect.Top;
+                return top < pageEnd ? top : pageEnd;
+            }
+
+            // Try to break between block children
+            float lastFittingBottom = -1;
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                float childTop = child.BorderRect.Top;
+                float childBottom = child.BorderRect.Bottom;
+
+                if (childBottom <= pageEnd)
+                {
+                    // This child fits entirely — record as potential break point
+                    lastFittingBottom = childBottom;
+                }
+                else if (childTop < pageEnd)
+                {
+                    // This child straddles the page boundary — try to break inside it
+                    float innerBreak = FindBestBreakInside(child, pageEnd);
+                    if (innerBreak < pageEnd)
+                        return innerBreak;
+                    // Can't break inside this child — break at page boundary.
+                    // Don't fall back to lastFittingBottom as that would push this
+                    // child entirely to the next page even though it's partially visible.
+                    return pageEnd;
+                }
+                else
+                {
+                    // This child starts at or after pageEnd — break before it
+                    break;
+                }
+            }
+
+            // All children fit within the page — the overflow comes from the
+            // parent's padding/border/margin, not from any child. Break at pageEnd
+            // to show all content that fits, rather than breaking early at the
+            // last child's bottom (which would waste space and clip transforms).
+            return pageEnd;
         }
 
         /// <summary>

@@ -839,7 +839,8 @@ namespace Rend.Pdf
         private PdfArray? BuildWidthsArray(PdfFont font)
         {
             // PDF /W array format: [cid [width1 width2 ...] cid [width1 ...] ...]
-            // Group consecutive glyph IDs for compact representation
+            // Widths must be in 1/1000 of text space units (i.e., scaled by 1000/unitsPerEm).
+            // Group consecutive glyph IDs for compact representation.
 
             List<ushort> sortedGlyphs;
             if (font.EmbedMode == FontEmbedMode.Full)
@@ -856,6 +857,10 @@ namespace Rend.Pdf
                 sortedGlyphs.Sort();
             }
 
+            // Scale factor: convert from font units to 1/1000 text space units
+            float unitsPerEm = font.Metrics.UnitsPerEm;
+            float scale = unitsPerEm > 0 ? 1000f / unitsPerEm : 1f;
+
             var widthsArray = new PdfArray();
 
             int i = 0;
@@ -867,7 +872,7 @@ namespace Rend.Pdf
                 // Collect consecutive glyph IDs
                 while (i < sortedGlyphs.Count && sortedGlyphs[i] == startGid + widths.Items.Count)
                 {
-                    float w = font.GetAdvanceWidth(sortedGlyphs[i]);
+                    float w = font.GetAdvanceWidth(sortedGlyphs[i]) * scale;
                     widths.Add(new PdfReal(w));
                     i++;
                 }

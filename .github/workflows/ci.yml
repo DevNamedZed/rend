@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -31,13 +35,13 @@ jobs:
         run: dotnet restore Rend.sln
 
       - name: Build
-        run: dotnet build Rend.sln --no-restore --configuration Release
+        run: dotnet build Rend.sln --no-restore --configuration Release -p:BUILD_NUMBER=${{ github.run_number }}
 
       - name: Test
         run: dotnet test Rend.sln --no-build --configuration Release --verbosity normal
 
       - name: Pack (validate)
-        run: dotnet pack Rend.sln --no-build --configuration Release --output ./nupkg
+        run: dotnet pack Rend.sln --no-build --configuration Release --output ./nupkg -p:BUILD_NUMBER=${{ github.run_number }}
 
       - name: Upload packages
         uses: actions/upload-artifact@v4

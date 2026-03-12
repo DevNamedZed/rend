@@ -10,6 +10,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Rend.Tests" />
     <InternalsVisibleTo Include="Rend.VisualRegression" />
+    <InternalsVisibleTo Include="tmp-render" />
   </ItemGroup>
 
   <ItemGroup>

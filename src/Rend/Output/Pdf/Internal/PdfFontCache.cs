@@ -26,6 +26,15 @@ namespace Rend.Output.Pdf.Internal
         {
             if (_cache.TryGetValue(descriptor, out var existing))
             {
+                // If we have real font data but the cached entry is a Standard14 fallback,
+                // replace it with the embedded font. This handles the case where DrawText
+                // (no font data) cached a fallback before DrawGlyphs (with font data) runs.
+                if (fontData != null && fontData.Length > 0 && existing.IsStandard14)
+                {
+                    var embedded = doc.AddFont(fontData, FontEmbedMode.Subset);
+                    _cache[descriptor] = embedded;
+                    return embedded;
+                }
                 return existing;
             }
 

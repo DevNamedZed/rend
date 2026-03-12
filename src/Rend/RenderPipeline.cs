@@ -57,6 +57,12 @@ namespace Rend
             progress?.Report(new RenderProgress(20, RenderStage.Styling, "Resolving fonts"));
             var fontProvider = _options.FontProvider ?? DefaultFontProvider.Value;
 
+            // Wire font provider into PDF render target for font embedding
+            if (target is Output.Pdf.PdfRenderTarget pdfTarget)
+            {
+                pdfTarget.SetFontProvider(fontProvider);
+            }
+
             // 5. Set up style resolver
             var selectorMatcher = new SelectorMatcherAdapter();
             var resolverOptions = new StyleResolverOptions
@@ -171,6 +177,12 @@ namespace Rend
             // 4. Set up font provider
             progress?.Report(new RenderProgress(20, RenderStage.Styling, "Resolving fonts"));
             var fontProvider = _options.FontProvider ?? DefaultFontProvider.Value;
+
+            // Wire font provider into PDF render target for font embedding
+            if (target is Output.Pdf.PdfRenderTarget pdfTarget)
+            {
+                pdfTarget.SetFontProvider(fontProvider);
+            }
 
             // 5. Set up style resolver
             var selectorMatcher = new SelectorMatcherAdapter();

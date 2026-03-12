@@ -388,9 +388,9 @@ namespace Rend.Layout.Internal
                 ApplyHangingPunctuation(lineBoxes, styledElement.Style.HangingPunctuation);
             }
 
-            // Reconcile inline-block box positions with fragment vertical-align offsets.
-            // After FinalizeLineBox applies vertical-align (frag.Y), update the actual
-            // box ContentRect to reflect the final vertical position within the line.
+            // Reconcile inline-block box positions with fragment offsets.
+            // After FinalizeLineBox applies text-align (fragment.X) and vertical-align (frag.Y),
+            // update the actual box ContentRect to reflect the final position within the line.
             for (int li = 0; li < lineBoxes.Count; li++)
             {
                 var line = lineBoxes[li];
@@ -399,21 +399,35 @@ namespace Rend.Layout.Internal
                     var frag = line.Fragments[fi];
                     if (frag.Box != null)
                     {
+                        // Reconcile horizontal position (text-align offset)
+                        float newX = line.X + frag.X + frag.Box.MarginLeft + frag.Box.BorderLeftWidth + frag.Box.PaddingLeft;
+                        float dx = newX - frag.Box.ContentRect.X;
+                        if (Math.Abs(dx) > 0.01f)
+                        {
+                            frag.Box.ContentRect = new RectF(newX, frag.Box.ContentRect.Y,
+                                frag.Box.ContentRect.Width, frag.Box.ContentRect.Height);
+                            for (int ci = 0; ci < frag.Box.Children.Count; ci++)
+                                OffsetChildBoxesXY(frag.Box.Children[ci], dx, 0);
+                            if (frag.Box.LineBoxes != null)
+                            {
+                                for (int lbi = 0; lbi < frag.Box.LineBoxes.Count; lbi++)
+                                    frag.Box.LineBoxes[lbi].X += dx;
+                            }
+                        }
+
+                        // Reconcile vertical position (vertical-align offset)
                         float newY = line.Y + frag.Y + frag.Box.MarginTop + frag.Box.BorderTopWidth + frag.Box.PaddingTop;
                         float dy = newY - frag.Box.ContentRect.Y;
                         if (Math.Abs(dy) > 0.01f)
                         {
                             frag.Box.ContentRect = new RectF(frag.Box.ContentRect.X, newY,
                                 frag.Box.ContentRect.Width, frag.Box.ContentRect.Height);
-                            // Also offset children positioned during inline-block layout
                             for (int ci = 0; ci < frag.Box.Children.Count; ci++)
-                                OffsetChildBoxes(frag.Box.Children[ci], dy);
+                                OffsetChildBoxesXY(frag.Box.Children[ci], 0, dy);
                             if (frag.Box.LineBoxes != null)
                             {
                                 for (int lbi = 0; lbi < frag.Box.LineBoxes.Count; lbi++)
-                                {
                                     frag.Box.LineBoxes[lbi].Y += dy;
-                                }
                             }
                         }
                     }
@@ -423,16 +437,19 @@ namespace Rend.Layout.Internal
             parent.LineBoxes = lineBoxes;
         }
 
-        private static void OffsetChildBoxes(LayoutBox box, float dy)
+        private static void OffsetChildBoxesXY(LayoutBox box, float dx, float dy)
         {
-            box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y + dy,
+            box.ContentRect = new RectF(box.ContentRect.X + dx, box.ContentRect.Y + dy,
                                         box.ContentRect.Width, box.ContentRect.Height);
             for (int i = 0; i < box.Children.Count; i++)
-                OffsetChildBoxes(box.Children[i], dy);
+                OffsetChildBoxesXY(box.Children[i], dx, dy);
             if (box.LineBoxes != null)
             {
                 for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    box.LineBoxes[i].X += dx;
                     box.LineBoxes[i].Y += dy;
+                }
             }
         }
 
@@ -1458,7 +1475,13 @@ namespace Rend.Layout.Internal
             // use their true shrink-to-fit width for line break decisions.
             if (needsShrinkToFit)
             {
-                var measureBox = new LayoutBox(element, BoxType.InlineBlock);
+                // Clone the element with text-align:left to prevent centering/right-align
+                // from inflating the measured content width. text-align shifts fragment X
+                // positions, but for shrink-to-fit we need the raw content extent.
+                var measureStyle = CloneStyleTextAlignLeft(element.Style);
+                var measureChildren = new List<StyledNode>(element.Children);
+                var measureElement = new StyledElement(element.Element, measureStyle, measureChildren);
+                var measureBox = new LayoutBox(measureElement, BoxType.InlineBlock);
                 BoxModelCalculator.ApplyBoxModel(measureBox, element.Style, containingWidth);
                 measureBox.ContentRect = new RectF(0, 0, contentWidth, 0);
                 var prevFloatM = context.FloatContext;
@@ -2473,7 +2496,7 @@ namespace Rend.Layout.Internal
         /// <summary>
         /// Measure the actual content width of a box (for shrink-to-fit inline-level boxes).
         /// </summary>
-        private static float MeasureContentWidth(LayoutBox box)
+        internal static float MeasureContentWidth(LayoutBox box)
         {
             float right = 0;
             float left = box.ContentRect.X;
@@ -2497,6 +2520,19 @@ namespace Rend.Layout.Internal
                 }
             }
             return right;
+        }
+
+        /// <summary>
+        /// Clone a computed style with text-align overridden to left.
+        /// Used for shrink-to-fit measurement to prevent centering/right-align
+        /// from inflating the measured content width.
+        /// </summary>
+        private static ComputedStyle CloneStyleTextAlignLeft(ComputedStyle source)
+        {
+            var values = (PropertyValue[])source.GetValues().Clone();
+            values[PropertyId.TextAlign] = PropertyValue.FromInt((int)CssTextAlign.Left);
+            var refValues = (object?[])source.GetRefValues().Clone();
+            return new ComputedStyle(values, refValues);
         }
 
         private static bool IsCjk(char ch)

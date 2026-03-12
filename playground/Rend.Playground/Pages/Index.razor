@@ -38,7 +38,7 @@
             }
             else
             {
-                <iframe class="html-preview-frame" srcdoc="@HtmlInput"></iframe>
+                <iframe class="html-preview-frame" srcdoc="@WrapForPreview(HtmlInput)"></iframe>
             }
         </div>
         <div class="preview-pane">
@@ -52,7 +52,7 @@
             }
             else if (PdfBytes != null)
             {
-                <canvas id="pdfCanvas"></canvas>
+                <div id="pdfPages"></div>
             }
             else
             {
@@ -74,6 +74,10 @@
     private string StatusText { get; set; } = "Ready";
     private string LeftTab { get; set; } = "editor";
     private string _selectedExample = "";
+
+    // Shared font provider loaded once at startup
+    private static Rend.Fonts.FontCollection? _fontProvider;
+    private static bool _fontsLoaded;
 
     private void ShowHtmlPreview()
     {
@@ -133,6 +137,7 @@
     {
         try
         {
+            await EnsureFontsLoaded();
             StatusText = "Loading example...";
             StateHasChanged();
             HtmlInput = await Http.GetStringAsync($"examples/{filename}");
@@ -149,7 +154,56 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await EnsureFontsLoaded();
         await DoRender();
+    }
+
+    // Google Croscore static fonts (Apache 2.0) — metrically compatible
+    // with Microsoft fonts. Each font is registered under multiple family
+    // names so HTML using Arial/Segoe UI/Times New Roman/Georgia/etc. works.
+    private static readonly (string Path, string[] FamilyNames)[] BundledFonts = new[]
+    {
+        // Arimo — replaces Arial and Segoe UI (sans-serif)
+        ("fonts/Arimo-Regular.ttf", new[] { "Arial", "Segoe UI" }),
+        ("fonts/Arimo-Bold.ttf", new[] { "Arial", "Segoe UI" }),
+        ("fonts/Arimo-Italic.ttf", new[] { "Arial", "Segoe UI" }),
+        ("fonts/Arimo-BoldItalic.ttf", new[] { "Arial", "Segoe UI" }),
+        // Tinos — replaces Times New Roman and Georgia (serif)
+        ("fonts/Tinos-Regular.ttf", new[] { "Times New Roman", "Georgia" }),
+        ("fonts/Tinos-Bold.ttf", new[] { "Times New Roman", "Georgia" }),
+        ("fonts/Tinos-Italic.ttf", new[] { "Times New Roman", "Georgia" }),
+        ("fonts/Tinos-BoldItalic.ttf", new[] { "Times New Roman", "Georgia" }),
+        // Cousine — replaces Courier New and Consolas (monospace)
+        ("fonts/Cousine-Regular.ttf", new[] { "Courier New", "Consolas" }),
+        ("fonts/Cousine-Bold.ttf", new[] { "Courier New", "Consolas" }),
+        ("fonts/Cousine-Italic.ttf", new[] { "Courier New", "Consolas" }),
+        ("fonts/Cousine-BoldItalic.ttf", new[] { "Courier New", "Consolas" }),
+    };
+
+    private async Task EnsureFontsLoaded()
+    {
+        if (_fontsLoaded) return;
+
+        StatusText = "Loading fonts...";
+        StateHasChanged();
+
+        var fc = new Rend.Fonts.FontCollection();
+        foreach (var (fontPath, familyNames) in BundledFonts)
+        {
+            try
+            {
+                var data = await Http.GetByteArrayAsync(fontPath);
+                foreach (var name in familyNames)
+                    fc.RegisterFont(data, name);
+            }
+            catch
+            {
+                // Font file not found — skip
+            }
+        }
+
+        _fontProvider = fc;
+        _fontsLoaded = true;
     }
 
     private async Task RenderNow()
@@ -177,7 +231,8 @@
                 MarginTop = 36f,
                 MarginRight = 36f,
                 MarginBottom = 36f,
-                MarginLeft = 36f
+                MarginLeft = 36f,
+                FontProvider = _fontProvider,
             };
 
             PdfBytes = Rend.Render.ToPdf(HtmlInput, options);
@@ -225,6 +280,21 @@
         if (PdfBytes == null) return;
         var base64 = Convert.ToBase64String(PdfBytes);
         await JS.InvokeVoidAsync("downloadFile", "output.pdf", base64);
+    }
+
+    private static string WrapForPreview(string html)
+    {
+        // Inject page-like styling to match PDF output (A4 at 595px with 36px margins)
+        var pageStyle = @"<style id=""rend-preview"">
+html { background: #e0e0e0 !important; }
+body { max-width: 523px !important; margin: 16px auto !important; padding: 36px !important;
+  background: white !important; box-shadow: 0 1px 6px rgba(0,0,0,0.12) !important;
+  min-height: 770px !important; }
+</style>";
+        // Insert before </head> if present, otherwise prepend
+        if (html.Contains("</head>", StringComparison.OrdinalIgnoreCase))
+            return html.Replace("</head>", pageStyle + "</head>", StringComparison.OrdinalIgnoreCase);
+        return pageStyle + html;
     }
 
     private const string DefaultHtml = @"<!DOCTYPE html>
@@ -283,7 +353,7 @@
 <body>
   <div class=""card"">
     <h1>Hello from Rend!</h1>
-    <p>Rendered entirely in your browser using <span class=""badge"">WebAssembly</span></p>
+    <p>Built in your browser with <span class=""badge"">WebAssembly</span></p>
     <div class=""grid"">
       <div class=""stat"">
         <div class=""stat-value"">100%</div>

@@ -264,11 +264,17 @@ namespace Rend.Layout.Internal
                 height = isFormControl ? intrinsicHeight : (ratio > 0 ? width / ratio : width);
             }
 
-            // Apply min/max constraints
+            // Apply min/max constraints — resolve percentage values first
             float minW = style.MinWidth;
             float maxW = style.MaxWidth;
             float minH = style.MinHeight;
             float maxH = style.MaxHeight;
+
+            // Resolve deferred percentage min/max (encoded as negative fractions)
+            if (maxW < 0 && maxW > -1.01f)
+                maxW = -maxW * containingWidth;
+            if (minW < 0 && minW > -1.01f)
+                minW = -minW * containingWidth;
 
             if (!float.IsNaN(maxW) && maxW > 0 && width > maxW)
             {

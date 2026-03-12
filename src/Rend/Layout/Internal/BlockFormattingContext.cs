@@ -154,6 +154,52 @@ namespace Rend.Layout.Internal
                 // Skip display:none
                 if (childStyle.Display == CssDisplay.None) continue;
 
+                // CSS 2.1 §9.2.1.1: Non-replaced inline-block/inline-flex/inline-grid elements
+                // among block-level siblings must be wrapped in anonymous block boxes so they
+                // can be laid out side-by-side via InlineFormattingContext.
+                // Replaced elements (form controls, images) are excluded — they have explicit
+                // CSS width/height and need to stay in the BFC for correct sizing.
+                if (!vertical && !ReplacedElementLayout.IsReplaced(childElement) &&
+                    (childStyle.Display == CssDisplay.InlineBlock ||
+                     childStyle.Display == CssDisplay.InlineFlex ||
+                     childStyle.Display == CssDisplay.InlineGrid) &&
+                    childStyle.Position != CssPosition.Absolute &&
+                    childStyle.Position != CssPosition.Fixed &&
+                    childStyle.Float == CssFloat.None)
+                {
+                    var inlineRun = new List<StyledNode>();
+                    inlineRun.Add(childElement);
+                    while (i + 1 < effectiveChildren.Count)
+                    {
+                        var next = effectiveChildren[i + 1];
+                        if (next.IsText || next is StyledPseudoElement)
+                        {
+                            inlineRun.Add(next);
+                            i++;
+                        }
+                        else if (next is StyledElement nextElem &&
+                                 !ReplacedElementLayout.IsReplaced(nextElem) &&
+                                 (nextElem.Style.Display == CssDisplay.InlineBlock ||
+                                  nextElem.Style.Display == CssDisplay.InlineFlex ||
+                                  nextElem.Style.Display == CssDisplay.InlineGrid) &&
+                                 nextElem.Style.Position != CssPosition.Absolute &&
+                                 nextElem.Style.Position != CssPosition.Fixed &&
+                                 nextElem.Style.Float == CssFloat.None &&
+                                 nextElem.Style.Display != CssDisplay.None)
+                        {
+                            inlineRun.Add(next);
+                            i++;
+                        }
+                        else break;
+                    }
+
+                    var anonBox = CreateAnonymousBlockForInlineRun(inlineRun, styledElement, parent, cursorY, containingWidth, context);
+                    parent.AddChild(anonBox);
+                    cursorY = anonBox.ContentRect.Y + anonBox.ContentRect.Height;
+                    prevMarginBottom = 0;
+                    continue;
+                }
+
                 // <dialog> without open attribute is hidden
                 if (childElement.TagName == "dialog" && childElement.GetAttribute("open") == null)
                     continue;
@@ -685,6 +731,65 @@ namespace Rend.Layout.Internal
             InlineFormattingContext.Layout(box, context);
 
             // Calculate auto height from line boxes
+            float height = CalculateAutoHeight(box);
+            box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y, box.ContentRect.Width, height);
+
+            return box;
+        }
+
+        /// <summary>
+        /// Returns true if a CSS display value is an inline-level block container
+        /// (inline-block, inline-flex, inline-grid). These need anonymous block wrapping
+        /// when they appear among block-level siblings so they get shrink-to-fit sizing
+        /// via InlineFormattingContext. Plain display:inline elements are NOT included
+        /// because they don't establish their own BFC.
+        /// </summary>
+        private static bool IsInlineLevelBlockDisplay(CssDisplay display)
+        {
+            return display == CssDisplay.InlineBlock ||
+                   display == CssDisplay.InlineFlex ||
+                   display == CssDisplay.InlineGrid;
+        }
+
+        /// <summary>
+        /// Creates an anonymous block box wrapping a run of inline-level content
+        /// (text nodes, pseudo-elements, and inline-level elements) in a block
+        /// formatting context with mixed block/inline children.
+        /// </summary>
+        private static LayoutBox CreateAnonymousBlockForInlineRun(List<StyledNode> inlineRun,
+            StyledElement parentStyled, LayoutBox parent, float cursorY, float containingWidth,
+            LayoutContext context)
+        {
+            var blockStyle = CloneStyleAsBlock(parentStyled.Style);
+            var doc = parentStyled.Element.OwnerDocument;
+            var anonElement = doc!.CreateElement("div");
+
+            // Build child list: text nodes get the block style, elements keep their own style
+            var anonChildren = new List<StyledNode>();
+            for (int r = 0; r < inlineRun.Count; r++)
+            {
+                var node = inlineRun[r];
+                if (node.IsText)
+                {
+                    anonChildren.Add(new StyledText(((StyledText)node).Text, blockStyle));
+                }
+                else if (node is StyledPseudoElement pseudo)
+                {
+                    anonChildren.Add(new StyledText(pseudo.Content, pseudo.Style));
+                }
+                else
+                {
+                    // Inline-level element (inline-block, inline-flex, etc.) — keep as-is
+                    anonChildren.Add(node);
+                }
+            }
+
+            var anonStyled = new StyledElement(anonElement, blockStyle, anonChildren);
+            var box = new LayoutBox(anonStyled, BoxType.Block);
+            box.ContentRect = new RectF(parent.ContentRect.X, cursorY, containingWidth, 0);
+
+            InlineFormattingContext.Layout(box, context);
+
             float height = CalculateAutoHeight(box);
             box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y, box.ContentRect.Width, height);
 
