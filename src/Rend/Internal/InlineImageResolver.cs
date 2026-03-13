@@ -14,7 +14,8 @@ namespace Rend.Internal
     /// </summary>
     internal sealed class InlineImageResolver
     {
-        private readonly Dictionary<string, ImageData?> _cache = new Dictionary<string, ImageData?>();
+        // BUG-043: Use ConcurrentDictionary for thread safety.
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ImageData?> _cache = new System.Collections.Concurrent.ConcurrentDictionary<string, ImageData?>();
         private readonly IImageResolver? _imageResolver;
         private readonly Func<string, byte[]?>? _resourceLoader;
         private readonly Uri? _baseUrl;
@@ -141,29 +142,80 @@ namespace Rend.Internal
             string? firstUrl = null;
             string? oneXUrl = null;
 
-            var entries = srcset.Split(',');
-            for (int i = 0; i < entries.Length; i++)
+            // Parse per HTML spec: commas separate entries, but URLs may contain commas.
+            // A valid separator comma is followed by optional whitespace then a new URL,
+            // while commas inside URLs (e.g., query strings) are not followed by whitespace.
+            // We use a state machine: skip whitespace/commas, read URL until whitespace,
+            // then read optional descriptor until next comma.
+            int pos = 0;
+            int len = srcset.Length;
+
+            while (pos < len)
             {
-                string entry = entries[i].Trim();
-                if (entry.Length == 0) continue;
-
-                // Split into URL and descriptor
-                int spaceIdx = entry.LastIndexOf(' ');
-                string url;
-                string descriptor;
-                if (spaceIdx > 0)
+                // Skip leading whitespace and commas (separators between entries)
+                while (pos < len && (srcset[pos] == ' ' || srcset[pos] == '\t' ||
+                       srcset[pos] == '\n' || srcset[pos] == '\r' || srcset[pos] == '\f' ||
+                       srcset[pos] == ','))
                 {
-                    url = entry.Substring(0, spaceIdx).Trim();
-                    descriptor = entry.Substring(spaceIdx + 1).Trim();
-                }
-                else
-                {
-                    url = entry;
-                    descriptor = "1x";
+                    pos++;
                 }
 
-                if (firstUrl == null) firstUrl = url;
-                if (descriptor == "1x") oneXUrl = url;
+                if (pos >= len)
+                {
+                    break;
+                }
+
+                // Read the URL: collect characters until whitespace or comma
+                // Per spec, URL ends at whitespace; commas without preceding whitespace are part of URL
+                int urlStart = pos;
+                while (pos < len && srcset[pos] != ' ' && srcset[pos] != '\t' &&
+                       srcset[pos] != '\n' && srcset[pos] != '\r' && srcset[pos] != '\f')
+                {
+                    // A comma followed by whitespace or end-of-string is a separator, not part of URL
+                    if (srcset[pos] == ',')
+                    {
+                        if (pos + 1 >= len || srcset[pos + 1] == ' ' || srcset[pos + 1] == '\t' ||
+                            srcset[pos + 1] == '\n' || srcset[pos + 1] == '\r' || srcset[pos + 1] == '\f')
+                        {
+                            break;
+                        }
+                    }
+                    pos++;
+                }
+
+                string url = srcset.Substring(urlStart, pos - urlStart);
+                if (url.Length == 0)
+                {
+                    continue;
+                }
+
+                // Skip whitespace between URL and descriptor
+                while (pos < len && (srcset[pos] == ' ' || srcset[pos] == '\t' ||
+                       srcset[pos] == '\n' || srcset[pos] == '\r' || srcset[pos] == '\f'))
+                {
+                    pos++;
+                }
+
+                // Read optional descriptor (e.g., "2x", "300w") until comma or end
+                string descriptor = "1x";
+                if (pos < len && srcset[pos] != ',')
+                {
+                    int descStart = pos;
+                    while (pos < len && srcset[pos] != ',')
+                    {
+                        pos++;
+                    }
+                    descriptor = srcset.Substring(descStart, pos - descStart).Trim();
+                }
+
+                if (firstUrl == null)
+                {
+                    firstUrl = url;
+                }
+                if (descriptor == "1x")
+                {
+                    oneXUrl = url;
+                }
             }
 
             return oneXUrl ?? firstUrl;

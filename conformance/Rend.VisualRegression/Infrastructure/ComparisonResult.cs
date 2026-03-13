@@ -33,5 +33,13 @@ namespace Rend.VisualRegression.Infrastructure
         public string? ErrorMessage { get; set; }
         public string? Html { get; set; }
         public TimeSpan Duration { get; set; }
+        /// <summary>Chrome's layout tree captured via CDP.</summary>
+        public LayoutNode? ChromeLayout { get; set; }
+        /// <summary>Path to the Chrome layout JSON file.</summary>
+        public string? ChromeLayoutPath { get; set; }
+        /// <summary>Rend's layout tree snapshot.</summary>
+        public Rend.LayoutSnapshot? RendLayout { get; set; }
+        /// <summary>Path to the Rend layout JSON file.</summary>
+        public string? RendLayoutPath { get; set; }
     }
 }

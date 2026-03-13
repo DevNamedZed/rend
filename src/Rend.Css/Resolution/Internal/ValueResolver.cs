@@ -30,12 +30,12 @@ namespace Rend.Css.Resolution.Internal
                         return TryResolveBorderRadiusPair(brPair, prop.Id, ctx, out result, out refResult);
                     }
                     // For percentage properties that resolve against the containing block
-                    // (not the viewport), defer resolution to layout time by encoding as
-                    // a negative fraction (e.g., 50% → -0.5). The layout engine resolves
-                    // these against the correct containing block dimension.
+                    // (not the viewport), defer resolution to layout time by encoding with
+                    // a sentinel offset (via DeferredPercent.Encode). The layout engine
+                    // resolves these against the correct containing block dimension.
                     if (value is CssPercentageValue pctDeferred && IsDeferredPercentageProperty(prop.Id))
                     {
-                        result = PropertyValue.FromLength(-pctDeferred.Value / 100f);
+                        result = PropertyValue.FromLength(DeferredPercent.Encode(pctDeferred.Value / 100f));
                         return true;
                     }
                     // Defer calc() expressions that contain percentages for properties
@@ -60,9 +60,22 @@ namespace Rend.Css.Resolution.Internal
                     return TryResolveNumber(value, out result);
 
                 case PropertyValueType.Keyword:
+                    // BUG-051: For comma-separated keyword lists (multi-layer backgrounds),
+                    // store the list as a ref value so the painter can access per-layer values.
+                    if (value is CssListValue kwList && kwList.Separator == ',')
+                    {
+                        refResult = value;
+                        result = default;
+                        result.IsSet = true;
+                        return true;
+                    }
                     return TryResolveKeyword(value, prop.Id, out result);
 
                 case PropertyValueType.String:
+                    if (prop.Id == PropertyId.FontFamily)
+                    {
+                        return TryResolveFontFamily(value, out refResult);
+                    }
                     return TryResolveString(value, out refResult);
 
                 case PropertyValueType.Raw:
@@ -112,7 +125,7 @@ namespace Rend.Css.Resolution.Internal
         /// <summary>
         /// Resolves a border-radius pair value (horizontal vertical).
         /// Stores the horizontal radius in the float slot and the vertical radius in refResult.
-        /// Percentages are deferred as negative fractions.
+        /// Percentages are deferred via DeferredPercent.Encode sentinel offset.
         /// </summary>
         private static bool TryResolveBorderRadiusPair(CssListValue pair, int propId,
             CssResolutionContext ctx, out PropertyValue result, out object? refResult)
@@ -133,8 +146,8 @@ namespace Rend.Css.Resolution.Internal
         {
             if (value is CssPercentageValue pct)
             {
-                // Deferred percentage as negative fraction
-                return -pct.Value / 100f;
+                // Deferred percentage encoded with sentinel offset
+                return DeferredPercent.Encode(pct.Value / 100f);
             }
             if (value is CssDimensionValue dim)
             {
@@ -605,6 +618,75 @@ namespace Rend.Css.Resolution.Internal
 
             refResult = value.ToString();
             return true;
+        }
+
+        /// <summary>
+        /// Resolves a font-family CSS value into a string[] of family names.
+        /// Handles comma-separated lists, quoted strings, and keywords.
+        /// </summary>
+        private static bool TryResolveFontFamily(CssValue value, out object? refResult)
+        {
+            refResult = null;
+
+            if (value is CssListValue list && list.Separator == ',')
+            {
+                var families = new string[list.Values.Count];
+                for (int i = 0; i < list.Values.Count; i++)
+                {
+                    families[i] = ExtractFontFamilyName(list.Values[i]);
+                }
+                refResult = families;
+                return true;
+            }
+
+            // Single family name (keyword or quoted string).
+            refResult = new string[] { ExtractFontFamilyName(value) };
+            return true;
+        }
+
+        /// <summary>
+        /// Extracts a single font family name from a CSS value node.
+        /// Handles quoted strings, keywords, and space-separated multi-word names.
+        /// </summary>
+        private static string ExtractFontFamilyName(CssValue value)
+        {
+            if (value is CssStringValue sv)
+            {
+                return sv.Value;
+            }
+            if (value is CssKeywordValue kw)
+            {
+                return kw.Keyword;
+            }
+            if (value is CssListValue spaceList && spaceList.Separator == ' ')
+            {
+                // Multi-word unquoted family name like "Times New Roman".
+                // Join the space-separated keywords.
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < spaceList.Values.Count; i++)
+                {
+                    if (i > 0)
+                    {
+                        sb.Append(' ');
+                    }
+                    if (spaceList.Values[i] is CssKeywordValue kwPart)
+                    {
+                        sb.Append(kwPart.Keyword);
+                    }
+                    else
+                    {
+                        sb.Append(spaceList.Values[i].ToString());
+                    }
+                }
+                return sb.ToString();
+            }
+            // Fallback: use ToString but strip any wrapping quotes.
+            string s = value.ToString();
+            if (s.Length >= 2 && (s[0] == '"' || s[0] == '\'') && s[s.Length - 1] == s[0])
+            {
+                return s.Substring(1, s.Length - 2);
+            }
+            return s;
         }
 
         #region calc() evaluation

@@ -16,8 +16,10 @@ packages/
 ## Test output
 test-output/
 
-## Visual regression timestamped runs (checked-in results are in conformance/results/)
+## Visual regression — output/ is working data (images, layout JSON), always gitignored
 conformance/Rend.VisualRegression/output/
+## results/ has latest report.html + results.json (checked in), history/ is gitignored
+conformance/Rend.VisualRegression/results/history/
 
 ## Playground publish output
 playground/release/

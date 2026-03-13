@@ -43,9 +43,11 @@ namespace Rend.Layout.Internal
                     return Math.Max(0, ValueResolver.EvaluateDeferredCalc(calcFn, containingBlockWidth));
                 return 0;
             }
-            // Negative values encode deferred percentages (e.g., -0.05 = 5% of containing block width)
-            if (value < 0 && value > -1.01f)
-                return Math.Max(0, -value * containingBlockWidth);
+            // Deferred percentage encoded with sentinel offset
+            if (DeferredPercent.IsEncoded(value))
+            {
+                return Math.Max(0, DeferredPercent.Resolve(value, containingBlockWidth));
+            }
             return Math.Max(0, value);
         }
 
@@ -59,10 +61,12 @@ namespace Rend.Layout.Internal
                     return ValueResolver.EvaluateDeferredCalc(calcFn, containingBlockWidth);
                 return 0;
             }
-            // Deferred percentage encoding: small negative fractions in (-1.01, 0) represent percentages.
+            // Deferred percentage encoding: resolve against the containing block width.
             // CSS 2.1 §8.3: All percentage margins resolve against the containing block width.
-            if (value < 0 && value > -1.01f)
-                return -value * containingBlockWidth;
+            if (DeferredPercent.IsEncoded(value))
+            {
+                return DeferredPercent.Resolve(value, containingBlockWidth);
+            }
             return value;
         }
 

@@ -1,0 +1,761 @@
+# Positioning
+# Visual regression tests for positioning
+tests:
+  - id: pos-absolute-corners
+    name: Absolute Positioning All Corners
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="position:relative; width:200px; height:150px; background:#ecf0f1; border:1px solid #bdc3c7;">
+                              <div style="position:absolute; top:5px; left:5px; width:30px; height:30px; background:#e74c3c;"></div>
+                              <div style="position:absolute; top:5px; right:5px; width:30px; height:30px; background:#3498db;"></div>
+                              <div style="position:absolute; bottom:5px; left:5px; width:30px; height:30px; background:#27ae60;"></div>
+                              <div style="position:absolute; bottom:5px; right:5px; width:30px; height:30px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pos-sticky-basic
+    name: Relative Offset Positioning
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="background:#3498db; height:30px; width:100px; margin-bottom:5px;"></div>
+                          <div style="position:relative; left:20px; top:-10px; background:#e74c3c; height:30px; width:100px; margin-bottom:5px;"></div>
+                          <div style="background:#27ae60; height:30px; width:100px;"></div>
+                      </body></html>
+
+  - id: adv-pos-sticky-in-scroll
+    name: Sticky Element in Scrollable Container
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="height:200px; overflow:auto; border:1px solid #ccc;">
+                              <div style="position:sticky; top:0; background:#2c3e50; height:30px; z-index:1;"></div>
+                              <div style="background:#3498db; height:50px; margin:4px 0;"></div>
+                              <div style="background:#e74c3c; height:50px; margin:4px 0;"></div>
+                              <div style="background:#27ae60; height:50px; margin:4px 0;"></div>
+                              <div style="background:#f39c12; height:50px; margin:4px 0;"></div>
+                              <div style="background:#9b59b6; height:50px; margin:4px 0;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-pos-absolute-in-relative
+    name: Absolute Positioned Inside Relative Parent
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="position:relative; width:300px; height:200px; background:#ecf0f1; margin:20px;">
+                              <div style="position:absolute; top:10px; left:10px; width:120px; height:80px; background:#3498db;"></div>
+                              <div style="position:absolute; top:50px; left:50px; width:120px; height:80px; background:#e74c3c;"></div>
+                              <div style="position:absolute; top:90px; left:90px; width:120px; height:80px; background:#27ae60;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-pos-stacking-contexts
+    name: Stacking Contexts with Nested Z-Index
+    html: |
+      <html><body style="margin:0; padding:20px;">
+                          <div style="position:relative; z-index:1;">
+                              <div style="position:absolute; top:0; left:0; width:150px; height:100px; background:#3498db; z-index:10;"></div>
+                          </div>
+                          <div style="position:relative; z-index:2;">
+                              <div style="position:absolute; top:30px; left:30px; width:150px; height:100px; background:#e74c3c; z-index:1;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-pos-fixed-corners
+    name: Fixed Position in All Corners
+    html: |
+      <html><body style="margin:0;">
+                          <div style="position:fixed; top:10px; left:10px; width:60px; height:40px; background:#3498db;"></div>
+                          <div style="position:fixed; top:10px; right:10px; width:60px; height:40px; background:#e74c3c;"></div>
+                          <div style="position:fixed; bottom:10px; left:10px; width:60px; height:40px; background:#27ae60;"></div>
+                          <div style="position:fixed; bottom:10px; right:10px; width:60px; height:40px; background:#f39c12;"></div>
+                      </body></html>
+
+  - id: bug048-negative-subpixel
+    name: Negative sub-pixel values (not percentages)
+    html: |
+      <html><body style="margin:0; padding:20px; font-family:sans-serif; font-size:14px;">
+      <div style="position:relative; width:200px; height:100px; background:#eee; border:1px solid #999;">
+          <div style="position:absolute; top:-0.5px; left:-0.5px; width:50px; height:50px; background:#3498db;"></div>
+          <div style="position:absolute; bottom:-0.5px; right:-0.5px; width:50px; height:50px; background:#e74c3c;"></div>
+      </div>
+      <div style="margin-top:10px;">
+          <div style="position:relative; width:300px; height:60px; background:#f0f0f0; border:1px solid #ccc;">
+              <div style="position:absolute; top:50%; left:50%; width:80px; height:30px; background:#27ae60; transform:translate(-50%,-50%);"></div>
+          </div>
+      </div>
+      </body></html>
+
+  - id: pos-fixed-like
+    name: Absolute in Viewport-Sized Container
+    html: |
+      <html><body style="margin:0;">
+                          <div style="position:relative; width:400px; height:300px; background:#f0f0f0;">
+                              <div style="position:absolute; top:0; left:0; right:0; height:40px; background:#3498db;"></div>
+                              <div style="position:absolute; bottom:0; left:0; right:0; height:40px; background:#e74c3c;"></div>
+                              <div style="padding:50px 10px 50px 10px;">Content area</div>
+                          </div>
+                      </body></html>
+
+  - id: pos-z-index
+    name: Z-Index Stacking
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="position:relative; height:100px;">
+                              <div style="position:absolute; top:0; left:0; width:120px; height:80px; background:#3498db; z-index:1;"></div>
+                              <div style="position:absolute; top:20px; left:40px; width:120px; height:80px; background:#e74c3c; z-index:2;"></div>
+                              <div style="position:absolute; top:40px; left:80px; width:120px; height:80px; background:#27ae60; z-index:3;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pos-inset-shorthand
+    name: Absolute with Top/Right/Bottom/Left
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="position:relative; width:200px; height:150px; background:#f0f0f0;">
+                              <div style="position:absolute; top:10px; right:10px; bottom:10px; left:10px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pos-inset-stretch
+    name: Absolute Positioning with Inset Stretch
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:200px; height:120px; background:#ecf0f1; border:1px solid #bdc3c7;">
+                              <div style="position:absolute; top:10px; right:10px; bottom:10px; left:10px; background:rgba(52,152,219,0.3); border:1px solid #3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-in-relative
+    name: Absolute in Relative
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:200px; height:150px; background:#ecf0f1;">
+                              <div style="position:absolute; top:10px; left:10px; width:80px; height:60px; background:#3498db;"></div>
+                              <div style="position:absolute; bottom:10px; right:10px; width:60px; height:40px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-z-index-layers
+    name: Z-Index Layers
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:200px; height:120px;">
+                              <div style="position:absolute; top:0; left:0; width:100px; height:80px; background:#3498db; z-index:1;"></div>
+                              <div style="position:absolute; top:20px; left:40px; width:100px; height:80px; background:#e74c3c; z-index:2;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-corners
+    name: Absolute Positioned Corners
+    html: |
+      <html><body style="margin:0; background:#fff;">
+                          <div style="position:relative; width:300px; height:200px; background:#ecf0f1; margin:20px;">
+                              <div style="position:absolute; top:0; left:0; width:40px; height:40px; background:#e74c3c;"></div>
+                              <div style="position:absolute; top:0; right:0; width:40px; height:40px; background:#3498db;"></div>
+                              <div style="position:absolute; bottom:0; left:0; width:40px; height:40px; background:#2ecc71;"></div>
+                              <div style="position:absolute; bottom:0; right:0; width:40px; height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-stacked-overlapping
+    name: Stacked Overlapping Boxes
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:250px; height:150px;">
+                              <div style="position:absolute; top:0; left:0; width:150px; height:100px; background:#3498db; opacity:0.8;"></div>
+                              <div style="position:absolute; top:30px; left:50px; width:150px; height:100px; background:#e74c3c; opacity:0.8;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-sticky-colors
+    name: Stacked Color Blocks
+    html: |
+      <html><body style="margin:0; background:#fff;">
+                          <div style="height:30px; background:#e74c3c;"></div>
+                          <div style="height:30px; background:#f39c12;"></div>
+                          <div style="height:30px; background:#2ecc71;"></div>
+                          <div style="height:30px; background:#3498db;"></div>
+                          <div style="height:30px; background:#9b59b6;"></div>
+                          <div style="height:30px; background:#1abc9c;"></div>
+                          <div style="height:30px; background:#e67e22;"></div>
+                          <div style="height:30px; background:#2c3e50;"></div>
+                      </body></html>
+
+  - id: pp-position-sticky-bg
+    name: Fixed Position Background
+    html: |
+      <html><body style="margin:0; background:#fff;">
+                          <div style="position:relative; height:200px;">
+                              <div style="position:absolute; top:10px; left:10px; right:10px; height:40px; background:#3498db;"></div>
+                              <div style="position:absolute; bottom:10px; left:10px; right:10px; height:40px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-stretch
+    name: Absolute Stretch All Sides
+    html: |
+      <html><body style="margin:0; background:#fff;">
+                          <div style="position:relative; height:200px; background:#ecf0f1;">
+                              <div style="position:absolute; top:20px; right:20px; bottom:20px; left:20px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-relative-offset
+    name: Relative Position Offset
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:60px; background:#ecf0f1;"></div>
+                          <div style="position:relative; top:-20px; left:30px; width:150px; height:40px; background:rgba(52,152,219,0.8);"></div>
+                      </body></html>
+
+  - id: pp-absolute-centering
+    name: Absolute Centering via Translate
+    html: |
+      <html><body style="margin:0; background:#fff;">
+                          <div style="position:relative; width:300px; height:200px; background:#ecf0f1;">
+                              <div style="position:absolute; top:50%; left:50%; width:100px; height:60px; background:#3498db; transform:translate(-50%,-50%);"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-position-fixed-static
+    name: Position Fixed in Static Render
+    html: |
+      <html><body style="margin:0; padding:0; background:#fff;">
+                          <div style="position:fixed; top:0; left:0; right:0; height:40px; background:#2c3e50;"></div>
+                          <div style="margin-top:50px; padding:10px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-width-height-pct
+    name: Absolute Width Height Percent
+    html: |
+      <html><body style="margin:0; padding:0; background:#fff;">
+                          <div style="position:relative; width:300px; height:200px; background:#ecf0f1;">
+                              <div style="position:absolute; width:50%; height:50%; background:#3498db;"></div>
+                              <div style="position:absolute; right:0; bottom:0; width:30%; height:40%; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-mixed-position-overlap
+    name: Mixed Position Overlap
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:200px; height:150px;">
+                              <div style="width:100px; height:100px; background:#3498db;"></div>
+                              <div style="position:absolute; top:30px; left:50px; width:100px; height:100px; background:rgba(231,76,60,0.8);"></div>
+                              <div style="position:absolute; top:60px; left:100px; width:80px; height:60px; background:rgba(46,204,113,0.8);"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-stacked-z-index
+    name: Stacked Elements Z-Index
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:120px;">
+                              <div style="position:absolute; z-index:1; top:0; left:0; width:120px; height:80px; background:#3498db;"></div>
+                              <div style="position:absolute; z-index:3; top:20px; left:40px; width:120px; height:80px; background:#e74c3c;"></div>
+                              <div style="position:absolute; z-index:2; top:40px; left:20px; width:120px; height:80px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-fixed-width-flex-items
+    name: Fixed and Flexible Items
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:10px; width:350px;">
+                              <div style="width:80px; height:50px; background:#3498db; flex-shrink:0;"></div>
+                              <div style="flex:1; height:50px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:50px; background:#2ecc71; flex-shrink:0;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-nested-absolute-zindex
+    name: Nested Absolute with Z-Index
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:250px; height:150px; background:#ecf0f1;">
+                              <div style="position:absolute; top:10px; left:10px; width:100px; height:100px; background:#3498db; z-index:1;">
+                                  <div style="position:absolute; top:20px; left:20px; width:60px; height:60px; background:#2980b9; z-index:10;"></div>
+                              </div>
+                              <div style="position:absolute; top:40px; left:60px; width:100px; height:80px; background:rgba(231,76,60,0.9); z-index:2;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-position-absolute-all-edges
+    name: Absolute All Edges Stretch
+    html: |
+      <html><body style="margin:0; padding:0; background:#fff;">
+                          <div style="position:relative; width:300px; height:200px; background:#ecf0f1; margin:10px;">
+                              <div style="position:absolute; top:10px; right:10px; bottom:10px; left:10px; background:#3498db; border-radius:4px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-overlay
+    name: Absolute Overlay Pattern
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:120px;">
+                              <div style="width:200px; height:120px; background:#3498db; border-radius:8px;"></div>
+                              <div style="position:absolute; bottom:0; left:0; right:0; height:40px; background:rgba(0,0,0,0.5); border-radius:0 0 8px 8px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-position-fixed-offset
+    name: Fixed Position with Offsets
+    html: |
+      <html><body style="margin:0; background:#fff;">
+                          <div style="position:fixed; top:10px; right:10px; width:80px; height:40px; background:#e74c3c;"></div>
+                          <div style="position:fixed; bottom:10px; left:10px; width:80px; height:40px; background:#3498db;"></div>
+                      </body></html>
+
+  - id: pp-absolute-center-translate
+    name: Absolute Centering with Transform
+    html: |
+      <html><body style="margin:0; background:#fff;">
+                          <div style="position:relative; width:300px; height:200px; background:#ecf0f1; margin:20px;">
+                              <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:100px; height:60px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-relative-negative-offset
+    name: Relative Position Offset
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:100px; height:50px; background:#3498db;"></div>
+                          <div style="position:relative; top:-10px; left:20px; width:100px; height:50px; background:#e74c3c;"></div>
+                          <div style="width:100px; height:50px; background:#2ecc71;"></div>
+                      </body></html>
+
+  - id: pp-z-index-stacking
+    name: Z-Index Stacking Boxes
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:150px;">
+                              <div style="position:absolute; z-index:1; top:0; left:0; width:100px; height:100px; background:#3498db;"></div>
+                              <div style="position:absolute; z-index:3; top:20px; left:20px; width:100px; height:100px; background:#e74c3c;"></div>
+                              <div style="position:absolute; z-index:2; top:40px; left:40px; width:100px; height:100px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-sticky-position
+    name: Sticky Position Element
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="height:40px; background:#3498db; margin-bottom:5px;"></div>
+                          <div style="position:sticky; top:0; height:30px; background:#e74c3c; margin-bottom:5px;"></div>
+                          <div style="height:40px; background:#2ecc71; margin-bottom:5px;"></div>
+                          <div style="height:40px; background:#f39c12;"></div>
+                      </body></html>
+
+  - id: pp-position-absolute-auto
+    name: Absolute Position with Auto Dimensions
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:200px; height:150px; background:#ecf0f1;">
+                              <div style="position:absolute; top:10px; left:10px; right:10px; bottom:10px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-two-corners
+    name: Absolute Positioned in Corners
+    html: |
+      <html><body style="margin:0; background:#fff;">
+                          <div style="position:relative; width:300px; height:200px; background:#ecf0f1; margin:20px;">
+                              <div style="position:absolute; top:20px; left:20px; width:100px; height:80px; background:#3498db;"></div>
+                              <div style="position:absolute; bottom:20px; right:20px; width:80px; height:60px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-nested-absolute-deep
+    name: Nested Absolute Positioning
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:250px; height:180px; background:#ecf0f1;">
+                              <div style="position:absolute; top:10px; left:10px; width:150px; height:120px; background:#bdc3c7;">
+                                  <div style="position:absolute; bottom:10px; right:10px; width:60px; height:40px; background:#3498db;"></div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pp-sticky-header-sim
+    name: Position Sticky Simulation
+    html: |
+      <html><body style="margin:0; background:#fff;">
+                          <div style="position:sticky; top:0; background:#2c3e50; height:40px; width:100%;"></div>
+                          <div style="height:60px; background:#ecf0f1;"></div>
+                          <div style="height:60px; background:#bdc3c7;"></div>
+                      </body></html>
+
+  - id: pp-absolute-center
+    name: Absolute Centered Element
+    html: |
+      <html><body style="margin:0; padding:0; background:#fff;">
+                          <div style="position:relative; width:300px; height:200px; background:#ecf0f1;">
+                              <div style="position:absolute; top:50px; left:50px; right:50px; bottom:50px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-z-index-overlap
+    name: Z-Index Overlapping Boxes
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:150px;">
+                              <div style="position:absolute; top:0; left:0; width:120px; height:120px; background:#3498db; z-index:1;"></div>
+                              <div style="position:absolute; top:30px; left:30px; width:120px; height:120px; background:#e74c3c; z-index:2;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-position-relative-offset
+    name: Position Relative with Offset
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:100px; background:#ecf0f1;">
+                              <div style="position:relative; top:10px; left:20px; width:80px; height:40px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-position-sticky-sim2
+    name: Position Fixed Corners
+    html: |
+      <html><body style="margin:0; padding:0; background:#fff;">
+                          <div style="position:relative; width:400px; height:300px; background:#ecf0f1;">
+                              <div style="position:absolute; top:0; left:0; width:40px; height:40px; background:#3498db;"></div>
+                              <div style="position:absolute; top:0; right:0; width:40px; height:40px; background:#e74c3c;"></div>
+                              <div style="position:absolute; bottom:0; left:0; width:40px; height:40px; background:#2ecc71;"></div>
+                              <div style="position:absolute; bottom:0; right:0; width:40px; height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-offset-all
+    name: Absolute Position All Offsets
+    html: |
+      <html><body style="margin:0; padding:0; background:#fff;">
+                          <div style="position:relative; width:300px; height:200px; background:#ecf0f1;">
+                              <div style="position:absolute; top:10px; left:10px; width:60px; height:60px; background:#3498db;"></div>
+                              <div style="position:absolute; top:10px; right:10px; width:60px; height:60px; background:#e74c3c;"></div>
+                              <div style="position:absolute; bottom:10px; left:10px; width:60px; height:60px; background:#2ecc71;"></div>
+                              <div style="position:absolute; bottom:10px; right:10px; width:60px; height:60px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-nested-absolute-relative
+    name: Nested Absolute in Relative
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:150px; background:#ecf0f1;">
+                              <div style="position:relative; top:20px; left:20px; width:160px; height:110px; background:#bdc3c7;">
+                                  <div style="position:absolute; top:10px; left:10px; width:60px; height:60px; background:#3498db;"></div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-stretch-both
+    name: Absolute Stretch Both Axes
+    html: |
+      <html><body style="margin:0; padding:0; background:#fff;">
+                          <div style="position:relative; width:300px; height:200px; background:#ecf0f1;">
+                              <div style="position:absolute; top:20px; right:20px; bottom:20px; left:20px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-z-order
+    name: Absolute Z-Index Stacking Order
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:200px;">
+                              <div style="position:absolute; top:0; left:0; width:100px; height:100px; background:#3498db; z-index:3;"></div>
+                              <div style="position:absolute; top:20px; left:20px; width:100px; height:100px; background:#e74c3c; z-index:1;"></div>
+                              <div style="position:absolute; top:40px; left:40px; width:100px; height:100px; background:#2ecc71; z-index:2;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-position-fixed-overlap
+    name: Fixed Position Overlapping
+    html: |
+      <html><body style="margin:0; padding:0; background:#fff;">
+                          <div style="position:relative; width:400px; height:300px;">
+                              <div style="position:absolute; top:20px; left:20px; width:180px; height:120px; background:#3498db;"></div>
+                              <div style="position:absolute; top:80px; left:80px; width:180px; height:120px; background:rgba(231,76,60,0.8);"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-auto-size
+    name: Absolute Position Auto Size
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:250px; height:180px; background:#ecf0f1;">
+                              <div style="position:absolute; top:15px; left:15px; right:15px; height:50px; background:#3498db;"></div>
+                              <div style="position:absolute; bottom:15px; left:15px; width:80px; height:50px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-negative-offset
+    name: Absolute Negative Offset
+    html: |
+      <html><body style="margin:0; padding:40px; background:#fff;">
+                          <div style="position:relative; width:200px; height:100px; background:#ecf0f1;">
+                              <div style="position:absolute; top:-10px; left:-10px; width:60px; height:60px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-percentage-offset
+    name: Absolute Position Percentage Offset
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:300px; height:200px; background:#ecf0f1;">
+                              <div style="position:absolute; top:10%; left:10%; width:80%; height:30%; background:#3498db;"></div>
+                              <div style="position:absolute; bottom:10%; right:10%; width:40%; height:30%; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-position-relative-nested
+    name: Nested Relative Position Offsets
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; top:10px; left:10px; width:200px; height:120px; background:#ecf0f1;">
+                              <div style="position:relative; top:15px; left:15px; width:120px; height:60px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-center-xy
+    name: Absolute Center Horizontal and Vertical
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:250px; height:180px; background:#ecf0f1;">
+                              <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:80px; height:60px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-fixed-size-centered
+    name: Absolute Fixed Size at Center
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:280px; height:200px; background:#ecf0f1;">
+                              <div style="position:absolute; top:0; left:0; right:0; bottom:0; margin:auto; width:120px; height:80px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-nested-absolute-offset
+    name: Nested Absolute with Different Offsets
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:250px; height:200px; background:#ecf0f1;">
+                              <div style="position:absolute; top:10px; left:10px; width:100px; height:80px; background:#3498db;"></div>
+                              <div style="position:absolute; top:50px; left:80px; width:100px; height:80px; background:rgba(231,76,60,0.8);"></div>
+                              <div style="position:absolute; bottom:10px; right:10px; width:80px; height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-inset-0
+    name: Absolute Inset Zero Fills Parent
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:120px; background:#ecf0f1;">
+                              <div style="position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(52,152,219,0.5);"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-position-sticky-box
+    name: Position Sticky as Static in Render
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:300px; height:200px; overflow:auto; background:#ecf0f1;">
+                              <div style="position:sticky; top:0; height:40px; background:#3498db;"></div>
+                              <div style="height:60px; background:#e74c3c;"></div>
+                              <div style="height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-overlap-3layers
+    name: Three Absolute Overlapping Layers
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:250px; height:180px; background:#ecf0f1;">
+                              <div style="position:absolute; top:10px; left:10px; width:120px; height:100px; background:rgba(52,152,219,0.7);"></div>
+                              <div style="position:absolute; top:40px; left:50px; width:120px; height:100px; background:rgba(231,76,60,0.7);"></div>
+                              <div style="position:absolute; top:70px; left:90px; width:120px; height:100px; background:rgba(46,204,113,0.7);"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-nested-absolute-layers
+    name: Nested Absolute Positioned Layers
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:150px; background:#ecf0f1;">
+                              <div style="position:absolute; top:10px; left:10px; width:120px; height:80px; background:rgba(52,152,219,0.7);"></div>
+                              <div style="position:absolute; top:40px; left:50px; width:120px; height:80px; background:rgba(231,76,60,0.7);"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-inset-10
+    name: Absolute Inset 10px All Sides
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:120px; background:#ecf0f1;">
+                              <div style="position:absolute; top:10px; right:10px; bottom:10px; left:10px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-absolute-right-bottom
+    name: Absolute Position Right Bottom
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:250px; height:150px; background:#ecf0f1;">
+                              <div style="position:absolute; right:10px; bottom:10px; width:80px; height:40px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-relative-negative-top
+    name: Relative Position Negative Top
+    html: |
+      <html><body style="margin:0; padding:40px; background:#fff;">
+                          <div style="width:100px; height:50px; background:#ecf0f1;"></div>
+                          <div style="width:100px; height:50px; background:#3498db; position:relative; top:-20px;"></div>
+                      </body></html>
+
+  - id: pp-absolute-centered-both
+    name: Absolute Centered Both Axes
+    html: |
+      <html><body style="margin:0; padding:0; background:#fff;">
+                          <div style="position:relative; width:300px; height:200px; background:#ecf0f1;">
+                              <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:100px; height:60px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-z-index-5-layers
+    name: Five Z-Index Layers
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:150px;">
+                              <div style="position:absolute; z-index:1; top:0; left:0; width:100px; height:80px; background:#3498db;"></div>
+                              <div style="position:absolute; z-index:2; top:10px; left:20px; width:100px; height:80px; background:#e74c3c;"></div>
+                              <div style="position:absolute; z-index:3; top:20px; left:40px; width:100px; height:80px; background:#2ecc71;"></div>
+                              <div style="position:absolute; z-index:4; top:30px; left:60px; width:100px; height:80px; background:#f39c12;"></div>
+                              <div style="position:absolute; z-index:5; top:40px; left:80px; width:100px; height:80px; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pos-relative-offset
+    name: Relative Position Offset
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; background:#ecf0f1; padding:10px;">
+                              <div style="width:80px; height:40px; background:#3498db; margin-bottom:4px;"></div>
+                              <div style="width:80px; height:40px; background:#e74c3c; position:relative; left:30px; top:-10px;"></div>
+                              <div style="width:80px; height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pos-absolute-fill
+    name: Absolute Position Fill Parent
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:200px; height:100px; background:#ecf0f1;">
+                              <div style="position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(52,152,219,0.3);"></div>
+                              <div style="position:absolute; top:10px; left:10px; right:10px; bottom:10px; background:rgba(231,76,60,0.5);"></div>
+                          </div>
+                      </body></html>
+
+  - id: pos-fixed-like-absolute
+    name: Absolute in Viewport-Like Container
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:300px; height:200px; background:#ecf0f1; overflow:hidden;">
+                              <div style="position:absolute; top:0; left:0; right:0; height:40px; background:#2c3e50;"></div>
+                              <div style="position:absolute; bottom:0; left:0; right:0; height:30px; background:#34495e;"></div>
+                              <div style="position:absolute; top:40px; left:0; width:80px; bottom:30px; background:#7f8c8d;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pos-stacking-no-zindex
+    name: Stacking Without Z-Index
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:200px; height:150px;">
+                              <div style="position:absolute; left:0; top:0; width:100px; height:100px; background:#e74c3c;"></div>
+                              <div style="position:absolute; left:25px; top:25px; width:100px; height:100px; background:#3498db;"></div>
+                              <div style="position:absolute; left:50px; top:50px; width:100px; height:100px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pos-negative-offset
+    name: Negative Position Offsets
+    html: |
+      <html><body style="margin:0; padding:30px; background:#fff;">
+                          <div style="position:relative; width:200px; height:100px; background:#ecf0f1;">
+                              <div style="position:absolute; top:-10px; left:-10px; width:50px; height:50px; background:#e74c3c;"></div>
+                              <div style="position:absolute; bottom:-10px; right:-10px; width:50px; height:50px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pos-centered-absolute
+    name: Centered Absolute Element
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:200px; height:150px; background:#ecf0f1;">
+                              <div style="position:absolute; top:45px; left:60px; width:80px; height:60px; background:#3498db; border-radius:8px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pos-relative
+    name: Relative Positioning
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="background:#3498db; width:100px; height:50px; position:relative; top:10px; left:20px;"></div>
+                          <div style="background:#e74c3c; width:100px; height:50px; margin-top:5px;"></div>
+                      </body></html>
+
+  - id: pos-absolute
+    name: Absolute Positioning
+    html: |
+      <html><body style="margin:0; padding:0;">
+                          <div style="position:relative; width:300px; height:200px; background:#f0f0f0; margin:20px;">
+                              <div style="position:absolute; top:10px; left:10px; width:80px; height:60px; background:#3498db;"></div>
+                              <div style="position:absolute; top:10px; right:10px; width:80px; height:60px; background:#e74c3c;"></div>
+                              <div style="position:absolute; bottom:10px; left:10px; width:80px; height:60px; background:#27ae60;"></div>
+                              <div style="position:absolute; bottom:10px; right:10px; width:80px; height:60px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pos-fixed
+    name: Fixed Positioning
+    html: |
+      <html><body style="margin:0; padding:0;">
+                          <div style="position:fixed; top:10px; right:10px; width:80px; height:40px; background:#e74c3c;"></div>
+                          <div style="position:fixed; bottom:10px; left:10px; width:80px; height:40px; background:#3498db;"></div>
+                      </body></html>
+
+  - id: pos-z-index-2
+    name: Z-Index Stacking
+    html: |
+      <html><body style="margin:0; padding:20px;">
+                          <div style="position:relative; height:150px;">
+                              <div style="position:absolute; top:0; left:0; width:120px; height:120px; background:#e74c3c; z-index:1;"></div>
+                              <div style="position:absolute; top:30px; left:30px; width:120px; height:120px; background:#3498db; z-index:3;"></div>
+                              <div style="position:absolute; top:60px; left:60px; width:120px; height:120px; background:#27ae60; z-index:2;"></div>
+                          </div>
+                      </body></html>
+
+  - id: z-index-stacking
+    name: Z-Index Stacking Order
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:200px; height:150px;">
+                              <div style="position:absolute; left:0; top:0; width:100px; height:100px; background:#e74c3c; z-index:1;"></div>
+                              <div style="position:absolute; left:30px; top:30px; width:100px; height:100px; background:#3498db; z-index:2;"></div>
+                              <div style="position:absolute; left:60px; top:60px; width:100px; height:100px; background:#2ecc71; z-index:3;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pos-absolute-offsets
+    name: Absolute Position Offsets
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:200px; height:200px; background:#eee;">
+                              <div style="position:absolute; top:10px; left:10px; width:40px; height:40px; background:#e74c3c;"></div>
+                              <div style="position:absolute; top:10px; right:10px; width:40px; height:40px; background:#3498db;"></div>
+                              <div style="position:absolute; bottom:10px; left:10px; width:40px; height:40px; background:#2ecc71;"></div>
+                              <div style="position:absolute; bottom:10px; right:10px; width:40px; height:40px; background:#f39c12;"></div>
+                              <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:40px; height:40px; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>

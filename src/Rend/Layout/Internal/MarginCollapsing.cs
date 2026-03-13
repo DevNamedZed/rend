@@ -32,11 +32,26 @@ namespace Rend.Layout.Internal
         public static bool ShouldCollapseWithFirstChild(LayoutBox parent)
         {
             if (parent.PaddingTop != 0 || parent.BorderTopWidth != 0)
+            {
                 return false;
+            }
 
             // Elements that establish a new BFC do not collapse margins with children.
             if (EstablishesBfc(parent))
+            {
                 return false;
+            }
+
+            // BUG-058: Margins don't collapse if there's inline content (text, replaced elements)
+            // before the first block child. Check if the first child is inline content.
+            if (parent.Children.Count > 0)
+            {
+                var firstChild = parent.Children[0];
+                if (firstChild.BoxType == BoxType.Inline || firstChild is LayoutText)
+                {
+                    return false;
+                }
+            }
 
             return true;
         }

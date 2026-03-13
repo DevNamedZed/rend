@@ -16,7 +16,7 @@ namespace Rend.Text
     internal sealed class HarfBuzzTextShaper : ITextShaper, IDisposable
     {
         private readonly object _cacheLock = new object();
-        private readonly Dictionary<int, CachedFont> _fontCache = new Dictionary<int, CachedFont>();
+        private readonly Dictionary<int, CachedFace> _faceCache = new Dictionary<int, CachedFace>();
         private bool _disposed;
 
         // Static cache for fallback font data extracted from system typefaces.
@@ -38,21 +38,28 @@ namespace Rend.Text
             ShapedGlyph[] glyphs;
             int count;
 
-            lock (_cacheLock)
+            Face face = GetOrCreateFace(fontData);
+
+            using (var font = new Font(face))
             {
-                var cached = GetOrCreateFont(fontData, fontSize);
+                int scale = (int)(fontSize * 64f);
+                font.SetScale(scale, scale);
 
                 using (var buffer = new HarfBuzzSharp.Buffer())
                 {
                     buffer.AddUtf16(text);
 
                     if (script != null)
+                    {
                         buffer.Script = ParseScript(script);
+                    }
                     if (language != null)
+                    {
                         buffer.Language = new Language(language);
+                    }
 
                     buffer.GuessSegmentProperties();
-                    cached.Font.Shape(buffer);
+                    font.Shape(buffer);
 
                     var glyphInfos = buffer.GlyphInfos;
                     var glyphPositions = buffer.GlyphPositions;
@@ -160,14 +167,17 @@ namespace Rend.Text
                 string subText = text.Substring(textStart, textEnd - textStart);
 
                 // Shape the substring with the fallback font.
-                lock (_cacheLock)
                 {
-                    var fallbackCached = GetOrCreateFont(fallbackData, fontSize);
+                    Face fallbackFace = GetOrCreateFace(fallbackData);
+
+                    using var fallbackFont = new Font(fallbackFace);
+                    int fallbackScale = (int)(fontSize * 64f);
+                    fallbackFont.SetScale(fallbackScale, fallbackScale);
 
                     using var fbBuffer = new HarfBuzzSharp.Buffer();
                     fbBuffer.AddUtf16(subText);
                     fbBuffer.GuessSegmentProperties();
-                    fallbackCached.Font.Shape(fbBuffer);
+                    fallbackFont.Shape(fbBuffer);
 
                     var fbInfos = fbBuffer.GlyphInfos;
                     var fbPositions = fbBuffer.GlyphPositions;
@@ -278,52 +288,43 @@ namespace Rend.Text
             return data;
         }
 
-        private CachedFont GetOrCreateFont(byte[] fontData, float fontSize)
+        private Face GetOrCreateFace(byte[] fontData)
         {
             // Use object identity hash code as cache key. Same byte[] instance maps
-            // to the same cached HarfBuzz Face/Font. Different arrays with the same
+            // to the same cached HarfBuzz Face. Different arrays with the same
             // content will create separate cache entries, which is acceptable.
             int key = RuntimeHelpers.GetHashCode(fontData);
 
-            if (_fontCache.TryGetValue(key, out var cached))
+            lock (_cacheLock)
             {
-                int scale = (int)(fontSize * 64f);
-                if (cached.Scale != scale)
+                if (_faceCache.TryGetValue(key, out var cached))
                 {
-                    cached.Font.SetScale(scale, scale);
-                    cached.Scale = scale;
+                    return cached.Face;
                 }
-                return cached;
-            }
 
-            var handle = GCHandle.Alloc(fontData, GCHandleType.Pinned);
-            Blob? blob = null;
-            Face? face = null;
-            Font? font = null;
+                var handle = GCHandle.Alloc(fontData, GCHandleType.Pinned);
+                Blob? blob = null;
+                Face? face = null;
 
-            try
-            {
-                blob = new Blob(handle.AddrOfPinnedObject(), fontData.Length, MemoryMode.ReadOnly);
-                face = new Face(blob, 0);
-                font = new Font(face);
-
-                int fontScale = (int)(fontSize * 64f);
-                font.SetScale(fontScale, fontScale);
-
-                var entry = new CachedFont(handle, blob, face, font, fontScale);
-                _fontCache[key] = entry;
-                return entry;
-            }
-            catch
-            {
-                font?.Dispose();
-                face?.Dispose();
-                blob?.Dispose();
-                if (handle.IsAllocated)
+                try
                 {
-                    handle.Free();
+                    blob = new Blob(handle.AddrOfPinnedObject(), fontData.Length, MemoryMode.ReadOnly);
+                    face = new Face(blob, 0);
+
+                    var entry = new CachedFace(handle, blob, face);
+                    _faceCache[key] = entry;
+                    return face;
                 }
-                throw;
+                catch
+                {
+                    face?.Dispose();
+                    blob?.Dispose();
+                    if (handle.IsAllocated)
+                    {
+                        handle.Free();
+                    }
+                    throw;
+                }
             }
         }
 
@@ -344,41 +345,39 @@ namespace Rend.Text
 
         public void Dispose()
         {
-            if (_disposed) return;
+            if (_disposed)
+            {
+                return;
+            }
             _disposed = true;
 
             lock (_cacheLock)
             {
-                foreach (var kvp in _fontCache)
+                foreach (var kvp in _faceCache)
                 {
                     kvp.Value.Dispose();
                 }
-                _fontCache.Clear();
+                _faceCache.Clear();
             }
         }
 
-        private sealed class CachedFont : IDisposable
+        private sealed class CachedFace : IDisposable
         {
             private readonly GCHandle _handle;
             private readonly Blob _blob;
-            private readonly Face _face;
 
-            public Font Font { get; }
-            public int Scale { get; set; }
+            public Face Face { get; }
 
-            public CachedFont(GCHandle handle, Blob blob, Face face, Font font, int scale)
+            public CachedFace(GCHandle handle, Blob blob, Face face)
             {
                 _handle = handle;
                 _blob = blob;
-                _face = face;
-                Font = font;
-                Scale = scale;
+                Face = face;
             }
 
             public void Dispose()
             {
-                Font.Dispose();
-                _face.Dispose();
+                Face.Dispose();
                 _blob.Dispose();
                 if (_handle.IsAllocated)
                 {

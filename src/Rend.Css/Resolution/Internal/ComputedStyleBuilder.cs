@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Rend.Core.Values;
 using Rend.Css.Cascade.Internal;
+using Rend.Css.Parser.Internal;
 using Rend.Css.Properties.Internal;
 
 namespace Rend.Css.Resolution.Internal
@@ -12,6 +13,16 @@ namespace Rend.Css.Resolution.Internal
     /// 3. Resolving values (keywords → enums, lengths → px, etc.)
     /// 4. Applying inheritance for unset inherited properties
     /// </summary>
+    /// <summary>
+    /// Sentinel value indicating a CSS custom property resolved to guaranteed-invalid (e.g. cyclic reference).
+    /// </summary>
+    internal sealed class GuaranteedInvalidValue : CssValue
+    {
+        public static readonly GuaranteedInvalidValue Instance = new GuaranteedInvalidValue();
+        public override CssValueKind Kind => CssValueKind.Keyword;
+        public override string ToString() => "";
+    }
+
     internal sealed class ComputedStyleBuilder
     {
         private readonly CssResolutionContext _ctx;
@@ -69,6 +80,7 @@ namespace Rend.Css.Resolution.Internal
                     else
                     {
                         var fsSub = SubstituteVar(fsValue, customProperties);
+                        if (fsSub is GuaranteedInvalidValue) fsSub = new CssNumberValue(0);
                         if (ValueResolver.TryResolve(fsSub, fsProp, _ctx, out var fsPv, out var fsRef))
                         {
                             if (!fsPv.IsSet && fsRef != null) fsPv.IsSet = true;
@@ -110,13 +122,50 @@ namespace Rend.Css.Resolution.Internal
                     continue;
                 }
 
-                var prop = PropertyRegistry.GetByName(kvp.Key);
-                if (prop == null) continue;
-
                 var value = kvp.Value.Declaration.Value;
 
+                // Substitute var() references before resolving.
+                var resolvedValue = SubstituteVar(value, customProperties);
+                if (resolvedValue is GuaranteedInvalidValue)
+                {
+                    resolvedValue = new CssNumberValue(0);
+                }
+
+                var prop = PropertyRegistry.GetByName(kvp.Key);
+                if (prop == null)
+                {
+                    // Property not in registry — likely a shorthand with var() that was
+                    // kept unexpanded (CSS Variables spec §3: pending-substitution values).
+                    // Now that var() is resolved, expand the shorthand and apply longhands.
+                    var longhands = new List<CssDeclaration>();
+                    if (CssShorthandExpander.TryExpand(kvp.Key, resolvedValue,
+                        kvp.Value.Declaration.Important, longhands))
+                    {
+                        foreach (var lh in longhands)
+                        {
+                            var lhProp = PropertyRegistry.GetByName(lh.Property);
+                            if (lhProp == null)
+                            {
+                                continue;
+                            }
+
+                            if (ValueResolver.TryResolve(lh.Value, lhProp, resolvedCtx,
+                                out var lhPv, out var lhRef))
+                            {
+                                if (!lhPv.IsSet && lhRef != null)
+                                {
+                                    lhPv.IsSet = true;
+                                }
+                                values[lhProp.Id] = lhPv;
+                                refValues[lhProp.Id] = lhRef;
+                            }
+                        }
+                    }
+                    continue;
+                }
+
                 // Handle inherit/initial/unset keywords
-                if (InheritanceResolver.IsInherit(value))
+                if (InheritanceResolver.IsInherit(resolvedValue))
                 {
                     if (parentValues != null)
                     {
@@ -131,14 +180,14 @@ namespace Rend.Css.Resolution.Internal
                     continue;
                 }
 
-                if (InheritanceResolver.IsInitial(value))
+                if (InheritanceResolver.IsInitial(resolvedValue))
                 {
                     values[prop.Id] = InitialValues.Get(prop.Id);
                     refValues[prop.Id] = InitialValues.GetRef(prop.Id);
                     continue;
                 }
 
-                if (InheritanceResolver.IsUnset(value) || InheritanceResolver.IsRevert(value))
+                if (InheritanceResolver.IsUnset(resolvedValue) || InheritanceResolver.IsRevert(resolvedValue))
                 {
                     if (prop.Inherited && parentValues != null)
                     {
@@ -152,9 +201,6 @@ namespace Rend.Css.Resolution.Internal
                     }
                     continue;
                 }
-
-                // Substitute var() references before resolving.
-                var resolvedValue = SubstituteVar(value, customProperties);
 
                 // Resolve the value using element's own font-size for em units
                 if (ValueResolver.TryResolve(resolvedValue, prop, resolvedCtx, out var pv, out var refVal))
@@ -176,6 +222,9 @@ namespace Rend.Css.Resolution.Internal
 
             // Resolve currentColor sentinels to the element's computed 'color' value.
             ResolveCurrentColor(values);
+
+            // CSS 2.1 §8.5.1: If border-style is 'none' or 'hidden', border-width computes to 0.
+            ZeroBorderWidthForNoneStyle(values);
 
             return new ComputedStyle(values, refValues, customProperties);
         }
@@ -259,6 +308,13 @@ namespace Rend.Css.Resolution.Internal
         private static CssValue ResolveVarFunction(CssFunctionValue fn,
             Dictionary<string, CssValue>? customProperties)
         {
+            return ResolveVarFunction(fn, customProperties, null);
+        }
+
+        private static CssValue ResolveVarFunction(CssFunctionValue fn,
+            Dictionary<string, CssValue>? customProperties,
+            HashSet<string>? inProgress)
+        {
             if (fn.Arguments.Count == 0)
             {
                 return new CssNumberValue(0); // invalid var()
@@ -274,19 +330,79 @@ namespace Rend.Css.Resolution.Internal
             if (propName != null && customProperties != null &&
                 customProperties.TryGetValue(propName, out var propValue))
             {
+                // BUG-044: Detect cyclic var() references to prevent StackOverflow.
+                // Per CSS Variables spec, cyclic references make the property guaranteed-invalid.
+                // Use the fallback value if provided.
+                if (inProgress != null && inProgress.Contains(propName))
+                {
+                    if (fn.Arguments.Count >= 2)
+                    {
+                        return SubstituteVar(fn.Arguments[1], customProperties);
+                    }
+                    return GuaranteedInvalidValue.Instance;
+                }
+
+                inProgress ??= new HashSet<string>();
+                inProgress.Add(propName);
+
                 // Recursively substitute in case the value itself contains var().
-                return SubstituteVar(propValue, customProperties);
+                var result = SubstituteVarWithCycleDetection(propValue, customProperties, inProgress);
+
+                inProgress.Remove(propName);
+
+                // If resolution produced guaranteed-invalid (cycle detected deeper),
+                // fall through to fallback value if available.
+                if (result is GuaranteedInvalidValue)
+                {
+                    if (fn.Arguments.Count >= 2)
+                    {
+                        return SubstituteVar(fn.Arguments[1], customProperties);
+                    }
+                    return GuaranteedInvalidValue.Instance;
+                }
+
+                return result;
             }
 
-            // Fallback value (second argument after comma).
+            // Fallback value: per CSS spec, everything after the first comma is the fallback.
+            // The parser (ParseVarArgs) now preserves the fallback as a single structured
+            // value in Arguments[1], with correct comma/space grouping.
             if (fn.Arguments.Count >= 2)
             {
-                var fallback = fn.Arguments[fn.Arguments.Count - 1];
-                return SubstituteVar(fallback, customProperties);
+                return SubstituteVar(fn.Arguments[1], customProperties);
             }
 
             // No value found and no fallback — return 0 as invalid.
             return new CssNumberValue(0);
+        }
+
+        private static CssValue SubstituteVarWithCycleDetection(CssValue value,
+            Dictionary<string, CssValue>? customProperties,
+            HashSet<string> inProgress)
+        {
+            if (value is CssFunctionValue fn && fn.Name == "var")
+            {
+                return ResolveVarFunction(fn, customProperties, inProgress);
+            }
+
+            if (value is CssListValue list)
+            {
+                bool anyChanged = false;
+                var newValues = new List<CssValue>(list.Values.Count);
+                for (int i = 0; i < list.Values.Count; i++)
+                {
+                    var orig = list.Values[i];
+                    var substituted = SubstituteVarWithCycleDetection(orig, customProperties, inProgress);
+                    newValues.Add(substituted);
+                    if (!ReferenceEquals(substituted, orig))
+                    {
+                        anyChanged = true;
+                    }
+                }
+                return anyChanged ? new CssListValue(newValues, list.Separator) : value;
+            }
+
+            return value;
         }
 
         /// <summary>
@@ -309,6 +425,39 @@ namespace Rend.Css.Resolution.Internal
                 values[PropertyId.OutlineColor] = elementColor;
             if (values[PropertyId.TextDecoration_Color].IsCurrentColor())
                 values[PropertyId.TextDecoration_Color] = elementColor;
+        }
+
+        /// <summary>
+        /// CSS 2.1 §8.5.1: If border-style is 'none' or 'hidden', the computed
+        /// value of border-width is 0.
+        /// </summary>
+        private static void ZeroBorderWidthForNoneStyle(PropertyValue[] values)
+        {
+            var zero = PropertyValue.FromLength(0);
+
+            var topStyle = (CssBorderStyle)values[PropertyId.BorderTopStyle].IntValue;
+            if (topStyle == CssBorderStyle.None || topStyle == CssBorderStyle.Hidden)
+            {
+                values[PropertyId.BorderTopWidth] = zero;
+            }
+
+            var rightStyle = (CssBorderStyle)values[PropertyId.BorderRightStyle].IntValue;
+            if (rightStyle == CssBorderStyle.None || rightStyle == CssBorderStyle.Hidden)
+            {
+                values[PropertyId.BorderRightWidth] = zero;
+            }
+
+            var bottomStyle = (CssBorderStyle)values[PropertyId.BorderBottomStyle].IntValue;
+            if (bottomStyle == CssBorderStyle.None || bottomStyle == CssBorderStyle.Hidden)
+            {
+                values[PropertyId.BorderBottomWidth] = zero;
+            }
+
+            var leftStyle = (CssBorderStyle)values[PropertyId.BorderLeftStyle].IntValue;
+            if (leftStyle == CssBorderStyle.None || leftStyle == CssBorderStyle.Hidden)
+            {
+                values[PropertyId.BorderLeftWidth] = zero;
+            }
         }
 
     }

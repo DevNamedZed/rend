@@ -251,13 +251,41 @@ namespace Rend.Html.Selectors.Internal
             pos++;
 
             // Skip :: for pseudo-elements (treat as pseudo-class for matching purposes)
+            bool isPseudoElement = false;
             if (pos < input.Length && input[pos] == ':')
+            {
+                isPseudoElement = true;
                 pos++;
+            }
 
             var name = ParseIdentifier(input, ref pos);
             if (name == null) return null;
 
             name = name.ToLowerInvariant();
+
+            // Pseudo-elements (::before, ::after, ::first-line, ::first-letter, etc.)
+            // are handled separately by the style tree builder — return null to silently drop.
+            // Also handle single-colon legacy syntax (:before, :after).
+            if (isPseudoElement ||
+                name == "before" || name == "after" ||
+                name == "first-line" || name == "first-letter" ||
+                name == "marker" || name == "placeholder" ||
+                name == "selection" || name == "backdrop")
+            {
+                // Skip any function arguments (e.g., ::part(...))
+                if (pos < input.Length && input[pos] == '(')
+                {
+                    int depth = 1;
+                    pos++;
+                    while (pos < input.Length && depth > 0)
+                    {
+                        if (input[pos] == '(') { depth++; }
+                        else if (input[pos] == ')') { depth--; }
+                        pos++;
+                    }
+                }
+                return null; // silently drop — handled by StyleTreeBuilder
+            }
 
             // Functional pseudo-classes (with parentheses)
             if (pos < input.Length && input[pos] == '(')
@@ -349,8 +377,10 @@ namespace Rend.Html.Selectors.Internal
                 case "empty": return PseudoClassSelector.Empty();
                 case "root": return PseudoClassSelector.Root();
                 default:
-                    // Unknown pseudo-class — return a never-matching selector
-                    return null;
+                    // Unknown/dynamic pseudo-classes (:hover, :active, :focus, :visited, etc.)
+                    // never match in static rendering. Return a never-matching selector
+                    // so the entire compound selector fails (rather than being silently dropped).
+                    return PseudoClassSelector.NeverMatch();
             }
         }
 

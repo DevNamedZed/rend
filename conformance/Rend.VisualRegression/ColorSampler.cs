@@ -7,8 +7,7 @@ public static class ColorSampler
     {
         // Render table-basic with debug output
         {
-            Rend.Layout.Internal.TableLayout._debugTable = true;
-            Rend.Rendering.Internal.TextPainter._debugText = true;
+
             string html = @"<!DOCTYPE html><html><body style=""margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;"">
                     <table style=""border-collapse:collapse; width:100%;"">
                         <thead><tr>
@@ -30,14 +29,13 @@ public static class ColorSampler
                 MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
                 Dpi = 96, ImageFormat = Rend.ImageOutputFormat.Png,
             });
-            Rend.Layout.Internal.TableLayout._debugTable = false;
-            Rend.Rendering.Internal.TextPainter._debugText = false;
+
             Console.WriteLine();
         }
 
         // adv-table-colspan debug render
         {
-            Rend.Layout.Internal.TableLayout._debugTable = true;
+
             string colspanHtml = @"<!DOCTYPE html><html><body style=""margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;"">
 <table style=""border-collapse:collapse; width:100%;"">
 <tr><td colspan=""3"" style=""border:1px solid #333; padding:8px; background:#3498db; color:#fff; text-align:center;"">Spanning 3 cols</td></tr>
@@ -51,7 +49,7 @@ public static class ColorSampler
                 MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
                 Dpi = 96, ImageFormat = Rend.ImageOutputFormat.Png,
             });
-            Rend.Layout.Internal.TableLayout._debugTable = false;
+
             Console.WriteLine();
         }
 

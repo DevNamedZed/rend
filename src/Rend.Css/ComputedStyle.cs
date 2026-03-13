@@ -354,7 +354,42 @@ namespace Rend.Css
 
         #region Typography
 
-        public string FontFamily => _refValues[PropertyId.FontFamily] as string ?? "serif";
+        /// <summary>
+        /// Gets the primary (first) font family name.
+        /// </summary>
+        public string FontFamily
+        {
+            get
+            {
+                var val = _refValues[PropertyId.FontFamily];
+                if (val is string[] arr)
+                {
+                    return arr.Length > 0 ? arr[0] : "serif";
+                }
+                return val as string ?? "serif";
+            }
+        }
+
+        /// <summary>
+        /// Gets the ordered list of font family names from the CSS font-family property.
+        /// Used for font fallback: each name is tried in sequence until a match is found.
+        /// </summary>
+        public string[] FontFamilies
+        {
+            get
+            {
+                var val = _refValues[PropertyId.FontFamily];
+                if (val is string[] arr)
+                {
+                    return arr;
+                }
+                if (val is string s)
+                {
+                    return new[] { s };
+                }
+                return new[] { "serif" };
+            }
+        }
 
         public float FontSize
         {

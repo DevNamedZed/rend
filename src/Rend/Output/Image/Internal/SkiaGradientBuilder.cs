@@ -116,6 +116,42 @@ namespace Rend.Output.Image.Internal
 
             var tileMode = gradient.Repeating ? SKShaderTileMode.Repeat : SKShaderTileMode.Clamp;
 
+            // For repeating radial gradients, remap positions to 0-1 within the repeat
+            // range and adjust the Skia radius to match the repeat distance.
+            // Otherwise Skia tiles at the full radius, not at the last stop position.
+            if (gradient.Repeating && positions.Length >= 2)
+            {
+                float firstPos = positions[0];
+                float lastPos = positions[positions.Length - 1];
+                float range = lastPos - firstPos;
+                if (range > 0.0001f && range < 0.999f)
+                {
+                    var remapped = new float[positions.Length];
+                    for (int i = 0; i < positions.Length; i++)
+                    {
+                        remapped[i] = (positions[i] - firstPos) / range;
+                    }
+                    // Skia radius spans the repeat unit (lastPos * radius in pixels)
+                    float repeatRadius = radius * lastPos;
+                    if (repeatRadius <= 0f) repeatRadius = 1f;
+                    positions = remapped;
+                    radius = repeatRadius;
+                    // Recalculate rx/ry for ellipse scaling below
+                    if (rx >= ry)
+                    {
+                        float scale = lastPos;
+                        rx *= scale;
+                        ry *= scale;
+                    }
+                    else
+                    {
+                        float scale = lastPos;
+                        rx *= scale;
+                        ry *= scale;
+                    }
+                }
+            }
+
             if (Math.Abs(rx - ry) < 0.5f)
             {
                 // Nearly circular — no scaling needed

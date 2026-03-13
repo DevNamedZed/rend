@@ -1,0 +1,449 @@
+# Borders
+# Visual regression tests for borders
+tests:
+  - id: adv-border-mixed-styles
+    name: Mixed Border Styles Per Side
+    html: |
+      <html><body style="margin:0; padding:20px;">
+                          <div style="border-top:4px solid #e74c3c; border-right:4px dashed #3498db; border-bottom:4px dotted #27ae60; border-left:4px double #f39c12; padding:20px; height:60px; background:#f9f9f9;"></div>
+                      </body></html>
+
+  - id: adv-border-collapse-table
+    name: Border Collapse on Table
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <table style="border-collapse:collapse; width:100%;">
+                              <tr>
+                                  <td style="border:2px solid #2c3e50; padding:8px; background:#ecf0f1;">A1</td>
+                                  <td style="border:2px solid #2c3e50; padding:8px; background:#ecf0f1;">A2</td>
+                                  <td style="border:2px solid #2c3e50; padding:8px; background:#ecf0f1;">A3</td>
+                              </tr>
+                              <tr>
+                                  <td style="border:2px solid #2c3e50; padding:8px; background:#ecf0f1;">B1</td>
+                                  <td style="border:2px solid #2c3e50; padding:8px; background:#ecf0f1;">B2</td>
+                                  <td style="border:2px solid #2c3e50; padding:8px; background:#ecf0f1;">B3</td>
+                              </tr>
+                              <tr>
+                                  <td style="border:2px solid #2c3e50; padding:8px; background:#ecf0f1;">C1</td>
+                                  <td style="border:2px solid #2c3e50; padding:8px; background:#ecf0f1;">C2</td>
+                                  <td style="border:2px solid #2c3e50; padding:8px; background:#ecf0f1;">C3</td>
+                              </tr>
+                          </table>
+                      </body></html>
+
+  - id: adv-border-outline
+    name: Outline Versus Border
+    html: |
+      <html><body style="margin:0; padding:20px;">
+                          <div style="width:150px; height:50px; border:3px solid #3498db; margin-bottom:20px; background:#ecf0f1;"></div>
+                          <div style="width:150px; height:50px; outline:3px solid #e74c3c; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: bug049-border-reset-image
+    name: border shorthand resets border-image
+    html: |
+      <html><body style="margin:0; padding:20px; font-family:sans-serif; font-size:14px;">
+      <div style="border-image:linear-gradient(red,blue) 10; width:200px; height:60px; padding:8px; margin-bottom:10px;">Has border-image</div>
+      <div style="border-image:linear-gradient(red,blue) 10; border:3px solid #333; width:200px; height:60px; padding:8px;">border: overrides border-image</div>
+      </body></html>
+
+  - id: bug049-border-cascade
+    name: border-image then border shorthand cascade
+    html: |
+      <html><head><style>
+      .box { width:180px; height:50px; padding:8px; margin:6px; font-family:sans-serif; font-size:12px; }
+      .has-image { border-image: linear-gradient(45deg, #3498db, #e74c3c) 1; }
+      .reset { border: 3px solid #333; }
+      </style></head><body style="margin:0; padding:10px;">
+      <div class="box has-image">border-image only</div>
+      <div class="box has-image reset">border-image then border (should show solid)</div>
+      <div class="box reset">border only (solid #333)</div>
+      </body></html>
+
+  - id: border-radius-individual
+    name: Individual Corner Radii
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="width:200px; height:80px; background:#3498db; border-radius:20px 0 20px 0; margin-bottom:10px;"></div>
+                          <div style="width:200px; height:80px; background:#e74c3c; border-radius:0 30px 0 30px;"></div>
+                      </body></html>
+
+  - id: border-radius-circle
+    name: Perfect Circle with Border Radius
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="width:100px; height:100px; background:#3498db; border-radius:50%;"></div>
+                      </body></html>
+
+  - id: border-thick-colored
+    name: Thick Colored Borders
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="border:8px solid #3498db; padding:15px; margin-bottom:10px;">
+                              <div style="background:#f0f0f0; height:30px;"></div>
+                          </div>
+                          <div style="border:4px solid #e74c3c; border-radius:12px; padding:15px;">
+                              <div style="background:#f0f0f0; height:30px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-border-solid
+    name: Solid Border Box
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:180px; height:80px; border:3px solid #2c3e50; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-rounded-box
+    name: Rounded Corner Box
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:180px; height:80px; background:#3498db; border-radius:12px;"></div>
+                      </body></html>
+
+  - id: pp-border-all-sides
+    name: Different Border Sides
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:160px; height:80px; border-top:4px solid #e74c3c; border-right:2px solid #3498db; border-bottom:4px solid #2ecc71; border-left:2px solid #f39c12; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-pill-shapes
+    name: Pill Shapes
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:40px; background:#3498db; border-radius:20px; margin-bottom:10px;"></div>
+                          <div style="width:150px; height:30px; background:#e74c3c; border-radius:15px; margin-bottom:10px;"></div>
+                          <div style="width:100px; height:100px; background:#2ecc71; border-radius:50%;"></div>
+                      </body></html>
+
+  - id: pp-border-radius-corners
+    name: Individual Border Radius
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:180px; height:80px; background:#3498db; border-radius:20px 0 20px 0; margin-bottom:10px;"></div>
+                          <div style="width:180px; height:80px; background:#e74c3c; border-radius:0 20px 0 20px;"></div>
+                      </body></html>
+
+  - id: pp-nested-borders
+    name: Nested Bordered Boxes
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="border:3px solid #2c3e50; padding:10px; width:250px;">
+                              <div style="border:2px solid #3498db; padding:8px;">
+                                  <div style="border:1px solid #e74c3c; height:40px; background:#ecf0f1;"></div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pp-border-double
+    name: Double Border Style
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:80px; border:6px double #2c3e50; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-outline-offset
+    name: Outline with Offset
+    html: |
+      <html><body style="margin:0; padding:30px; background:#fff;">
+                          <div style="width:150px; height:80px; background:#3498db; outline:3px solid #e74c3c; outline-offset:5px;"></div>
+                      </body></html>
+
+  - id: pp-border-box-sizing
+    name: Border Box Sizing
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="box-sizing:border-box; width:200px; height:80px; padding:15px; border:5px solid #2c3e50; background:#ecf0f1; margin-bottom:10px;"></div>
+                          <div style="box-sizing:content-box; width:200px; height:80px; padding:15px; border:5px solid #e74c3c; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-border-dashed
+    name: Dashed Border
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:80px; border:3px dashed #2c3e50; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-border-radius-circle
+    name: Perfect Circle
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:100px; height:100px; border-radius:50%; background:#3498db;"></div>
+                      </body></html>
+
+  - id: pp-border-width-variations
+    name: Border Width Variations
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:30px; border:1px solid #333; margin-bottom:10px;"></div>
+                          <div style="width:200px; height:30px; border:3px solid #e74c3c; margin-bottom:10px;"></div>
+                          <div style="width:200px; height:30px; border:5px solid #3498db; margin-bottom:10px;"></div>
+                          <div style="width:200px; height:30px; border-top:8px solid #2ecc71; border-left:2px solid #f39c12;"></div>
+                      </body></html>
+
+  - id: pp-complex-border-radius
+    name: Complex Border Radius Elliptical
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:80px; background:#3498db; border-radius:40px 10px / 20px 40px;"></div>
+                      </body></html>
+
+  - id: pp-outline-styles
+    name: Outline Styles
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:150px; height:40px; background:#ecf0f1; outline:3px solid #3498db; margin-bottom:20px;"></div>
+                          <div style="width:150px; height:40px; background:#ecf0f1; outline:2px dashed #e74c3c; outline-offset:4px;"></div>
+                      </body></html>
+
+  - id: pp-nested-rounded-boxes
+    name: Nested Rounded Boxes
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="background:#ecf0f1; border-radius:12px; padding:15px;">
+                              <div style="background:#3498db; border-radius:8px; padding:10px;">
+                                  <div style="background:#fff; border-radius:4px; height:40px;"></div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pp-border-image-none
+    name: Thick Borders Different Colors
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:150px; height:80px; border-top:8px solid #e74c3c; border-right:4px solid #3498db; border-bottom:8px solid #2ecc71; border-left:4px solid #f39c12; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-border-with-radius
+    name: Colored Border with Radius
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:80px; background:#ecf0f1; border:3px solid #3498db; border-radius:12px;"></div>
+                      </body></html>
+
+  - id: pp-multiple-borders-sizes
+    name: Different Border Widths Per Side
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:150px; height:80px; border-top:1px solid #333; border-right:3px solid #e74c3c; border-bottom:5px solid #2ecc71; border-left:2px solid #3498db; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-border-dashed-thick
+    name: Dashed Border Style
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:80px; border:3px dashed #333; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-border-dotted
+    name: Dotted Border Style
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:80px; border:3px dotted #333; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-outline-offset-gap
+    name: Outline with Offset
+    html: |
+      <html><body style="margin:0; padding:30px; background:#fff;">
+                          <div style="width:150px; height:60px; background:#3498db; outline:3px solid #e74c3c; outline-offset:5px;"></div>
+                      </body></html>
+
+  - id: pp-border-double-thick
+    name: Double Border Style
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:80px; border:6px double #333; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-border-box-padding
+    name: Border Box with Padding
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="box-sizing:border-box; width:200px; height:100px; padding:20px; border:5px solid #333; background:#ecf0f1;">
+                              <div style="width:100%; height:100%; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-border-double-2
+    name: Double Border Style
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:100px; border:6px double #333; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-border-dashed-2
+    name: Dashed Border Style
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:80px; border:3px dashed #e74c3c; background:#fff;"></div>
+                      </body></html>
+
+  - id: pp-border-mixed-styles
+    name: Mixed Border Styles Per Side
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:100px; background:#ecf0f1;
+                              border-top:4px solid #3498db;
+                              border-right:4px solid #e74c3c;
+                              border-bottom:4px solid #2ecc71;
+                              border-left:4px solid #f39c12;"></div>
+                      </body></html>
+
+  - id: pp-nested-borders-2
+    name: Nested Elements with Borders
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; padding:10px; border:3px solid #3498db; background:#ecf0f1;">
+                              <div style="padding:10px; border:2px solid #e74c3c; background:#fff;">
+                                  <div style="height:40px; background:#2ecc71;"></div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pp-border-thick-solid
+    name: Thick Solid Borders
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:180px; height:80px; border:8px solid #2c3e50; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-border-radius-overflow
+    name: Border Radius with Overflow Hidden
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:100px; border-radius:20px; overflow:hidden; background:#ecf0f1;">
+                              <div style="width:100%; height:50px; background:#3498db;"></div>
+                              <div style="width:100%; height:50px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-border-color-per-side
+    name: Different Color Per Border Side
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:100px; background:#fff;
+                              border-top:6px solid #3498db;
+                              border-right:6px solid #e74c3c;
+                              border-bottom:6px solid #2ecc71;
+                              border-left:6px solid #f39c12;"></div>
+                      </body></html>
+
+  - id: pp-border-radius-pill
+    name: Pill Shaped Border Radius
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:40px; border-radius:20px; background:#3498db;"></div>
+                      </body></html>
+
+  - id: pp-multiple-borders-nested
+    name: Multiple Nested Border Colors
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="border:4px solid #3498db; padding:8px;">
+                              <div style="border:3px solid #e74c3c; padding:8px;">
+                                  <div style="border:2px solid #2ecc71; padding:8px;">
+                                      <div style="height:30px; background:#f39c12;"></div>
+                                  </div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pp-border-radius-large
+    name: Large Border Radius Circle
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:100px; height:100px; border-radius:50%; background:#3498db;"></div>
+                      </body></html>
+
+  - id: pp-border-box-sizing-2
+    name: Border Box Sizing
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="box-sizing:border-box; width:200px; height:80px; padding:15px; border:5px solid #333; background:#3498db; margin-bottom:10px;"></div>
+                          <div style="box-sizing:content-box; width:200px; height:80px; padding:15px; border:5px solid #333; background:#e74c3c;"></div>
+                      </body></html>
+
+  - id: pp-border-thick
+    name: Thick Solid Borders
+    html: |
+      <html><body style="margin:0; padding:30px; background:#fff;">
+                          <div style="width:150px; height:80px; border:8px solid #3498db; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-nested-border-radius
+    name: Nested Containers with Border Radius
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:120px; border-radius:20px; background:#3498db; padding:15px;">
+                              <div style="width:100%; height:100%; border-radius:10px; background:#ecf0f1;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-border-radius-overflow-img
+    name: Border Radius Clips Colored Content
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:150px; height:150px; border-radius:50%; overflow:hidden;">
+                              <div style="width:100%; height:50%; background:#3498db;"></div>
+                              <div style="width:100%; height:50%; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-outline-thin
+    name: Thin Outline Around Box
+    html: |
+      <html><body style="margin:0; padding:30px; background:#fff;">
+                          <div style="width:150px; height:80px; background:#ecf0f1; outline:2px solid #3498db;"></div>
+                      </body></html>
+
+  - id: pp-border-thick-different-colors
+    name: Thick Borders Different Colors
+    html: |
+      <html><body style="margin:0; padding:30px; background:#fff;">
+                          <div style="width:150px; height:80px; border-top:5px solid #3498db; border-right:5px solid #e74c3c; border-bottom:5px solid #2ecc71; border-left:5px solid #f39c12; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: pp-border-radius-circle-2
+    name: Border Radius Circle
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:80px; height:80px; border-radius:50%; background:#3498db; border:4px solid #333;"></div>
+                          <div style="margin-top:10px; width:60px; height:60px; border-radius:50%; background:#e74c3c; border:2px solid white;"></div>
+                      </body></html>
+
+  - id: border-radius-nested
+    name: Nested Border Radius
+    html: |
+      <html><body style="margin:0; padding:10px; background:#f0f0f0;">
+                          <div style="background:#3498db; border-radius:16px; padding:12px; width:200px;">
+                              <div style="background:#fff; border-radius:8px; padding:8px; height:40px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: border-radius-circle-2
+    name: Circle and Ellipse Shapes
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff; display:flex; gap:12px;">
+                          <div style="width:80px; height:80px; background:#e74c3c; border-radius:50%;"></div>
+                          <div style="width:120px; height:80px; background:#3498db; border-radius:50%;"></div>
+                          <div style="width:80px; height:80px; background:#2ecc71; border-radius:40px 10px;"></div>
+                      </body></html>
+
+  - id: border-styles-mixed
+    name: Mixed Border Styles
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:50px; border-top:3px solid #e74c3c; border-right:3px dashed #3498db; border-bottom:3px dotted #2ecc71; border-left:3px double #f39c12; margin-bottom:10px;"></div>
+                          <div style="width:200px; height:50px; border:4px solid transparent; border-image:linear-gradient(to right, #e74c3c, #3498db) 1;"></div>
+                      </body></html>
+
+  - id: outline-styles
+    name: CSS Outline Styles
+    html: |
+      <html><body style="margin:0; padding:15px; background:#fff;">
+                          <div style="width:120px; height:40px; background:#f0f0f0; outline:2px solid #3498db; margin-bottom:15px;"></div>
+                          <div style="width:120px; height:40px; background:#f0f0f0; outline:3px dashed #e74c3c; margin-bottom:15px;"></div>
+                          <div style="width:120px; height:40px; background:#f0f0f0; outline:2px solid #27ae60; outline-offset:4px;"></div>
+                      </body></html>

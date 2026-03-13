@@ -88,6 +88,12 @@ namespace Rend.Css.Media.Internal
             var colonIdx = feature.IndexOf(':');
             if (colonIdx < 0)
             {
+                // Try range syntax: (width >= 768px), (height < 600px), etc.
+                if (TryEvaluateRangeSyntax(feature, context, out bool rangeResult))
+                {
+                    return rangeResult;
+                }
+
                 // Boolean feature (e.g. "color")
                 return true; // assume supported
             }
@@ -135,6 +141,67 @@ namespace Rend.Css.Media.Internal
                 case "max-resolution": return context.Resolution <= ConvertResolutionToDpi(value, valueStr);
                 default:
                     return true; // unknown feature — assume match
+            }
+        }
+
+        /// <summary>
+        /// Tries to evaluate CSS Media Queries Level 4 range syntax.
+        /// Examples: "width &gt;= 768px", "height &lt; 600px", "width = 1024px"
+        /// </summary>
+        private static bool TryEvaluateRangeSyntax(string feature, MediaContext context, out bool result)
+        {
+            result = false;
+            var lower = feature.Trim().ToLowerInvariant();
+
+            // Try each operator (longest first to avoid >= matching as >)
+            string[] operators = { ">=", "<=", ">", "<", "=" };
+            string? foundOp = null;
+            int opIdx = -1;
+
+            for (int i = 0; i < operators.Length; i++)
+            {
+                opIdx = lower.IndexOf(operators[i]);
+                if (opIdx > 0)
+                {
+                    foundOp = operators[i];
+                    break;
+                }
+            }
+
+            if (foundOp == null)
+            {
+                return false;
+            }
+
+            var name = lower.Substring(0, opIdx).Trim();
+            var valueStr = lower.Substring(opIdx + foundOp.Length).Trim();
+
+            if (!TryParseLength(valueStr, out float value))
+            {
+                return false;
+            }
+
+            float contextValue;
+            switch (name)
+            {
+                case "width": contextValue = context.Width; break;
+                case "height": contextValue = context.Height; break;
+                case "min-width": contextValue = context.Width; break;
+                case "min-height": contextValue = context.Height; break;
+                case "max-width": contextValue = context.Width; break;
+                case "max-height": contextValue = context.Height; break;
+                default:
+                    return false; // unknown feature for range syntax
+            }
+
+            switch (foundOp)
+            {
+                case ">=": result = contextValue >= value; return true;
+                case "<=": result = contextValue <= value; return true;
+                case ">": result = contextValue > value; return true;
+                case "<": result = contextValue < value; return true;
+                case "=": result = contextValue == value; return true;
+                default: return false;
             }
         }
 

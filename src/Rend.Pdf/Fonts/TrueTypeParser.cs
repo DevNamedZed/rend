@@ -120,7 +120,11 @@ namespace Rend.Pdf.Fonts
                 italicAngle: italicAngle,
                 bBox: new RectF(head.XMin, head.YMin, head.XMax - head.XMin, head.YMax - head.YMin),
                 unitsPerEm: unitsPerEm,
-                flags: ComputeFontFlags(isFixedPitch, italicAngle)
+                flags: ComputeFontFlags(isFixedPitch, italicAngle),
+                underlinePosition: post.HasData ? post.UnderlinePosition : 0,
+                underlineThickness: post.HasData ? post.UnderlineThickness : 0,
+                strikeoutPosition: os2.StrikeoutPosition,
+                strikeoutSize: os2.StrikeoutSize
             );
 
             return new PdfFontData(baseFontName, metrics, charToGlyph, hmtx, supplementaryMap,
@@ -305,7 +309,11 @@ namespace Rend.Pdf.Fonts
             ushort weightClass = r.ReadUInt16();
             ushort widthClass = r.ReadUInt16();
             r.Skip(2); // fsType
-            r.Skip(22); // ySubscript*, ySuperscript*, yStrikeout*, sFamilyClass, panose[10]
+            r.Skip(16); // ySubscriptXSize, ySubscriptYSize, ySubscriptXOffset, ySubscriptYOffset,
+                        // ySuperscriptXSize, ySuperscriptYSize, ySuperscriptXOffset, ySuperscriptYOffset
+            short yStrikeoutSize = r.ReadInt16();
+            short yStrikeoutPosition = r.ReadInt16();
+            r.Skip(12); // sFamilyClass, panose[10]
             r.Skip(16); // ulUnicodeRange1-4
             r.Skip(4);  // achVendID
             ushort fsSelection = r.ReadUInt16();
@@ -331,6 +339,8 @@ namespace Rend.Pdf.Fonts
                 Descent = typoDescender,
                 CapHeight = capHeight,
                 XHeight = xHeight,
+                StrikeoutSize = yStrikeoutSize,
+                StrikeoutPosition = yStrikeoutPosition,
                 IsFixedPitch = avgCharWidth == 500 // crude heuristic
             };
         }
@@ -695,14 +705,16 @@ namespace Rend.Pdf.Fonts
             short intPart = r.ReadInt16();
             ushort fracPart = r.ReadUInt16();
             float italicAngle = intPart + fracPart / 65536f;
-            // underlinePosition, underlineThickness (skip)
-            r.Skip(4);
+            short underlinePosition = r.ReadInt16();
+            short underlineThickness = r.ReadInt16();
             // isFixedPitch: uint32, nonzero means fixed pitch
             uint isFixedPitch = r.ReadUInt32();
 
             return new PostData
             {
                 ItalicAngle = italicAngle,
+                UnderlinePosition = underlinePosition,
+                UnderlineThickness = underlineThickness,
                 IsFixedPitch = isFixedPitch != 0,
                 HasData = true
             };
@@ -879,12 +891,15 @@ namespace Rend.Pdf.Fonts
             public ushort WeightClass;
             public short Ascent, Descent;
             public short CapHeight, XHeight;
+            public short StrikeoutSize, StrikeoutPosition;
             public bool IsFixedPitch;
         }
 
         private struct PostData
         {
             public float ItalicAngle;
+            public short UnderlinePosition;
+            public short UnderlineThickness;
             public bool IsFixedPitch;
             public bool HasData;
         }

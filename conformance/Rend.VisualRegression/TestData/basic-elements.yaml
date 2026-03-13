@@ -1,0 +1,100 @@
+# Basic Elements
+# Visual regression tests for basic elements
+tests:
+  - id: basic-paragraph
+    name: Paragraph
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <p style="color:#333; margin:0;">This is a simple paragraph of text used to verify basic text rendering. It should wrap naturally within the given page width.</p>
+                      </body></html>
+
+  - id: basic-headings
+    name: Headings H1-H6
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; line-height:1.2;">
+                          <h1 style="font-size:24px; margin:4px 0;">Heading 1</h1>
+                          <h2 style="font-size:20px; margin:4px 0;">Heading 2</h2>
+                          <h3 style="font-size:18px; margin:4px 0;">Heading 3</h3>
+                          <h4 style="font-size:16px; margin:4px 0;">Heading 4</h4>
+                          <h5 style="font-size:14px; margin:4px 0;">Heading 5</h5>
+                          <h6 style="font-size:12px; margin:4px 0;">Heading 6</h6>
+                      </body></html>
+
+  - id: basic-unordered-list
+    name: Unordered List
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <ul style="margin:0; padding-left:24px;">
+                              <li>First item</li>
+                              <li>Second item</li>
+                              <li>Third item</li>
+                          </ul>
+                      </body></html>
+
+  - id: basic-ordered-list
+    name: Ordered List
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <ol style="margin:0; padding-left:24px;">
+                              <li>First item</li>
+                              <li>Second item</li>
+                              <li>Third item</li>
+                          </ol>
+                      </body></html>
+
+  - id: basic-links
+    name: Links
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <p style="margin:0 0 8px 0;">Visit <a href="https://example.com" style="color:#3498db; text-decoration:underline;">Example.com</a> for more info.</p>
+                          <p style="margin:0;"><a href="#" style="color:#e74c3c; text-decoration:none; font-weight:bold;">Styled link without underline</a></p>
+                      </body></html>
+
+  - id: basic-inline-elements
+    name: "Inline Elements (strong, em, code)"
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <p style="margin:0;">This has <strong style="font-weight:bold;">bold text</strong> and <em style="font-style:italic;">italic text</em> and <code style="font-family:monospace; background:#f0f0f0; padding:2px 4px;">inline code</code>.</p>
+                      </body></html>
+
+  - id: bug050-media-range
+    name: Media queries L4 range syntax
+    html: |
+      <html><head><style>
+      .box { width:150px; height:40px; padding:8px; margin:4px; background:#ccc; font-family:sans-serif; font-size:12px; }
+      @media (width >= 300px) { .wide { background:#27ae60; color:#fff; } }
+      @media (width < 300px) { .narrow { background:#e74c3c; color:#fff; } }
+      @media (width >= 200px) and (width <= 500px) { .mid { background:#3498db; color:#fff; } }
+      </style></head><body style="margin:0; padding:10px;">
+      <div class="box wide">width>=300: green</div>
+      <div class="box narrow">width<300: red (inactive)</div>
+      <div class="box mid">200<=w<=500: blue</div>
+      </body></html>
+
+  - id: bug050-media-combined
+    name: Media queries combining L4 range + traditional
+    html: |
+      <html><head><style>
+      .item { padding:8px; margin:4px; font-family:sans-serif; font-size:12px; background:#eee; }
+      @media (min-width: 200px) { .traditional { background:#3498db; color:#fff; } }
+      @media (width >= 200px) { .range { background:#27ae60; color:#fff; } }
+      @media (width >= 200px) and (width <= 600px) { .bounded { background:#e74c3c; color:#fff; } }
+      @media (height >= 100px) { .tall { background:#9b59b6; color:#fff; } }
+      </style></head><body style="margin:0; padding:10px;">
+      <div class="item traditional">min-width:200px (traditional)</div>
+      <div class="item range">width>=200px (L4 range)</div>
+      <div class="item bounded">200<=width<=600 (bounded)</div>
+      <div class="item tall">height>=100px</div>
+      </body></html>
+
+  - id: bug055-nested-head-style
+    name: Style in nested head element
+    html: |
+      <html><head>
+      <style>.direct { color: #3498db; }</style>
+      <noscript><style>.nested { color: #e74c3c; font-weight: bold; }</style></noscript>
+      </head><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px;">
+      <p class="direct">Direct style in head (blue)</p>
+      <p class="nested">Style from noscript in head (red bold)</p>
+      <p>Unstyled paragraph</p>
+      </body></html>

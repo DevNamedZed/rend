@@ -120,15 +120,26 @@ namespace Rend.Layout.Internal
                         lineHeight = -lineHeight * fontSize;
                     else if (float.IsNaN(lineHeight) || lineHeight == 0)
                         lineHeight = fontSize * 1.2f;
-                    float estimatedWidth = pseudo.Content.Length * fontSize * 0.6f;
-                    pseudoBox.ContentRect = new RectF(0, 0, estimatedWidth, lineHeight);
+                    float measuredWidth;
+                    if (context.TextMeasurer != null)
+                    {
+                        var fontDesc = new Fonts.FontDescriptor(pseudo.Style.FontFamilies,
+                            pseudo.Style.FontWeight, pseudo.Style.FontStyle);
+                        var shaped = context.TextMeasurer.Shape(pseudo.Content, fontDesc, fontSize);
+                        measuredWidth = shaped.TotalWidth;
+                    }
+                    else
+                    {
+                        measuredWidth = pseudo.Content.Length * fontSize * 0.6f;
+                    }
+                    pseudoBox.ContentRect = new RectF(0, 0, measuredWidth, lineHeight);
                     items.Add(new FlexItem
                     {
                         Box = pseudoBox,
                         Style = pseudo.Style,
                         FlexGrow = 0,
                         FlexShrink = 1,
-                        BaseSize = isColumn ? lineHeight : estimatedWidth,
+                        BaseSize = isColumn ? lineHeight : measuredWidth,
                         Order = 0
                     });
                     continue;
@@ -771,10 +782,47 @@ namespace Rend.Layout.Internal
         {
             float basis = style.FlexBasis;
             if (!float.IsNaN(basis) && basis >= 0)
+            {
+                // When box-sizing is border-box, flex-basis includes padding+border.
+                // Convert to content-box since flex algorithm works with content sizes.
+                if (style.BoxSizing == CssBoxSizing.BorderBox)
+                {
+                    if (isColumn)
+                    {
+                        basis -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
+                    }
+                    else
+                    {
+                        basis -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
+                    }
+                    if (basis < 0)
+                    {
+                        basis = 0;
+                    }
+                }
                 return basis;
+            }
             // Resolve deferred percentage flex-basis against the flex container's main size
-            if (!float.IsNaN(basis) && basis < 0 && basis > -1.01f)
-                return -basis * (isColumn ? containerHeight : containerWidth);
+            if (DeferredPercent.IsEncoded(basis))
+            {
+                float resolved = DeferredPercent.Resolve(basis, isColumn ? containerHeight : containerWidth);
+                if (style.BoxSizing == CssBoxSizing.BorderBox)
+                {
+                    if (isColumn)
+                    {
+                        resolved -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
+                    }
+                    else
+                    {
+                        resolved -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
+                    }
+                    if (resolved < 0)
+                    {
+                        resolved = 0;
+                    }
+                }
+                return resolved;
+            }
 
             // Use width/height as fallback (resolve deferred percentages and calc)
             float size = isColumn ? style.Height : style.Width;
@@ -789,13 +837,53 @@ namespace Rend.Layout.Internal
                     float cbDim = isColumn ? containerHeight : containerWidth;
                     var refVal = style.GetRefValue(propId);
                     if (refVal is CssFunctionValue calcFn)
-                        return Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(calcFn, cbDim);
+                    {
+                        float calcSize = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(calcFn, cbDim);
+                        // box-sizing: border-box → subtract padding+border
+                        if (style.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            if (isColumn)
+                            {
+                                calcSize -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
+                            }
+                            else
+                            {
+                                calcSize -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
+                            }
+                            if (calcSize < 0)
+                            {
+                                calcSize = 0;
+                            }
+                        }
+                        return calcSize;
+                    }
                 }
-                // Resolve deferred percentage (negative fraction encoding)
-                if (size < 0 && size > -1.01f)
-                    size = -size * (isColumn ? containerHeight : containerWidth);
+                // Resolve deferred percentage (sentinel offset encoding)
+                if (DeferredPercent.IsEncoded(size))
+                {
+                    size = DeferredPercent.Resolve(size, isColumn ? containerHeight : containerWidth);
+                }
                 if (size >= 0)
+                {
+                    // When box-sizing is border-box, the CSS width/height includes
+                    // padding and border. Flex base size must be content-box.
+                    if (style.BoxSizing == CssBoxSizing.BorderBox)
+                    {
+                        if (isColumn)
+                        {
+                            size -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
+                        }
+                        else
+                        {
+                            size -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
+                        }
+                        if (size < 0)
+                        {
+                            size = 0;
+                        }
+                    }
                     return size;
+                }
             }
 
             // Auto: measure content size via trial layout
@@ -813,44 +901,20 @@ namespace Rend.Layout.Internal
             else
             {
                 // Row: main axis is width, use shrink-to-fit heuristic
-                // Lay out with full available width, then measure actual content extent
+                // Lay out with full available width, then measure actual content extent.
+                // Use GetContentExtent which recursively measures auto-width block children
+                // and uses NaturalContentWidth for lines (pre-alignment, ignoring text-align).
                 float availWidth = containerWidth - BoxModelCalculator.GetHorizontalSpacing(measureBox);
                 measureBox.ContentRect = new RectF(0, 0, availWidth, 0);
                 BlockFormattingContext.LayoutChildren(measureBox, context);
-                float contentWidth = MeasureContentWidth(measureBox);
+                float contentWidth = BlockFormattingContext.GetContentExtent(measureBox);
                 return Math.Min(contentWidth, availWidth);
             }
         }
 
-        private static float MeasureContentWidth(LayoutBox box)
-        {
-            float maxRight = 0;
-            for (int i = 0; i < box.Children.Count; i++)
-            {
-                var child = box.Children[i];
-                float right = child.ContentRect.X + child.ContentRect.Width
-                            + child.PaddingRight + child.BorderRightWidth + child.MarginRight
-                            - box.ContentRect.X;
-                if (right > maxRight) maxRight = right;
-            }
-            if (box.LineBoxes != null)
-            {
-                for (int i = 0; i < box.LineBoxes.Count; i++)
-                {
-                    var lb = box.LineBoxes[i];
-                    // Measure actual content extent from fragments, not LineBox.Width
-                    // (which holds the available/containing width, not content width)
-                    float contentRight = 0;
-                    for (int f = 0; f < lb.Fragments.Count; f++)
-                    {
-                        float fragRight = lb.Fragments[f].X + lb.Fragments[f].Width;
-                        if (fragRight > contentRight) contentRight = fragRight;
-                    }
-                    if (contentRight > maxRight) maxRight = contentRight;
-                }
-            }
-            return maxRight;
-        }
+        // MeasureContentWidth removed — now using BlockFormattingContext.GetContentExtent
+        // which handles text-align correctly (via NaturalContentWidth) and recursively
+        // measures auto-width block children.
 
         /// <summary>
         /// Returns the effective min-main-size for a flex item.

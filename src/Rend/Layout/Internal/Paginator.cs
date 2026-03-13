@@ -77,18 +77,31 @@ namespace Rend.Layout.Internal
             return pages;
         }
 
-        private static float CalculateTotalHeight(LayoutBox box)
+        /// <summary>
+        /// Returns the absolute Y coordinate of the bottom edge of the box and all its descendants.
+        /// BUG-030: Fixed to consistently use absolute Y coordinates throughout (not heights).
+        /// </summary>
+        private static float CalculateAbsoluteBottom(LayoutBox box)
         {
-            float bottom = box.ContentRect.Y + box.ContentRect.Height
-                         + box.PaddingBottom + box.BorderBottomWidth + box.MarginBottom;
+            float bottom = box.BorderRect.Bottom;
 
             for (int i = 0; i < box.Children.Count; i++)
             {
-                float childBottom = CalculateTotalHeight(box.Children[i]);
-                if (childBottom > bottom) bottom = childBottom;
+                float childBottom = CalculateAbsoluteBottom(box.Children[i]);
+                if (childBottom > bottom)
+                {
+                    bottom = childBottom;
+                }
             }
 
-            return bottom - box.ContentRect.Y + box.PaddingTop + box.BorderTopWidth + box.MarginTop;
+            return bottom;
+        }
+
+        private static float CalculateTotalHeight(LayoutBox box)
+        {
+            float absBottom = CalculateAbsoluteBottom(box);
+            float absTop = box.BorderRect.Top;
+            return absBottom - absTop;
         }
 
         private static List<float> FindBreakPoints(LayoutBox rootBox, float pageContentHeight)

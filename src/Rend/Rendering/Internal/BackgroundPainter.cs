@@ -15,6 +15,7 @@ namespace Rend.Rendering.Internal
     {
         /// <summary>
         /// Paints the background for the given box onto the render target.
+        /// Per CSS Backgrounds L3 §3, layers are painted back-to-front: last layer first, first layer on top.
         /// </summary>
         public static void Paint(LayoutBox box, IRenderTarget target,
             ImageResolverDelegate? imageResolver = null)
@@ -25,15 +26,30 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
-            // Determine clip and origin rects based on background-clip / background-origin
-            RectF clipRect = ResolveBoxRect(box, style.BackgroundClip);
-            RectF originRect = ResolveBoxRect(box, (CssBackgroundClip)(int)style.BackgroundOrigin);
-
             // Border-radius for rounded backgrounds.
             var radii = BorderRadiusResolver.Resolve(style, box.BorderRect);
             bool hasRadius = radii.HasRadius;
 
-            // 1. Paint background-color (clipped to background-clip area).
+            // Determine how many background layers we have.
+            object? bgImageRef = style.GetRefValue(PropertyId.BackgroundImage);
+            int layerCount = 1;
+            CssListValue? imageList = null;
+            if (bgImageRef is CssListValue imgList && imgList.Separator == ',')
+            {
+                layerCount = imgList.Values.Count;
+                imageList = imgList;
+            }
+
+            // Get multi-layer longhand refs for repeat/position/size/clip/origin
+            object? repeatRef = style.GetRefValue(PropertyId.BackgroundRepeat);
+            object? positionRef = style.GetRefValue(PropertyId.BackgroundPosition);
+            object? sizeRef = style.GetRefValue(PropertyId.BackgroundSize);
+            object? clipRef = style.GetRefValue(PropertyId.BackgroundClip);
+            object? originRef = style.GetRefValue(PropertyId.BackgroundOrigin);
+
+            // 1. Paint background-color first (below all layers), using final layer's clip area.
+            CssBackgroundClip finalClip = GetLayerClipEnum(clipRef, layerCount - 1, style.BackgroundClip);
+            RectF colorClipRect = ResolveBoxRect(box, finalClip);
             CssColor bgColor = style.BackgroundColor;
             if (bgColor.A > 0)
             {
@@ -41,21 +57,107 @@ namespace Rend.Rendering.Internal
                 if (hasRadius)
                 {
                     var path = new PathData();
-                    radii.AddToPath(path, clipRect);
+                    radii.AddToPath(path, colorClipRect);
                     target.FillPath(path, brush);
                 }
                 else
                 {
-                    // Snap to integer pixel boundaries (Chrome's PixelSnappedIntRect)
-                    target.FillRect(clipRect.PixelSnap(), brush);
+                    target.FillRect(colorClipRect.PixelSnap(), brush);
                 }
             }
 
-            // 2. Paint background-image (URL images or CSS gradients).
-            object? bgImageRef = style.GetRefValue(PropertyId.BackgroundImage);
+            // 2. Paint background-image layers back-to-front (last layer painted first).
+            for (int layerIdx = layerCount - 1; layerIdx >= 0; layerIdx--)
+            {
+                object? layerImage = imageList != null ? imageList.Values[layerIdx] : bgImageRef;
+                CssBackgroundClip layerClipEnum = GetLayerClipEnum(clipRef, layerIdx, style.BackgroundClip);
+                CssBackgroundOrigin layerOriginEnum = GetLayerOriginEnum(originRef, layerIdx, style.BackgroundOrigin);
+                RectF clipRect = ResolveBoxRect(box, layerClipEnum);
+                RectF originRect = ResolveBoxRect(box, (CssBackgroundClip)(int)layerOriginEnum);
 
+                PaintBackgroundLayer(layerImage, layerIdx, repeatRef, positionRef, sizeRef,
+                    style, clipRect, originRect, radii, hasRadius, target, imageResolver);
+            }
+        }
+
+        /// <summary>
+        /// Gets the background-clip enum for a specific layer index.
+        /// </summary>
+        private static CssBackgroundClip GetLayerClipEnum(object? clipRef, int layerIdx, CssBackgroundClip fallback)
+        {
+            if (clipRef is CssListValue clipList && clipList.Separator == ',')
+            {
+                if (layerIdx < clipList.Values.Count)
+                {
+                    return ParseClipKeyword(clipList.Values[layerIdx], fallback);
+                }
+                // CSS spec: cycle through available values
+                if (clipList.Values.Count > 0)
+                {
+                    return ParseClipKeyword(clipList.Values[layerIdx % clipList.Values.Count], fallback);
+                }
+            }
+            return fallback;
+        }
+
+        /// <summary>
+        /// Gets the background-origin enum for a specific layer index.
+        /// </summary>
+        private static CssBackgroundOrigin GetLayerOriginEnum(object? originRef, int layerIdx, CssBackgroundOrigin fallback)
+        {
+            if (originRef is CssListValue originList && originList.Separator == ',')
+            {
+                if (layerIdx < originList.Values.Count)
+                {
+                    return ParseOriginKeyword(originList.Values[layerIdx], fallback);
+                }
+                if (originList.Values.Count > 0)
+                {
+                    return ParseOriginKeyword(originList.Values[layerIdx % originList.Values.Count], fallback);
+                }
+            }
+            return fallback;
+        }
+
+        private static CssBackgroundClip ParseClipKeyword(CssValue val, CssBackgroundClip fallback)
+        {
+            if (val is CssKeywordValue kw)
+            {
+                switch (kw.Keyword)
+                {
+                    case "border-box": return CssBackgroundClip.BorderBox;
+                    case "padding-box": return CssBackgroundClip.PaddingBox;
+                    case "content-box": return CssBackgroundClip.ContentBox;
+                }
+            }
+            return fallback;
+        }
+
+        private static CssBackgroundOrigin ParseOriginKeyword(CssValue val, CssBackgroundOrigin fallback)
+        {
+            if (val is CssKeywordValue kw)
+            {
+                switch (kw.Keyword)
+                {
+                    case "border-box": return CssBackgroundOrigin.BorderBox;
+                    case "padding-box": return CssBackgroundOrigin.PaddingBox;
+                    case "content-box": return CssBackgroundOrigin.ContentBox;
+                }
+            }
+            return fallback;
+        }
+
+        /// <summary>
+        /// Paints a single background-image layer.
+        /// </summary>
+        private static void PaintBackgroundLayer(object? layerImage, int layerIdx,
+            object? repeatRef, object? positionRef, object? sizeRef,
+            ComputedStyle style, RectF clipRect, RectF originRect,
+            BorderRadii radii, bool hasRadius, IRenderTarget target,
+            ImageResolverDelegate? imageResolver)
+        {
             // Check for CSS gradient functions
-            if (bgImageRef is CssFunctionValue gradientFn)
+            if (layerImage is CssFunctionValue gradientFn)
             {
                 var gradient = ParseCssGradient(gradientFn, clipRect);
                 if (gradient != null)
@@ -82,12 +184,18 @@ namespace Rend.Rendering.Internal
 
             // Extract URL from CssUrlValue or string ref
             string? bgImageUrl = null;
-            if (bgImageRef is CssUrlValue urlVal)
+            if (layerImage is CssUrlValue urlVal)
+            {
                 bgImageUrl = urlVal.Url;
-            else if (bgImageRef is CssKeywordValue kwRef && kwRef.Keyword != "none")
+            }
+            else if (layerImage is CssKeywordValue kwRef && kwRef.Keyword != "none")
+            {
                 bgImageUrl = kwRef.Keyword;
-            else if (bgImageRef is string strRef)
+            }
+            else if (layerImage is string strRef)
+            {
                 bgImageUrl = strRef;
+            }
 
             if (string.IsNullOrEmpty(bgImageUrl) || bgImageUrl == "none")
             {
@@ -103,15 +211,17 @@ namespace Rend.Rendering.Internal
             // Calculate image size (relative to background-origin area).
             float imgW = imageData.Width;
             float imgH = imageData.Height;
-            ComputeBackgroundSize(style, originRect, imgW, imgH,
+            object? layerSize = GetLayerRef(sizeRef, layerIdx);
+            ComputeBackgroundSizeFromRef(layerSize, originRect, imgW, imgH,
                 out float scaledW, out float scaledH);
 
             // Calculate image position (relative to background-origin area).
-            ComputeBackgroundPosition(style, originRect, scaledW, scaledH,
+            object? layerPosition = GetLayerRef(positionRef, layerIdx);
+            ComputeBackgroundPositionFromRef(layerPosition, originRect, scaledW, scaledH,
                 out float posX, out float posY);
 
-            // Get repeat mode.
-            int repeatMode = style.GetRawValue(PropertyId.BackgroundRepeat).IntValue;
+            // Get repeat mode for this layer.
+            int repeatMode = GetLayerRepeatMode(repeatRef, layerIdx, style);
 
             // Clip to background-clip rect for tiled backgrounds.
             bool needsClip = repeatMode != (int)CssBackgroundRepeat.NoRepeat;
@@ -164,6 +274,52 @@ namespace Rend.Rendering.Internal
             }
         }
 
+        /// <summary>
+        /// Gets the ref value for a specific layer from a potentially comma-separated list.
+        /// </summary>
+        private static object? GetLayerRef(object? refValue, int layerIdx)
+        {
+            if (refValue is CssListValue list && list.Separator == ',')
+            {
+                if (layerIdx < list.Values.Count)
+                {
+                    return list.Values[layerIdx];
+                }
+                // CSS spec: cycle through available values
+                if (list.Values.Count > 0)
+                {
+                    return list.Values[layerIdx % list.Values.Count];
+                }
+            }
+            return refValue;
+        }
+
+        /// <summary>
+        /// Gets the repeat mode for a specific layer.
+        /// </summary>
+        private static int GetLayerRepeatMode(object? repeatRef, int layerIdx, ComputedStyle style)
+        {
+            if (repeatRef is CssListValue repeatList && repeatList.Separator == ',')
+            {
+                int idx = layerIdx < repeatList.Values.Count ? layerIdx : layerIdx % repeatList.Values.Count;
+                if (idx < repeatList.Values.Count)
+                {
+                    var val = repeatList.Values[idx];
+                    if (val is CssKeywordValue kw)
+                    {
+                        switch (kw.Keyword)
+                        {
+                            case "repeat": return (int)CssBackgroundRepeat.Repeat;
+                            case "no-repeat": return (int)CssBackgroundRepeat.NoRepeat;
+                            case "repeat-x": return (int)CssBackgroundRepeat.RepeatX;
+                            case "repeat-y": return (int)CssBackgroundRepeat.RepeatY;
+                        }
+                    }
+                }
+            }
+            return style.GetRawValue(PropertyId.BackgroundRepeat).IntValue;
+        }
+
         private static RectF ResolveBoxRect(LayoutBox box, CssBackgroundClip boxArea)
         {
             switch (boxArea)
@@ -191,14 +347,13 @@ namespace Rend.Rendering.Internal
         /// <summary>
         /// Computes the scaled size of the background image based on background-size.
         /// </summary>
-        private static void ComputeBackgroundSize(ComputedStyle style, RectF paddingRect,
+        private static void ComputeBackgroundSizeFromRef(object? sizeRef, RectF paddingRect,
             float imgW, float imgH, out float scaledW, out float scaledH)
         {
             // Default: auto (intrinsic size)
             scaledW = imgW;
             scaledH = imgH;
 
-            object? sizeRef = style.GetRefValue(PropertyId.BackgroundSize);
             if (sizeRef == null)
             {
                 return;
@@ -279,14 +434,13 @@ namespace Rend.Rendering.Internal
         /// <summary>
         /// Computes the position of the background image.
         /// </summary>
-        private static void ComputeBackgroundPosition(ComputedStyle style, RectF paddingRect,
+        private static void ComputeBackgroundPositionFromRef(object? posRef, RectF paddingRect,
             float scaledW, float scaledH, out float posX, out float posY)
         {
             // Default: 0% 0% (top-left)
             posX = paddingRect.X;
             posY = paddingRect.Y;
 
-            object? posRef = style.GetRefValue(PropertyId.BackgroundPosition);
             if (posRef == null)
             {
                 return;
@@ -499,11 +653,8 @@ namespace Rend.Rendering.Internal
                 }
             }
 
-            var stops = ParseColorStops(fn.Arguments, colorStartIdx);
-            if (stops == null || stops.Length < 2) return null;
-
-            // Compute radii based on shape and size keyword.
-            // Center in absolute coordinates.
+            // Compute radii based on shape and size keyword BEFORE parsing stops,
+            // since px stop positions need to be normalized against the gradient radius.
             float absCx = centerX * rect.Width;
             float absCy = centerY * rect.Height;
 
@@ -514,6 +665,7 @@ namespace Rend.Rendering.Internal
             float dBottom = rect.Height - absCy;
 
             float rx, ry;
+            float gradientRadius; // absolute pixel radius for stop normalization
             if (isCircle)
             {
                 float r;
@@ -542,32 +694,29 @@ namespace Rend.Rendering.Internal
                 }
                 rx = rect.Width > 0 ? r / rect.Width : 0.5f;
                 ry = rect.Height > 0 ? r / rect.Height : 0.5f;
+                gradientRadius = r;
             }
             else
             {
                 // Ellipse: radii are proportional to box dimensions.
-                // For farthest-corner, ellipse must pass through the farthest corner
-                // while maintaining the aspect ratio (rx/ry = W/H when centered).
+                float erxAbs, eryAbs;
                 switch (sizeKeyword)
                 {
                     case 1: // closest-side
-                        rx = rect.Width > 0 ? Math.Min(dLeft, dRight) / rect.Width : 0.5f;
-                        ry = rect.Height > 0 ? Math.Min(dTop, dBottom) / rect.Height : 0.5f;
+                        erxAbs = Math.Min(dLeft, dRight);
+                        eryAbs = Math.Min(dTop, dBottom);
                         break;
                     case 2: // farthest-side
-                        rx = rect.Width > 0 ? Math.Max(dLeft, dRight) / rect.Width : 0.5f;
-                        ry = rect.Height > 0 ? Math.Max(dTop, dBottom) / rect.Height : 0.5f;
+                        erxAbs = Math.Max(dLeft, dRight);
+                        eryAbs = Math.Max(dTop, dBottom);
                         break;
                     case 3: // closest-corner
                     {
                         float cDx = Math.Min(dLeft, dRight);
                         float cDy = Math.Min(dTop, dBottom);
                         float ratio = rect.Width > 0 && rect.Height > 0 ? rect.Width / rect.Height : 1f;
-                        // Ellipse: (cDx/erx)² + (cDy/ery)² = 1, erx/ery = ratio
-                        float ery = (float)Math.Sqrt(cDx * cDx / (ratio * ratio) + cDy * cDy);
-                        float erx = ery * ratio;
-                        rx = rect.Width > 0 ? erx / rect.Width : 0.5f;
-                        ry = rect.Height > 0 ? ery / rect.Height : 0.5f;
+                        eryAbs = (float)Math.Sqrt(cDx * cDx / (ratio * ratio) + cDy * cDy);
+                        erxAbs = eryAbs * ratio;
                         break;
                     }
                     default: // 0: farthest-corner (CSS default)
@@ -576,13 +725,20 @@ namespace Rend.Rendering.Internal
                         float fDy = Math.Max(dTop, dBottom);
                         float ratio2 = rect.Width > 0 && rect.Height > 0 ? rect.Width / rect.Height : 1f;
                         float ery2 = (float)Math.Sqrt(fDx * fDx / (ratio2 * ratio2) + fDy * fDy);
-                        float erx2 = ery2 * ratio2;
-                        rx = rect.Width > 0 ? erx2 / rect.Width : 0.5f;
-                        ry = rect.Height > 0 ? ery2 / rect.Height : 0.5f;
+                        erxAbs = ery2 * ratio2;
+                        eryAbs = ery2;
                         break;
                     }
                 }
+                rx = rect.Width > 0 ? erxAbs / rect.Width : 0.5f;
+                ry = rect.Height > 0 ? eryAbs / rect.Height : 0.5f;
+                // For elliptical gradients, Skia uses the larger radius and scales.
+                // Stop positions normalize against the larger radius.
+                gradientRadius = Math.Max(erxAbs, eryAbs);
             }
+
+            var stops = ParseColorStops(fn.Arguments, colorStartIdx, gradientRadius);
+            if (stops == null || stops.Length < 2) return null;
 
             return new GradientInfo(GradientType.Radial, stops)
             {
@@ -750,6 +906,7 @@ namespace Rend.Rendering.Internal
                 else continue;
 
                 // Check if next argument is a position
+                float position2 = -1;
                 if (i + 1 < args.Count)
                 {
                     var next = args[i + 1];
@@ -765,10 +922,34 @@ namespace Rend.Rendering.Internal
                         position = gradientLineLength > 0 ? px / gradientLineLength : px / 100f;
                         i++;
                     }
+
+                    // CSS double-position syntax: "color pos1 pos2" → two stops
+                    if (position >= 0 && i + 1 < args.Count)
+                    {
+                        var next2 = args[i + 1];
+                        if (next2 is CssPercentageValue pct2)
+                        {
+                            position2 = pct2.Value / 100f;
+                            i++;
+                        }
+                        else if (next2 is CssDimensionValue posDim2)
+                        {
+                            float px2 = ResolveLengthValue(posDim2);
+                            position2 = gradientLineLength > 0 ? px2 / gradientLineLength : px2 / 100f;
+                            i++;
+                        }
+                    }
                 }
 
                 if (color.HasValue)
+                {
                     stops.Add(new GradientStop(color.Value, position));
+                    // Double-position: add a second stop at the end position
+                    if (position2 >= 0)
+                    {
+                        stops.Add(new GradientStop(color.Value, position2));
+                    }
+                }
             }
 
             if (stops.Count < 2) return null;

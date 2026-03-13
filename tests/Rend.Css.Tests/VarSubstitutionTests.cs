@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Rend.Core.Values;
 using Rend.Css;
 using Rend.Css.Cascade.Internal;
@@ -221,8 +222,144 @@ namespace Rend.Css.Tests
         }
 
         // ═══════════════════════════════════════════
+        // Full parser pipeline tests (CSS text → parsed value)
+        // ═══════════════════════════════════════════
+
+        [Fact]
+        public void Var_FullParse_SimpleFallback()
+        {
+            // Parse through the full CSS pipeline
+            var sheet = CssParser.Parse("div { width: var(--w, 100px); }");
+            var rule = Assert.IsType<StyleRule>(sheet.Rules[0]);
+            var decl = rule.Declarations.First(d => d.Property == "width");
+
+            // Should be a CssFunctionValue("var") with 2 args
+            var fn = Assert.IsType<CssFunctionValue>(decl.Value);
+            Assert.Equal("var", fn.Name);
+            Assert.Equal(2, fn.Arguments.Count);
+
+            // First arg: custom property name
+            var propName = Assert.IsType<CssKeywordValue>(fn.Arguments[0]);
+            Assert.Equal("--w", propName.Keyword);
+
+            // Second arg: fallback value
+            var fallback = Assert.IsType<CssDimensionValue>(fn.Arguments[1]);
+            Assert.Equal(100f, fallback.Value, 0.01);
+            Assert.Equal("px", fallback.Unit);
+        }
+
+        [Fact]
+        public void Var_FullParse_SpaceSeparatedFallback()
+        {
+            // var(--border, 2px solid #333) kept as shorthand (pending-substitution)
+            // Not expanded to longhands at parse time — that happens after var() resolution
+            var sheet = CssParser.Parse("div { border: var(--border, 2px solid #333); }");
+            var rule = Assert.IsType<StyleRule>(sheet.Rules[0]);
+            var decl = rule.Declarations.First(d => d.Property == "border");
+
+            var fn = Assert.IsType<CssFunctionValue>(decl.Value);
+            Assert.Equal("var", fn.Name);
+            Assert.Equal(2, fn.Arguments.Count);
+
+            // Fallback should be a space-separated list: [2px, solid, #333333]
+            var fallback = Assert.IsType<CssListValue>(fn.Arguments[1]);
+            Assert.Equal(3, fallback.Values.Count);
+        }
+
+        [Fact]
+        public void Var_FullParse_CommaSeparatedFallback()
+        {
+            // var(--font, Arial, sans-serif) → fallback is comma-separated list
+            var sheet = CssParser.Parse("div { font-family: var(--font, Arial, sans-serif); }");
+            var rule = Assert.IsType<StyleRule>(sheet.Rules[0]);
+            var decl = rule.Declarations.First(d => d.Property == "font-family");
+
+            var fn = Assert.IsType<CssFunctionValue>(decl.Value);
+            Assert.Equal("var", fn.Name);
+            Assert.Equal(2, fn.Arguments.Count);
+
+            // Fallback should be a comma-separated list: [Arial, sans-serif]
+            var fallback = Assert.IsType<CssListValue>(fn.Arguments[1]);
+            Assert.Equal(',', fallback.Separator);
+            Assert.Equal(2, fallback.Values.Count);
+        }
+
+        [Fact]
+        public void Var_FullParse_FallbackResolvedInStyle()
+        {
+            // End-to-end: var(--missing, 100px) should resolve to width: 100px
+            var style = ResolveElement("div { width: var(--missing, 100px); }");
+            Assert.Equal(100f, style.Width, 0.01);
+        }
+
+        [Fact]
+        public void Var_FullParse_CommaSeparatedFallbackResolvedInStyle()
+        {
+            // End-to-end: var(--font, Arial, sans-serif) should resolve font-family
+            var style = ResolveElement("div { font-family: var(--font, Arial, sans-serif); }");
+            // Should resolve to "arial" (first item in comma list)
+            Assert.Equal("arial", style.FontFamily);
+        }
+
+        // ═══════════════════════════════════════════
+        // Background shorthand box keyword
+        // ═══════════════════════════════════════════
+
+        [Fact]
+        public void Background_SingleBoxKeyword_SetsBothClipAndOrigin()
+        {
+            var style = ResolveElement("div { background: #e74c3c padding-box; }");
+            Assert.Equal(CssBackgroundClip.PaddingBox, style.BackgroundClip);
+            Assert.Equal(CssBackgroundOrigin.PaddingBox, style.BackgroundOrigin);
+        }
+
+        [Fact]
+        public void Background_ShorthandExpands_ClipAndOrigin()
+        {
+            // Verify the shorthand parser produces the right longhands
+            var sheet = CssParser.Parse("div { background: #e74c3c padding-box; }");
+            var rule = Assert.IsType<StyleRule>(sheet.Rules[0]);
+            var clipDecl = rule.Declarations.FirstOrDefault(d => d.Property == "background-clip");
+            var originDecl = rule.Declarations.FirstOrDefault(d => d.Property == "background-origin");
+            Assert.NotNull(clipDecl);
+            Assert.NotNull(originDecl);
+            var clipKw = Assert.IsType<CssKeywordValue>(clipDecl.Value);
+            var originKw = Assert.IsType<CssKeywordValue>(originDecl.Value);
+            Assert.Equal("padding-box", clipKw.Keyword);
+            Assert.Equal("padding-box", originKw.Keyword);
+        }
+
+        [Fact]
+        public void Background_ContentBox_SetsBothClipAndOrigin()
+        {
+            var style = ResolveElement("div { background: #3498db content-box; }");
+            Assert.Equal(CssBackgroundClip.ContentBox, style.BackgroundClip);
+            Assert.Equal(CssBackgroundOrigin.ContentBox, style.BackgroundOrigin);
+        }
+
+        // ═══════════════════════════════════════════
         // Helpers
         // ═══════════════════════════════════════════
+
+        private ComputedStyle ResolveElement(string css)
+        {
+            var matcher = new MockSelectorMatcher();
+            var resolver = new StyleResolver(matcher, new StyleResolverOptions
+            {
+                ApplyUserAgentStyles = false,
+                DefaultFontSize = 16,
+                ViewportWidth = 800,
+                ViewportHeight = 600
+            });
+
+            if (!string.IsNullOrEmpty(css))
+            {
+                resolver.AddStylesheet(CssParser.Parse(css));
+            }
+
+            var element = new MockStylableElement { TagName = "div" };
+            return resolver.Resolve(element);
+        }
 
         private static CssValue MakeVar(string name)
         {

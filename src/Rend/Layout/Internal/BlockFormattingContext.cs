@@ -119,11 +119,14 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
-                        var anonBox = CreateAnonymousBlockForText(textNode, styledElement, parent, cursorY, containingWidth, context);
+                        // Account for previous sibling's margin-bottom before anonymous block
+                        float textAnonY = cursorY + MarginCollapsing.Collapse(prevMarginBottom, 0);
+                        var anonBox = CreateAnonymousBlockForText(textNode, styledElement, parent, textAnonY, containingWidth, context);
                         parent.AddChild(anonBox);
                         cursorY = anonBox.ContentRect.Y + anonBox.ContentRect.Height;
                     }
                     prevMarginBottom = 0;
+                    isFirstInFlowChild = false;
                     continue;
                 }
 
@@ -145,6 +148,7 @@ namespace Rend.Layout.Internal
                         cursorY = anonBox.ContentRect.Y + anonBox.ContentRect.Height;
                     }
                     prevMarginBottom = 0;
+                    isFirstInFlowChild = false;
                     continue;
                 }
 
@@ -193,7 +197,9 @@ namespace Rend.Layout.Internal
                         else break;
                     }
 
-                    var anonBox = CreateAnonymousBlockForInlineRun(inlineRun, styledElement, parent, cursorY, containingWidth, context);
+                    // Account for previous sibling's margin-bottom before anonymous block
+                    float inlineAnonY = cursorY + MarginCollapsing.Collapse(prevMarginBottom, 0);
+                    var anonBox = CreateAnonymousBlockForInlineRun(inlineRun, styledElement, parent, inlineAnonY, containingWidth, context);
                     parent.AddChild(anonBox);
                     cursorY = anonBox.ContentRect.Y + anonBox.ContentRect.Height;
                     prevMarginBottom = 0;
@@ -221,6 +227,31 @@ namespace Rend.Layout.Internal
                     else
                     {
                         posWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, posBox);
+                        // CSS 2.1 §10.3.7: Absolutely positioned elements with auto width
+                        // use shrink-to-fit (= fit-content), not fill available space.
+                        // When left/right is set, constrain available width accordingly.
+                        if (float.IsNaN(childStyle.Width) && !DeferredPercent.IsEncoded(childStyle.Width))
+                        {
+                            float shrinkAvail = containingWidth;
+                            float leftVal = childStyle.Left;
+                            float rightVal = childStyle.Right;
+                            if (!float.IsNaN(leftVal))
+                            {
+                                float resolvedLeft = DeferredPercent.IsEncoded(leftVal)
+                                    ? DeferredPercent.Resolve(leftVal, containingWidth) : leftVal;
+                                if (float.IsNaN(rightVal))
+                                {
+                                    shrinkAvail = containingWidth - resolvedLeft;
+                                }
+                            }
+                            else if (!float.IsNaN(rightVal))
+                            {
+                                float resolvedRight = DeferredPercent.IsEncoded(rightVal)
+                                    ? DeferredPercent.Resolve(rightVal, containingWidth) : rightVal;
+                                shrinkAvail = containingWidth - resolvedRight;
+                            }
+                            posWidth = MeasureIntrinsicWidth(childElement, SizingKeyword.FitContent, shrinkAvail, context);
+                        }
                     }
                     // Static position Y: where the element's content edge would be in normal flow.
                     // Include the collapsed margin gap from the previous sibling, plus
@@ -271,6 +302,12 @@ namespace Rend.Layout.Internal
                         var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(
                             childElement.Element, 16f);
                         intrinsicW = mathSize.Width + 4f;
+                    }
+                    // Fallback: extract width from data: URI for images
+                    if (intrinsicW <= 0 &&
+                        ReplacedElementLayout.TryGetDataUriDimensions(childElement, out float duW0, out _))
+                    {
+                        intrinsicW = duW0;
                     }
                     contentWidth = intrinsicW > 0 ? intrinsicW : 300;
                 }
@@ -367,6 +404,13 @@ namespace Rend.Layout.Internal
                             if (intrinsicW <= 0) intrinsicW = mathSize.Width + 4f;
                             if (intrinsicH <= 0) intrinsicH = mathSize.Height;
                         }
+                        // Fallback: extract dimensions from data: URI for images
+                        if ((intrinsicW <= 0 || intrinsicH <= 0) &&
+                            ReplacedElementLayout.TryGetDataUriDimensions(childElement, out float duW, out float duH))
+                        {
+                            if (intrinsicW <= 0) intrinsicW = duW;
+                            if (intrinsicH <= 0) intrinsicH = duH;
+                        }
                         ReplacedElementLayout.ResolveDimensions(childBox, childStyle, containingWidth, intrinsicW, intrinsicH);
                         contentWidth = childBox.ContentRect.Width;
                         contentHeight = childBox.ContentRect.Height;
@@ -391,6 +435,20 @@ namespace Rend.Layout.Internal
                             // Apply min-height / max-height to auto height
                             float minH = DimensionResolver.ResolvePercentHeight(childStyle.MinHeight, parentContentHeight);
                             float maxH = DimensionResolver.ResolvePercentHeight(childStyle.MaxHeight, parentContentHeight);
+                            // box-sizing: border-box → min/max-height includes padding+border
+                            if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
+                            {
+                                float vExtra = childBox.PaddingTop + childBox.PaddingBottom
+                                             + childBox.BorderTopWidth + childBox.BorderBottomWidth;
+                                if (!float.IsNaN(minH) && minH >= 0)
+                                {
+                                    minH = Math.Max(0, minH - vExtra);
+                                }
+                                if (!float.IsNaN(maxH) && maxH >= 0)
+                                {
+                                    maxH = Math.Max(0, maxH - vExtra);
+                                }
+                            }
                             if (!float.IsNaN(maxH) && maxH >= 0 && contentHeight > maxH)
                                 contentHeight = maxH;
                             if (!float.IsNaN(minH) && minH >= 0 && contentHeight < minH)
@@ -434,6 +492,13 @@ namespace Rend.Layout.Internal
                             var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(childElement.Element, 16f);
                             if (intrinsicW <= 0) intrinsicW = mathSize.Width + 4f;
                             if (intrinsicH <= 0) intrinsicH = mathSize.Height;
+                        }
+                        // Fallback: extract dimensions from data: URI for images
+                        if ((intrinsicW <= 0 || intrinsicH <= 0) &&
+                            ReplacedElementLayout.TryGetDataUriDimensions(childElement, out float duW, out float duH))
+                        {
+                            if (intrinsicW <= 0) intrinsicW = duW;
+                            if (intrinsicH <= 0) intrinsicH = duH;
                         }
                         ReplacedElementLayout.ResolveDimensions(childBox, childStyle, containingWidth, intrinsicW, intrinsicH);
                         contentWidth = childBox.ContentRect.Width;
@@ -493,6 +558,20 @@ namespace Rend.Layout.Internal
                             // Apply min-height / max-height to auto height
                             float minH = DimensionResolver.ResolvePercentHeight(childStyle.MinHeight, parentContentHeight);
                             float maxH = DimensionResolver.ResolvePercentHeight(childStyle.MaxHeight, parentContentHeight);
+                            // box-sizing: border-box → min/max-height includes padding+border
+                            if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
+                            {
+                                float vExtra = childBox.PaddingTop + childBox.PaddingBottom
+                                             + childBox.BorderTopWidth + childBox.BorderBottomWidth;
+                                if (!float.IsNaN(minH) && minH >= 0)
+                                {
+                                    minH = Math.Max(0, minH - vExtra);
+                                }
+                                if (!float.IsNaN(maxH) && maxH >= 0)
+                                {
+                                    maxH = Math.Max(0, maxH - vExtra);
+                                }
+                            }
                             if (!float.IsNaN(maxH) && maxH >= 0 && contentHeight > maxH)
                                 contentHeight = maxH;
                             if (!float.IsNaN(minH) && minH >= 0 && contentHeight < minH)
@@ -558,9 +637,19 @@ namespace Rend.Layout.Internal
             }
 
             // Handle parent-last-child margin collapsing
+            // CSS 2.1 §8.3.1: When the parent has no bottom padding/border and auto height,
+            // the last child's bottom margin collapses with the parent's bottom margin.
+            // The collapsed margin does NOT contribute to the parent's auto height.
             if (effectiveChildren.Count > 0 && MarginCollapsing.ShouldCollapseWithLastChild(parent))
             {
                 parent.MarginBottom = MarginCollapsing.Collapse(parent.MarginBottom, prevMarginBottom);
+                // Zero the last child's MarginBottom so CalculateAutoHeight excludes it.
+                // The margin is now represented on the parent instead.
+                if (parent.Children.Count > 0)
+                {
+                    var lastChild = parent.Children[parent.Children.Count - 1];
+                    lastChild.MarginBottom = 0;
+                }
             }
 
             // Restore previous float context
@@ -800,11 +889,29 @@ namespace Rend.Layout.Internal
         /// Clone a computed style but override display to block.
         /// Prevents issues when anonymous text wrappers inherit non-block display.
         /// </summary>
+        // BUG-062: Match FlexLayout.CloneStyleAsBlock — clear visual decoration on anonymous wrappers.
         private static ComputedStyle CloneStyleAsBlock(ComputedStyle source)
         {
             var values = (PropertyValue[])source.GetValues().Clone();
             values[PropertyId.Display] = PropertyValue.FromInt((int)CssDisplay.Block);
+            var autoVal = PropertyValue.FromLength(float.NaN);
+            values[PropertyId.Width] = autoVal;
+            values[PropertyId.Height] = autoVal;
+
             var refValues = (object?[])source.GetRefValues().Clone();
+            refValues[PropertyId.BoxShadow] = null;
+            refValues[PropertyId.BackgroundImage] = null;
+            var zero = PropertyValue.FromLength(0);
+            var transparent = PropertyValue.FromColor(new CssColor(0, 0, 0, 0));
+            values[PropertyId.BackgroundColor] = transparent;
+            values[PropertyId.BorderTopWidth] = zero;
+            values[PropertyId.BorderRightWidth] = zero;
+            values[PropertyId.BorderBottomWidth] = zero;
+            values[PropertyId.BorderLeftWidth] = zero;
+            values[PropertyId.PaddingTop] = zero;
+            values[PropertyId.PaddingRight] = zero;
+            values[PropertyId.PaddingBottom] = zero;
+            values[PropertyId.PaddingLeft] = zero;
             return new ComputedStyle(values, refValues);
         }
 
@@ -826,7 +933,7 @@ namespace Rend.Layout.Internal
             if (context.TextMeasurer != null)
             {
                 var fontDesc = new Fonts.FontDescriptor(
-                    textNode.Style.FontFamily ?? "serif",
+                    textNode.Style.FontFamilies,
                     textNode.Style.FontWeight,
                     textNode.Style.FontStyle,
                     Fonts.FontDescriptor.StretchToPercentage(textNode.Style.FontStretch));
@@ -900,30 +1007,10 @@ namespace Rend.Layout.Internal
             box.ContentRect = new RectF(0, 0, contentWidth, 0);
             LayoutChildren(box, context);
 
-            // Measure actual content extent
-            float maxRight = 0;
-            for (int i = 0; i < box.Children.Count; i++)
-            {
-                var child = box.Children[i];
-                float right = child.ContentRect.X + child.ContentRect.Width
-                            + child.PaddingRight + child.BorderRightWidth + child.MarginRight;
-                if (right > maxRight) maxRight = right;
-            }
-            if (box.LineBoxes != null)
-            {
-                for (int i = 0; i < box.LineBoxes.Count; i++)
-                {
-                    var line = box.LineBoxes[i];
-                    // Measure actual content extent from fragments, not the available line width
-                    float lineRight = 0;
-                    for (int f = 0; f < line.Fragments.Count; f++)
-                    {
-                        float fragRight = line.Fragments[f].X + line.Fragments[f].Width;
-                        if (fragRight > lineRight) lineRight = fragRight;
-                    }
-                    if (lineRight > maxRight) maxRight = lineRight;
-                }
-            }
+            // Measure actual content extent.
+            // For block children with auto width, they fill the available space
+            // but their actual content may be narrower. Use recursive measurement.
+            float maxRight = GetContentExtent(box);
 
             // Return content width (not including parent's padding/border — the caller
             // uses this as ContentRect.Width which is the content area).
@@ -939,6 +1026,66 @@ namespace Rend.Layout.Internal
             }
 
             return measured;
+        }
+
+        /// <summary>
+        /// Recursively measures the actual content extent of a laid-out box.
+        /// For inline content, measures the widest line fragment extent.
+        /// For block children with auto width, recursively measures their content
+        /// instead of using the filled available width.
+        /// Returns extent relative to box.ContentRect.X.
+        /// </summary>
+        internal static float GetContentExtent(LayoutBox box)
+        {
+            float maxExtent = 0;
+            float contentLeft = box.ContentRect.X;
+
+            // Inline content: use NaturalContentWidth which captures the
+            // pre-alignment (pre-centering) extent of each line.
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    float lineWidth = box.LineBoxes[i].NaturalContentWidth;
+                    if (lineWidth > maxExtent)
+                    {
+                        maxExtent = lineWidth;
+                    }
+                }
+            }
+
+            // Block children
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                var childStyle = child.StyledNode?.Style;
+                bool isAutoWidthBlock = childStyle != null
+                    && float.IsNaN(childStyle.Width)
+                    && !SizingKeyword.IsSizingKeyword(childStyle.Width)
+                    && !DeferredPercent.IsEncoded(childStyle.Width);
+
+                float extent;
+                if (isAutoWidthBlock)
+                {
+                    // Auto-width block fills available space but actual content is narrower.
+                    // Recursively measure the content extent.
+                    float innerExtent = GetContentExtent(child);
+                    extent = (child.ContentRect.X - contentLeft) + innerExtent
+                           + child.PaddingRight + child.BorderRightWidth + child.MarginRight;
+                }
+                else
+                {
+                    extent = (child.ContentRect.X - contentLeft) + child.ContentRect.Width
+                           + child.PaddingRight + child.BorderRightWidth + child.MarginRight;
+                }
+
+                if (extent > maxExtent)
+                {
+                    maxExtent = extent;
+                }
+            }
+
+            return maxExtent;
         }
 
         /// <summary>

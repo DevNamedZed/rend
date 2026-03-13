@@ -170,7 +170,6 @@ namespace Rend.Output.Image
                         using var fallbackTypeface = SKFontManager.Default.MatchCharacter(codepoint);
                         if (fallbackTypeface == null)
                         {
-                            Console.WriteLine($"[FontFallback] No fallback for U+{codepoint:X4}");
                             i2++;
                             continue;
                         }

@@ -49,3 +49,45 @@ jobs:
           name: nupkg-${{ matrix.os }}
           path: ./nupkg/*.nupkg
           retention-days: 7
+
+  visual-regression:
+    runs-on: windows-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore Rend.sln
+
+      - name: Build
+        run: dotnet build conformance/Rend.VisualRegression/Rend.VisualRegression.csproj --configuration Release
+
+      - name: Run visual regression tests
+        run: dotnet run --project conformance/Rend.VisualRegression/Rend.VisualRegression.csproj --configuration Release
+        continue-on-error: true
+
+      - name: Upload visual regression report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-regression-report
+          path: |
+            conformance/Rend.VisualRegression/results/report.html
+            conformance/Rend.VisualRegression/results/results.json
+          retention-days: 30
+
+      - name: Upload full visual regression output
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-regression-full
+          path: conformance/Rend.VisualRegression/output/
+          retention-days: 7

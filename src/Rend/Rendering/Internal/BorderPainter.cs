@@ -12,7 +12,6 @@ namespace Rend.Rendering.Internal
     /// </summary>
     internal static class BorderPainter
     {
-        internal static bool _debugCollapse = false;
         /// <summary>
         /// Paints all four borders of the given box onto the render target.
         /// Each side is drawn only if it has a non-none style and a width greater than zero.
@@ -85,8 +84,6 @@ namespace Rend.Rendering.Internal
                 outerRight = (float)Math.Round(gridRight + halfRight, MidpointRounding.AwayFromZero);
                 outerBottom = (float)Math.Round(gridBottom + halfBottom, MidpointRounding.AwayFromZero);
 
-                if (_debugCollapse)
-                    Console.Error.WriteLine($"[BORDER] grid=({gridLeft:F2},{gridTop:F2})-({gridRight:F2},{gridBottom:F2}) outer=({outerLeft:F1},{outerTop:F1})-({outerRight:F1},{outerBottom:F1}) widths=L{leftW} T{topW} R{rightW} B{bottomW}");
             }
 
             float innerLeft = outerLeft + leftW;

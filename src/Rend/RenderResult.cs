@@ -14,11 +14,18 @@ namespace Rend
         /// <summary>The output format ("pdf", "png", "jpeg", "webp").</summary>
         public string Format { get; }
 
-        internal RenderResult(byte[] data, int pageCount, string format)
+        /// <summary>
+        /// Snapshot of the layout tree for diagnostic comparison with browser layout.
+        /// Only populated when requested via RenderOptions.
+        /// </summary>
+        public LayoutSnapshot? LayoutTree { get; }
+
+        internal RenderResult(byte[] data, int pageCount, string format, LayoutSnapshot? layoutTree = null)
         {
             Data = data;
             PageCount = pageCount;
             Format = format;
+            LayoutTree = layoutTree;
         }
     }
 }

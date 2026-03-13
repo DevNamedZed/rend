@@ -52,6 +52,10 @@ namespace Rend
         public static byte[] ToImage(string html, RenderOptions? options = null)
             => Instance.ToImage(html, options);
 
+        /// <summary>Renders HTML to an image with full result (including layout tree snapshot).</summary>
+        public static RenderResult ToImageResult(string html, RenderOptions? options = null)
+            => Instance.ToImageResult(html, options);
+
         /// <inheritdoc cref="IRenderer.ToImage(string, Stream, RenderOptions?)"/>
         public static void ToImage(string html, Stream output, RenderOptions? options = null)
             => Instance.ToImage(html, output, options);

@@ -31,7 +31,7 @@ namespace Rend.Tests.Fonts
         [Fact]
         public void Constructor_ThrowsOnNullFamily()
         {
-            Assert.Throws<System.ArgumentNullException>(() => new FontDescriptor(null!));
+            Assert.Throws<System.ArgumentNullException>(() => new FontDescriptor((string)null!));
         }
 
         [Fact]

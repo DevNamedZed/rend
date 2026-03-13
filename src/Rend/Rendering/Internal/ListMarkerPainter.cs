@@ -177,13 +177,13 @@ namespace Rend.Rendering.Internal
                                                CssColor color, float fontSize, ComputedStyle style,
                                                bool isInside)
         {
-            string fontFamily = style.FontFamily;
+            string[] fontFamilies = style.FontFamilies;
             float fontWeight = style.FontWeight;
             CssFontStyle fontStyle = style.FontStyle;
 
             var textStyle = new TextStyle
             {
-                Font = new FontDescriptor(fontFamily, fontWeight, fontStyle, FontDescriptor.StretchToPercentage(style.FontStretch)),
+                Font = new FontDescriptor(fontFamilies, fontWeight, fontStyle, FontDescriptor.StretchToPercentage(style.FontStretch)),
                 FontSize = fontSize,
                 Color = color,
                 Bold = fontWeight >= 700f,

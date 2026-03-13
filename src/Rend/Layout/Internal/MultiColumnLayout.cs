@@ -113,8 +113,8 @@ namespace Rend.Layout.Internal
             }
 
             // Assign block children to columns using content-aware fragmentation.
-            // When checking overflow, only count margin-top + border-box height (not margin-bottom)
-            // because trailing margin doesn't affect the visual bottom of the last item in a column.
+            // When a block element with line boxes overflows a column, split it at
+            // the line boundary (CSS Fragmentation Level 3: break within block).
             int currentCol = 0;
             float currentColHeight = 0;
             foreach (var child in columnBox.Children)
@@ -122,10 +122,30 @@ namespace Rend.Layout.Internal
                 float childVisualHeight = child.BorderRect.Height + child.MarginTop;
                 float childFullHeight = childVisualHeight + child.MarginBottom;
 
-                // Move to next column if this child would overflow and there's room
+                // Check if this child overflows the current column
                 if (currentColHeight > 0 && currentColHeight + childVisualHeight > columnHeight
                     && currentCol < columnCount - 1)
                 {
+                    // CSS Fragmentation Level 3: split block at line boundaries when it
+                    // overflows the remaining column space, for balanced column layout.
+                    float remainingSpace = columnHeight - currentColHeight;
+                    if (child.LineBoxes != null && child.LineBoxes.Count > 1
+                        && remainingSpace > 0)
+                    {
+                        var split = SplitBoxAtLine(child, remainingSpace);
+                        if (split.first != null && split.second != null)
+                        {
+                            colChildren[currentCol].Add(split.first);
+                            currentCol++;
+                            currentColHeight = 0;
+                            colChildren[currentCol].Add(split.second);
+                            float secondH = split.second.BorderRect.Height + split.second.MarginTop
+                                          + split.second.MarginBottom;
+                            currentColHeight += secondH;
+                            continue;
+                        }
+                    }
+                    // No split possible — move whole child to next column
                     currentCol++;
                     currentColHeight = 0;
                 }
@@ -387,14 +407,19 @@ namespace Rend.Layout.Internal
             BlockFormattingContext.Layout(tempBox, context);
 
             float totalHeight = CalculateContentHeight(tempBox);
-            if (totalHeight <= 0) return startY;
+            if (totalHeight <= 0)
+            {
+                return startY;
+            }
 
             float targetHeight = Math.Max(totalHeight / columnCount, 1);
 
-            // Sequential content-aware fragmentation
+            // Sequential content-aware fragmentation with line-level splitting
             var segColChildren = new List<LayoutBox>[columnCount];
             for (int i = 0; i < columnCount; i++)
+            {
                 segColChildren[i] = new List<LayoutBox>();
+            }
 
             int curCol = 0;
             float curColH = 0;
@@ -404,6 +429,24 @@ namespace Rend.Layout.Internal
                 float childFullH = childVisH + child.MarginBottom;
                 if (curColH > 0 && curColH + childVisH > targetHeight && curCol < columnCount - 1)
                 {
+                    // Try splitting at line boundary for balanced columns
+                    float remaining = targetHeight - curColH;
+                    if (child.LineBoxes != null && child.LineBoxes.Count > 1
+                        && remaining > 0)
+                    {
+                        var split = SplitBoxAtLine(child, remaining);
+                        if (split.first != null && split.second != null)
+                        {
+                            segColChildren[curCol].Add(split.first);
+                            curCol++;
+                            curColH = 0;
+                            segColChildren[curCol].Add(split.second);
+                            float secondH = split.second.BorderRect.Height + split.second.MarginTop
+                                          + split.second.MarginBottom;
+                            curColH += secondH;
+                            continue;
+                        }
+                    }
                     curCol++;
                     curColH = 0;
                 }
@@ -466,44 +509,75 @@ namespace Rend.Layout.Internal
         /// <summary>
         /// Binary search for the minimum column height that allows all content
         /// (block children and/or line boxes) to fit within the given number of columns.
+        /// Supports line-level fragmentation: blocks with multiple line boxes can be
+        /// split at line boundaries for better column balance (CSS Fragmentation Level 3).
         /// </summary>
         private static float BinarySearchColumnHeight(LayoutBox columnBox, int columnCount, float contentHeight)
         {
             if (contentHeight <= 0 || columnCount <= 1)
+            {
                 return contentHeight;
+            }
 
-            // Collect item heights for fragmentation simulation
-            var itemHeights = new List<float>();
+            // Find minimum possible height: tallest single non-splittable unit
+            float minHeight = 0;
             foreach (var child in columnBox.Children)
             {
-                float h = child.BorderRect.Height + child.MarginTop + child.MarginBottom;
-                itemHeights.Add(Math.Max(h, 0));
+                if (child.LineBoxes != null && child.LineBoxes.Count > 1)
+                {
+                    // Splittable block: min height = one line + top overhead
+                    float topOverhead = child.PaddingTop + child.BorderTopWidth + child.MarginTop;
+                    foreach (var line in child.LineBoxes)
+                    {
+                        float lineH = line.Height + topOverhead;
+                        if (lineH > minHeight)
+                        {
+                            minHeight = lineH;
+                        }
+                        topOverhead = 0; // only first line carries top overhead
+                    }
+                }
+                else
+                {
+                    // Atomic block: can't split
+                    float h = child.BorderRect.Height + child.MarginTop + child.MarginBottom;
+                    if (h > minHeight)
+                    {
+                        minHeight = h;
+                    }
+                }
             }
             if (columnBox.LineBoxes != null)
             {
                 foreach (var line in columnBox.LineBoxes)
-                    itemHeights.Add(line.Height);
+                {
+                    if (line.Height > minHeight)
+                    {
+                        minHeight = line.Height;
+                    }
+                }
             }
 
-            if (itemHeights.Count == 0)
+            if (minHeight <= 0)
+            {
                 return contentHeight;
+            }
 
-            // Find the tallest single item (minimum possible column height)
-            float maxItem = 0;
-            for (int i = 0; i < itemHeights.Count; i++)
-                if (itemHeights[i] > maxItem) maxItem = itemHeights[i];
-
-            float lo = maxItem;
+            float lo = minHeight;
             float hi = contentHeight;
 
-            // Binary search: find minimum height where items fit in columnCount columns
+            // Binary search: find minimum height where content fits with line-level splitting
             for (int iter = 0; iter < 20 && hi - lo > 0.5f; iter++)
             {
                 float mid = (lo + hi) * 0.5f;
-                if (FitsInColumns(itemHeights, columnCount, mid))
+                if (FitsInColumnsWithSplitting(columnBox, columnCount, mid))
+                {
                     hi = mid;
+                }
                 else
+                {
                     lo = mid;
+                }
             }
 
             // Add a small epsilon to avoid edge-case rounding issues
@@ -511,23 +585,95 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
-        /// Check if items fit within the given number of columns at the specified height.
+        /// Check if content fits within the given number of columns at the specified height,
+        /// allowing blocks with line boxes to be split at line boundaries.
         /// </summary>
-        private static bool FitsInColumns(List<float> itemHeights, int columnCount, float columnHeight)
+        private static bool FitsInColumnsWithSplitting(LayoutBox columnBox, int columnCount, float columnHeight)
         {
             int col = 0;
             float currentHeight = 0;
-            for (int i = 0; i < itemHeights.Count; i++)
+
+            foreach (var child in columnBox.Children)
             {
-                float h = itemHeights[i];
-                if (currentHeight > 0 && currentHeight + h > columnHeight)
+                float childVisH = child.BorderRect.Height + child.MarginTop;
+                float childFullH = childVisH + child.MarginBottom;
+
+                if (currentHeight > 0 && currentHeight + childVisH > columnHeight)
                 {
+                    // Try splitting at line boundary
+                    float remaining = columnHeight - currentHeight;
+                    if (child.LineBoxes != null && child.LineBoxes.Count > 1 && remaining > 0)
+                    {
+                        float topOverhead = child.PaddingTop + child.BorderTopWidth + child.MarginTop;
+                        float available = remaining - topOverhead;
+                        if (available > 0)
+                        {
+                            float contentStartY = child.ContentRect.Y;
+                            int splitAfter = -1;
+                            for (int i = 0; i < child.LineBoxes.Count; i++)
+                            {
+                                float lineBottom = child.LineBoxes[i].Y + child.LineBoxes[i].Height - contentStartY;
+                                if (lineBottom <= available)
+                                {
+                                    splitAfter = i;
+                                }
+                                else
+                                {
+                                    break;
+                                }
+                            }
+
+                            if (splitAfter >= 0 && splitAfter < child.LineBoxes.Count - 1)
+                            {
+                                // Split succeeds — first part fills this column
+                                col++;
+                                if (col >= columnCount)
+                                {
+                                    return false;
+                                }
+
+                                // Second part: remaining lines + bottom overhead
+                                float secondContentH = child.ContentRect.Y + child.ContentRect.Height
+                                                     - child.LineBoxes[splitAfter + 1].Y;
+                                float secondH = secondContentH + child.PaddingBottom + child.BorderBottomWidth
+                                              + child.MarginBottom;
+                                currentHeight = secondH;
+                                continue;
+                            }
+                        }
+                    }
+
+                    // No split possible — move whole item to next column
                     col++;
-                    if (col >= columnCount) return false;
+                    if (col >= columnCount)
+                    {
+                        return false;
+                    }
                     currentHeight = 0;
                 }
-                currentHeight += h;
+
+                currentHeight += childFullH;
             }
+
+            // Handle direct line boxes (inline content)
+            if (columnBox.LineBoxes != null)
+            {
+                foreach (var line in columnBox.LineBoxes)
+                {
+                    float h = line.Height;
+                    if (currentHeight > 0 && currentHeight + h > columnHeight)
+                    {
+                        col++;
+                        if (col >= columnCount)
+                        {
+                            return false;
+                        }
+                        currentHeight = 0;
+                    }
+                    currentHeight += h;
+                }
+            }
+
             return true;
         }
 
@@ -593,6 +739,31 @@ namespace Rend.Layout.Internal
             return height;
         }
 
+        /// <summary>
+        /// Calculates the total margin-box height of block children with proper margin collapsing.
+        /// This gives the true content extent that must be distributed across columns.
+        /// </summary>
+        private static float CalculateMarginBoxHeight(LayoutBox box)
+        {
+            float height = 0;
+            float prevMB = 0;
+            foreach (var child in box.Children)
+            {
+                float mc = (height > 0) ? Math.Min(prevMB, child.MarginTop) : 0;
+                float childVisH = child.BorderRect.Height + child.MarginTop - mc;
+                height += childVisH + child.MarginBottom;
+                prevMB = child.MarginBottom;
+            }
+            if (box.LineBoxes != null)
+            {
+                foreach (var line in box.LineBoxes)
+                {
+                    height += line.Height;
+                }
+            }
+            return height;
+        }
+
         private static bool HasBlockChildren(StyledElement element)
         {
             for (int i = 0; i < element.Children.Count; i++)
@@ -614,6 +785,108 @@ namespace Rend.Layout.Internal
             foreach (var child in source.Children)
                 target.AddChild(child);
             target.LineBoxes = source.LineBoxes;
+        }
+
+        /// <summary>
+        /// Splits a block box at a line boundary so that the first part fits within
+        /// the remaining column space. Returns (first, second) partial boxes.
+        /// If splitting is not possible (e.g., first line already overflows), returns nulls.
+        /// </summary>
+        private static (LayoutBox? first, LayoutBox? second) SplitBoxAtLine(
+            LayoutBox box, float remainingSpace)
+        {
+            if (box.LineBoxes == null || box.LineBoxes.Count < 2)
+            {
+                return (null, null);
+            }
+
+            // Find the split point: last line that fits within remainingSpace
+            // Account for padding-top and border-top of the box
+            float contentStartY = box.ContentRect.Y;
+            float boxTopOverhead = box.PaddingTop + box.BorderTopWidth + box.MarginTop;
+            float available = remainingSpace - boxTopOverhead;
+            if (available <= 0)
+            {
+                return (null, null);
+            }
+
+            int splitAfter = -1; // index of last line to include in first part
+            for (int i = 0; i < box.LineBoxes.Count; i++)
+            {
+                float lineBottom = box.LineBoxes[i].Y + box.LineBoxes[i].Height - contentStartY;
+                if (lineBottom <= available)
+                {
+                    splitAfter = i;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            // Need at least one line in each part
+            if (splitAfter < 0 || splitAfter >= box.LineBoxes.Count - 1)
+            {
+                return (null, null);
+            }
+
+            // Create first part: lines 0..splitAfter
+            var firstBox = new LayoutBox(box.StyledNode, box.BoxType);
+            firstBox.PaddingTop = box.PaddingTop;
+            firstBox.PaddingRight = box.PaddingRight;
+            firstBox.PaddingBottom = 0; // No bottom padding on first fragment
+            firstBox.PaddingLeft = box.PaddingLeft;
+            firstBox.BorderTopWidth = box.BorderTopWidth;
+            firstBox.BorderRightWidth = box.BorderRightWidth;
+            firstBox.BorderBottomWidth = 0; // No bottom border on first fragment
+            firstBox.BorderLeftWidth = box.BorderLeftWidth;
+            firstBox.MarginTop = box.MarginTop;
+            firstBox.MarginRight = box.MarginRight;
+            firstBox.MarginBottom = 0;
+            firstBox.MarginLeft = box.MarginLeft;
+
+            var firstLines = new List<LineBox>();
+            for (int i = 0; i <= splitAfter; i++)
+            {
+                firstLines.Add(box.LineBoxes[i]);
+            }
+            firstBox.LineBoxes = firstLines;
+
+            float firstContentHeight = firstLines[firstLines.Count - 1].Y
+                                     + firstLines[firstLines.Count - 1].Height - contentStartY;
+            firstBox.ContentRect = new RectF(
+                box.ContentRect.X, box.ContentRect.Y,
+                box.ContentRect.Width, firstContentHeight);
+
+            // Create second part: lines splitAfter+1..end
+            var secondBox = new LayoutBox(box.StyledNode, box.BoxType);
+            secondBox.PaddingTop = 0; // No top padding on continuation
+            secondBox.PaddingRight = box.PaddingRight;
+            secondBox.PaddingBottom = box.PaddingBottom;
+            secondBox.PaddingLeft = box.PaddingLeft;
+            secondBox.BorderTopWidth = 0;
+            secondBox.BorderRightWidth = box.BorderRightWidth;
+            secondBox.BorderBottomWidth = box.BorderBottomWidth;
+            secondBox.BorderLeftWidth = box.BorderLeftWidth;
+            secondBox.MarginTop = 0;
+            secondBox.MarginRight = box.MarginRight;
+            secondBox.MarginBottom = box.MarginBottom;
+            secondBox.MarginLeft = box.MarginLeft;
+
+            var secondLines = new List<LineBox>();
+            float secondStartY = box.LineBoxes[splitAfter + 1].Y;
+            for (int i = splitAfter + 1; i < box.LineBoxes.Count; i++)
+            {
+                secondLines.Add(box.LineBoxes[i]);
+            }
+            secondBox.LineBoxes = secondLines;
+
+            float secondContentHeight = box.ContentRect.Y + box.ContentRect.Height - secondStartY;
+            secondBox.ContentRect = new RectF(
+                box.ContentRect.X, secondStartY,
+                box.ContentRect.Width, secondContentHeight);
+
+            return (firstBox, secondBox);
         }
 
         private static LayoutBox OffsetBox(LayoutBox original, float offsetX, float offsetY)

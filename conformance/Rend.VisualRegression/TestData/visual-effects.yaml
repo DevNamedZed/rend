@@ -1,0 +1,102 @@
+# Visual Effects
+# Visual regression tests for visual effects
+tests:
+  - id: pp-opacity-overlay
+    name: Opacity Overlay
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:200px; height:100px;">
+                              <div style="position:absolute; top:0; left:0; width:200px; height:100px; background:#e74c3c;"></div>
+                              <div style="position:absolute; top:20px; left:20px; width:160px; height:60px; background:#fff; opacity:0.7;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-opacity-stack
+    name: Stacked Opacity Elements
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:100px;">
+                              <div style="position:absolute; top:0; left:0; width:120px; height:80px; background:#3498db; opacity:0.5;"></div>
+                              <div style="position:absolute; top:20px; left:40px; width:120px; height:80px; background:#e74c3c; opacity:0.5;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-stacking-opacity-layers
+    name: Stacking Opacity Layers
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:120px;">
+                              <div style="position:absolute; width:150px; height:80px; background:#3498db; opacity:0.7;"></div>
+                              <div style="position:absolute; top:20px; left:30px; width:150px; height:80px; background:#e74c3c; opacity:0.5;"></div>
+                              <div style="position:absolute; top:40px; left:60px; width:100px; height:60px; background:#2ecc71; opacity:0.8;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-opacity-nested
+    name: Nested Opacity
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="opacity:0.5; width:200px; height:100px; background:#3498db; padding:20px;">
+                              <div style="opacity:0.5; width:100px; height:60px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-opacity-layers
+    name: Opacity Layered Boxes
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:150px;">
+                              <div style="position:absolute; top:0; left:0; width:120px; height:120px; background:#3498db; opacity:0.7;"></div>
+                              <div style="position:absolute; top:30px; left:30px; width:120px; height:120px; background:#e74c3c; opacity:0.7;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-opacity-nested-2
+    name: Nested Opacity Multiplied
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="opacity:0.5;">
+                              <div style="width:200px; height:60px; background:#3498db; margin-bottom:10px;"></div>
+                              <div style="width:200px; height:60px; background:#e74c3c; opacity:0.5;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-opacity-on-border
+    name: Opacity Applied to Bordered Element
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:150px; height:80px; border:4px solid #333; background:#3498db; opacity:0.5;"></div>
+                      </body></html>
+
+  - id: pp-opacity-stack-3
+    name: Three Overlapping Semi-Transparent Boxes
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:120px;">
+                              <div style="position:absolute; top:0; left:0; width:100px; height:80px; background:#3498db; opacity:0.5;"></div>
+                              <div style="position:absolute; top:20px; left:40px; width:100px; height:80px; background:#e74c3c; opacity:0.5;"></div>
+                              <div style="position:absolute; top:40px; left:80px; width:100px; height:80px; background:#2ecc71; opacity:0.5;"></div>
+                          </div>
+                      </body></html>
+
+  - id: opacity-element
+    name: Element Opacity
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:4px;">
+                              <div style="width:60px; height:60px; background:#3498db; opacity:1.0;"></div>
+                              <div style="width:60px; height:60px; background:#3498db; opacity:0.8;"></div>
+                              <div style="width:60px; height:60px; background:#3498db; opacity:0.5;"></div>
+                              <div style="width:60px; height:60px; background:#3498db; opacity:0.2;"></div>
+                          </div>
+                      </body></html>
+
+  - id: opacity-layers
+    name: Opacity Stacking
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="position:relative; width:200px; height:100px;">
+                              <div style="position:absolute; left:0; top:0; width:120px; height:80px; background:#e74c3c;"></div>
+                              <div style="position:absolute; left:40px; top:20px; width:120px; height:80px; background:#3498db; opacity:0.7;"></div>
+                          </div>
+                      </body></html>

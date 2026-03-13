@@ -1,6 +1,7 @@
 using System;
 using Rend.Core.Values;
 using Rend.Css;
+using Rend.Css.Properties.Internal;
 
 namespace Rend.Layout.Internal
 {
@@ -183,16 +184,19 @@ namespace Rend.Layout.Internal
         }
         /// <summary>
         /// Resolves a position value (top/right/bottom/left) that may be a deferred percentage.
-        /// Deferred percentages are encoded as negative fractions in [-1.01, 0).
+        /// Deferred percentages are encoded via DeferredPercent sentinel offset.
         /// </summary>
         private static float ResolvePositionValue(float value, float containingDimension)
         {
-            if (float.IsNaN(value)) return float.NaN;
-            // Deferred percentage encoding: small negative value = percentage fraction
-            // e.g., -0.5 = 50%, -1.0 = 100%. Range: (-1.01, 0)
-            // Values below -1.01 are legitimate negative pixel values (e.g., top: -20px)
-            if (value < 0 && value > -1.01f)
-                return -value * containingDimension;
+            if (float.IsNaN(value))
+            {
+                return float.NaN;
+            }
+            // Deferred percentage encoded with sentinel offset
+            if (DeferredPercent.IsEncoded(value))
+            {
+                return DeferredPercent.Resolve(value, containingDimension);
+            }
             return value;
         }
     }

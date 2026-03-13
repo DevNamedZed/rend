@@ -53,6 +53,12 @@ namespace Rend
             var externalSheets = resourceCtx.LoadExternalStylesheets(document);
             stylesheets.AddRange(externalSheets);
 
+            // 3b. Resolve @import rules in all stylesheets
+            for (int i = 0; i < stylesheets.Count; i++)
+            {
+                stylesheets[i] = resourceCtx.ResolveImports(stylesheets[i]);
+            }
+
             // 4. Set up font provider
             progress?.Report(new RenderProgress(20, RenderStage.Styling, "Resolving fonts"));
             var fontProvider = _options.FontProvider ?? DefaultFontProvider.Value;
@@ -103,7 +109,7 @@ namespace Rend
                 MarginBottom = _options.MarginBottom,
                 MarginLeft = _options.MarginLeft,
                 DefaultFontSize = _options.DefaultFontSize,
-                Paginate = true
+                Paginate = !(target is Output.Image.SkiaRenderTarget)
             };
             var layoutDoc = layoutEngine.Layout(styledTree, layoutOptions);
 
@@ -142,13 +148,20 @@ namespace Rend
 
             painter.Paint(layoutDoc, target, hfRenderer);
 
+            // 10b. Capture layout tree snapshot if requested
+            LayoutSnapshot? layoutSnapshot = null;
+            if (_options.CaptureLayoutTree)
+            {
+                layoutSnapshot = LayoutSnapshotBuilder.Build(layoutDoc.RootBox);
+            }
+
             // 11. Finish and collect output
             progress?.Report(new RenderProgress(90, RenderStage.Finishing, "Generating output"));
             using (var ms = new MemoryStream())
             {
                 target.Finish(ms);
                 progress?.Report(new RenderProgress(100, RenderStage.Finishing, "Complete"));
-                return new RenderResult(ms.ToArray(), layoutDoc.Pages.Count, GetFormat(target));
+                return new RenderResult(ms.ToArray(), layoutDoc.Pages.Count, GetFormat(target), layoutSnapshot);
             }
         }
 
@@ -173,6 +186,12 @@ namespace Rend
             var resourceCtx = new ResourceLoadingContext(_options.BaseUrl, _options.ResourceLoader);
             var externalSheets = await resourceCtx.LoadExternalStylesheetsAsync(document, cancellationToken).ConfigureAwait(false);
             stylesheets.AddRange(externalSheets);
+
+            // 3b. Resolve @import rules in all stylesheets
+            for (int i = 0; i < stylesheets.Count; i++)
+            {
+                stylesheets[i] = await resourceCtx.ResolveImportsAsync(stylesheets[i], cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
 
             // 4. Set up font provider
             progress?.Report(new RenderProgress(20, RenderStage.Styling, "Resolving fonts"));
@@ -226,7 +245,7 @@ namespace Rend
                 MarginBottom = _options.MarginBottom,
                 MarginLeft = _options.MarginLeft,
                 DefaultFontSize = _options.DefaultFontSize,
-                Paginate = true
+                Paginate = !(target is Output.Image.SkiaRenderTarget)
             };
             var layoutDoc = layoutEngine.Layout(styledTree, layoutOptions);
 
@@ -266,13 +285,20 @@ namespace Rend
 
             painter.Paint(layoutDoc, target, hfRenderer);
 
+            // 10b. Capture layout tree snapshot if requested
+            LayoutSnapshot? layoutSnapshotAsync = null;
+            if (_options.CaptureLayoutTree)
+            {
+                layoutSnapshotAsync = LayoutSnapshotBuilder.Build(layoutDoc.RootBox);
+            }
+
             // 11. Finish and collect output
             progress?.Report(new RenderProgress(90, RenderStage.Finishing, "Generating output"));
             using (var ms = new MemoryStream())
             {
                 target.Finish(ms);
                 progress?.Report(new RenderProgress(100, RenderStage.Finishing, "Complete"));
-                return new RenderResult(ms.ToArray(), layoutDoc.Pages.Count, GetFormat(target));
+                return new RenderResult(ms.ToArray(), layoutDoc.Pages.Count, GetFormat(target), layoutSnapshotAsync);
             }
         }
 

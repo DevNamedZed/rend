@@ -13,7 +13,6 @@ namespace Rend.Rendering.Internal
     /// </summary>
     internal static class TextPainter
     {
-        internal static bool _debugText; // set true for debug logging
         /// <summary>
         /// Paints a single line fragment onto the render target.
         /// </summary>
@@ -45,41 +44,14 @@ namespace Rend.Rendering.Internal
 
             CssColor color = style.Color;
             float fontSize = style.FontSize;
-            string fontFamily = style.FontFamily;
+            string[] fontFamilies = style.FontFamilies;
             CssFontStyle fontStyle = style.FontStyle;
             float fontWeight = style.FontWeight;
             float letterSpacing = style.LetterSpacing;
             float wordSpacing = style.WordSpacing + fragment.JustifyWordSpacing;
 
-            if (fragment.ShapedRun != null)
-            {
-                float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
-                var fontDesc = new FontDescriptor(fontFamily, fontWeight, fontStyle, stretch);
-                var run = fragment.ShapedRun;
-                if (letterSpacing != 0 || wordSpacing != 0)
-                    run = ApplySpacingToRun(run, letterSpacing, wordSpacing);
-                target.DrawGlyphs(run, drawX, drawY, color, fontDesc);
-            }
-            else
-            {
-                string? text = fragment.Text;
-                if (text != null)
-                {
-                    float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
-                    var textStyle = new TextStyle
-                    {
-                        Font = new FontDescriptor(fontFamily, fontWeight, fontStyle, stretch),
-                        FontSize = fontSize,
-                        Color = color,
-                        Bold = fontWeight >= 700f,
-                        Italic = fontStyle == CssFontStyle.Italic || fontStyle == CssFontStyle.Oblique,
-                        LetterSpacing = letterSpacing,
-                        WordSpacing = wordSpacing,
-                        FontData = null
-                    };
-                    target.DrawText(text, drawX, drawY, textStyle);
-                }
-            }
+            DrawTextFragment(fragment, drawX, drawY, color, fontSize, fontFamilies,
+                             fontStyle, fontWeight, letterSpacing, wordSpacing, style, target);
 
             // Paint text decorations.
             PaintDecorations(fragment, lineX, lineY, lineBaseline, target, style);
@@ -120,7 +92,7 @@ namespace Rend.Rendering.Internal
             var rubyTextStyle = new TextStyle
             {
                 Font = new FontDescriptor(
-                    rubyStyle.FontFamily,
+                    rubyStyle.FontFamilies,
                     rubyStyle.FontWeight,
                     rubyStyle.FontStyle,
                     stretch),
@@ -181,19 +153,42 @@ namespace Rend.Rendering.Internal
 
             CssColor color = style.Color;
             float fontSize = style.FontSize;
-            string fontFamily = style.FontFamily;
+            string[] fontFamilies = style.FontFamilies;
             CssFontStyle fontStyle = style.FontStyle;
             float fontWeight = style.FontWeight;
             float letterSpacing = style.LetterSpacing;
             float wordSpacing = style.WordSpacing + fragment.JustifyWordSpacing;
 
+            DrawTextFragment(fragment, drawX, drawY, color, fontSize, fontFamilies,
+                             fontStyle, fontWeight, letterSpacing, wordSpacing, style, target);
+
+            // Restore state (removes rotation)
+            target.Restore();
+
+            // TODO: text-orientation: mixed — classify each character as CJK (upright) or
+            // Latin/other (sideways 90deg). Currently all text is rotated sideways.
+            // TODO: text-orientation: upright — draw each character upright with wider spacing.
+        }
+
+        /// <summary>
+        /// Draws the text content of a fragment, using shaped glyphs when available
+        /// and falling back to DrawText otherwise.
+        /// </summary>
+        private static void DrawTextFragment(LineFragment fragment, float drawX, float drawY,
+                                             CssColor color, float fontSize, string[] fontFamilies,
+                                             CssFontStyle fontStyle, float fontWeight,
+                                             float letterSpacing, float wordSpacing,
+                                             ComputedStyle style, IRenderTarget target)
+        {
             if (fragment.ShapedRun != null)
             {
                 float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
-                var fontDesc = new FontDescriptor(fontFamily, fontWeight, fontStyle, stretch);
+                var fontDesc = new FontDescriptor(fontFamilies, fontWeight, fontStyle, stretch);
                 var run = fragment.ShapedRun;
                 if (letterSpacing != 0 || wordSpacing != 0)
+                {
                     run = ApplySpacingToRun(run, letterSpacing, wordSpacing);
+                }
                 target.DrawGlyphs(run, drawX, drawY, color, fontDesc);
             }
             else
@@ -204,7 +199,7 @@ namespace Rend.Rendering.Internal
                     float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
                     var textStyle = new TextStyle
                     {
-                        Font = new FontDescriptor(fontFamily, fontWeight, fontStyle, stretch),
+                        Font = new FontDescriptor(fontFamilies, fontWeight, fontStyle, stretch),
                         FontSize = fontSize,
                         Color = color,
                         Bold = fontWeight >= 700f,
@@ -216,13 +211,6 @@ namespace Rend.Rendering.Internal
                     target.DrawText(text, drawX, drawY, textStyle);
                 }
             }
-
-            // Restore state (removes rotation)
-            target.Restore();
-
-            // TODO: text-orientation: mixed — classify each character as CJK (upright) or
-            // Latin/other (sideways 90deg). Currently all text is rotated sideways.
-            // TODO: text-orientation: upright — draw each character upright with wider spacing.
         }
 
         /// <summary>
@@ -284,7 +272,7 @@ namespace Rend.Rendering.Internal
 
             // Get font-specific decoration metrics (underline/strikeout position and thickness).
             float stretch = FontDescriptor.StretchToPercentage(style.FontStretch);
-            var fontDesc = new FontDescriptor(style.FontFamily, style.FontWeight, style.FontStyle, stretch);
+            var fontDesc = new FontDescriptor(style.FontFamilies, style.FontWeight, style.FontStyle, stretch);
             var metrics = target.GetDecorationMetrics(fontDesc, fontSize);
 
             // Use text-decoration-thickness if set, otherwise use font's underline thickness.

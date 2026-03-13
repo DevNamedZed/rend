@@ -1,3 +1,4 @@
+using System.Linq;
 using Rend.Css;
 using Xunit;
 
@@ -86,6 +87,37 @@ namespace Rend.Css.Tests
         {
             var style = ResolveElement("div { background-origin: padding-box; }");
             Assert.Equal(CssBackgroundOrigin.PaddingBox, style.BackgroundOrigin);
+        }
+
+        // ═══════════════════════════════════════════
+        // background shorthand with <box> value
+        // ═══════════════════════════════════════════
+
+        [Fact]
+        public void Background_Shorthand_ContentBox_SetsClipAndOrigin()
+        {
+            var style = ResolveElement("div { background: #3498db content-box; }");
+            Assert.Equal(CssBackgroundClip.ContentBox, style.BackgroundClip);
+            Assert.Equal(CssBackgroundOrigin.ContentBox, style.BackgroundOrigin);
+        }
+
+        [Fact]
+        public void Background_Shorthand_PaddingBox_SetsClipAndOrigin()
+        {
+            var style = ResolveElement("div { background: #e74c3c padding-box; }");
+            Assert.Equal(CssBackgroundClip.PaddingBox, style.BackgroundClip);
+            Assert.Equal(CssBackgroundOrigin.PaddingBox, style.BackgroundOrigin);
+        }
+
+        [Fact]
+        public void Background_Shorthand_PaddingBox_WithColor()
+        {
+            // Matches the visual regression test: background:#e74c3c padding-box
+            var style = ResolveElement("div { background: #e74c3c padding-box; }");
+            Assert.Equal(CssBackgroundClip.PaddingBox, style.BackgroundClip);
+            // Background color should be set
+            Assert.Equal(231, style.BackgroundColor.R);
+            Assert.Equal(76, style.BackgroundColor.G);
         }
     }
 }

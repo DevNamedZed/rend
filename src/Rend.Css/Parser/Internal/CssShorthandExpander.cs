@@ -20,11 +20,12 @@ namespace Rend.Css.Parser.Internal
         public static bool TryExpand(string property, CssValue value, bool important, List<CssDeclaration> output)
         {
             // If the value contains var(), we can't expand the shorthand at parse time
-            // because we don't know the resolved value yet. Pass it through to all
-            // relevant longhand properties and let var() substitution happen later.
+            // because we don't know the resolved value yet. Keep the shorthand as-is
+            // and let ComputedStyleBuilder expand it after var() substitution.
+            // (CSS Variables spec §3: pending-substitution values)
             if (ContainsVar(value))
             {
-                return TryExpandVarShorthand(property, value, important, output);
+                return false;
             }
 
             switch (property)
@@ -249,6 +250,19 @@ namespace Rend.Css.Parser.Internal
                 output.Add(new CssDeclaration($"border-{side}-style", style, important));
                 output.Add(new CssDeclaration($"border-{side}-color", color, important));
             }
+
+            // BUG-049: Per CSS Backgrounds L3, border shorthand resets border-image to initial.
+            var none = new CssKeywordValue("none");
+            var initialSlice = new CssPercentageValue(100);
+            var one = new CssNumberValue(1);
+            var zero = new CssNumberValue(0);
+            var stretch = new CssKeywordValue("stretch");
+            output.Add(new CssDeclaration("border-image-source", none, important));
+            output.Add(new CssDeclaration("border-image-slice", initialSlice, important));
+            output.Add(new CssDeclaration("border-image-width", one, important));
+            output.Add(new CssDeclaration("border-image-outset", zero, important));
+            output.Add(new CssDeclaration("border-image-repeat", stretch, important));
+
             return true;
         }
 
@@ -638,14 +652,83 @@ namespace Rend.Css.Parser.Internal
 
         private static bool ExpandBackground(CssValue value, bool important, List<CssDeclaration> output)
         {
-            var parts = GetListValues(value);
+            // BUG-051: Split comma-separated layers and expand each independently.
+            // Per CSS Backgrounds L3 §3, background shorthand is a comma-separated list of layers.
+            // Each longhand becomes a comma-separated list. background-color only applies to final layer.
+            var layers = new List<CssValue>();
+            if (value is CssListValue topList && topList.Separator == ',')
+            {
+                for (int i = 0; i < topList.Values.Count; i++)
+                {
+                    layers.Add(topList.Values[i]);
+                }
+            }
+            else
+            {
+                layers.Add(value);
+            }
 
+            int layerCount = layers.Count;
+            var allImages = new List<CssValue>(layerCount);
+            var allRepeats = new List<CssValue>(layerCount);
+            var allPositions = new List<CssValue>(layerCount);
+            var allSizes = new List<CssValue>(layerCount);
+            var allClips = new List<CssValue>(layerCount);
+            var allOrigins = new List<CssValue>(layerCount);
             CssValue bgColor = new CssKeywordValue("transparent");
-            CssValue bgImage = new CssKeywordValue("none");
-            CssValue bgRepeat = new CssKeywordValue("repeat");
-            CssValue bgSize = new CssKeywordValue("auto");
-            CssValue bgClip = new CssKeywordValue("border-box");
-            CssValue bgOrigin = new CssKeywordValue("padding-box");
+
+            for (int layerIdx = 0; layerIdx < layerCount; layerIdx++)
+            {
+                ExpandBackgroundLayer(layers[layerIdx], layerIdx == layerCount - 1,
+                    out CssValue image, out CssValue repeat, out CssValue position,
+                    out CssValue size, out CssValue clip, out CssValue origin,
+                    out CssValue color);
+
+                allImages.Add(image);
+                allRepeats.Add(repeat);
+                allPositions.Add(position);
+                allSizes.Add(size);
+                allClips.Add(clip);
+                allOrigins.Add(origin);
+
+                // Per CSS spec, only the final layer may have a background-color
+                if (layerIdx == layerCount - 1)
+                {
+                    bgColor = color;
+                }
+            }
+
+            output.Add(new CssDeclaration("background-color", bgColor, important));
+            output.Add(new CssDeclaration("background-image",
+                layerCount == 1 ? allImages[0] : new CssListValue(allImages, ','), important));
+            output.Add(new CssDeclaration("background-repeat",
+                layerCount == 1 ? allRepeats[0] : new CssListValue(allRepeats, ','), important));
+            output.Add(new CssDeclaration("background-position",
+                layerCount == 1 ? allPositions[0] : new CssListValue(allPositions, ','), important));
+            output.Add(new CssDeclaration("background-size",
+                layerCount == 1 ? allSizes[0] : new CssListValue(allSizes, ','), important));
+            output.Add(new CssDeclaration("background-clip",
+                layerCount == 1 ? allClips[0] : new CssListValue(allClips, ','), important));
+            output.Add(new CssDeclaration("background-origin",
+                layerCount == 1 ? allOrigins[0] : new CssListValue(allOrigins, ','), important));
+            return true;
+        }
+
+        /// <summary>
+        /// Expands a single background layer into its longhand components.
+        /// </summary>
+        private static void ExpandBackgroundLayer(CssValue layerValue, bool isFinalLayer,
+            out CssValue image, out CssValue repeat, out CssValue position,
+            out CssValue size, out CssValue clip, out CssValue origin, out CssValue color)
+        {
+            var parts = GetListValues(layerValue);
+
+            color = new CssKeywordValue("transparent");
+            image = new CssKeywordValue("none");
+            repeat = new CssKeywordValue("repeat");
+            size = new CssKeywordValue("auto");
+            clip = new CssKeywordValue("border-box");
+            origin = new CssKeywordValue("padding-box");
             var positionParts = new List<CssValue>();
             bool sizeNext = false;
             var sizeParts = new List<CssValue>();
@@ -666,7 +749,9 @@ namespace Rend.Css.Parser.Internal
                     sizeParts.Add(p);
                     // Size takes at most 2 values
                     if (sizeParts.Count >= 2 || (p is CssKeywordValue sk && (sk.Keyword == "cover" || sk.Keyword == "contain")))
+                    {
                         sizeNext = false;
+                    }
                     continue;
                 }
 
@@ -677,34 +762,59 @@ namespace Rend.Css.Parser.Internal
                      fn.Name == "repeating-linear-gradient" || fn.Name == "repeating-radial-gradient" ||
                      fn.Name == "repeating-conic-gradient"))
                 {
-                    bgImage = p;
+                    image = p;
                 }
                 else if (p is CssColorValue)
                 {
-                    bgColor = p;
+                    // Per CSS spec, only the final layer may specify a color
+                    if (isFinalLayer)
+                    {
+                        color = p;
+                    }
                 }
                 else if (p is CssKeywordValue kw)
                 {
                     string k = kw.Keyword;
                     if (k == "transparent" || k == "currentcolor" || k == "inherit")
-                        bgColor = p;
+                    {
+                        if (isFinalLayer)
+                        {
+                            color = p;
+                        }
+                    }
                     else if (k == "none")
-                        bgImage = p;
+                    {
+                        image = p;
+                    }
                     else if (k == "repeat" || k == "no-repeat" || k == "repeat-x" || k == "repeat-y" ||
                              k == "space" || k == "round")
-                        bgRepeat = p;
+                    {
+                        repeat = p;
+                    }
                     else if (k == "border-box" || k == "padding-box" || k == "content-box")
                     {
-                        // First box value is origin, second is clip
-                        if (bgOrigin is CssKeywordValue origKw && origKw.Keyword == "padding-box")
-                            bgOrigin = p;
+                        // BUG-052: Per CSS Backgrounds L3 §3.2, if only one <box> value,
+                        // it sets both origin AND clip. If two, first is origin, second is clip.
+                        if (origin is CssKeywordValue origKw && origKw.Keyword == "padding-box")
+                        {
+                            // First box keyword: set origin (and tentatively clip to same value)
+                            origin = p;
+                            clip = p;
+                        }
                         else
-                            bgClip = p;
+                        {
+                            // Second box keyword: override clip only
+                            clip = p;
+                        }
                     }
                     else if (k == "cover" || k == "contain")
-                        bgSize = p;
+                    {
+                        size = p;
+                    }
                     else if (k == "left" || k == "right" || k == "top" || k == "bottom" || k == "center")
+                    {
                         positionParts.Add(p);
+                    }
                 }
                 else if (p is CssPercentageValue || p is CssDimensionValue)
                 {
@@ -717,28 +827,28 @@ namespace Rend.Css.Parser.Internal
             }
 
             // Build background-position from collected parts
-            CssValue bgPosition;
             if (positionParts.Count == 0)
-                bgPosition = new CssKeywordValue("0% 0%");
+            {
+                position = new CssKeywordValue("0% 0%");
+            }
             else if (positionParts.Count == 1)
-                bgPosition = positionParts[0];
+            {
+                position = positionParts[0];
+            }
             else
-                bgPosition = new CssListValue(positionParts);
+            {
+                position = new CssListValue(positionParts);
+            }
 
             // Build background-size from collected parts
             if (sizeParts.Count == 1)
-                bgSize = sizeParts[0];
+            {
+                size = sizeParts[0];
+            }
             else if (sizeParts.Count >= 2)
-                bgSize = new CssListValue(sizeParts);
-
-            output.Add(new CssDeclaration("background-color", bgColor, important));
-            output.Add(new CssDeclaration("background-image", bgImage, important));
-            output.Add(new CssDeclaration("background-repeat", bgRepeat, important));
-            output.Add(new CssDeclaration("background-position", bgPosition, important));
-            output.Add(new CssDeclaration("background-size", bgSize, important));
-            output.Add(new CssDeclaration("background-clip", bgClip, important));
-            output.Add(new CssDeclaration("background-origin", bgOrigin, important));
-            return true;
+            {
+                size = new CssListValue(sizeParts);
+            }
         }
 
         #endregion

@@ -561,7 +561,9 @@ namespace Rend.Pdf
             // 8. Write all objects
             bool useObjStreams = _options.UseObjectStreams && _options.Version >= PdfVersion.Pdf15;
             if (useObjStreams)
-                _objectTable.WriteAllObjectsWithStreams(writer);
+            {
+                _objectTable.WriteAllObjectsWithStreams(writer, encryptRef?.ObjectNumber ?? -1);
+            }
             else
                 _objectTable.WriteAllObjects(writer);
 

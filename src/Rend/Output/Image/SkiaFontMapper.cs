@@ -139,7 +139,7 @@ namespace Rend.Output.Image
         private static SKTypeface ResolveByFamilyName(FontDescriptor descriptor)
         {
             // Check shared cache first.
-            string cacheKey = descriptor.Family + "|" + (int)descriptor.Weight + "|" + (int)descriptor.Style;
+            string cacheKey = string.Join(",", descriptor.Families) + "|" + (int)descriptor.Weight + "|" + (int)descriptor.Style;
             lock (s_typefaceLock)
             {
                 if (s_familyTypefaceCache.TryGetValue(cacheKey, out var cached))
@@ -153,9 +153,8 @@ namespace Rend.Output.Image
                 : SKFontStyleSlant.Upright;
             var skStyle = new SKFontStyle(weight, SKFontStyleWidth.Normal, slant);
 
-            // CSS font-family may be a comma-separated list.
-            // Parse and try each family in order.
-            var families = Fonts.FontMatchingAlgorithm.ParseFontFamilyList(descriptor.Family);
+            // Walk the font-family fallback chain stored in the descriptor.
+            var families = descriptor.Families;
 
             foreach (var family in families)
             {

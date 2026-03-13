@@ -77,7 +77,7 @@ namespace Rend.Css.Properties.Internal
             _values[PropertyId.Opacity] = PropertyValue.FromNumber(1f);
 
             // Typography
-            _refValues[PropertyId.FontFamily] = "serif";
+            _refValues[PropertyId.FontFamily] = new string[] { "serif" };
             _values[PropertyId.FontSize] = PropertyValue.FromLength(16); // medium = 16px
             _values[PropertyId.FontStyle] = PropertyValue.FromKeyword((int)CssFontStyle.Normal);
             _values[PropertyId.FontWeight] = PropertyValue.FromNumber(400); // normal

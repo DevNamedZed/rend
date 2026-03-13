@@ -1,0 +1,31 @@
+# Clip Path
+# Visual regression tests for clip path
+tests:
+  - id: clip-circle
+    name: Clip Path Circle
+    html: |
+      <html><body style="margin:0; padding:20px; font-family:sans-serif; background:#fff;">
+                          <div style="width:120px; height:120px; background:#3498db; clip-path:circle(50% at 50% 50%);"></div>
+                      </body></html>
+
+  - id: clip-polygon
+    name: Clip Path Polygon
+    html: |
+      <html><body style="margin:0; padding:20px; font-family:sans-serif; background:#fff;">
+                          <div style="width:150px; height:130px; background:linear-gradient(135deg, #667eea, #764ba2);
+                                      clip-path:polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);"></div>
+                      </body></html>
+
+  - id: clip-inset
+    name: Clip Path Inset with Radius
+    html: |
+      <html><body style="margin:0; padding:20px; font-family:sans-serif; background:#fff;">
+                          <div style="width:200px; height:100px; background:#e74c3c; clip-path:inset(10px 20px 10px 20px round 15px);"></div>
+                      </body></html>
+
+  - id: clip-ellipse
+    name: Clip Path Ellipse
+    html: |
+      <html><body style="margin:0; padding:20px; font-family:sans-serif; background:#fff;">
+                          <div style="width:200px; height:120px; background:#2ecc71; clip-path:ellipse(45% 40% at 50% 50%);"></div>
+                      </body></html>

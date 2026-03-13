@@ -1,0 +1,371 @@
+# Tables
+# Visual regression tests for tables
+tests:
+  - id: adv-table-colspan
+    name: Table with Colspan
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <table style="border-collapse:collapse; width:100%;">
+                              <tr>
+                                  <td colspan="3" style="border:1px solid #333; padding:8px; background:#3498db; color:#fff; text-align:center;">Spanning 3 cols</td>
+                              </tr>
+                              <tr>
+                                  <td style="border:1px solid #333; padding:8px; background:#ecf0f1;">A</td>
+                                  <td style="border:1px solid #333; padding:8px; background:#ecf0f1;">B</td>
+                                  <td style="border:1px solid #333; padding:8px; background:#ecf0f1;">C</td>
+                              </tr>
+                              <tr>
+                                  <td style="border:1px solid #333; padding:8px; background:#ecf0f1;">D</td>
+                                  <td colspan="2" style="border:1px solid #333; padding:8px; background:#e74c3c; color:#fff; text-align:center;">Spanning 2 cols</td>
+                              </tr>
+                          </table>
+                      </body></html>
+
+  - id: adv-table-nested
+    name: Nested Tables
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <table style="border-collapse:collapse; width:100%;">
+                              <tr>
+                                  <td style="border:1px solid #333; padding:8px; vertical-align:top;">
+                                      <table style="border-collapse:collapse; width:100%;">
+                                          <tr>
+                                              <td style="border:1px solid #999; padding:4px; background:#e8f4fd;">Inner A</td>
+                                              <td style="border:1px solid #999; padding:4px; background:#e8f4fd;">Inner B</td>
+                                          </tr>
+                                      </table>
+                                  </td>
+                                  <td style="border:1px solid #333; padding:8px; background:#fde8e8;">Outer cell</td>
+                              </tr>
+                          </table>
+                      </body></html>
+
+  - id: adv-table-fixed-layout
+    name: Table Layout Fixed
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <table style="table-layout:fixed; width:380px; border-collapse:collapse;">
+                              <tr>
+                                  <td style="width:100px; border:1px solid #333; padding:8px; background:#3498db; color:#fff;">Fixed 100</td>
+                                  <td style="width:180px; border:1px solid #333; padding:8px; background:#e74c3c; color:#fff;">Fixed 180</td>
+                                  <td style="width:100px; border:1px solid #333; padding:8px; background:#27ae60; color:#fff;">Fixed 100</td>
+                              </tr>
+                              <tr>
+                                  <td style="border:1px solid #333; padding:8px; background:#ecf0f1;">Cell</td>
+                                  <td style="border:1px solid #333; padding:8px; background:#ecf0f1;">Cell</td>
+                                  <td style="border:1px solid #333; padding:8px; background:#ecf0f1;">Cell</td>
+                              </tr>
+                          </table>
+                      </body></html>
+
+  - id: adv-table-cell-align
+    name: Table Cell Vertical Alignment
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <table style="border-collapse:collapse; width:100%;">
+                              <tr style="height:80px;">
+                                  <td style="border:1px solid #333; padding:8px; vertical-align:top; background:#ecf0f1;">Top</td>
+                                  <td style="border:1px solid #333; padding:8px; vertical-align:middle; background:#e8f4fd;">Middle</td>
+                                  <td style="border:1px solid #333; padding:8px; vertical-align:bottom; background:#fde8e8;">Bottom</td>
+                              </tr>
+                          </table>
+                      </body></html>
+
+  - id: adv-table-percent-widths
+    name: Table with Percentage Widths
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <table style="border-collapse:collapse; width:100%;">
+                              <tr>
+                                  <td style="width:20%; border:1px solid #333; padding:8px; background:#3498db; color:#fff;">20%</td>
+                                  <td style="width:50%; border:1px solid #333; padding:8px; background:#e74c3c; color:#fff;">50%</td>
+                                  <td style="width:30%; border:1px solid #333; padding:8px; background:#27ae60; color:#fff;">30%</td>
+                              </tr>
+                              <tr>
+                                  <td style="border:1px solid #333; padding:8px; background:#ecf0f1;">A</td>
+                                  <td style="border:1px solid #333; padding:8px; background:#ecf0f1;">B</td>
+                                  <td style="border:1px solid #333; padding:8px; background:#ecf0f1;">C</td>
+                              </tr>
+                          </table>
+                      </body></html>
+
+  - id: bug064-rowspan-height
+    name: Rowspan height distribution (overlapping spans)
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:13px; line-height:1.4;">
+      <table style="border-collapse:collapse; width:100%;">
+      <tr>
+          <td rowspan="3" style="border:1px solid #333; padding:6px; background:#ecf0f1; vertical-align:top;">Span 3 rows</td>
+          <td style="border:1px solid #333; padding:6px;">Row 1</td>
+          <td rowspan="2" style="border:1px solid #333; padding:6px; background:#d5f5e3; vertical-align:top;">Span 2 rows</td>
+      </tr>
+      <tr>
+          <td style="border:1px solid #333; padding:6px;">Row 2</td>
+      </tr>
+      <tr>
+          <td style="border:1px solid #333; padding:6px;">Row 3</td>
+          <td style="border:1px solid #333; padding:6px;">Normal</td>
+      </tr>
+      </table>
+      </body></html>
+
+  - id: bug064-rowspan-overlap
+    name: Table overlapping rowspans (no double-inflation)
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:12px; line-height:1.3;">
+      <table style="border-collapse:collapse; width:350px;">
+      <tr>
+          <td rowspan="4" style="border:1px solid #333; padding:4px; background:#d4e6f1; width:80px; vertical-align:top;">4-row span</td>
+          <td style="border:1px solid #333; padding:4px;">A</td>
+          <td rowspan="2" style="border:1px solid #333; padding:4px; background:#d5f5e3; vertical-align:top;">2-row</td>
+          <td rowspan="3" style="border:1px solid #333; padding:4px; background:#fdebd0; vertical-align:top;">3-row</td>
+      </tr>
+      <tr><td style="border:1px solid #333; padding:4px;">B</td></tr>
+      <tr>
+          <td style="border:1px solid #333; padding:4px;">C</td>
+          <td rowspan="2" style="border:1px solid #333; padding:4px; background:#fadbd8; vertical-align:top;">2-row</td>
+      </tr>
+      <tr>
+          <td style="border:1px solid #333; padding:4px;">D</td>
+          <td style="border:1px solid #333; padding:4px;">E</td>
+      </tr>
+      </table>
+      </body></html>
+
+  - id: pp-border-collapse-basic
+    name: Basic Border Collapse
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff; font-size:0;">
+                          <div style="display:inline-block; width:50px; height:50px; border:2px solid #333;"></div>
+                          <div style="display:inline-block; width:50px; height:50px; border:2px solid #333; margin-left:-2px;"></div>
+                          <div style="display:inline-block; width:50px; height:50px; border:2px solid #333; margin-left:-2px;"></div>
+                      </body></html>
+
+  - id: pp-table-geometry
+    name: Table Pure Geometry
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <table style="border-collapse:collapse; width:300px;">
+                              <tr><td style="border:1px solid #333; height:30px; background:#3498db;"></td>
+                                  <td style="border:1px solid #333; height:30px; background:#e74c3c;"></td></tr>
+                              <tr><td style="border:1px solid #333; height:30px; background:#2ecc71;"></td>
+                                  <td style="border:1px solid #333; height:30px; background:#f39c12;"></td></tr>
+                          </table>
+                      </body></html>
+
+  - id: pp-table-separate-spacing
+    name: Table Separate Border Spacing
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <table style="border-collapse:separate; border-spacing:8px; width:300px;">
+                              <tr><td style="border:2px solid #333; height:30px; background:#3498db;"></td>
+                                  <td style="border:2px solid #333; height:30px; background:#e74c3c;"></td></tr>
+                              <tr><td style="border:2px solid #333; height:30px; background:#2ecc71;"></td>
+                                  <td style="border:2px solid #333; height:30px; background:#f39c12;"></td></tr>
+                          </table>
+                      </body></html>
+
+  - id: pp-border-collapse-colors
+    name: Border Collapse Different Colors
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <table style="border-collapse:collapse;">
+                              <tr><td style="border:2px solid #e74c3c; width:80px; height:40px; background:#fff;"></td>
+                                  <td style="border:2px solid #3498db; width:80px; height:40px; background:#fff;"></td></tr>
+                              <tr><td style="border:2px solid #2ecc71; width:80px; height:40px; background:#fff;"></td>
+                                  <td style="border:2px solid #f39c12; width:80px; height:40px; background:#fff;"></td></tr>
+                          </table>
+                      </body></html>
+
+  - id: pp-table-valign
+    name: Table Cell Vertical Align
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff; font-family:Arial,sans-serif; font-size:14px;">
+                          <table style="border-collapse:collapse; width:300px;">
+                              <tr>
+                                  <td style="border:1px solid #999; padding:6px; height:60px;">Short</td>
+                                  <td style="border:1px solid #999; padding:6px; height:60px;">Also short</td>
+                              </tr>
+                          </table>
+                      </body></html>
+
+  - id: table-colspan
+    name: Table Colspan
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#fff;">
+                          <table style="border-collapse:collapse; width:100%;">
+                              <tr>
+                                  <th colspan="3" style="border:1px solid #333; padding:6px; background:#2c3e50; color:white;">Full Width Header</th>
+                              </tr>
+                              <tr>
+                                  <td style="border:1px solid #ccc; padding:6px;">A</td>
+                                  <td style="border:1px solid #ccc; padding:6px;">B</td>
+                                  <td style="border:1px solid #ccc; padding:6px;">C</td>
+                              </tr>
+                              <tr>
+                                  <td colspan="2" style="border:1px solid #ccc; padding:6px; background:#ecf0f1;">Spans 2 columns</td>
+                                  <td style="border:1px solid #ccc; padding:6px;">D</td>
+                              </tr>
+                          </table>
+                      </body></html>
+
+  - id: table-rowspan
+    name: Table Rowspan
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#fff;">
+                          <table style="border-collapse:collapse; width:100%;">
+                              <tr>
+                                  <td rowspan="3" style="border:1px solid #ccc; padding:6px; background:#3498db; color:white; vertical-align:middle; text-align:center;">Spans 3 rows</td>
+                                  <td style="border:1px solid #ccc; padding:6px;">Row 1</td>
+                              </tr>
+                              <tr>
+                                  <td style="border:1px solid #ccc; padding:6px;">Row 2</td>
+                              </tr>
+                              <tr>
+                                  <td style="border:1px solid #ccc; padding:6px;">Row 3</td>
+                              </tr>
+                          </table>
+                      </body></html>
+
+  - id: table-caption
+    name: Table with Caption
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#fff;">
+                          <table style="border-collapse:collapse; width:100%;">
+                              <caption style="margin-bottom:6px; font-weight:bold; font-size:14px;">Monthly Sales Data</caption>
+                              <thead>
+                                  <tr style="background:#34495e; color:white;">
+                                      <th style="border:1px solid #2c3e50; padding:6px;">Month</th>
+                                      <th style="border:1px solid #2c3e50; padding:6px;">Revenue</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  <tr><td style="border:1px solid #ccc; padding:6px;">Jan</td><td style="border:1px solid #ccc; padding:6px;">$1,200</td></tr>
+                                  <tr style="background:#f9f9f9;"><td style="border:1px solid #ccc; padding:6px;">Feb</td><td style="border:1px solid #ccc; padding:6px;">$1,800</td></tr>
+                              </tbody>
+                          </table>
+                      </body></html>
+
+  - id: table-nested
+    name: Nested Table
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:12px; background:#fff;">
+                          <table style="border-collapse:collapse; width:100%;">
+                              <tr>
+                                  <td style="border:1px solid #999; padding:6px;">Outer A</td>
+                                  <td style="border:1px solid #999; padding:6px;">
+                                      <table style="border-collapse:collapse; width:100%;">
+                                          <tr><td style="border:1px solid #ccc; padding:3px; background:#ecf0f1;">Inner 1</td></tr>
+                                          <tr><td style="border:1px solid #ccc; padding:3px; background:#d5dbdb;">Inner 2</td></tr>
+                                      </table>
+                                  </td>
+                              </tr>
+                              <tr>
+                                  <td style="border:1px solid #999; padding:6px;">Outer B</td>
+                                  <td style="border:1px solid #999; padding:6px;">Outer C</td>
+                              </tr>
+                          </table>
+                      </body></html>
+
+  - id: table-border-spacing
+    name: Table Border Spacing
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#fff;">
+                          <table style="border-collapse:separate; border-spacing:8px; background:#ecf0f1;">
+                              <tr>
+                                  <td style="background:#3498db; color:white; padding:8px;">A</td>
+                                  <td style="background:#e74c3c; color:white; padding:8px;">B</td>
+                                  <td style="background:#27ae60; color:white; padding:8px;">C</td>
+                              </tr>
+                              <tr>
+                                  <td style="background:#f39c12; color:white; padding:8px;">D</td>
+                                  <td style="background:#9b59b6; color:white; padding:8px;">E</td>
+                                  <td style="background:#1abc9c; color:white; padding:8px;">F</td>
+                              </tr>
+                          </table>
+                      </body></html>
+
+  - id: table-basic
+    name: Basic Table with Borders
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <table style="border-collapse:collapse; width:100%;">
+                              <thead>
+                                  <tr>
+                                      <th style="border:1px solid #333; padding:8px; background:#f0f0f0; text-align:left;">Name</th>
+                                      <th style="border:1px solid #333; padding:8px; background:#f0f0f0; text-align:left;">Value</th>
+                                      <th style="border:1px solid #333; padding:8px; background:#f0f0f0; text-align:left;">Status</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  <tr>
+                                      <td style="border:1px solid #333; padding:8px;">Alpha</td>
+                                      <td style="border:1px solid #333; padding:8px;">100</td>
+                                      <td style="border:1px solid #333; padding:8px;">Active</td>
+                                  </tr>
+                                  <tr>
+                                      <td style="border:1px solid #333; padding:8px;">Beta</td>
+                                      <td style="border:1px solid #333; padding:8px;">200</td>
+                                      <td style="border:1px solid #333; padding:8px;">Inactive</td>
+                                  </tr>
+                                  <tr>
+                                      <td style="border:1px solid #333; padding:8px;">Gamma</td>
+                                      <td style="border:1px solid #333; padding:8px;">300</td>
+                                      <td style="border:1px solid #333; padding:8px;">Active</td>
+                                  </tr>
+                              </tbody>
+                          </table>
+                      </body></html>
+
+  - id: table-striped
+    name: Table with Alternating Row Colors
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <table style="border-collapse:collapse; width:100%;">
+                              <thead>
+                                  <tr style="background:#2c3e50; color:#fff;">
+                                      <th style="padding:8px; text-align:left;">Item</th>
+                                      <th style="padding:8px; text-align:left;">Qty</th>
+                                      <th style="padding:8px; text-align:left;">Price</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  <tr style="background:#ffffff;">
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">Widget</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">10</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">$5.00</td>
+                                  </tr>
+                                  <tr style="background:#f8f9fa;">
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">Gadget</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">5</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">$12.50</td>
+                                  </tr>
+                                  <tr style="background:#ffffff;">
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">Doohickey</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">20</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">$2.75</td>
+                                  </tr>
+                                  <tr style="background:#f8f9fa;">
+                                      <td style="padding:8px;">Thingamajig</td>
+                                      <td style="padding:8px;">8</td>
+                                      <td style="padding:8px;">$8.00</td>
+                                  </tr>
+                              </tbody>
+                          </table>
+                      </body></html>
+
+  - id: table-colored-borders
+    name: Table with Colored Borders
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <table style="border-collapse:collapse; width:100%;">
+                              <tr>
+                                  <td style="border:2px solid #3498db; padding:10px; text-align:center;">Blue</td>
+                                  <td style="border:2px solid #e74c3c; padding:10px; text-align:center;">Red</td>
+                              </tr>
+                              <tr>
+                                  <td style="border:2px solid #27ae60; padding:10px; text-align:center;">Green</td>
+                                  <td style="border:2px solid #f39c12; padding:10px; text-align:center;">Orange</td>
+                              </tr>
+                          </table>
+                      </body></html>

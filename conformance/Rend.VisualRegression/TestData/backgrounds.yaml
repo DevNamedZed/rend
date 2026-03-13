@@ -1,0 +1,135 @@
+# Backgrounds
+# Visual regression tests for backgrounds
+tests:
+  - id: bg-position
+    name: Background Color with Box
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="background:#3498db; width:150px; height:80px; border-radius:8px; margin-bottom:10px;"></div>
+                          <div style="background:#e74c3c; width:200px; height:60px; border-radius:4px 20px;"></div>
+                      </body></html>
+
+  - id: adv-bg-multiple
+    name: Multiple Background Colors via Nesting
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="background:#2c3e50; padding:12px; border-radius:8px;">
+                              <div style="background:#34495e; padding:12px; border-radius:6px;">
+                                  <div style="background:#3498db; height:40px; border-radius:4px; margin-bottom:8px;"></div>
+                                  <div style="background:#e74c3c; height:40px; border-radius:4px;"></div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: adv-bg-size-cover
+    name: Background Size Cover with Color Fallback
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="width:200px; height:120px; background:#3498db; background-size:cover; border-radius:8px; margin-bottom:10px;"></div>
+                          <div style="width:300px; height:80px; background:#e74c3c; background-size:contain; border-radius:4px;"></div>
+                      </body></html>
+
+  - id: adv-bg-clip
+    name: Background Clip Padding Box
+    html: |
+      <html><body style="margin:0; padding:20px;">
+                          <div style="width:200px; height:80px; background:#3498db; border:10px solid #2c3e50; background-clip:padding-box; margin-bottom:12px;"></div>
+                          <div style="width:200px; height:80px; background:#e74c3c; border:10px solid #2c3e50; background-clip:border-box;"></div>
+                      </body></html>
+
+  - id: bug052-bg-box-keyword
+    name: "background single <box> sets both origin+clip"
+    html: |
+      <html><body style="margin:0; padding:20px; font-family:sans-serif; font-size:14px;">
+      <div style="width:200px; height:80px; padding:20px; border:10px dashed #999; background:#3498db content-box;">content-box bg</div>
+      <div style="width:200px; height:80px; padding:20px; border:10px dashed #999; background:#e74c3c padding-box; margin-top:10px;">padding-box bg</div>
+      </body></html>
+
+  - id: bug052-bg-origin-clip
+    name: background-origin and background-clip interaction
+    html: |
+      <html><body style="margin:0; padding:20px; font-family:sans-serif; font-size:12px;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <div style="width:120px; height:80px; padding:15px; border:5px dashed #999; background:#3498db border-box;">
+              <span style="color:#fff;">border-box</span>
+          </div>
+          <div style="width:120px; height:80px; padding:15px; border:5px dashed #999; background:#e74c3c padding-box;">
+              <span style="color:#fff;">padding-box</span>
+          </div>
+          <div style="width:120px; height:80px; padding:15px; border:5px dashed #999; background:#27ae60 content-box;">
+              <span style="color:#fff;">content-box</span>
+          </div>
+      </div>
+      </body></html>
+
+  - id: bg-nested-colors
+    name: Nested Background Colors
+    html: |
+      <html><body style="margin:0; padding:10px; background:#ecf0f1;">
+                          <div style="background:#fff; padding:15px; border-radius:8px;">
+                              <div style="background:#3498db; height:30px; border-radius:4px; margin-bottom:8px;"></div>
+                              <div style="background:#e74c3c; height:30px; border-radius:4px; margin-bottom:8px;"></div>
+                              <div style="background:#27ae60; height:30px; border-radius:4px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-color-palette
+    name: Color Palette Squares
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:5px;">
+                              <div style="width:40px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:40px; height:40px; background:#e67e22;"></div>
+                              <div style="width:40px; height:40px; background:#f1c40f;"></div>
+                              <div style="width:40px; height:40px; background:#2ecc71;"></div>
+                              <div style="width:40px; height:40px; background:#3498db;"></div>
+                              <div style="width:40px; height:40px; background:#9b59b6;"></div>
+                              <div style="width:40px; height:40px; background:#1abc9c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-background-size-cover
+    name: Background Size Cover
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:100px; background:linear-gradient(#3498db, #e74c3c); background-size:cover;"></div>
+                      </body></html>
+
+  - id: pp-multiple-backgrounds
+    name: Multiple Background Colors Stacked
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:100px;">
+                              <div style="position:absolute; inset:0; background:#3498db;"></div>
+                              <div style="position:absolute; top:10px; left:10px; right:10px; bottom:10px; background:#e74c3c;"></div>
+                              <div style="position:absolute; top:20px; left:20px; right:20px; bottom:20px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-background-color-alpha
+    name: Background with Alpha Transparency
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:100px; background:#3498db;">
+                              <div style="width:100%; height:100%; background:rgba(255,255,255,0.5);"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-stacked-backgrounds
+    name: Stacked Colored Backgrounds
+    html: |
+      <html><body style="margin:0; background:#fff;">
+                          <div style="height:50px; background:#3498db;"></div>
+                          <div style="height:50px; background:#e74c3c;"></div>
+                          <div style="height:50px; background:#2ecc71;"></div>
+                          <div style="height:50px; background:#f39c12;"></div>
+                          <div style="height:50px; background:#9b59b6;"></div>
+                      </body></html>
+
+  - id: bg-size-position
+    name: Background Size and Position
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:100px; background:linear-gradient(to right, #3498db, #2ecc71); margin-bottom:8px;"></div>
+                          <div style="width:200px; height:100px; background:linear-gradient(to bottom, #e74c3c, #f39c12, #9b59b6);"></div>
+                      </body></html>

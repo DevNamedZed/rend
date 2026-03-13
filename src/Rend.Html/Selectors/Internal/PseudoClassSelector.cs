@@ -54,6 +54,13 @@ namespace Rend.Html.Selectors.Internal
         public static PseudoClassSelector Has(Selector arg) =>
             new PseudoClassSelector(PseudoType.Has, argument: arg);
 
+        /// <summary>
+        /// Returns a selector that never matches. Used for dynamic pseudo-classes
+        /// (:hover, :active, :focus, :visited) in static rendering.
+        /// </summary>
+        public static PseudoClassSelector NeverMatch() =>
+            new PseudoClassSelector(PseudoType.NeverMatch);
+
         public override bool Matches(Element element)
         {
             switch (_type)
@@ -256,7 +263,8 @@ namespace Rend.Html.Selectors.Internal
             Not,
             Is,
             Where,
-            Has
+            Has,
+            NeverMatch
         }
     }
 }

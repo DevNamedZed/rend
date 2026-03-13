@@ -171,7 +171,9 @@ namespace Rend.Pdf.Fonts
                 italicAngle: ItalicAngle,
                 bBox: bBox,
                 unitsPerEm: unitsPerEm,
-                flags: flags
+                flags: flags,
+                underlinePosition: UnderlinePosition,
+                underlineThickness: UnderlineThickness
             );
 
             // Build a WinAnsiEncoding-compatible char-to-glyph map and width table.
@@ -236,7 +238,9 @@ namespace Rend.Pdf.Fonts
             var metrics = new FontMetrics(
                 ascent: ascent, descent: descent, capHeight: capHeight, xHeight: xHeight,
                 stemV: stemV, italicAngle: ItalicAngle, bBox: bBox,
-                unitsPerEm: unitsPerEm, flags: flags);
+                unitsPerEm: unitsPerEm, flags: flags,
+                underlinePosition: UnderlinePosition,
+                underlineThickness: UnderlineThickness);
 
             var charToGlyph = new ushort[256];
             var advanceWidths = new float[256];

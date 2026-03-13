@@ -36,7 +36,10 @@ namespace Rend.Css.Parser.Internal
             while (_pos < _count && _tokens[_pos].Type != CssTokenType.EOF)
             {
                 var val = ParseSingleValue();
-                if (val == null) break;
+                if (val == null)
+                {
+                    break;
+                }
                 currentGroup.Add(val);
 
                 SkipWhitespace();
@@ -238,9 +241,159 @@ namespace Rend.Css.Parser.Internal
                 return new CssFunctionValue(lowerName, args);
             }
 
-            // For var() and other functions — store as CssFunctionValue
+            // For var() — special parsing to preserve fallback structure.
+            // CSS spec: var(<custom-property-name>, <fallback-value>?)
+            // Everything after the first comma is the fallback, commas included.
+            if (lowerName == "var")
+            {
+                ParseVarArgs(args);
+                return new CssFunctionValue(lowerName, args);
+            }
+
+            // For other functions — store as CssFunctionValue
             ParseFunctionArgs(args);
             return new CssFunctionValue(lowerName, args);
+        }
+
+        /// <summary>
+        /// Parses var() arguments: the property name, then optionally a comma
+        /// followed by the fallback value. The fallback preserves its original
+        /// structure (space-separated groups joined by commas).
+        /// </summary>
+        private void ParseVarArgs(List<CssValue> args)
+        {
+            int depth = 1;
+            SkipWhitespace();
+
+            // Parse the custom property name (e.g., --font)
+            if (_pos < _count)
+            {
+                var val = ParseSingleValue();
+                if (val != null)
+                {
+                    args.Add(val);
+                }
+            }
+
+            SkipWhitespace();
+
+            // Check for comma → fallback follows
+            if (_pos < _count && _tokens[_pos].Type == CssTokenType.Comma)
+            {
+                _pos++; // skip comma
+                SkipWhitespace();
+
+                // Collect all remaining tokens as the fallback.
+                // Group space-separated tokens into lists, separated by commas.
+                var groups = new List<List<CssValue>>();
+                var currentGroup = new List<CssValue>();
+
+                while (_pos < _count && depth > 0)
+                {
+                    ref var t = ref _tokens[_pos];
+
+                    if (t.Type == CssTokenType.RightParen)
+                    {
+                        depth--;
+                        if (depth == 0)
+                        {
+                            _pos++;
+                            break;
+                        }
+                        _pos++;
+                        continue;
+                    }
+
+                    if (t.Type == CssTokenType.LeftParen || t.Type == CssTokenType.Function)
+                    {
+                        if (t.Type == CssTokenType.Function)
+                        {
+                            var fn = ParseFunction();
+                            if (fn != null)
+                            {
+                                currentGroup.Add(fn);
+                            }
+                            continue;
+                        }
+                        depth++;
+                        _pos++;
+                        continue;
+                    }
+
+                    if (t.Type == CssTokenType.Comma)
+                    {
+                        _pos++;
+                        SkipWhitespace();
+                        groups.Add(currentGroup);
+                        currentGroup = new List<CssValue>();
+                        continue;
+                    }
+
+                    if (t.Type == CssTokenType.Whitespace)
+                    {
+                        SkipWhitespace();
+                        continue;
+                    }
+
+                    var v = ParseSingleValue();
+                    if (v != null)
+                    {
+                        currentGroup.Add(v);
+                    }
+                }
+
+                if (currentGroup.Count > 0)
+                {
+                    groups.Add(currentGroup);
+                }
+
+                // Build the fallback value preserving structure.
+                if (groups.Count == 1)
+                {
+                    // Single group: space-separated (e.g., "2px solid #333")
+                    if (groups[0].Count == 1)
+                    {
+                        args.Add(groups[0][0]);
+                    }
+                    else
+                    {
+                        args.Add(new CssListValue(groups[0])); // space separator
+                    }
+                }
+                else if (groups.Count > 1)
+                {
+                    // Multiple groups: comma-separated (e.g., "Arial, sans-serif")
+                    var commaValues = new List<CssValue>();
+                    foreach (var g in groups)
+                    {
+                        if (g.Count == 1)
+                        {
+                            commaValues.Add(g[0]);
+                        }
+                        else if (g.Count > 1)
+                        {
+                            commaValues.Add(new CssListValue(g)); // space separator within group
+                        }
+                    }
+                    args.Add(new CssListValue(commaValues, ',')); // comma separator between groups
+                }
+
+                return;
+            }
+
+            // No comma/fallback — consume closing paren
+            while (_pos < _count && depth > 0)
+            {
+                if (_tokens[_pos].Type == CssTokenType.RightParen)
+                {
+                    depth--;
+                    _pos++;
+                }
+                else
+                {
+                    _pos++;
+                }
+            }
         }
 
         private void ParseFunctionArgs(List<CssValue> args)

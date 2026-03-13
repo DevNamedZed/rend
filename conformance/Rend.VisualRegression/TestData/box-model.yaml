@@ -1,0 +1,519 @@
+# Box Model
+# Visual regression tests for box model
+tests:
+  - id: box-nested-margins
+    name: Nested Margins and Padding
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="background:#ecf0f1; padding:15px;">
+                              <div style="background:#3498db; padding:10px; margin-bottom:10px;">
+                                  <div style="background:#2980b9; height:30px;"></div>
+                              </div>
+                              <div style="background:#e74c3c; padding:10px;">
+                                  <div style="background:#c0392b; height:30px;"></div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: box-border-styles
+    name: "Border Styles (solid, dashed, dotted)"
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="border:3px solid #333; padding:8px; margin-bottom:8px; height:20px;"></div>
+                          <div style="border:3px dashed #e74c3c; padding:8px; margin-bottom:8px; height:20px;"></div>
+                          <div style="border:3px dotted #3498db; padding:8px; height:20px;"></div>
+                      </body></html>
+
+  - id: box-individual-borders
+    name: Individual Border Sides
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="border-top:4px solid #e74c3c; border-right:4px solid #3498db; border-bottom:4px solid #27ae60; border-left:4px solid #f39c12; padding:15px; height:40px; background:#f9f9f9;"></div>
+                      </body></html>
+
+  - id: box-large-border-radius
+    name: Large Border Radius (pill shape)
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="background:#3498db; border-radius:25px; width:200px; height:50px; margin-bottom:10px;"></div>
+                          <div style="background:#e74c3c; border-radius:50%; width:80px; height:80px;"></div>
+                      </body></html>
+
+  - id: adv-box-negative-margins
+    name: Negative Margins Overlap
+    html: |
+      <html><body style="margin:0; padding:20px;">
+                          <div style="background:#3498db; width:200px; height:60px;"></div>
+                          <div style="background:#e74c3c; width:200px; height:60px; margin-top:-20px; margin-left:30px;"></div>
+                          <div style="background:#27ae60; width:200px; height:60px; margin-top:-20px; margin-left:60px;"></div>
+                      </body></html>
+
+  - id: adv-box-overflow-auto-dims
+    name: Overflow Auto with Fixed Dimensions
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="width:180px; height:100px; overflow:auto; border:2px solid #333; padding:8px;">
+                              <div style="background:#3498db; width:250px; height:40px; margin-bottom:4px;"></div>
+                              <div style="background:#e74c3c; width:150px; height:40px; margin-bottom:4px;"></div>
+                              <div style="background:#27ae60; width:200px; height:40px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-box-sizing-padding
+    name: Box Sizing Border Box with Large Padding
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="width:200px; height:80px; box-sizing:border-box; padding:25px; border:5px solid #333; background:#3498db; margin-bottom:10px;"></div>
+                          <div style="width:200px; height:80px; box-sizing:content-box; padding:25px; border:5px solid #333; background:#e74c3c;"></div>
+                      </body></html>
+
+  - id: adv-edge-empty-blocks
+    name: Empty Block Elements with Various Heights
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="background:#3498db; height:0; margin-bottom:4px;"></div>
+                          <div style="background:#e74c3c; height:20px; margin-bottom:4px;"></div>
+                          <div style="background:#27ae60; height:0; border-top:2px solid #1e8449; margin-bottom:4px;"></div>
+                          <div style="background:#f39c12; height:30px; margin-bottom:4px;"></div>
+                          <div style="height:0; margin-bottom:4px;"></div>
+                          <div style="background:#9b59b6; height:40px;"></div>
+                      </body></html>
+
+  - id: box-fixed-width-height
+    name: Fixed Width and Height
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:150px; height:80px; background:#3498db;"></div>
+                      </body></html>
+
+  - id: box-percentage-width
+    name: Percentage Width
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:50%; height:60px; background:#e74c3c;"></div>
+                          <div style="width:75%; height:60px; background:#2ecc71; margin-top:8px;"></div>
+                      </body></html>
+
+  - id: box-auto-height
+    name: Auto Height with Content
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; background:#ecf0f1; padding:10px;">
+                              <div style="height:30px; background:#3498db; margin-bottom:8px;"></div>
+                              <div style="height:50px; background:#e74c3c; margin-bottom:8px;"></div>
+                              <div style="height:20px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: box-margin-auto-center
+    name: Margin Auto Centering
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:40px; background:#3498db; margin:0 auto;"></div>
+                          <div style="width:150px; height:40px; background:#e74c3c; margin:8px auto 0;"></div>
+                          <div style="width:100px; height:40px; background:#2ecc71; margin:8px auto 0;"></div>
+                      </body></html>
+
+  - id: box-margin-collapse
+    name: Margin Collapse
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:40px; background:#3498db; margin-bottom:20px;"></div>
+                          <div style="width:200px; height:40px; background:#e74c3c; margin-top:30px;"></div>
+                      </body></html>
+
+  - id: box-padding-all-sides
+    name: Padding All Sides
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="background:#ecf0f1; padding:20px 30px 10px 40px; width:200px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: box-sizing-border-box
+    name: Box Sizing Border Box
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:60px; padding:10px; border:5px solid #3498db; background:#ecf0f1; box-sizing:border-box; margin-bottom:8px;"></div>
+                          <div style="width:200px; height:60px; padding:10px; border:5px solid #e74c3c; background:#ecf0f1; box-sizing:content-box;"></div>
+                      </body></html>
+
+  - id: box-nested-deep
+    name: Deeply Nested Boxes
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="background:#ecf0f1; padding:10px; width:250px;">
+                              <div style="background:#bdc3c7; padding:10px;">
+                                  <div style="background:#95a5a6; padding:10px;">
+                                      <div style="background:#7f8c8d; padding:10px;">
+                                          <div style="background:#2c3e50; height:30px;"></div>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: box-min-max-width
+    name: Min and Max Width
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="min-width:100px; max-width:300px; width:50%; height:40px; background:#3498db; margin-bottom:8px;"></div>
+                          <div style="min-width:200px; width:10%; height:40px; background:#e74c3c; margin-bottom:8px;"></div>
+                          <div style="max-width:150px; width:80%; height:40px; background:#2ecc71;"></div>
+                      </body></html>
+
+  - id: box-border-widths
+    name: Different Border Widths
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:50px; border:1px solid #333; margin-bottom:8px;"></div>
+                          <div style="width:200px; height:50px; border:3px solid #333; margin-bottom:8px;"></div>
+                          <div style="width:200px; height:50px; border:6px solid #333;"></div>
+                      </body></html>
+
+  - id: box-border-sides
+    name: Side-Specific Borders
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:50px; border-left:4px solid #e74c3c; background:#ecf0f1; margin-bottom:8px;"></div>
+                          <div style="width:200px; height:50px; border-bottom:4px solid #3498db; background:#ecf0f1; margin-bottom:8px;"></div>
+                          <div style="width:200px; height:50px; border-top:4px solid #2ecc71; border-bottom:4px solid #f39c12; background:#ecf0f1;"></div>
+                      </body></html>
+
+  - id: box-inline-block
+    name: Inline Block Elements
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:inline-block; width:80px; height:60px; background:#3498db; margin-right:4px;"></div>
+                          <div style="display:inline-block; width:80px; height:60px; background:#e74c3c; margin-right:4px;"></div>
+                          <div style="display:inline-block; width:80px; height:60px; background:#2ecc71;"></div>
+                      </body></html>
+
+  - id: box-stacked-full
+    name: Stacked Full Width Boxes
+    html: |
+      <html><body style="margin:0; background:#fff;">
+                          <div style="height:50px; background:#2c3e50;"></div>
+                          <div style="height:30px; background:#34495e;"></div>
+                          <div style="height:80px; background:#ecf0f1;"></div>
+                          <div style="height:40px; background:#95a5a6;"></div>
+                      </body></html>
+
+  - id: box-border-radius-variations
+    name: Border Radius Variations
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:50px; background:#3498db; border-radius:4px; margin-bottom:8px;"></div>
+                          <div style="width:200px; height:50px; background:#e74c3c; border-radius:12px; margin-bottom:8px;"></div>
+                          <div style="width:200px; height:50px; background:#2ecc71; border-radius:25px;"></div>
+                      </body></html>
+
+  - id: box-background-colors
+    name: Various Background Colors
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:4px; flex-wrap:wrap; width:300px;">
+                              <div style="width:40px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:40px; height:40px; background:#e67e22;"></div>
+                              <div style="width:40px; height:40px; background:#f1c40f;"></div>
+                              <div style="width:40px; height:40px; background:#2ecc71;"></div>
+                              <div style="width:40px; height:40px; background:#3498db;"></div>
+                              <div style="width:40px; height:40px; background:#9b59b6;"></div>
+                              <div style="width:40px; height:40px; background:#1abc9c;"></div>
+                              <div style="width:40px; height:40px; background:#34495e;"></div>
+                              <div style="width:40px; height:40px; background:#95a5a6;"></div>
+                              <div style="width:40px; height:40px; background:#d35400;"></div>
+                              <div style="width:40px; height:40px; background:#c0392b;"></div>
+                              <div style="width:40px; height:40px; background:#16a085;"></div>
+                          </div>
+                      </body></html>
+
+  - id: box-square-grid
+    name: Square Grid Layout
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(4, 50px); gap:4px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:50px; background:#2ecc71;"></div>
+                              <div style="height:50px; background:#f39c12;"></div>
+                              <div style="height:50px; background:#9b59b6;"></div>
+                              <div style="height:50px; background:#1abc9c;"></div>
+                              <div style="height:50px; background:#e67e22;"></div>
+                              <div style="height:50px; background:#34495e;"></div>
+                          </div>
+                      </body></html>
+
+  - id: box-margins
+    name: Margins
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="background:#e8f4fd; margin:10px; padding:8px; height:24px;">Margin 10px</div>
+                          <div style="background:#fde8e8; margin:20px; padding:8px; height:24px;">Margin 20px</div>
+                          <div style="background:#e8fde8; margin:5px 30px; padding:8px; height:24px;">Margin 5px 30px</div>
+                      </body></html>
+
+  - id: box-padding
+    name: Padding
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="background:#e8f4fd; padding:5px; margin-bottom:8px; height:24px;">Padding 5px</div>
+                          <div style="background:#fde8e8; padding:15px; margin-bottom:8px; height:24px;">Padding 15px</div>
+                          <div style="background:#e8fde8; padding:5px 25px; margin-bottom:8px; height:24px;">Padding 5px 25px</div>
+                          <div style="background:#fdf5e8; padding:10px 20px 30px 40px; height:24px;">Padding TRBL</div>
+                      </body></html>
+
+  - id: box-borders
+    name: Borders
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="border:1px solid #333; padding:8px; margin-bottom:8px; height:20px;">Solid 1px</div>
+                          <div style="border:2px solid #e74c3c; padding:8px; margin-bottom:8px; height:20px;">Solid 2px red</div>
+                          <div style="border:3px solid #3498db; padding:8px; margin-bottom:8px; height:20px;">Solid 3px blue</div>
+                          <div style="border-top:2px solid #27ae60; border-bottom:2px solid #e67e22; padding:8px; height:20px;">Top/Bottom only</div>
+                      </body></html>
+
+  - id: box-border-radius
+    name: Border Radius
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="background:#3498db; color:#fff; padding:12px; margin-bottom:8px; border-radius:4px; height:20px;">Radius 4px</div>
+                          <div style="background:#e74c3c; color:#fff; padding:12px; margin-bottom:8px; border-radius:12px; height:20px;">Radius 12px</div>
+                          <div style="background:#27ae60; color:#fff; width:60px; height:60px; border-radius:30px; display:flex; align-items:center; justify-content:center;">Circle</div>
+                      </body></html>
+
+  - id: box-shadow
+    name: Box Shadow
+    html: |
+      <html><body style="margin:0; padding:20px; font-family:sans-serif; font-size:14px; background:#f5f5f5; line-height:1.4;">
+                          <div style="background:#fff; padding:16px; margin-bottom:16px; box-shadow:0 2px 4px rgba(0,0,0,0.1); height:20px;">Light shadow</div>
+                          <div style="background:#fff; padding:16px; box-shadow:0 4px 12px rgba(0,0,0,0.25); height:20px;">Heavier shadow</div>
+                      </body></html>
+
+  - id: bug058-margin-collapse-inline
+    name: Margin collapse blocked by inline content
+    html: |
+      <html><body style="margin:0; padding:0; font-family:sans-serif; font-size:14px;">
+      <div style="margin-top:20px; background:#eee; padding:0;">
+          Text before block child
+          <div style="margin-top:30px; background:#3498db; color:#fff; padding:8px;">Block child with margin-top:30px</div>
+      </div>
+      <div style="margin-top:20px; background:#f0f0f0; padding:0;">
+          <div style="margin-top:30px; background:#e74c3c; color:#fff; padding:8px;">No inline before — margins should collapse</div>
+      </div>
+      </body></html>
+
+  - id: box-border-box
+    name: Border-Box Sizing Comparison
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="width:200px; padding:20px; border:5px solid #333; background:#3498db; height:50px; margin-bottom:10px;"></div>
+                          <div style="width:200px; padding:20px; border:5px solid #333; background:#e74c3c; height:50px; box-sizing:border-box;"></div>
+                      </body></html>
+
+  - id: box-margin-collapse-2
+    name: Margin Collapsing Between Siblings
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="background:#3498db; height:40px; margin-bottom:20px;"></div>
+                          <div style="background:#e74c3c; height:40px; margin-top:30px; margin-bottom:20px;"></div>
+                          <div style="background:#27ae60; height:40px; margin-top:10px;"></div>
+                      </body></html>
+
+  - id: box-percent-padding
+    name: Percentage Padding
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="width:300px; background:#f0f0f0;">
+                              <div style="padding:5%; background:#3498db; height:30px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: box-auto-margin-center
+    name: Auto Margins Horizontal Centering
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="width:200px; margin:0 auto; background:#3498db; height:50px;"></div>
+                          <div style="width:150px; margin:10px auto 0; background:#e74c3c; height:50px;"></div>
+                      </body></html>
+
+  - id: margin-collapse-parent-child
+    name: Margin Collapsing Parent-Child
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="background:#ecf0f1; margin-top:20px;">
+                              <div style="margin-top:30px; background:#3498db; height:40px;"></div>
+                          </div>
+                          <div style="background:#e74c3c; height:30px; margin-top:10px;"></div>
+                      </body></html>
+
+  - id: margin-collapse-through
+    name: Margin Collapsing Through Empty Elements
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="background:#3498db; height:30px; margin-bottom:20px;"></div>
+                          <div style="margin-top:15px; margin-bottom:25px;"></div>
+                          <div style="background:#e74c3c; height:30px; margin-top:10px;"></div>
+                      </body></html>
+
+  - id: negative-margin-overlap
+    name: Negative Margins Overlapping
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="background:#3498db; height:50px; width:200px;"></div>
+                          <div style="background:rgba(231,76,60,0.7); height:50px; width:200px; margin-top:-20px; margin-left:30px;"></div>
+                      </body></html>
+
+  - id: pp-margin-box
+    name: Margin Between Boxes
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:40px; background:#3498db; margin-bottom:20px;"></div>
+                          <div style="width:200px; height:40px; background:#e74c3c; margin-bottom:10px;"></div>
+                          <div style="width:200px; height:40px; background:#2ecc71;"></div>
+                      </body></html>
+
+  - id: pp-margin-collapse
+    name: Margin Collapse
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="height:40px; background:#3498db; margin-bottom:20px;"></div>
+                          <div style="height:40px; background:#e74c3c; margin-top:30px;"></div>
+                          <div style="height:40px; background:#2ecc71; margin-top:10px;"></div>
+                      </body></html>
+
+  - id: pp-nested-margin-collapse
+    name: Nested Margin Collapsing
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="margin-bottom:30px; background:#3498db; height:40px;"></div>
+                          <div style="margin-top:20px; background:#e74c3c; height:40px;"></div>
+                          <div style="margin-top:40px;">
+                              <div style="margin-top:10px; background:#2ecc71; height:40px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-margin-collapse-siblings
+    name: Margin Collapse Between Siblings
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="height:40px; background:#3498db; margin-bottom:20px;"></div>
+                          <div style="height:40px; background:#e74c3c; margin-top:30px;"></div>
+                          <div style="height:40px; background:#2ecc71; margin-top:10px;"></div>
+                      </body></html>
+
+  - id: pp-margin-collapse-parent-child
+    name: Margin Collapse Parent-Child
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="background:#ecf0f1;">
+                              <div style="margin-top:20px; height:40px; background:#3498db;"></div>
+                          </div>
+                          <div style="height:40px; background:#e74c3c; margin-top:10px;"></div>
+                      </body></html>
+
+  - id: pp-margin-collapse-blocked-by-padding
+    name: Margin Collapse Blocked by Padding
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="padding-top:1px; background:#ecf0f1;">
+                              <div style="margin-top:20px; height:40px; background:#3498db;"></div>
+                          </div>
+                          <div style="height:40px; background:#e74c3c; margin-top:10px;"></div>
+                      </body></html>
+
+  - id: pp-negative-margin-shift
+    name: Negative Margin Overlap
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:60px; background:#3498db;"></div>
+                          <div style="width:200px; height:60px; background:#e74c3c; margin-top:-20px; margin-left:30px;"></div>
+                      </body></html>
+
+  - id: pp-nested-margin-collapse-deep
+    name: Deep Nested Margin Collapse
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="background:#ecf0f1;">
+                              <div>
+                                  <div style="margin-top:30px; height:40px; background:#3498db;"></div>
+                              </div>
+                          </div>
+                          <div style="margin-top:20px; height:40px; background:#e74c3c;"></div>
+                      </body></html>
+
+  - id: pp-margin-auto-flex
+    name: Margin Auto in Flex
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; width:300px; height:60px; background:#ecf0f1;">
+                              <div style="width:50px; height:40px; background:#3498db; margin:auto 0;"></div>
+                              <div style="width:50px; height:40px; background:#e74c3c; margin-left:auto;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-negative-margin-overlap
+    name: Negative Margin Overlap
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:150px; height:60px; background:#3498db;"></div>
+                          <div style="width:150px; height:60px; background:#e74c3c; margin-top:-20px; margin-left:30px;"></div>
+                      </body></html>
+
+  - id: pp-margin-collapse-siblings-2
+    name: Margin Collapse Between Siblings
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:40px; background:#3498db; margin-bottom:20px;"></div>
+                          <div style="width:200px; height:40px; background:#e74c3c; margin-top:30px;"></div>
+                          <div style="width:200px; height:40px; background:#2ecc71; margin-top:10px;"></div>
+                      </body></html>
+
+  - id: pp-padding-percentage-parent
+    name: Percentage Padding on Parent
+    html: |
+      <html><body style="margin:0; padding:0; background:#fff;">
+                          <div style="width:300px; padding:5%; background:#ecf0f1;">
+                              <div style="height:60px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-margin-negative-pull
+    name: Negative Margin Pulls Up
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:60px; background:#3498db;"></div>
+                          <div style="width:200px; height:60px; background:#e74c3c; margin-top:-15px;"></div>
+                      </body></html>
+
+  - id: pp-nested-padding-border
+    name: Nested Padding and Border
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="padding:15px; border:3px solid #3498db; background:#ecf0f1;">
+                              <div style="padding:10px; border:2px solid #e74c3c; background:#fff;">
+                                  <div style="padding:5px; border:1px solid #2ecc71; background:#f0fff0;">
+                                      <div style="height:30px; background:#f39c12;"></div>
+                                  </div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pp-padding-all-sides
+    name: Padding Different All Sides
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="padding:10px 20px 30px 40px; background:#ecf0f1; width:200px;">
+                              <div style="height:60px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-margin-all-sides
+    name: Margin Different All Sides
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="background:#ecf0f1; width:300px; padding:1px;">
+                              <div style="margin:5px 15px 25px 35px; height:50px; background:#3498db;"></div>
+                          </div>
+                      </body></html>

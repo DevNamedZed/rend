@@ -234,8 +234,8 @@ namespace Rend.Rendering.Internal
                         float rx = ReadNumber(d, ref i, len);
                         float ry = ReadNumber(d, ref i, len);
                         float rotation = ReadNumber(d, ref i, len);
-                        float largeArc = ReadNumber(d, ref i, len);
-                        float sweep = ReadNumber(d, ref i, len);
+                        float largeArc = ReadFlag(d, ref i, len);
+                        float sweep = ReadFlag(d, ref i, len);
                         float x, y;
                         if (cmd == 'A')
                         {
@@ -321,6 +321,29 @@ namespace Rend.Rendering.Internal
                 System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture);
 #endif
+        }
+
+        /// <summary>
+        /// Reads a single-digit flag value (0 or 1) for SVG arc commands.
+        /// Per the SVG spec, large-arc-flag and sweep-flag are always exactly
+        /// one character and do not require separators before the next parameter.
+        /// </summary>
+        private static float ReadFlag(string s, ref int i, int len)
+        {
+            SkipWhitespaceAndCommas(s, ref i, len);
+            if (i >= len)
+            {
+                return 0;
+            }
+
+            char c = s[i];
+            if (c == '0' || c == '1')
+            {
+                i++;
+                return c - '0';
+            }
+
+            return 0;
         }
 
         /// <summary>

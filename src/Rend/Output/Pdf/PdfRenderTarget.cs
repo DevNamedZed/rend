@@ -411,10 +411,89 @@ namespace Rend.Output.Pdf
             // Counter-flip Y in text matrix to cancel the page-level Y-flip CTM.
             content.SetTextMatrix(1f, 0f, 0f, -1f, x, y);
 
-            // Use the original text for encoding. The PdfFont.Encode method handles
-            // glyph mapping internally, so passing the original text ensures correct
-            // CID encoding for embedded fonts.
-            content.ShowText(pdfFont, run.OriginalText);
+            // Use the HarfBuzz-shaped glyph IDs directly instead of re-encoding
+            // from text through cmap. This ensures the PDF output matches the
+            // shaped glyph sequence exactly.
+            var shapedGlyphs = run.Glyphs;
+            int glyphCount = shapedGlyphs.Length;
+
+            // Check whether any glyph's shaped advance differs from the font's default.
+            // This happens when letter-spacing, word-spacing, or justify spacing is applied
+            // via ApplySpacingToRun in TextPainter.
+            float unitsPerEm = pdfFont.Metrics.UnitsPerEm;
+            bool needsPositioning = false;
+            for (int i = 0; i < glyphCount; i++)
+            {
+                ushort gid = (ushort)shapedGlyphs[i].GlyphId;
+                float defaultAdvance1000 = unitsPerEm > 0
+                    ? pdfFont.GetAdvanceWidth(gid) * 1000f / unitsPerEm
+                    : 0f;
+                float shapedAdvance1000 = run.FontSize > 0
+                    ? shapedGlyphs[i].XAdvance * 1000f / run.FontSize
+                    : 0f;
+                float delta = defaultAdvance1000 - shapedAdvance1000;
+                if (delta > 0.1f || delta < -0.1f)
+                {
+                    needsPositioning = true;
+                    break;
+                }
+            }
+
+            var glyphPositions = needsPositioning ? new GlyphPosition[glyphCount] : null;
+            var glyphIds = needsPositioning ? null : new ushort[glyphCount];
+
+            for (int i = 0; i < glyphCount; i++)
+            {
+                ushort gid = (ushort)shapedGlyphs[i].GlyphId;
+
+                if (needsPositioning)
+                {
+                    // Compute TJ adjustment: positive = move left, negative = move right.
+                    // After showing a glyph, PDF advances by defaultWidth. We want shapedAdvance,
+                    // so adjustment = defaultAdvance - shapedAdvance (in 1/1000 text space units).
+                    float defaultAdvance1000 = unitsPerEm > 0
+                        ? pdfFont.GetAdvanceWidth(gid) * 1000f / unitsPerEm
+                        : 0f;
+                    float shapedAdvance1000 = run.FontSize > 0
+                        ? shapedGlyphs[i].XAdvance * 1000f / run.FontSize
+                        : 0f;
+                    glyphPositions![i] = new GlyphPosition(gid, defaultAdvance1000 - shapedAdvance1000);
+                }
+                else
+                {
+                    glyphIds![i] = gid;
+                }
+
+                // Record glyph-to-unicode mapping for ToUnicode CMap (text extraction).
+                // Use the cluster index to find the corresponding code point in the original text.
+                uint cluster = shapedGlyphs[i].Cluster;
+                if (cluster < (uint)run.OriginalText.Length)
+                {
+                    int codePoint;
+                    if (char.IsHighSurrogate(run.OriginalText[(int)cluster])
+                        && (int)cluster + 1 < run.OriginalText.Length
+                        && char.IsLowSurrogate(run.OriginalText[(int)cluster + 1]))
+                    {
+                        codePoint = char.ConvertToUtf32(
+                            run.OriginalText[(int)cluster],
+                            run.OriginalText[(int)cluster + 1]);
+                    }
+                    else
+                    {
+                        codePoint = run.OriginalText[(int)cluster];
+                    }
+                    pdfFont.RecordGlyphWithUnicode(gid, codePoint);
+                }
+            }
+
+            if (needsPositioning)
+            {
+                content.ShowGlyphsWithPositioning(pdfFont, (ReadOnlySpan<GlyphPosition>)glyphPositions);
+            }
+            else
+            {
+                content.ShowGlyphs(pdfFont, glyphIds);
+            }
             content.EndText();
             if (hasAlpha) content.RestoreState();
         }
@@ -423,9 +502,29 @@ namespace Rend.Output.Pdf
                 float StrikeoutPosition, float StrikeoutThickness) GetDecorationMetrics(
             FontDescriptor font, float fontSize)
         {
-            // Default approximation for PDF output
-            // underlinePosition positive = below baseline, strikeoutPosition negative = above
-            return (fontSize * 0.15f, 1f, -fontSize * 0.3f, 1f);
+            PdfFont pdfFont = ResolvePdfFont(font);
+            var metrics = pdfFont.Metrics;
+            float scale = metrics.UnitsPerEm > 0 ? fontSize / metrics.UnitsPerEm : 0;
+
+            // post table: underlinePosition is negative (below baseline).
+            // Skia convention: positive = below baseline. Negate to match.
+            float ulPos = metrics.UnderlineThickness != 0
+                ? -metrics.UnderlinePosition * scale
+                : fontSize * 0.15f;
+            float ulThick = metrics.UnderlineThickness != 0
+                ? metrics.UnderlineThickness * scale
+                : 1f;
+
+            // OS/2 table: yStrikeoutPosition is positive (above baseline).
+            // Skia convention: negative = above baseline. Negate to match.
+            float stPos = metrics.StrikeoutSize != 0
+                ? -metrics.StrikeoutPosition * scale
+                : -fontSize * 0.3f;
+            float stThick = metrics.StrikeoutSize != 0
+                ? metrics.StrikeoutSize * scale
+                : 1f;
+
+            return (ulPos, ulThick, stPos, stThick);
         }
 
         /// <inheritdoc />

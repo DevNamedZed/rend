@@ -1,0 +1,15 @@
+# Internationalization
+# Visual regression tests for internationalization
+tests:
+  - id: ruby-annotation
+    name: Ruby Annotations
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <p style="margin:0;">
+                              <ruby>
+                                  &#x6F22;<rp>(</rp><rt>&#x304B;&#x3093;</rt><rp>)</rp>
+                                  &#x5B57;<rp>(</rp><rt>&#x3058;</rt><rp>)</rp>
+                              </ruby>
+                              are Chinese characters.
+                          </p>
+                      </body></html>

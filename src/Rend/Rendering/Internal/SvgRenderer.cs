@@ -298,9 +298,10 @@ namespace Rend.Rendering.Internal
             if (fontStyleAttr == "italic") { cssFontStyle = Css.CssFontStyle.Italic; italic = true; }
             else if (fontStyleAttr == "oblique") { cssFontStyle = Css.CssFontStyle.Oblique; italic = true; }
 
-            // Build font descriptor (default to sans-serif if no family specified)
-            string family = fontFamily ?? "sans-serif";
-            var fontDesc = new Fonts.FontDescriptor(family, fontWeight, cssFontStyle);
+            // Build font descriptor (default to sans-serif if no family specified).
+            // SVG font-family attribute can be comma-separated like CSS.
+            string[] families = Fonts.FontMatchingAlgorithm.ParseFontFamilyList(fontFamily ?? "sans-serif");
+            var fontDesc = new Fonts.FontDescriptor(families, fontWeight, cssFontStyle);
 
             var style = new TextStyle
             {

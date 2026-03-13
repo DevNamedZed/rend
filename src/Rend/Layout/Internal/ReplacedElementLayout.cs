@@ -1,5 +1,6 @@
 using System;
 using Rend.Css;
+using Rend.Css.Properties.Internal;
 using Rend.Fonts;
 using Rend.Style;
 using Rend.Text;
@@ -221,6 +222,111 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
+        /// Tries to extract intrinsic dimensions from a data: URI image source.
+        /// Only decodes enough of the header to read PNG/JPEG/GIF dimensions.
+        /// </summary>
+        public static bool TryGetDataUriDimensions(StyledElement element, out float width, out float height)
+        {
+            width = 0;
+            height = 0;
+            if (element.TagName != "img")
+            {
+                return false;
+            }
+
+            string? src = element.GetAttribute("src");
+            if (src == null || !src.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // Find the base64 data portion
+            int commaIdx = src.IndexOf(',');
+            if (commaIdx < 0 || commaIdx >= src.Length - 1)
+            {
+                return false;
+            }
+
+            // Only decode enough bytes to read headers (first ~100 bytes of image)
+            string base64 = src.Substring(commaIdx + 1);
+            // 100 bytes of image data = ceil(100 * 4/3) = 134 base64 chars
+            int charsNeeded = Math.Min(base64.Length, 512);
+            // Trim to multiple of 4 for valid base64
+            charsNeeded = (charsNeeded / 4) * 4;
+            if (charsNeeded < 32)
+            {
+                return false;
+            }
+
+            byte[] data;
+            try
+            {
+                data = Convert.FromBase64String(base64.Substring(0, charsNeeded));
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (data.Length < 8)
+            {
+                return false;
+            }
+
+            // PNG: IHDR at offset 8, width at 16, height at 20 (big-endian)
+            if (data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47)
+            {
+                if (data.Length >= 24)
+                {
+                    width = (data[16] << 24) | (data[17] << 16) | (data[18] << 8) | data[19];
+                    height = (data[20] << 24) | (data[21] << 16) | (data[22] << 8) | data[23];
+                    return width > 0 && height > 0;
+                }
+                return false;
+            }
+
+            // JPEG: scan for SOF0/SOF2 marker
+            if (data[0] == 0xFF && data[1] == 0xD8)
+            {
+                int offset = 2;
+                while (offset + 9 < data.Length)
+                {
+                    if (data[offset] != 0xFF)
+                    {
+                        break;
+                    }
+                    byte marker = data[offset + 1];
+                    if (marker == 0xC0 || marker == 0xC2)
+                    {
+                        height = (data[offset + 5] << 8) | data[offset + 6];
+                        width = (data[offset + 7] << 8) | data[offset + 8];
+                        return width > 0 && height > 0;
+                    }
+                    if (offset + 3 < data.Length)
+                    {
+                        int segLen = (data[offset + 2] << 8) | data[offset + 3];
+                        offset += 2 + segLen;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                return false;
+            }
+
+            // GIF: width at 6, height at 8 (little-endian)
+            if (data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 && data.Length >= 10)
+            {
+                width = data[6] | (data[7] << 8);
+                height = data[8] | (data[9] << 8);
+                return width > 0 && height > 0;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Resolve the content dimensions for a replaced element.
         /// </summary>
         public static void ResolveDimensions(LayoutBox box, ComputedStyle style,
@@ -237,15 +343,29 @@ namespace Rend.Layout.Internal
                 (el.TagName == "input" || el.TagName == "select" || el.TagName == "textarea"
                  || el.TagName == "meter" || el.TagName == "progress");
 
-            // Resolve deferred percentage widths (encoded as negative fractions)
-            if (width < 0 && width > -1.01f)
+            // Resolve deferred percentage widths (encoded with sentinel offset)
+            if (DeferredPercent.IsEncoded(width))
             {
-                width = -width * containingWidth;
+                width = DeferredPercent.Resolve(width, containingWidth);
                 if (style.BoxSizing == CssBoxSizing.BorderBox)
+                {
                     width -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
+                }
             }
-            if (height < 0 && height > -1.01f)
+            else if (!float.IsNaN(width) && style.BoxSizing == CssBoxSizing.BorderBox)
+            {
+                // Fixed pixel width with border-box: subtract padding+border
+                width -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
+            }
+            if (DeferredPercent.IsEncoded(height))
+            {
                 height = float.NaN; // percentage heights without containing block → auto
+            }
+            else if (!float.IsNaN(height) && style.BoxSizing == CssBoxSizing.BorderBox)
+            {
+                // Fixed pixel height with border-box: subtract padding+border
+                height -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
+            }
 
             if (float.IsNaN(width) && float.IsNaN(height))
             {
@@ -270,11 +390,15 @@ namespace Rend.Layout.Internal
             float minH = style.MinHeight;
             float maxH = style.MaxHeight;
 
-            // Resolve deferred percentage min/max (encoded as negative fractions)
-            if (maxW < 0 && maxW > -1.01f)
-                maxW = -maxW * containingWidth;
-            if (minW < 0 && minW > -1.01f)
-                minW = -minW * containingWidth;
+            // Resolve deferred percentage min/max (encoded with sentinel offset)
+            if (DeferredPercent.IsEncoded(maxW))
+            {
+                maxW = DeferredPercent.Resolve(maxW, containingWidth);
+            }
+            if (DeferredPercent.IsEncoded(minW))
+            {
+                minW = DeferredPercent.Resolve(minW, containingWidth);
+            }
 
             if (!float.IsNaN(maxW) && maxW > 0 && width > maxW)
             {

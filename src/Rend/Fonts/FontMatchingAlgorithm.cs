@@ -40,9 +40,8 @@ namespace Rend.Fonts
 
             try
             {
-                // CSS font-family may be a comma-separated list (e.g. "Arial, sans-serif").
-                // Try each family in order until one matches.
-                var families = ParseFontFamilyList(requested.Family);
+                // Walk the font-family fallback chain stored in the descriptor.
+                var families = requested.Families;
 
                 scratchA.Clear();
                 foreach (var family in families)

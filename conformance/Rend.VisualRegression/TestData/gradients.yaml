@@ -1,0 +1,264 @@
+# Gradients
+# Visual regression tests for gradients
+tests:
+  - id: gradient-diagonal
+    name: Diagonal Gradient
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:100px; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:8px; margin-bottom:10px;"></div>
+                          <div style="width:200px; height:100px; background:linear-gradient(45deg, #f093fb 0%, #f5576c 100%); border-radius:8px;"></div>
+                      </body></html>
+
+  - id: gradient-radial
+    name: Radial Gradient
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:200px; background:radial-gradient(circle, #3498db, #2c3e50); border-radius:8px;"></div>
+                      </body></html>
+
+  - id: gradient-multi-stop
+    name: Multi-Stop Gradient
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:380px; height:60px; background:linear-gradient(to right, #e74c3c, #f39c12, #2ecc71, #3498db, #9b59b6); border-radius:6px;"></div>
+                      </body></html>
+
+  - id: pp-gradient-horizontal
+    name: Horizontal Gradient
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:300px; height:60px; background:linear-gradient(to right, #3498db, #9b59b6); border-radius:4px;"></div>
+                      </body></html>
+
+  - id: pp-gradient-vertical
+    name: Vertical Gradient
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:100px; background:linear-gradient(to bottom, #e74c3c, #f39c12); border-radius:4px;"></div>
+                      </body></html>
+
+  - id: pp-gradient-diagonal
+    name: Diagonal Gradient
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:300px; height:100px; background:linear-gradient(135deg, #3498db, #9b59b6); border-radius:4px;"></div>
+                      </body></html>
+
+  - id: pp-opacity-gradient
+    name: Opacity on Gradient
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:300px; height:80px; background:linear-gradient(to right, #3498db, #e74c3c); opacity:0.7;"></div>
+                      </body></html>
+
+  - id: pp-radial-gradient
+    name: Radial Gradient
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:200px; background:radial-gradient(circle, #3498db, #2c3e50);"></div>
+                      </body></html>
+
+  - id: pp-linear-gradient-multi
+    name: Multi-stop Gradient
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:300px; height:60px; background:linear-gradient(to right, #e74c3c, #f39c12, #2ecc71, #3498db);"></div>
+                      </body></html>
+
+  - id: pp-gradient-buttons
+    name: Gradient Button Shapes
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:10px;">
+                              <div style="width:120px; height:36px; background:linear-gradient(to bottom, #3498db, #2980b9); border-radius:4px;"></div>
+                              <div style="width:120px; height:36px; background:linear-gradient(to bottom, #2ecc71, #27ae60); border-radius:18px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-gradient-overlay-box
+    name: Gradient Overlaid Box
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="position:relative; width:200px; height:100px;">
+                              <div style="position:absolute; inset:0; background:linear-gradient(135deg, #667eea, #764ba2); border-radius:8px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-gradient-radial-position
+    name: Radial Gradient Custom Position
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:100px; background:radial-gradient(circle at 30% 40%, #3498db, #2c3e50);"></div>
+                      </body></html>
+
+  - id: pp-linear-gradient-diagonal
+    name: Diagonal Linear Gradient
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:100px; background:linear-gradient(135deg, #3498db, #e74c3c, #2ecc71);"></div>
+                      </body></html>
+
+  - id: pp-conic-gradient
+    name: Conic Gradient
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:150px; height:150px; border-radius:50%; background:conic-gradient(#3498db, #e74c3c, #2ecc71, #3498db);"></div>
+                      </body></html>
+
+  - id: pp-radial-gradient-ellipse
+    name: Radial Gradient Ellipse
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:250px; height:100px; background:radial-gradient(ellipse at center, #3498db, #2c3e50);"></div>
+                      </body></html>
+
+  - id: pp-linear-gradient-angle
+    name: Linear Gradient 135deg
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:100px; background:linear-gradient(135deg, #3498db, #e74c3c);"></div>
+                      </body></html>
+
+  - id: pp-linear-gradient-horizontal
+    name: Linear Gradient Horizontal
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:250px; height:80px; background:linear-gradient(to right, #3498db, #e74c3c);"></div>
+                      </body></html>
+
+  - id: pp-linear-gradient-diagonal-2
+    name: Linear Gradient Diagonal
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:200px; background:linear-gradient(45deg, #3498db, #2ecc71);"></div>
+                      </body></html>
+
+  - id: pp-radial-gradient-circle
+    name: Radial Gradient Circle
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:200px; background:radial-gradient(circle, #3498db, #2c3e50);"></div>
+                      </body></html>
+
+  - id: pp-gradient-three-stop
+    name: Three Color Stop Gradient
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:250px; height:80px; background:linear-gradient(to right, #3498db, #2ecc71, #e74c3c);"></div>
+                      </body></html>
+
+  - id: pp-linear-gradient-to-bottom
+    name: Linear Gradient To Bottom
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:100px; background:linear-gradient(to bottom, #3498db, #2c3e50);"></div>
+                      </body></html>
+
+  - id: pp-multi-gradient-stops
+    name: Gradient with Many Stops
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:300px; height:60px; background:linear-gradient(to right, #e74c3c, #f39c12, #2ecc71, #3498db, #9b59b6);"></div>
+                      </body></html>
+
+  - id: pp-radial-gradient-offset
+    name: Radial Gradient Off-Center
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:200px; background:radial-gradient(circle at 30% 30%, #3498db, #2c3e50);"></div>
+                      </body></html>
+
+  - id: pp-conic-gradient-simple
+    name: Conic Gradient Simple
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:150px; height:150px; border-radius:50%; background:conic-gradient(#3498db, #e74c3c, #2ecc71, #3498db);"></div>
+                      </body></html>
+
+  - id: pp-linear-gradient-4color
+    name: Four Color Linear Gradient
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:280px; height:80px; background:linear-gradient(to right, #3498db 0%, #e74c3c 33%, #2ecc71 66%, #f39c12 100%);"></div>
+                      </body></html>
+
+  - id: pp-gradient-radial-size
+    name: Radial Gradient Sized
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:200px; background:radial-gradient(circle closest-side, #3498db, #2c3e50);"></div>
+                      </body></html>
+
+  - id: pp-gradient-linear-3stop
+    name: Linear Gradient Three Stops
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:250px; height:80px; background:linear-gradient(to right, #3498db, #2ecc71, #e74c3c);"></div>
+                      </body></html>
+
+  - id: pp-radial-gradient-large
+    name: Radial Gradient Large Circle
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:200px; background:radial-gradient(circle at center, #3498db, #2ecc71, #e74c3c);"></div>
+                      </body></html>
+
+  - id: pp-gradient-vertical-3stop
+    name: Vertical Gradient Three Stops
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:120px; background:linear-gradient(to bottom, #3498db, #2ecc71 50%, #e74c3c);"></div>
+                      </body></html>
+
+  - id: pp-gradient-45deg-3stop
+    name: 45 Degree Gradient Three Stops
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:120px; background:linear-gradient(45deg, #3498db, #2ecc71, #e74c3c);"></div>
+                      </body></html>
+
+  - id: pp-gradient-linear-45
+    name: Linear Gradient 45deg Two Colors
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:100px; background:linear-gradient(45deg, #3498db, #e74c3c);"></div>
+                      </body></html>
+
+  - id: pp-gradient-radial-centered
+    name: Radial Gradient Centered
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:200px; height:200px; background:radial-gradient(circle, #3498db, #2ecc71);"></div>
+                      </body></html>
+
+  - id: pp-gradient-three-color-horizontal
+    name: Three Color Horizontal Gradient
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:250px; height:60px; background:linear-gradient(to right, #3498db, #2ecc71, #e74c3c);"></div>
+                      </body></html>
+
+  - id: pp-linear-gradient-vertical-3stop
+    name: Vertical Three Stop Gradient
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:120px; height:180px; background:linear-gradient(to bottom, #3498db, #ecf0f1, #e74c3c);"></div>
+                      </body></html>
+
+  - id: gradient-linear-basic
+    name: Linear Gradient Basic
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; height:60px; background:linear-gradient(to right, #3498db, #2ecc71); border-radius:4px; margin-bottom:8px;"></div>
+                          <div style="width:200px; height:60px; background:linear-gradient(to bottom, #e74c3c, #f39c12); border-radius:4px; margin-bottom:8px;"></div>
+                          <div style="width:200px; height:60px; background:linear-gradient(135deg, #9b59b6, #1abc9c); border-radius:4px;"></div>
+                      </body></html>
+
+  - id: gradient-linear-stops
+    name: Linear Gradient with Stops
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:300px; height:50px; background:linear-gradient(to right, red, orange, yellow, green, blue); margin-bottom:8px;"></div>
+                          <div style="width:300px; height:50px; background:linear-gradient(to right, #333 0%, #333 50%, #eee 50%, #eee 100%); margin-bottom:8px;"></div>
+                          <div style="width:300px; height:50px; background:linear-gradient(to right, #ffffff, #3498db);"></div>
+                      </body></html>

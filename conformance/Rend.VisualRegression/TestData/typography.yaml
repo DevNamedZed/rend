@@ -1,0 +1,387 @@
+# Typography
+# Visual regression tests for typography
+tests:
+  - id: adv-text-overflow-ellipsis
+    name: Text Overflow Ellipsis
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; background:#ecf0f1; padding:8px; margin-bottom:8px;">This is a very long text that should be truncated with an ellipsis</div>
+                          <div style="width:150px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; background:#e8f4fd; padding:8px;">Another long text that will overflow and show dots</div>
+                      </body></html>
+
+  - id: adv-text-whitespace-nowrap
+    name: White Space Nowrap
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="width:200px; white-space:nowrap; overflow:hidden; background:#ecf0f1; padding:8px; border:1px solid #ccc; margin-bottom:8px;">This text will not wrap to a new line</div>
+                          <div style="width:200px; white-space:normal; background:#e8f4fd; padding:8px; border:1px solid #ccc;">This text will wrap normally within the container</div>
+                      </body></html>
+
+  - id: adv-text-word-break
+    name: Word Break Break All
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="width:120px; word-break:break-all; background:#ecf0f1; padding:8px; border:1px solid #ccc; margin-bottom:8px;">Superlongwordthatwillbebroken</div>
+                          <div style="width:120px; overflow-wrap:break-word; background:#e8f4fd; padding:8px; border:1px solid #ccc;">Anotherlongword here</div>
+                      </body></html>
+
+  - id: adv-text-indent
+    name: Text Indent
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <p style="text-indent:30px; margin:0 0 8px 0; background:#ecf0f1; padding:8px;">This paragraph has a 30px text indent on the first line only.</p>
+                          <p style="text-indent:50px; margin:0; background:#e8f4fd; padding:8px;">This paragraph has a 50px text indent applied to its first line.</p>
+                      </body></html>
+
+  - id: bug065-soft-hyphen
+    name: Soft hyphen visible at line break
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+      <div style="width:150px; background:#eee; padding:8px; border:1px solid #ccc;">
+      Donau&#xAD;dampf&#xAD;schiff&#xAD;fahrts&#xAD;gesellschaft
+      </div>
+      <div style="width:120px; background:#f0f0f0; padding:8px; border:1px solid #ccc; margin-top:8px;">
+      Schwei&#xAD;zer&#xAD;hoch&#xAD;deutsch
+      </div>
+      </body></html>
+
+  - id: bug046-font-family-fallback
+    name: font-family fallback chain
+    html: |
+      <html><body style="margin:0; padding:10px; font-size:14px; line-height:1.5;">
+      <p style="font-family: 'NonExistent Font', Arial, sans-serif;">Fallback to Arial/sans-serif</p>
+      <p style="font-family: 'Also Fake', 'Courier New', monospace;">Fallback to Courier New/monospace</p>
+      <p style="font-family: serif;">Generic serif</p>
+      <p style="font-family: 'Times New Roman', 'Noto Serif', serif;">Times New Roman chain</p>
+      </body></html>
+
+  - id: bug059-justify-shaped
+    name: Justified text with shaped runs
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.5;">
+      <div style="width:300px; text-align:justify; background:#f9f9f9; padding:8px; border:1px solid #ddd;">
+      This is a paragraph with justified text alignment. The words should be evenly spaced across the full width of the container, creating straight left and right edges.
+      </div>
+      <div style="width:250px; text-align:justify; background:#f0f0f0; padding:8px; border:1px solid #ccc; margin-top:8px;">
+      Another justified paragraph with different width. Spacing between words adjusts to fill each line completely from edge to edge.
+      </div>
+      </body></html>
+
+  - id: bug065-soft-hyphen-multi
+    name: Soft hyphen multiple break points
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.5;">
+      <div style="width:100px; background:#f5f5f5; padding:8px; border:1px solid #ddd; margin-bottom:8px;">
+      In&#xAD;ter&#xAD;na&#xAD;tion&#xAD;al&#xAD;i&#xAD;za&#xAD;tion
+      </div>
+      <div style="width:80px; background:#f0f0f0; padding:8px; border:1px solid #ccc; margin-bottom:8px;">
+      Su&#xAD;per&#xAD;cal&#xAD;i&#xAD;frag&#xAD;il&#xAD;is&#xAD;tic
+      </div>
+      <div style="width:200px; background:#fafafa; padding:8px; border:1px solid #ddd;">
+      This word fits: In&#xAD;ter&#xAD;na&#xAD;tion&#xAD;al&#xAD;i&#xAD;za&#xAD;tion (no hyphen needed)
+      </div>
+      </body></html>
+
+  - id: bug059-justify-last-line
+    name: "Justify: last line not stretched"
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.5;">
+      <div style="width:280px; text-align:justify; background:#f5f5f5; padding:10px; border:1px solid #ddd;">
+      The quick brown fox jumps over the lazy dog. This text should be fully justified on all lines except the very last one, which should be left-aligned.
+      </div>
+      </body></html>
+
+  - id: pp-text-single-span
+    name: Single Span of Text
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff; font-family:Arial,sans-serif; font-size:16px;">
+                          <span>Hello World</span>
+                      </body></html>
+
+  - id: pp-text-no-padding
+    name: Text No Padding
+    html: |
+      <html style="margin:0; padding:0;"><body style="margin:0; padding:0; background:#fff; font-family:Arial,sans-serif; font-size:16px; line-height:18px;"><span style="background:#ff0;">H</span></body></html>
+
+  - id: pp-text-single-div
+    name: Single Div with Text
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff; font-family:Arial,sans-serif; font-size:16px; line-height:normal;">
+                          <div>Hello World</div>
+                      </body></html>
+
+  - id: pp-text-14px
+    name: Text at 14px
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff; font-family:Arial,sans-serif; font-size:14px; line-height:normal;">
+                          <span>The quick brown fox</span>
+                      </body></html>
+
+  - id: pp-text-bold
+    name: Bold Text
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff; font-family:Arial,sans-serif; font-size:16px; line-height:normal;">
+                          <b>Bold Text</b>
+                      </body></html>
+
+  - id: pp-text-colored-bg
+    name: Text on Colored Background
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff; font-family:Arial,sans-serif; font-size:16px; line-height:normal;">
+                          <div style="background:#eee; padding:8px;">Text on gray</div>
+                      </body></html>
+
+  - id: pp-text-multiline
+    name: Multi-line text wrapping
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff; font-family:Arial,sans-serif; font-size:14px; line-height:normal;">
+                          <div style="width:200px;">The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.</div>
+                      </body></html>
+
+  - id: pp-text-multiline-16
+    name: Multi-line text at 16px
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff; font-family:Arial,sans-serif; font-size:16px; line-height:normal;">
+                          <div style="width:200px;">The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.</div>
+                      </body></html>
+
+  - id: pp-text-multiline-lh12
+    name: "Multi-line text line-height:1.2"
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff; font-family:Arial,sans-serif; font-size:14px; line-height:1.2;">
+                          <div style="width:200px;">The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.</div>
+                      </body></html>
+
+  - id: pp-text-multiline-bold
+    name: Multi-line bold text
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff; font-family:Arial,sans-serif; font-size:14px; line-height:normal;">
+                          <div style="width:200px;"><b>The quick brown fox jumps over the lazy dog. The quick brown fox jumps.</b></div>
+                      </body></html>
+
+  - id: pp-text-heading-stack
+    name: Stacked headings
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff; font-family:Arial,sans-serif; line-height:1.2;">
+                          <h1 style="font-size:24px; margin:4px 0;">Heading 1</h1>
+                          <h2 style="font-size:20px; margin:4px 0;">Heading 2</h2>
+                          <h3 style="font-size:18px; margin:4px 0;">Heading 3</h3>
+                          <h4 style="font-size:16px; margin:4px 0;">Heading 4</h4>
+                          <h5 style="font-size:14px; margin:4px 0;">Heading 5</h5>
+                          <h6 style="font-size:12px; margin:4px 0;">Heading 6</h6>
+                      </body></html>
+
+  - id: pp-text-wrap-14
+    name: Text wrapping at 14px in 200px
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">The quick brown fox jumps over the lazy dog and runs away.</div>
+                      </body></html>
+
+  - id: pp-text-center-200
+    name: Centered text in 200px
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; font-family:Arial,sans-serif; font-size:14px; text-align:center;">Centered text content</div>
+                      </body></html>
+
+  - id: pp-text-right-200
+    name: Right-aligned text in 200px
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; font-family:Arial,sans-serif; font-size:14px; text-align:right;">Right aligned text</div>
+                      </body></html>
+
+  - id: pp-text-justify-200
+    name: Justified text in 200px
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:200px; font-family:Arial,sans-serif; font-size:14px; text-align:justify;">The quick brown fox jumps over the lazy dog and runs away fast.</div>
+                      </body></html>
+
+  - id: pp-mono-courier
+    name: Courier New 13px
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="font-family:'Courier New',monospace; font-size:13px;">Hello World 123</div>
+                      </body></html>
+
+  - id: pp-mono-pre
+    name: Pre with explicit Courier New
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <pre style="margin:0; font-family:'Courier New',monospace; font-size:13px;">Line 1
+        indented line
+          double indent
+      Line 4</pre>
+                      </body></html>
+
+  - id: pp-mono-long
+    name: Long monospace line 13px
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <pre style="margin:0; font-family:'Courier New',monospace; font-size:13px;">abcdefghij klmnopqrst uvwxyz 1234567890</pre>
+                      </body></html>
+
+  - id: pp-mono-generic
+    name: Generic monospace 13px
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <pre style="margin:0; font-family:monospace; font-size:13px;">abcdefghij klmnopqrst uvwxyz 1234567890</pre>
+                      </body></html>
+
+  - id: pp-valign-super
+    name: Vertical Align Super
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff; font-family:Arial,sans-serif; font-size:14px; line-height:2;">
+                          <p style="margin:0;">Normal <span style="vertical-align:super; font-size:10px;">superscript</span> text</p>
+                      </body></html>
+
+  - id: pp-valign-sub
+    name: Vertical Align Sub
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff; font-family:Arial,sans-serif; font-size:14px; line-height:2;">
+                          <p style="margin:0;">Normal <span style="vertical-align:sub; font-size:10px;">subscript</span> text</p>
+                      </body></html>
+
+  - id: pp-valign-middle
+    name: Vertical Align Middle
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff; font-family:Arial,sans-serif; font-size:20px; line-height:1.5;">
+                          <p style="margin:0;">Big <span style="font-size:10px; vertical-align:middle;">middle</span> text</p>
+                      </body></html>
+
+  - id: pp-valign-top-bottom
+    name: Vertical Align Top Bottom
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff; font-family:Arial,sans-serif; font-size:20px; line-height:1.5;">
+                          <p style="margin:0;">Big <span style="font-size:10px; vertical-align:top;">top</span> and <span style="font-size:10px; vertical-align:bottom;">bottom</span></p>
+                      </body></html>
+
+  - id: pp-max-content
+    name: Width max-content
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="width:max-content; font-family:Arial,sans-serif; font-size:14px; background:#eee; padding:4px;">Hello World</div>
+                      </body></html>
+
+  - id: pp-underline-arial
+    name: Underline Arial 16px
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="font-family:Arial,sans-serif; font-size:16px; text-decoration:underline;">Underlined text</div>
+                      </body></html>
+
+  - id: pp-line-through-arial
+    name: Line-through Arial 16px
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="font-family:Arial,sans-serif; font-size:16px; text-decoration:line-through;">Strikethrough text</div>
+                      </body></html>
+
+  - id: typo-font-sizes
+    name: Font Sizes
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; line-height:1.2;">
+                          <p style="font-size:10px; margin:0 0 4px 0;">Font size 10px</p>
+                          <p style="font-size:14px; margin:0 0 4px 0;">Font size 14px</p>
+                          <p style="font-size:18px; margin:0 0 4px 0;">Font size 18px</p>
+                          <p style="font-size:24px; margin:0 0 4px 0;">Font size 24px</p>
+                          <p style="font-size:32px; margin:0;">Font size 32px</p>
+                      </body></html>
+
+  - id: typo-font-weight
+    name: Font Weight
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:16px; line-height:1.2;">
+                          <p style="font-weight:100; margin:0 0 4px 0;">Weight 100 (Thin)</p>
+                          <p style="font-weight:300; margin:0 0 4px 0;">Weight 300 (Light)</p>
+                          <p style="font-weight:400; margin:0 0 4px 0;">Weight 400 (Normal)</p>
+                          <p style="font-weight:600; margin:0 0 4px 0;">Weight 600 (Semi-Bold)</p>
+                          <p style="font-weight:700; margin:0 0 4px 0;">Weight 700 (Bold)</p>
+                          <p style="font-weight:900; margin:0;">Weight 900 (Black)</p>
+                      </body></html>
+
+  - id: typo-text-alignment
+    name: Text Alignment
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <p style="text-align:left; background:#f0f0f0; padding:6px; margin:0 0 6px 0; height:20px;">Left aligned</p>
+                          <p style="text-align:center; background:#f0f0f0; padding:6px; margin:0 0 6px 0; height:20px;">Center aligned</p>
+                          <p style="text-align:right; background:#f0f0f0; padding:6px; margin:0 0 6px 0; height:20px;">Right aligned</p>
+                          <p style="text-align:justify; background:#f0f0f0; padding:6px; margin:0; height:40px;">Justified text that should stretch to fill the entire width of its container element evenly.</p>
+                      </body></html>
+
+  - id: typo-text-decoration
+    name: Text Decoration
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:16px; line-height:1.4;">
+                          <p style="text-decoration:underline; margin:0 0 6px 0;">Underlined text</p>
+                          <p style="text-decoration:line-through; margin:0 0 6px 0;">Strikethrough text</p>
+                          <p style="text-decoration:overline; margin:0 0 6px 0;">Overlined text</p>
+                          <p style="text-decoration:none; margin:0;">No decoration</p>
+                      </body></html>
+
+  - id: typo-line-height
+    name: Line Height
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px;">
+                          <p style="line-height:1.0; background:#e8f4fd; padding:4px; margin:0 0 8px 0;">Line height 1.0. This is a longer text that should show tight spacing between lines when it wraps.</p>
+                          <p style="line-height:1.5; background:#fde8e8; padding:4px; margin:0 0 8px 0;">Line height 1.5. This is a longer text that should show normal spacing between lines when it wraps.</p>
+                          <p style="line-height:2.0; background:#e8fde8; padding:4px; margin:0;">Line height 2.0. This is a longer text that should show generous spacing between lines when it wraps.</p>
+                      </body></html>
+
+  - id: text-indent
+    name: Text Indent
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <p style="margin:0 0 8px; text-indent:30px; background:#f0f0f0; padding:4px;">
+                              This paragraph has a 30px text indent on the first line. The second line should not be indented.
+                          </p>
+                          <p style="margin:0; text-indent:50px; background:#e0e0e0; padding:4px;">
+                              This has 50px indent applied.
+                          </p>
+                      </body></html>
+
+  - id: letter-spacing
+    name: Letter Spacing
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <p style="margin:0 0 6px; letter-spacing:0;">Normal letter spacing</p>
+                          <p style="margin:0 0 6px; letter-spacing:2px;">2px letter spacing</p>
+                          <p style="margin:0 0 6px; letter-spacing:5px;">5px letter spacing</p>
+                          <p style="margin:0; letter-spacing:-1px;">-1px letter spacing (tighter)</p>
+                      </body></html>
+
+  - id: word-spacing
+    name: Word Spacing
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <p style="margin:0 0 6px; word-spacing:0;">Normal word spacing between words</p>
+                          <p style="margin:0 0 6px; word-spacing:5px;">5px extra word spacing between words</p>
+                          <p style="margin:0; word-spacing:10px;">10px extra word spacing between words</p>
+                      </body></html>
+
+  - id: vertical-align
+    name: Vertical Align in Inline Context
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <p style="margin:0 0 8px; line-height:2;">
+                              Normal <span style="vertical-align:super; font-size:10px;">superscript</span>
+                              and <span style="vertical-align:sub; font-size:10px;">subscript</span> text
+                          </p>
+                          <p style="margin:0; font-size:20px; line-height:1.5;">
+                              Big <span style="font-size:10px; vertical-align:middle;">middle</span>
+                              and <span style="font-size:10px; vertical-align:top;">top</span>
+                              and <span style="font-size:10px; vertical-align:bottom;">bottom</span>
+                          </p>
+                      </body></html>
+
+  - id: text-transform
+    name: Text Transform
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <p style="margin:0 0 6px; text-transform:uppercase;">this text should be uppercase</p>
+                          <p style="margin:0 0 6px; text-transform:lowercase;">THIS TEXT SHOULD BE LOWERCASE</p>
+                          <p style="margin:0; text-transform:capitalize;">each word should be capitalized</p>
+                      </body></html>

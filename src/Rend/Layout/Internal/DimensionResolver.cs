@@ -28,10 +28,10 @@ namespace Rend.Layout.Internal
                     width -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
                 }
             }
-            // Deferred percentage width (encoded as negative fraction, e.g. -0.5 = 50%, -1.5 = 150%)
-            else if (specifiedWidth < 0 && !float.IsNaN(specifiedWidth))
+            // Deferred percentage width (encoded with sentinel offset)
+            else if (DeferredPercent.IsEncoded(specifiedWidth))
             {
-                width = -specifiedWidth * containingBlockWidth;
+                width = DeferredPercent.Resolve(specifiedWidth, containingBlockWidth);
                 if (style.BoxSizing == CssBoxSizing.BorderBox)
                 {
                     width -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
@@ -61,6 +61,18 @@ namespace Rend.Layout.Internal
             // Apply min/max constraints (resolve deferred percentages)
             float minW = ResolvePercentWidth(style.MinWidth, containingBlockWidth);
             float maxW = ResolvePercentWidth(style.MaxWidth, containingBlockWidth);
+            if (style.BoxSizing == CssBoxSizing.BorderBox)
+            {
+                float hExtra = box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth;
+                if (!float.IsNaN(minW) && minW >= 0)
+                {
+                    minW = Math.Max(0, minW - hExtra);
+                }
+                if (!float.IsNaN(maxW) && maxW >= 0)
+                {
+                    maxW = Math.Max(0, maxW - hExtra);
+                }
+            }
             if (!SizingKeyword.IsSizingKeyword(style.MinWidth)) width = ApplyMinMax(width, minW, float.NaN);
             if (!SizingKeyword.IsSizingKeyword(style.MaxWidth)) width = ApplyMinMax(width, float.NaN, maxW);
 
@@ -68,14 +80,18 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
-        /// Resolve a width value that may be a deferred percentage (negative fraction).
+        /// Resolve a width value that may be a deferred percentage (sentinel offset encoding).
         /// </summary>
         public static float ResolvePercentWidth(float value, float containingBlockWidth)
         {
             if (float.IsNegativeInfinity(value))
+            {
                 return value; // deferred calc — needs style context, handle at call site
-            if (value < 0 && !float.IsNaN(value))
-                return -value * containingBlockWidth;
+            }
+            if (DeferredPercent.IsEncoded(value))
+            {
+                return DeferredPercent.Resolve(value, containingBlockWidth);
+            }
             return value;
         }
 
@@ -92,14 +108,18 @@ namespace Rend.Layout.Internal
             {
                 specifiedHeight = ResolveDeferredCalc(style, PropertyId.Height, containingBlockHeight);
             }
-            // Negative values encode deferred percentage heights (e.g., -0.5 = 50%).
+            // Deferred percentage heights (encoded with sentinel offset).
             // Resolve against the containing block height, or treat as auto if unknown.
-            else if (specifiedHeight < 0 && !float.IsNaN(specifiedHeight))
+            else if (DeferredPercent.IsEncoded(specifiedHeight))
             {
                 if (float.IsNaN(containingBlockHeight) || containingBlockHeight <= 0)
+                {
                     specifiedHeight = float.NaN; // treat as auto
+                }
                 else
-                    specifiedHeight = -specifiedHeight * containingBlockHeight;
+                {
+                    specifiedHeight = DeferredPercent.Resolve(specifiedHeight, containingBlockHeight);
+                }
             }
 
             // Sizing keywords (fit-content, min-content, max-content) → treat as auto for height
@@ -123,14 +143,27 @@ namespace Rend.Layout.Internal
 
             float height = specifiedHeight;
 
+            float vExtra = 0;
             if (style.BoxSizing == CssBoxSizing.BorderBox)
             {
-                height -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
+                vExtra = box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth;
+                height -= vExtra;
             }
 
-            height = ApplyMinMax(height,
-                ResolveMinMaxH(style.MinHeight, containingBlockHeight),
-                ResolveMinMaxH(style.MaxHeight, containingBlockHeight));
+            float minH = ResolveMinMaxH(style.MinHeight, containingBlockHeight);
+            float maxH = ResolveMinMaxH(style.MaxHeight, containingBlockHeight);
+            if (vExtra > 0)
+            {
+                if (!float.IsNaN(minH) && minH >= 0)
+                {
+                    minH = Math.Max(0, minH - vExtra);
+                }
+                if (!float.IsNaN(maxH) && maxH >= 0)
+                {
+                    maxH = Math.Max(0, maxH - vExtra);
+                }
+            }
+            height = ApplyMinMax(height, minH, maxH);
 
             return Math.Max(0, height);
         }
@@ -139,7 +172,7 @@ namespace Rend.Layout.Internal
         /// Resolve a min/max height value, handling deferred percentage encoding.
         /// </summary>
         /// <summary>
-        /// Resolve a height value that may be a deferred percentage (negative fraction).
+        /// Resolve a height value that may be a deferred percentage (sentinel offset encoding).
         /// </summary>
         public static float ResolvePercentHeight(float value, float containingBlockHeight)
         {
@@ -148,11 +181,13 @@ namespace Rend.Layout.Internal
 
         private static float ResolveMinMaxH(float value, float containingBlockHeight)
         {
-            if (value < 0 && !float.IsNaN(value))
+            if (DeferredPercent.IsEncoded(value))
             {
                 if (float.IsNaN(containingBlockHeight) || containingBlockHeight <= 0)
+                {
                     return float.NaN;
-                return -value * containingBlockHeight;
+                }
+                return DeferredPercent.Resolve(value, containingBlockHeight);
             }
             return value;
         }

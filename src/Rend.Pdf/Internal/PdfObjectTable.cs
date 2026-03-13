@@ -59,24 +59,27 @@ namespace Rend.Pdf.Internal
         /// Non-eligible objects (streams, encryption dict, catalog) are written normally.
         /// Returns metadata for xref stream entries.
         /// </summary>
-        public void WriteAllObjectsWithStreams(PdfWriter writer, int maxPerObjStream = 100)
+        public void WriteAllObjectsWithStreams(PdfWriter writer, int encryptObjectNumber = -1, int maxPerObjStream = 100)
         {
             // Phase 1: Identify which objects can go into object streams.
-            // Per PDF spec, these CANNOT go into object streams:
+            // Per PDF spec (ISO 32000-1 §7.6.5), these CANNOT go into object streams:
             // - Stream objects (they have their own stream data)
             // - The encryption dictionary object
             // - Objects whose generation != 0 (we always use gen 0)
-            // We keep it simple: pack all non-PdfStream objects into ObjStm groups.
 
             var normalIndices = new List<int>();   // indices of objects that must be written normally
             var compressibleIndices = new List<int>(); // indices of objects that can be packed
 
             for (int i = 0; i < _objects.Count; i++)
             {
-                if (_objects[i].Object is PdfStream)
+                if (_objects[i].Object is PdfStream || _objects[i].ObjectNumber == encryptObjectNumber)
+                {
                     normalIndices.Add(i);
+                }
                 else
+                {
                     compressibleIndices.Add(i);
+                }
             }
 
             // Phase 2: Write normal (non-compressible) objects directly

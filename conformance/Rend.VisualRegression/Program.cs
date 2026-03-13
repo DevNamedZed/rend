@@ -21,11 +21,18 @@ class Program
         Console.WriteLine("Visual Regression: Chrome vs Rend");
         Console.WriteLine();
 
-        // Create a timestamped run folder under the output root.
-        var outputRoot = FindOutputRoot();
+        // Create output directories:
+        //   output/          — per-run working directory for images, layout JSON, etc.
+        //   results/         — latest report.html + results.json (checked in)
+        //   results/history/ — timestamped copies of report + results (gitignored)
+        var projectRoot = FindProjectRoot();
         var runId = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
-        var outputDir = Path.Combine(outputRoot, runId);
+        var outputDir = Path.Combine(projectRoot, "output", runId);
+        var resultsDir = Path.Combine(projectRoot, "results");
+        var historyDir = Path.Combine(resultsDir, "history", runId);
         Directory.CreateDirectory(outputDir);
+        Directory.CreateDirectory(resultsDir);
+        Directory.CreateDirectory(historyDir);
 
         // Download Chrome 116 to match SkiaSharp's bundled Skia m116.
         const string chromeBuildId = "116.0.5845.96";
@@ -124,7 +131,9 @@ class Program
         for (int ai = 0; ai < args.Length; ai++)
         {
             if (args[ai] == "--parallel" && ai + 1 < args.Length && int.TryParse(args[ai + 1], out int p))
+            {
                 workerCount = Math.Clamp(p, 1, 32);
+            }
         }
         Console.WriteLine($"Workers: {workerCount}");
 
@@ -192,9 +201,22 @@ class Program
 
         Console.WriteLine($"Results: {sortedResults.Count} tests, {passCount} passed, {failCount} failed, {errorCount} errors, avg diff {avgDiff:F4}%");
         Console.WriteLine($"Duration: {totalSw.Elapsed.TotalSeconds:F1}s");
+
+        // Copy report and results to results/ (latest, for check-in)
+        var latestReportPath = Path.Combine(resultsDir, "report.html");
+        var latestJsonPath = Path.Combine(resultsDir, "results.json");
+        File.Copy(reportPath, latestReportPath, overwrite: true);
+        File.Copy(jsonPath, latestJsonPath, overwrite: true);
+
+        // Copy to results/history/{runId}/ for archive
+        File.Copy(reportPath, Path.Combine(historyDir, "report.html"), overwrite: true);
+        File.Copy(jsonPath, Path.Combine(historyDir, "results.json"), overwrite: true);
+
         Console.WriteLine($"Output:  {outputDir}");
-        Console.WriteLine($"Report:  {reportPath}");
-        Console.WriteLine($"JSON:    {jsonPath}");
+        Console.WriteLine($"Results: {resultsDir}");
+        Console.WriteLine($"History: {historyDir}");
+        Console.WriteLine($"Report:  {latestReportPath}");
+        Console.WriteLine($"JSON:    {latestJsonPath}");
 
         return failCount > 0 || errorCount > 0 ? 1 : 0;
     }
@@ -242,6 +264,27 @@ class Program
                     WaitUntil = new[] { WaitUntilNavigation.Load },
                 });
 
+                // Capture Chrome's layout tree via CDP
+                try
+                {
+                    result.ChromeLayout = await LayoutTreeDumper.DumpAsync(page);
+                    if (result.ChromeLayout != null)
+                    {
+                        var layoutJson = JsonSerializer.Serialize(result.ChromeLayout, new JsonSerializerOptions
+                        {
+                            WriteIndented = true,
+                            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                        });
+                        var layoutPath = Path.Combine(outputDir, $"{testCase.Id}-chrome-layout.json");
+                        File.WriteAllText(layoutPath, layoutJson);
+                        result.ChromeLayoutPath = layoutPath;
+                    }
+                }
+                catch
+                {
+                    // Layout dump is best-effort — don't fail the test
+                }
+
                 chromePng = await page.ScreenshotDataAsync(new ScreenshotOptions
                 {
                     Clip = new PuppeteerSharp.Media.Clip
@@ -261,7 +304,7 @@ class Program
             byte[] rendPng;
             try
             {
-                rendPng = Render.ToImage(html, new RenderOptions
+                var rendResult = Render.ToImageResult(html, new RenderOptions
                 {
                     PageSize = new SizeF(testCase.ViewportWidth, testCase.ViewportHeight),
                     MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
@@ -270,7 +313,30 @@ class Program
                     FontProvider = fontProvider,
                     TextShaper = textShaper,
                     FontMapper = fontMapper,
+                    CaptureLayoutTree = true,
                 });
+                rendPng = rendResult.Data;
+
+                // Save Rend layout tree
+                if (rendResult.LayoutTree != null)
+                {
+                    result.RendLayout = rendResult.LayoutTree;
+                    try
+                    {
+                        var rendLayoutJson = JsonSerializer.Serialize(rendResult.LayoutTree, new JsonSerializerOptions
+                        {
+                            WriteIndented = true,
+                            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                        });
+                        var rendLayoutPath = Path.Combine(outputDir, $"{testCase.Id}-rend-layout.json");
+                        File.WriteAllText(rendLayoutPath, rendLayoutJson);
+                        result.RendLayoutPath = rendLayoutPath;
+                    }
+                    catch
+                    {
+                        // Best-effort
+                    }
+                }
             }
             catch (Exception ex) when (IsNativeLibraryFailure(ex))
             {
@@ -363,21 +429,25 @@ class Program
         File.WriteAllText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    private static string FindOutputRoot()
+    private static string FindProjectRoot()
     {
         var dir = AppContext.BaseDirectory;
         while (dir != null)
         {
             if (File.Exists(Path.Combine(dir, "Rend.VisualRegression.csproj")))
-                return Path.Combine(dir, "output");
+            {
+                return dir;
+            }
             dir = Path.GetDirectoryName(dir);
         }
 
-        var candidate = Path.Combine(Directory.GetCurrentDirectory(), "conformance", "Rend.VisualRegression", "output");
-        if (Directory.Exists(Path.GetDirectoryName(candidate)!))
+        var candidate = Path.Combine(Directory.GetCurrentDirectory(), "conformance", "Rend.VisualRegression");
+        if (Directory.Exists(candidate))
+        {
             return candidate;
+        }
 
-        return Path.Combine(AppContext.BaseDirectory, "output");
+        return AppContext.BaseDirectory;
     }
 
     private static Rend.Fonts.IFontProvider CreateSharedFontProvider()

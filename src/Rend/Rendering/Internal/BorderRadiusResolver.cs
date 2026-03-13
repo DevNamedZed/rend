@@ -41,7 +41,7 @@ namespace Rend.Rendering.Internal
     {
         /// <summary>
         /// Resolve border-radius from style, handling deferred percentages.
-        /// Percentages are stored as negative fractions (e.g. -0.5 = 50%).
+        /// Percentages are stored via DeferredPercent sentinel offset encoding.
         /// They resolve against the element's border-box width (for rx) and height (for ry).
         /// </summary>
         public static BorderRadii Resolve(ComputedStyle style, RectF borderRect)
@@ -83,9 +83,9 @@ namespace Rend.Rendering.Internal
             else
             {
                 // No separate vertical value: for percentages, ry resolves against height; for px, ry = rx
-                if (hValue < 0 && !float.IsNaN(hValue) && !float.IsNegativeInfinity(hValue))
+                if (DeferredPercent.IsEncoded(hValue))
                 {
-                    float pct = -hValue;
+                    float pct = DeferredPercent.DecodeFraction(hValue);
                     ry = pct * boxHeight;
                 }
                 else
@@ -97,10 +97,9 @@ namespace Rend.Rendering.Internal
 
         private static float ResolveSingleRadius(float value, float boxDimension)
         {
-            if (value < 0 && !float.IsNaN(value) && !float.IsNegativeInfinity(value))
+            if (DeferredPercent.IsEncoded(value))
             {
-                // Deferred percentage: -0.5 = 50%
-                return (-value) * boxDimension;
+                return DeferredPercent.Resolve(value, boxDimension);
             }
             if (float.IsNaN(value) || value < 0)
             {

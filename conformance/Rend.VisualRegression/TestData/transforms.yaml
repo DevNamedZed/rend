@@ -1,0 +1,206 @@
+# Transforms
+# Visual regression tests for transforms
+tests:
+  - id: transform-translate
+    name: CSS Transform Translate
+    html: |
+      <html><body style="margin:0; padding:30px;">
+                          <div style="width:80px; height:80px; background:#3498db; transform:translate(20px, 10px);"></div>
+                      </body></html>
+
+  - id: transform-scale-origin
+    name: CSS Transform Scale with Origin
+    html: |
+      <html><body style="margin:0; padding:30px;">
+                          <div style="width:100px; height:60px; background:#e74c3c; transform:scale(1.5); transform-origin:0 0;"></div>
+                      </body></html>
+
+  - id: transform-rotate
+    name: CSS Transform Rotate
+    html: |
+      <html><body style="margin:0; padding:60px;">
+                          <div style="width:80px; height:80px; background:#3498db; transform:rotate(45deg);"></div>
+                      </body></html>
+
+  - id: transform-multiple
+    name: Multiple Transforms
+    html: |
+      <html><body style="margin:0; padding:60px;">
+                          <div style="width:100px; height:60px; background:#e74c3c; transform:translate(10px, 5px) rotate(15deg);"></div>
+                      </body></html>
+
+  - id: pp-transform-translate
+    name: Transform Translate
+    html: |
+      <html><body style="margin:0; padding:30px; background:#fff;">
+                          <div style="width:80px; height:80px; background:#3498db; transform:translate(20px, 10px);"></div>
+                      </body></html>
+
+  - id: pp-transform-scale
+    name: Transform Scale
+    html: |
+      <html><body style="margin:0; padding:40px; background:#fff;">
+                          <div style="width:80px; height:80px; background:#3498db; transform:scale(1.5);"></div>
+                      </body></html>
+
+  - id: pp-transform-rotate-45
+    name: Transform Rotate 45 Degrees
+    html: |
+      <html><body style="margin:0; padding:60px; background:#fff;">
+                          <div style="width:80px; height:80px; background:#3498db; transform:rotate(45deg);"></div>
+                      </body></html>
+
+  - id: pp-transform-skew
+    name: Transform Skew
+    html: |
+      <html><body style="margin:0; padding:30px; background:#fff;">
+                          <div style="width:150px; height:60px; background:#e74c3c; transform:skewX(-10deg);"></div>
+                      </body></html>
+
+  - id: pp-transform-multiple
+    name: Multiple Transforms Combined
+    html: |
+      <html><body style="margin:0; padding:60px; background:#fff;">
+                          <div style="width:100px; height:60px; background:#3498db; transform:rotate(15deg) scale(1.2);"></div>
+                      </body></html>
+
+  - id: pp-transform-scale-updown
+    name: Transform Scale Up and Down
+    html: |
+      <html><body style="margin:0; padding:40px; background:#fff;">
+                          <div style="width:80px; height:80px; background:#3498db; transform:scale(1.5); margin-bottom:30px;"></div>
+                          <div style="width:80px; height:80px; background:#e74c3c; transform:scale(0.75);"></div>
+                      </body></html>
+
+  - id: pp-transform-rotate
+    name: Transform Rotate
+    html: |
+      <html><body style="margin:0; padding:60px; background:#fff;">
+                          <div style="width:80px; height:80px; background:#3498db; transform:rotate(45deg);"></div>
+                      </body></html>
+
+  - id: pp-transform-skew-xy
+    name: Transform SkewX and SkewY
+    html: |
+      <html><body style="margin:0; padding:40px; background:#fff;">
+                          <div style="width:120px; height:60px; background:#3498db; transform:skewX(15deg); margin-bottom:30px;"></div>
+                          <div style="width:120px; height:60px; background:#e74c3c; transform:skewY(10deg);"></div>
+                      </body></html>
+
+  - id: pp-transform-origin
+    name: Transform with Custom Origin
+    html: |
+      <html><body style="margin:0; padding:60px; background:#fff;">
+                          <div style="width:80px; height:80px; background:#3498db; transform:rotate(30deg); transform-origin:top left;"></div>
+                      </body></html>
+
+  - id: pp-translate-offset
+    name: Transform Translate
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:100px; height:60px; background:#3498db; transform:translate(30px, 20px);"></div>
+                      </body></html>
+
+  - id: pp-rotate-45-square
+    name: Transform Rotate 45deg
+    html: |
+      <html><body style="margin:0; padding:60px; background:#fff;">
+                          <div style="width:80px; height:80px; background:#e74c3c; transform:rotate(45deg);"></div>
+                      </body></html>
+
+  - id: pp-transform-scale-origin
+    name: Transform Scale with Origin
+    html: |
+      <html><body style="margin:0; padding:60px; background:#fff;">
+                          <div style="width:100px; height:60px; background:#3498db; transform:scale(1.5); transform-origin:top left;"></div>
+                      </body></html>
+
+  - id: pp-transform-rotate-origin
+    name: Transform Rotate with Custom Origin
+    html: |
+      <html><body style="margin:0; padding:60px; background:#fff;">
+                          <div style="width:100px; height:60px; background:#e74c3c; transform:rotate(30deg); transform-origin:bottom right;"></div>
+                      </body></html>
+
+  - id: pp-transform-translate-px
+    name: Transform Translate Pixel Values
+    html: |
+      <html><body style="margin:0; padding:40px; background:#fff;">
+                          <div style="width:100px; height:60px; background:#3498db; transform:translate(20px, 15px);"></div>
+                      </body></html>
+
+  - id: pp-transform-rotate-90
+    name: Transform Rotate 90 Degrees
+    html: |
+      <html><body style="margin:0; padding:60px; background:#fff;">
+                          <div style="width:80px; height:40px; background:#3498db; transform:rotate(90deg);"></div>
+                      </body></html>
+
+  - id: pp-transform-rotate-180
+    name: Transform Rotate 180 Degrees
+    html: |
+      <html><body style="margin:0; padding:40px; background:#fff;">
+                          <div style="width:120px; height:60px; background:linear-gradient(to right, #3498db, #e74c3c); transform:rotate(180deg);"></div>
+                      </body></html>
+
+  - id: pp-transform-translate-50
+    name: Transform Translate 50px
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:80px; height:60px; background:#3498db; transform:translate(50px, 30px);"></div>
+                      </body></html>
+
+  - id: pp-transform-scale-center
+    name: Transform Scale at Center
+    html: |
+      <html><body style="margin:0; padding:50px; background:#fff;">
+                          <div style="width:80px; height:60px; background:#3498db; transform:scale(1.5); transform-origin:center;"></div>
+                      </body></html>
+
+  - id: transform-rotate-scale
+    name: "CSS Transform (Rotate, Scale)"
+    html: |
+      <html><body style="margin:0; padding:30px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="display:flex; gap:30px; align-items:center; justify-content:center;">
+                              <div style="background:#3498db; color:#fff; padding:16px; transform:rotate(15deg); height:20px;">Rotated 15deg</div>
+                              <div style="background:#e74c3c; color:#fff; padding:16px; transform:scale(1.2); height:20px;">Scaled 1.2x</div>
+                          </div>
+                      </body></html>
+
+  - id: transform-box-shadow
+    name: Box Shadow Effects
+    html: |
+      <html><body style="margin:0; padding:20px; font-family:sans-serif; font-size:14px; background:#f0f0f0; line-height:1.4;">
+                          <div style="background:#fff; padding:16px; margin-bottom:16px; box-shadow:2px 2px 0 #333; height:20px;">Hard shadow</div>
+                          <div style="background:#fff; padding:16px; margin-bottom:16px; box-shadow:0 4px 8px rgba(0,0,0,0.2); height:20px;">Soft shadow</div>
+                          <div style="background:#fff; padding:16px; box-shadow:0 0 0 3px #3498db; height:20px;">Outline shadow</div>
+                      </body></html>
+
+  - id: transform-opacity-layers
+    name: Opacity with Layered Elements
+    html: |
+      <html><body style="margin:0; padding:20px; font-family:sans-serif; font-size:14px;">
+                          <div style="position:relative; height:120px;">
+                              <div style="position:absolute; top:0; left:0; width:120px; height:80px; background:#e74c3c; opacity:0.8;"></div>
+                              <div style="position:absolute; top:20px; left:40px; width:120px; height:80px; background:#3498db; opacity:0.8;"></div>
+                              <div style="position:absolute; top:40px; left:80px; width:120px; height:80px; background:#27ae60; opacity:0.8;"></div>
+                          </div>
+                      </body></html>
+
+  - id: transform-rotate-elements
+    name: Rotated Elements
+    html: |
+      <html><body style="margin:0; padding:40px; background:#fff; display:flex; gap:30px; align-items:center; justify-content:center; height:300px;">
+                          <div style="width:60px; height:60px; background:#e74c3c; transform:rotate(15deg);"></div>
+                          <div style="width:60px; height:60px; background:#3498db; transform:rotate(45deg);"></div>
+                          <div style="width:60px; height:60px; background:#2ecc71; transform:rotate(-30deg);"></div>
+                      </body></html>
+
+  - id: transform-scale-elements
+    name: Scaled Elements
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff; display:flex; gap:20px; align-items:center; justify-content:center; height:300px;">
+                          <div style="width:50px; height:50px; background:#e74c3c; transform:scale(0.5);"></div>
+                          <div style="width:50px; height:50px; background:#3498db; transform:scale(1);"></div>
+                          <div style="width:50px; height:50px; background:#2ecc71; transform:scale(1.5);"></div>
+                      </body></html>

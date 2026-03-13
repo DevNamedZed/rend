@@ -1,0 +1,72 @@
+# List Styles
+# Visual regression tests for list styles
+tests:
+  - id: adv-list-styled-ul
+    name: Unordered List with Square Markers
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <ul style="margin:0; padding-left:24px; list-style-type:square;">
+                              <li style="margin-bottom:4px;">First item</li>
+                              <li style="margin-bottom:4px;">Second item</li>
+                              <li style="margin-bottom:4px;">Third item</li>
+                              <li>Fourth item</li>
+                          </ul>
+                      </body></html>
+
+  - id: adv-list-styled-ol
+    name: Ordered List with Upper Roman Numerals
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <ol style="margin:0; padding-left:40px; list-style-type:upper-roman;">
+                              <li style="margin-bottom:4px;">First item</li>
+                              <li style="margin-bottom:4px;">Second item</li>
+                              <li style="margin-bottom:4px;">Third item</li>
+                              <li>Fourth item</li>
+                          </ol>
+                      </body></html>
+
+  - id: list-ordered-types
+    name: Ordered List Types
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <ol style="list-style-type:decimal; margin:0 0 8px;"><li>Decimal one</li><li>Decimal two</li></ol>
+                          <ol style="list-style-type:lower-alpha; margin:0 0 8px;"><li>Alpha one</li><li>Alpha two</li></ol>
+                          <ol style="list-style-type:upper-roman; margin:0;"><li>Roman one</li><li>Roman two</li></ol>
+                      </body></html>
+
+  - id: list-unordered-types
+    name: Unordered List Types
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <ul style="list-style-type:disc; margin:0 0 8px;"><li>Disc one</li><li>Disc two</li></ul>
+                          <ul style="list-style-type:circle; margin:0 0 8px;"><li>Circle one</li><li>Circle two</li></ul>
+                          <ul style="list-style-type:square; margin:0;"><li>Square one</li><li>Square two</li></ul>
+                      </body></html>
+
+  - id: list-nested
+    name: Nested Lists
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#fff;">
+                          <ul style="margin:0;">
+                              <li>Item 1
+                                  <ul><li>Sub-item A</li><li>Sub-item B</li></ul>
+                              </li>
+                              <li>Item 2
+                                  <ol><li>Numbered A</li><li>Numbered B</li></ol>
+                              </li>
+                          </ul>
+                      </body></html>
+
+  - id: list-position-inside
+    name: List Style Position Inside
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <ul style="list-style-position:outside; margin:0 0 10px; background:#f0f0f0; padding-left:30px;">
+                              <li style="background:#ddd;">Outside position (default)</li>
+                              <li style="background:#ddd;">Second item outside</li>
+                          </ul>
+                          <ul style="list-style-position:inside; margin:0; background:#f0f0f0; padding-left:10px;">
+                              <li style="background:#ddd;">Inside position</li>
+                              <li style="background:#ddd;">Second item inside</li>
+                          </ul>
+                      </body></html>

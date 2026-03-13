@@ -1,0 +1,1257 @@
+# Grid
+# Visual regression tests for grid
+tests:
+  - id: grid-span
+    name: Grid Column Span
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;">
+                              <div style="grid-column:span 2; background:#3498db; height:40px;"></div>
+                              <div style="background:#e74c3c; height:40px;"></div>
+                              <div style="background:#27ae60; height:40px;"></div>
+                              <div style="grid-column:span 2; background:#f39c12; height:40px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-row-span
+    name: Grid Row Span
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:40px; gap:6px;">
+                              <div style="grid-row:span 2; background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#27ae60;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-mixed-units
+    name: "Grid Mixed Units (px, fr, %)"
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:80px 1fr 25%; gap:8px;">
+                              <div style="background:#3498db; height:50px;"></div>
+                              <div style="background:#e74c3c; height:50px;"></div>
+                              <div style="background:#27ae60; height:50px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-align-items
+    name: Grid Align/Justify Items
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:80px; gap:6px; align-items:center; justify-items:center;">
+                              <div style="background:#3498db; width:60px; height:30px;"></div>
+                              <div style="background:#e74c3c; width:60px; height:30px;"></div>
+                              <div style="background:#27ae60; width:60px; height:30px;"></div>
+                              <div style="background:#f39c12; width:60px; height:30px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-grid-template-areas
+    name: Grid Template Areas
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-areas:'header header header' 'sidebar main main' 'footer footer footer'; grid-template-rows:40px 1fr 30px; grid-template-columns:80px 1fr 1fr; gap:4px; height:200px;">
+                              <div style="grid-area:header; background:#2c3e50;"></div>
+                              <div style="grid-area:sidebar; background:#34495e;"></div>
+                              <div style="grid-area:main; background:#3498db;"></div>
+                              <div style="grid-area:footer; background:#7f8c8d;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-grid-auto-placement
+    name: Grid Auto Placement with Varying Sizes
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:repeat(4, 1fr); grid-auto-rows:40px; gap:4px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#e74c3c; grid-column:span 2;"></div>
+                              <div style="background:#27ae60;"></div>
+                              <div style="background:#f39c12;"></div>
+                              <div style="background:#9b59b6; grid-column:span 3;"></div>
+                              <div style="background:#1abc9c;"></div>
+                              <div style="background:#e67e22;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-grid-span-both
+    name: Grid Column and Row Span Combined
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 1fr); grid-auto-rows:50px; gap:4px;">
+                              <div style="grid-column:span 2; grid-row:span 2; background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#27ae60;"></div>
+                              <div style="background:#f39c12;"></div>
+                              <div style="background:#9b59b6;"></div>
+                              <div style="background:#1abc9c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-grid-dense-packing
+    name: Grid Dense Auto Flow
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 1fr); grid-auto-rows:40px; grid-auto-flow:dense; gap:4px;">
+                              <div style="grid-column:span 2; background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#27ae60;"></div>
+                              <div style="grid-column:span 2; background:#f39c12;"></div>
+                              <div style="background:#9b59b6;"></div>
+                              <div style="background:#1abc9c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-grid-min-content
+    name: Grid with Min-Content Column
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="display:grid; grid-template-columns:min-content 1fr; gap:8px;">
+                              <div style="background:#3498db; padding:8px; color:#fff; white-space:nowrap;">Short</div>
+                              <div style="background:#e74c3c; height:40px;"></div>
+                              <div style="background:#27ae60; padding:8px; color:#fff; white-space:nowrap;">Longer text</div>
+                              <div style="background:#f39c12; height:40px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: bug063-grid-span-placement
+    name: Grid spanning items auto-placement
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:12px;">
+      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:4px;">
+          <div style="grid-column:span 2; background:#3498db; color:#fff; padding:8px;">Span 2</div>
+          <div style="background:#e74c3c; color:#fff; padding:8px;">1</div>
+          <div style="background:#27ae60; color:#fff; padding:8px;">2</div>
+          <div style="grid-column:span 3; background:#f39c12; color:#fff; padding:8px;">Span 3 (full width)</div>
+          <div style="grid-column:span 2; background:#9b59b6; color:#fff; padding:8px;">Span 2 again</div>
+          <div style="background:#1abc9c; color:#fff; padding:8px;">3</div>
+      </div>
+      </body></html>
+
+  - id: bug063-grid-dense-span
+    name: Grid dense auto-flow with spanning items
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:11px;">
+      <div style="display:grid; grid-template-columns:repeat(4, 1fr); grid-auto-flow:dense; gap:4px;">
+          <div style="grid-column:span 2; background:#3498db; color:#fff; padding:6px;">2-col</div>
+          <div style="background:#e74c3c; color:#fff; padding:6px;">A</div>
+          <div style="background:#27ae60; color:#fff; padding:6px;">B</div>
+          <div style="grid-column:span 3; background:#f39c12; color:#fff; padding:6px;">3-col</div>
+          <div style="background:#9b59b6; color:#fff; padding:6px;">C</div>
+          <div style="grid-column:span 2; grid-row:span 2; background:#1abc9c; color:#fff; padding:6px;">2x2</div>
+          <div style="background:#e67e22; color:#fff; padding:6px;">D</div>
+          <div style="background:#2c3e50; color:#fff; padding:6px;">E</div>
+      </div>
+      </body></html>
+
+  - id: bug063-grid-full-span
+    name: Grid full-width spanning item
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:12px;">
+      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; width:300px;">
+          <div style="background:#3498db; color:#fff; padding:6px;">Col 1</div>
+          <div style="background:#e74c3c; color:#fff; padding:6px;">Col 2</div>
+          <div style="background:#27ae60; color:#fff; padding:6px;">Col 3</div>
+          <div style="grid-column:1/-1; background:#f39c12; color:#fff; padding:6px; text-align:center;">Full-width span (1/-1)</div>
+          <div style="background:#9b59b6; color:#fff; padding:6px;">A</div>
+          <div style="grid-column:span 2; background:#1abc9c; color:#fff; padding:6px;">Span 2</div>
+      </div>
+      </body></html>
+
+  - id: grid-auto-flow-dense
+    name: Grid Auto Flow (default)
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:4px;">
+                              <div style="background:#3498db; height:40px;"></div>
+                              <div style="background:#e74c3c; height:40px;"></div>
+                              <div style="background:#27ae60; height:40px;"></div>
+                              <div style="background:#f39c12; height:40px;"></div>
+                              <div style="background:#9b59b6; height:40px;"></div>
+                              <div style="background:#1abc9c; height:40px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-explicit-placement
+    name: Grid Explicit Row/Column Placement
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; grid-template-rows:50px 50px; gap:4px;">
+                              <div style="grid-column:1; grid-row:1; background:#3498db;"></div>
+                              <div style="grid-column:3; grid-row:1; background:#e74c3c;"></div>
+                              <div style="grid-column:2; grid-row:2; background:#27ae60;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-minmax
+    name: Grid Minmax Track Sizing
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:minmax(50px, 1fr) minmax(100px, 2fr); gap:8px;">
+                              <div style="background:#3498db; height:50px;"></div>
+                              <div style="background:#e74c3c; height:50px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-gap-variations
+    name: Grid Row and Column Gap
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; row-gap:16px; column-gap:4px;">
+                              <div style="background:#3498db; height:40px;"></div>
+                              <div style="background:#e74c3c; height:40px;"></div>
+                              <div style="background:#27ae60; height:40px;"></div>
+                              <div style="background:#f39c12; height:40px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-percent-heights
+    name: Grid with Explicit Row Heights
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:60px 80px; gap:4px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#27ae60;"></div>
+                              <div style="background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-span-columns
+    name: Grid Column Span
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 80px); gap:4px;">
+                              <div style="grid-column:span 2; height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                              <div style="grid-column:span 2; height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-span-rows
+    name: Grid Row Span
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 80px); gap:4px;">
+                              <div style="grid-row:span 2; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                              <div style="height:40px; background:#f39c12;"></div>
+                              <div style="height:40px; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-justify-items
+    name: Grid Justify Items
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 100px); justify-items:center; gap:4px;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-fr-units
+    name: Grid Fractional Units
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 2fr 1fr; gap:4px; width:300px; margin-bottom:8px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                          </div>
+                          <div style="display:grid; grid-template-columns:1fr 3fr; gap:4px; width:300px;">
+                              <div style="height:40px; background:#f39c12;"></div>
+                              <div style="height:40px; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-flex-center
+    name: Grid Items with Flex Centering
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; width:360px;">
+                              <div style="height:60px; background:#3498db; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;">Center</div>
+                              <div style="height:60px; background:#e74c3c; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;">Text</div>
+                              <div style="height:60px; background:#2ecc71; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;">Here</div>
+                          </div>
+                      </body></html>
+
+  - id: grid-mosaic-flex
+    name: Grid Mosaic with Flex Text
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(4, 1fr); grid-auto-rows:50px; gap:6px; width:360px;">
+                              <div style="grid-column:span 2; grid-row:span 2; background:#e74c3c; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;">A</div>
+                              <div style="background:#3498db; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;">B</div>
+                              <div style="background:#2ecc71; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;">C</div>
+                              <div style="grid-column:span 2; background:#f39c12; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;">D</div>
+                              <div style="grid-row:span 2; background:#9b59b6; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;">E</div>
+                              <div style="background:#1abc9c; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;">F</div>
+                              <div style="background:#3498db; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;">G</div>
+                              <div style="grid-column:span 2; background:#2ecc71; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:sans-serif; font-size:14px; font-weight:bold;">H</div>
+                          </div>
+                      </body></html>
+
+  - id: grid-two-column
+    name: Grid Two Column Equal
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; width:300px;">
+                              <div style="height:50px; background:#3498db; border-radius:4px;"></div>
+                              <div style="height:50px; background:#e74c3c; border-radius:4px;"></div>
+                              <div style="height:50px; background:#2ecc71; border-radius:4px;"></div>
+                              <div style="height:50px; background:#f39c12; border-radius:4px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-basic
+    name: Basic Grid (2x2)
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                              <div style="background:#3498db; height:60px;"></div>
+                              <div style="background:#e74c3c; height:60px;"></div>
+                              <div style="background:#27ae60; height:60px;"></div>
+                              <div style="background:#f39c12; height:60px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-three-col
+    name: Three Column Grid
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:1fr 2fr 1fr; gap:8px;">
+                              <div style="background:#3498db; height:80px;"></div>
+                              <div style="background:#e74c3c; height:80px;"></div>
+                              <div style="background:#27ae60; height:80px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-fixed-cols
+    name: Fixed Width Columns
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:100px 150px 100px; gap:10px;">
+                              <div style="background:#3498db; height:50px;"></div>
+                              <div style="background:#e74c3c; height:50px;"></div>
+                              <div style="background:#27ae60; height:50px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-auto-rows
+    name: Grid Auto Rows
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 1fr); grid-auto-rows:40px; gap:6px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#27ae60;"></div>
+                              <div style="background:#f39c12;"></div>
+                              <div style="background:#9b59b6;"></div>
+                              <div style="background:#1abc9c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-auto-fill
+    name: Grid Auto-fill Repeat
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(80px, 1fr)); gap:8px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#27ae60;"></div>
+                              <div style="height:40px; background:#f39c12;"></div>
+                              <div style="height:40px; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-auto-fit
+    name: Grid Auto-fit Repeat
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:8px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#27ae60;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-nested
+    name: Nested Grids
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                              <div style="display:grid; grid-template-rows:1fr 1fr; gap:4px;">
+                                  <div style="background:#3498db; height:30px;"></div>
+                                  <div style="background:#2980b9; height:30px;"></div>
+                              </div>
+                              <div style="display:grid; grid-template-rows:1fr 1fr 1fr; gap:4px;">
+                                  <div style="background:#e74c3c; height:20px;"></div>
+                                  <div style="background:#c0392b; height:20px;"></div>
+                                  <div style="background:#a93226; height:20px;"></div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-4x2
+    name: Grid 4x2
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(4, 60px); gap:6px;">
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#f39c12;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#9b59b6;"></div>
+                              <div style="height:40px; background:#1abc9c;"></div>
+                              <div style="height:40px; background:#e67e22;"></div>
+                              <div style="height:40px; background:#34495e;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-span-2
+    name: Grid Span 2 Columns
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 100px); gap:6px;">
+                              <div style="grid-column:span 2; height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                              <div style="height:40px; background:#f39c12;"></div>
+                              <div style="height:40px; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-3x3
+    name: Grid 3x3 Checkerboard
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 60px); gap:4px;">
+                              <div style="height:60px; background:#2c3e50;"></div>
+                              <div style="height:60px; background:#ecf0f1;"></div>
+                              <div style="height:60px; background:#2c3e50;"></div>
+                              <div style="height:60px; background:#ecf0f1;"></div>
+                              <div style="height:60px; background:#2c3e50;"></div>
+                              <div style="height:60px; background:#ecf0f1;"></div>
+                              <div style="height:60px; background:#2c3e50;"></div>
+                              <div style="height:60px; background:#ecf0f1;"></div>
+                              <div style="height:60px; background:#2c3e50;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-gap
+    name: Grid with Gap
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:80px 80px 80px; gap:10px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:50px; background:#2ecc71;"></div>
+                              <div style="height:50px; background:#f39c12;"></div>
+                              <div style="height:50px; background:#9b59b6;"></div>
+                              <div style="height:50px; background:#1abc9c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-auto-rows
+    name: Grid Auto Rows
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:50px; gap:5px; width:200px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-repeat
+    name: Grid Repeat Auto
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(4, 80px); gap:8px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                              <div style="height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-minmax
+    name: Grid Minmax Columns
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:minmax(50px,100px) 1fr minmax(50px,100px); gap:10px; width:350px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-fr-mix
+    name: Grid FR and Fixed Mix
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:100px 1fr 2fr; gap:5px; width:350px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-auto-flow
+    name: Grid Auto Flow Dense
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 80px); grid-auto-rows:50px; gap:5px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#e74c3c; grid-column:span 2;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#f39c12;"></div>
+                              <div style="background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-auto-fill
+    name: Grid Auto Fill
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(80px, 1fr)); gap:10px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:50px; background:#2ecc71;"></div>
+                              <div style="height:50px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-row-gap-col-gap
+    name: Grid Separate Row and Column Gap
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; row-gap:20px; column-gap:5px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                              <div style="height:40px; background:#f39c12;"></div>
+                              <div style="height:40px; background:#9b59b6;"></div>
+                              <div style="height:40px; background:#1abc9c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-explicit-placement
+    name: Grid Explicit Row Column Placement
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:100px 100px 100px; grid-template-rows:50px 50px; gap:5px;">
+                              <div style="grid-column:1; grid-row:1; background:#3498db;"></div>
+                              <div style="grid-column:3; grid-row:1; background:#e74c3c;"></div>
+                              <div style="grid-column:2; grid-row:2; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-3x3-colors
+    name: Grid 3x3 Color Matrix
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 60px); grid-template-rows:repeat(3, 60px); gap:4px;">
+                              <div style="background:#c0392b;"></div><div style="background:#e74c3c;"></div><div style="background:#ec7063;"></div>
+                              <div style="background:#2980b9;"></div><div style="background:#3498db;"></div><div style="background:#5dade2;"></div>
+                              <div style="background:#27ae60;"></div><div style="background:#2ecc71;"></div><div style="background:#58d68d;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-span-multiple
+    name: Grid Item Spanning Multiple Tracks
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(4, 1fr); grid-template-rows:60px 60px; gap:5px; width:340px;">
+                              <div style="grid-column:1/3; background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#f39c12;"></div>
+                              <div style="grid-column:2/5; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-dense-packing
+    name: Grid Dense Auto Placement
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 80px); grid-auto-rows:40px; grid-auto-flow:dense; gap:4px;">
+                              <div style="grid-column:span 2; background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="grid-column:span 2; background:#f39c12;"></div>
+                              <div style="background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-fixed-and-fr
+    name: Grid Fixed and FR Columns
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:100px 1fr 80px; gap:8px; width:350px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-gap-asymmetric
+    name: Grid with Different Row and Column Gaps
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:80px 80px 80px; row-gap:15px; column-gap:5px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                              <div style="height:40px; background:#f39c12;"></div>
+                              <div style="height:40px; background:#9b59b6;"></div>
+                              <div style="height:40px; background:#1abc9c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-auto-placement
+    name: Grid Auto Placement
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 80px); grid-auto-rows:40px; gap:5px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#e74c3c; grid-column:span 2;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#f39c12;"></div>
+                              <div style="background:#9b59b6; grid-row:span 2;"></div>
+                              <div style="background:#1abc9c;"></div>
+                              <div style="background:#e67e22;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-named-areas
+    name: Grid Named Template Areas
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-areas:'hd hd' 'sd mn' 'ft ft'; grid-template-rows:40px 80px 30px; grid-template-columns:100px 1fr; gap:5px; width:300px;">
+                              <div style="grid-area:hd; background:#3498db;"></div>
+                              <div style="grid-area:sd; background:#e74c3c;"></div>
+                              <div style="grid-area:mn; background:#2ecc71;"></div>
+                              <div style="grid-area:ft; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-minmax-3col
+    name: Grid with Minmax Columns
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:minmax(50px,100px) 1fr minmax(80px,150px); gap:5px; width:350px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-row-span
+    name: Grid Item Row Span
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:40px; gap:5px; width:250px;">
+                              <div style="grid-row:span 2; background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-justify-items
+    name: Grid Justify Items Center
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:100px 100px; gap:10px; justify-items:center;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:40px; background:#2ecc71;"></div>
+                              <div style="width:60px; height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-auto-rows-fixed
+    name: Grid Auto Rows Fixed Height
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:60px; gap:5px; width:250px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-gap-uniform
+    name: Grid with Uniform Gap
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 80px); grid-template-rows:repeat(2, 60px); gap:10px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#f39c12;"></div>
+                              <div style="background:#9b59b6;"></div>
+                              <div style="background:#1abc9c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-col-span
+    name: Grid Column Span
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 80px); gap:10px;">
+                              <div style="grid-column:span 2; height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:50px; background:#2ecc71;"></div>
+                              <div style="grid-column:span 2; height:50px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-row-span-2
+    name: Grid Row Span
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:80px 80px; grid-template-rows:50px 50px; gap:10px;">
+                              <div style="grid-row:span 2; background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-minmax-2
+    name: Grid Minmax Column
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:minmax(50px,100px) 1fr; gap:10px; width:300px;">
+                              <div style="height:60px; background:#3498db;"></div>
+                              <div style="height:60px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-2x3-fixed
+    name: Grid 2x3 Fixed Size
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:100px 100px 100px; grid-template-rows:50px 50px; gap:5px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#f39c12;"></div>
+                              <div style="background:#9b59b6;"></div>
+                              <div style="background:#1abc9c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-fr-mixed
+    name: Grid Fr and Px Mixed Columns
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:80px 1fr 80px; gap:10px; width:300px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-auto-flow-dense
+    name: Grid Auto Flow Dense
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 60px); grid-auto-flow:dense; gap:5px;">
+                              <div style="grid-column:span 2; height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                              <div style="grid-column:span 2; height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-named-areas-2
+    name: Grid Named Template Areas
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-areas:'a a b' 'c c b'; grid-template-columns:1fr 1fr 1fr; grid-template-rows:50px 50px; gap:5px; width:250px;">
+                              <div style="grid-area:a; background:#3498db;"></div>
+                              <div style="grid-area:b; background:#e74c3c;"></div>
+                              <div style="grid-area:c; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-auto-col-row
+    name: Grid Auto Columns and Rows
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(2, 80px); grid-auto-rows:50px; gap:8px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#f39c12;"></div>
+                              <div style="background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-justify-items-end
+    name: Grid Justify Items End
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(2, 120px); gap:10px; justify-items:end;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:40px; background:#2ecc71;"></div>
+                              <div style="width:60px; height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-align-items-center
+    name: Grid Align Items Center
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 80px); gap:10px; height:120px; align-items:center;">
+                              <div style="height:30px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-col-row-span-combo
+    name: Grid Combined Column and Row Span
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 70px); grid-template-rows:repeat(3, 40px); gap:5px;">
+                              <div style="grid-column:span 2; grid-row:span 2; background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#f39c12;"></div>
+                              <div style="grid-column:span 2; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-3x3-areas
+    name: Grid 3x3 Named Areas
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-areas:'h h h' 's m m' 'f f f'; grid-template-columns:80px 1fr 1fr; grid-template-rows:40px 80px 30px; gap:5px; width:350px;">
+                              <div style="grid-area:h; background:#3498db;"></div>
+                              <div style="grid-area:s; background:#e74c3c;"></div>
+                              <div style="grid-area:m; background:#2ecc71;"></div>
+                              <div style="grid-area:f; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-justify-content-center
+    name: Grid Justify Content Center
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:80px 80px; gap:10px; justify-content:center; width:300px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-auto-fill-2
+    name: Grid Auto Fill Responsive
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(auto-fill, 80px); gap:10px; width:300px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-dense-fill
+    name: Grid Dense Auto-Placement
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(4, 60px); grid-auto-flow:dense; gap:5px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="grid-column:span 2; height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                              <div style="grid-column:span 3; height:40px; background:#f39c12;"></div>
+                              <div style="height:40px; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-justify-end
+    name: Grid Justify Content End
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:80px 80px; gap:10px; justify-content:end; width:300px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-gap-large
+    name: Grid with Large Gap
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(2, 100px); gap:30px;">
+                              <div style="height:60px; background:#3498db;"></div>
+                              <div style="height:60px; background:#e74c3c;"></div>
+                              <div style="height:60px; background:#2ecc71;"></div>
+                              <div style="height:60px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-3col-1fr
+    name: Grid Three Equal 1fr Columns
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; width:300px;">
+                              <div style="height:60px; background:#3498db;"></div>
+                              <div style="height:60px; background:#e74c3c;"></div>
+                              <div style="height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-4col-equal
+    name: Grid Four Equal Columns
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; width:340px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:50px; background:#2ecc71;"></div>
+                              <div style="height:50px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-mixed-units
+    name: Grid Mixed Pixel and FR Units
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:60px 1fr 80px; gap:10px; width:300px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-auto-rows-2
+    name: Grid Auto Rows Height
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:40px; gap:5px; width:200px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#f39c12;"></div>
+                              <div style="background:#9b59b6;"></div>
+                              <div style="background:#1abc9c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-row-gap-only
+    name: Grid with Only Row Gap
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; row-gap:15px; width:200px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                              <div style="height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-col-gap-only
+    name: Grid with Only Column Gap
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; column-gap:15px; width:240px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-align-self
+    name: Grid Align Self Options
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; height:120px; gap:5px; width:250px;">
+                              <div style="align-self:start; height:40px; background:#3498db;"></div>
+                              <div style="align-self:center; height:40px; background:#e74c3c;"></div>
+                              <div style="align-self:end; height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-span-2-rows
+    name: Grid Item Spanning Two Rows
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:60px 60px; gap:5px; width:200px;">
+                              <div style="grid-row:1/3; background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-justify-space-between
+    name: Grid Justify Content Space Between
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:60px 60px 60px; justify-content:space-between; width:300px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-justify-space-evenly
+    name: Grid Justify Content Space Evenly
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:60px 60px; justify-content:space-evenly; width:300px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-justify-items-stretch
+    name: Grid Justify Items Stretch
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; width:250px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-3x3-colors-v2
+    name: Grid 3x3 Solid Color Matrix
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 80px); grid-template-rows:repeat(3, 60px); gap:3px;">
+                              <div style="background:#c0392b;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#f1948a;"></div>
+                              <div style="background:#27ae60;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#82e0aa;"></div>
+                              <div style="background:#2980b9;"></div>
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#85c1e9;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-5col-equal
+    name: Grid Five Equal Columns
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:4px; width:370px;">
+                              <div style="height:40px; background:#c0392b;"></div>
+                              <div style="height:40px; background:#27ae60;"></div>
+                              <div style="height:40px; background:#2980b9;"></div>
+                              <div style="height:40px; background:#f39c12;"></div>
+                              <div style="height:40px; background:#8e44ad;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-template-areas-complex
+    name: Grid Template Areas Complex Layout
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-areas:'a a b' 'c d b' 'c e e'; grid-template-columns:80px 80px 80px; grid-template-rows:50px 50px 50px; gap:4px; width:248px;">
+                              <div style="grid-area:a; background:#3498db;"></div>
+                              <div style="grid-area:b; background:#e74c3c;"></div>
+                              <div style="grid-area:c; background:#2ecc71;"></div>
+                              <div style="grid-area:d; background:#f39c12;"></div>
+                              <div style="grid-area:e; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-align-content-center
+    name: Grid Align Content Center
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; align-content:center; height:200px; gap:5px; width:200px; background:#ecf0f1;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                              <div style="height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-auto-flow-col
+    name: Grid Auto Flow Column
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-rows:50px 50px; grid-auto-flow:column; grid-auto-columns:60px; gap:5px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-align-content-end
+    name: Grid Align Content End
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; align-content:end; height:200px; gap:5px; width:200px; background:#ecf0f1;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-align-content-space-between
+    name: Grid Align Content Space Between
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; align-content:space-between; height:200px; gap:5px; width:200px; background:#ecf0f1;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                              <div style="height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-6col-equal
+    name: Grid Six Equal Narrow Columns
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(6, 1fr); gap:3px; width:375px;">
+                              <div style="height:35px; background:#e74c3c;"></div>
+                              <div style="height:35px; background:#f39c12;"></div>
+                              <div style="height:35px; background:#f1c40f;"></div>
+                              <div style="height:35px; background:#2ecc71;"></div>
+                              <div style="height:35px; background:#3498db;"></div>
+                              <div style="height:35px; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-span-col-row
+    name: Grid Span Column and Row
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 80px); grid-template-rows:repeat(3, 50px); gap:4px;">
+                              <div style="grid-column:1/3; grid-row:1/2; background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="grid-column:2/4; grid-row:2/4; background:#f39c12;"></div>
+                              <div style="background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-minmax-auto
+    name: Grid Minmax with Auto
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:minmax(50px, 1fr) minmax(100px, 2fr); gap:10px; width:300px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-2x2-fixed-gap
+    name: Grid 2x2 Fixed with Gap
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:100px 100px; grid-template-rows:50px 50px; gap:12px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-justify-space-around
+    name: Grid Justify Content Space Around
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:60px 60px; justify-content:space-around; width:300px;">
+                              <div style="height:50px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-4x4-checkerboard
+    name: Grid 4x4 Checkerboard
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(4,40px); grid-template-rows:repeat(4,40px); gap:0;">
+                              <div style="background:#333;"></div><div style="background:#fff;"></div><div style="background:#333;"></div><div style="background:#fff;"></div>
+                              <div style="background:#fff;"></div><div style="background:#333;"></div><div style="background:#fff;"></div><div style="background:#333;"></div>
+                              <div style="background:#333;"></div><div style="background:#fff;"></div><div style="background:#333;"></div><div style="background:#fff;"></div>
+                              <div style="background:#fff;"></div><div style="background:#333;"></div><div style="background:#fff;"></div><div style="background:#333;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-auto-flow-dense-fill
+    name: Grid Dense Auto Flow with Spanning
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3,60px); grid-auto-rows:40px; grid-auto-flow:dense; gap:4px;">
+                              <div style="background:#3498db;"></div>
+                              <div style="grid-column:span 2; background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="background:#f39c12;"></div>
+                              <div style="grid-column:span 2; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-3x3-gap-colored
+    name: Grid 3x3 with Gap and Colors
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3,60px); grid-template-rows:repeat(3,40px); gap:6px;">
+                              <div style="background:#e74c3c;"></div><div style="background:#f39c12;"></div><div style="background:#f1c40f;"></div>
+                              <div style="background:#2ecc71;"></div><div style="background:#3498db;"></div><div style="background:#9b59b6;"></div>
+                              <div style="background:#1abc9c;"></div><div style="background:#e67e22;"></div><div style="background:#34495e;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-area-sidebar
+    name: Grid Template Areas Sidebar Layout
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:80px 1fr; grid-template-rows:40px 1fr; gap:4px; width:300px; height:200px; grid-template-areas:'sidebar header' 'sidebar main';">
+                              <div style="grid-area:header; background:#3498db;"></div>
+                              <div style="grid-area:sidebar; background:#2ecc71;"></div>
+                              <div style="grid-area:main; background:#ecf0f1;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-grid-span-3-cols
+    name: Grid Item Spanning Three Columns
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(4,60px); grid-auto-rows:40px; gap:4px;">
+                              <div style="grid-column:span 3; background:#3498db;"></div>
+                              <div style="background:#e74c3c;"></div>
+                              <div style="background:#2ecc71;"></div>
+                              <div style="grid-column:span 2; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-areas-layout
+    name: Grid Template Areas
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-areas: 'header header' 'sidebar main' 'footer footer'; grid-template-columns:100px 1fr; grid-template-rows:40px 1fr 30px; gap:4px; height:200px; width:300px;">
+                              <div style="grid-area:header; background:#2c3e50;"></div>
+                              <div style="grid-area:sidebar; background:#34495e;"></div>
+                              <div style="grid-area:main; background:#ecf0f1;"></div>
+                              <div style="grid-area:footer; background:#95a5a6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: grid-gap-row-col
+    name: Grid Row and Column Gap
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 60px); row-gap:8px; column-gap:16px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                              <div style="height:40px; background:#f39c12;"></div>
+                              <div style="height:40px; background:#9b59b6;"></div>
+                              <div style="height:40px; background:#1abc9c;"></div>
+                          </div>
+                      </body></html>

@@ -1,0 +1,49 @@
+# MathML
+# Visual regression tests for mathml
+tests:
+  - id: mathml-fraction
+    name: MathML Fraction
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <p style="margin:0 0 8px;">Simple fraction:</p>
+                          <math>
+                              <mfrac>
+                                  <mn>1</mn>
+                                  <mn>2</mn>
+                              </mfrac>
+                          </math>
+                      </body></html>
+
+  - id: mathml-quadratic
+    name: MathML Quadratic Formula
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <p style="margin:0 0 8px;">Quadratic formula:</p>
+                          <math>
+                              <mi>x</mi>
+                              <mo>=</mo>
+                              <mfrac>
+                                  <mrow>
+                                      <mo>-</mo>
+                                      <mi>b</mi>
+                                      <mo>&#xB1;</mo>
+                                      <msqrt>
+                                          <mrow>
+                                              <msup>
+                                                  <mi>b</mi>
+                                                  <mn>2</mn>
+                                              </msup>
+                                              <mo>-</mo>
+                                              <mn>4</mn>
+                                              <mi>a</mi>
+                                              <mi>c</mi>
+                                          </mrow>
+                                      </msqrt>
+                                  </mrow>
+                                  <mrow>
+                                      <mn>2</mn>
+                                      <mi>a</mi>
+                                  </mrow>
+                              </mfrac>
+                          </math>
+                      </body></html>

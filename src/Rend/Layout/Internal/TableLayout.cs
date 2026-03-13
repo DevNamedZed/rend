@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Rend.Core.Values;
 using Rend.Css;
+using Rend.Css.Properties.Internal;
 using Rend.Style;
 
 namespace Rend.Layout.Internal
@@ -12,7 +13,6 @@ namespace Rend.Layout.Internal
     /// </summary>
     internal static class TableLayout
     {
-        internal static bool _debugTable = false;
         public static void Layout(LayoutBox parent, LayoutContext context)
         {
             var styledElement = parent.StyledNode as StyledElement;
@@ -79,7 +79,6 @@ namespace Rend.Layout.Internal
 
                 preCollapseOuterLeft = maxLeftBorder / 2f;
                 preCollapseOuterRight = maxRightBorder / 2f;
-                if (_debugTable) Console.WriteLine($"[TABLE] preCollapse: maxL={maxLeftBorder}, maxR={maxRightBorder}, tableL={style.BorderLeftWidth}, tableR={style.BorderRightWidth}, outerL={preCollapseOuterLeft}, outerR={preCollapseOuterRight}, totalSpacing={totalSpacing}");
             }
 
             // Chrome: assignable = used_table_size - undistributable_space
@@ -92,13 +91,6 @@ namespace Rend.Layout.Internal
             else
                 colWidths = CalculateAutoWidths(tableCtx, numCols, colAvailWidth, context,
                     hasExplicitWidth: !float.IsNaN(style.Width), collapsed: collapsed);
-
-            if (_debugTable)
-            {
-                Console.WriteLine($"[TABLE] containerWidth={containerWidth}, colAvailWidth={colAvailWidth}, numCols={numCols}, hasExplicit={!float.IsNaN(style.Width)}, collapsed={collapsed}");
-                for (int c = 0; c < numCols; c++)
-                    Console.WriteLine($"[TABLE] Col {c}: width={colWidths[c]:F4}");
-            }
 
             int numRows = tableCtx.Rows.Count;
 
@@ -227,35 +219,57 @@ namespace Rend.Layout.Internal
                 }
             }
 
-            // Distribute rowspan cell heights across spanned rows
+            // Distribute rowspan cell heights across spanned rows.
+            // To avoid double-inflation when multiple spans overlap the same rows,
+            // we calculate each span's extra need against the ORIGINAL row heights,
+            // then apply the maximum extra per row across all spans.
+            float[] originalRowHeights = new float[numRows];
+            Array.Copy(rowHeights, originalRowHeights, numRows);
+            float[] extraPerRow = new float[numRows];
+
             for (int s = 0; s < rowspanCells.Count; s++)
             {
                 var rsc = rowspanCells[s];
                 float spannedHeight = 0;
                 for (int rs = 0; rs < rsc.RowSpan; rs++)
-                    spannedHeight += rowHeights[rsc.StartRow + rs] + (rs > 0 ? borderSpacingV : 0);
+                {
+                    spannedHeight += originalRowHeights[rsc.StartRow + rs] + (rs > 0 ? borderSpacingV : 0);
+                }
 
                 if (rsc.TotalHeight > spannedHeight)
                 {
                     float extra = rsc.TotalHeight - spannedHeight;
-                    // Distribute extra height proportionally to existing row heights
+                    // Distribute extra height proportionally to original row heights
                     float totalRowHeight = 0;
                     for (int rs = 0; rs < rsc.RowSpan; rs++)
-                        totalRowHeight += rowHeights[rsc.StartRow + rs];
+                    {
+                        totalRowHeight += originalRowHeights[rsc.StartRow + rs];
+                    }
 
                     if (totalRowHeight > 0)
                     {
                         for (int rs = 0; rs < rsc.RowSpan; rs++)
-                            rowHeights[rsc.StartRow + rs] += extra * (rowHeights[rsc.StartRow + rs] / totalRowHeight);
+                        {
+                            float rowExtra = extra * (originalRowHeights[rsc.StartRow + rs] / totalRowHeight);
+                            extraPerRow[rsc.StartRow + rs] = Math.Max(extraPerRow[rsc.StartRow + rs], rowExtra);
+                        }
                     }
                     else
                     {
                         // All spanned rows have zero height: distribute equally
                         float perRow = extra / rsc.RowSpan;
                         for (int rs = 0; rs < rsc.RowSpan; rs++)
-                            rowHeights[rsc.StartRow + rs] += perRow;
+                        {
+                            extraPerRow[rsc.StartRow + rs] = Math.Max(extraPerRow[rsc.StartRow + rs], perRow);
+                        }
                     }
                 }
+            }
+
+            // Apply the maximum extra from all spans to each row
+            for (int r = 0; r < numRows; r++)
+            {
+                rowHeights[r] = originalRowHeights[r] + extraPerRow[r];
             }
 
             // Build column X positions (border-spacing applies before first column too)
@@ -395,7 +409,6 @@ namespace Rend.Layout.Internal
                         if (rowspanBoxes.Contains(cellBox)) continue;
                         float h = cellBox.ContentRect.Height + cellBox.PaddingTop + cellBox.PaddingBottom
                                  + cellBox.BorderTopWidth + cellBox.BorderBottomWidth;
-                        if (_debugTable) Console.WriteLine($"[TABLE] Row {r} Cell {ci}: contentH={cellBox.ContentRect.Height} padT={cellBox.PaddingTop} padB={cellBox.PaddingBottom} borT={cellBox.BorderTopWidth} borB={cellBox.BorderBottomWidth} totalH={h}");
                         if (h > maxH) maxH = h;
                     }
                     // Enforce explicit row height from CSS
@@ -408,7 +421,6 @@ namespace Rend.Layout.Internal
                             maxH = rowSpecH;
                     }
                     if (maxH > 0) rowHeights[r] = maxH;
-                    if (_debugTable) Console.WriteLine($"[TABLE] Row {r} final height after collapse recalc: {rowHeights[r]}");
                 }
             }
 
@@ -425,13 +437,11 @@ namespace Rend.Layout.Internal
             // border-spacing applies before the first row too.
             // In collapsed mode, offset by the outer half of the top border
             // so cell positions start at the border midpoint (matching Chrome).
-            if (_debugTable) Console.WriteLine($"[TABLE] cursorY before rows = {cursorY}, borderSpacingV={borderSpacingV}, collapseOuterTop={collapseOuterTop}");
             cursorY += borderSpacingV + collapseOuterTop;
             float[] rowYPositions = new float[numRows];
             for (int r = 0; r < numRows; r++)
             {
                 rowYPositions[r] = cursorY;
-                if (_debugTable) Console.WriteLine($"[TABLE] Row {r}: Y={cursorY}, height={rowHeights[r]}");
                 cursorY += rowHeights[r] + borderSpacingV;
 
             }
@@ -1001,6 +1011,7 @@ namespace Rend.Layout.Internal
         {
             float[] minWidths = new float[numCols];
             float[] maxWidths = new float[numCols];
+            bool[] constrained = new bool[numCols]; // columns with explicit width
 
             // Chrome two-pass approach (table_layout_utils.cc):
             // Pass 1: Process colspan==1 cells to establish base column widths
@@ -1009,13 +1020,39 @@ namespace Rend.Layout.Internal
             // Collect colspan cells for pass 2
             var colspanCells = new List<(int col, int span, float minW, float maxW)>();
 
+            // Build occupied grid to track rowspan/colspan cells
+            int numRows = ctx.Rows.Count;
+            var occupied = new bool[numRows, numCols];
+
             // Pass 1: Single-column cells only
-            for (int r = 0; r < ctx.Rows.Count; r++)
+            for (int r = 0; r < numRows; r++)
             {
                 int col = 0;
                 for (int c = 0; c < ctx.Rows[r].Cells.Count && col < numCols; c++)
                 {
+                    // Skip columns occupied by rowspan cells from previous rows
+                    while (col < numCols && occupied[r, col])
+                    {
+                        col++;
+                    }
+                    if (col >= numCols)
+                    {
+                        break;
+                    }
+
                     var cell = ctx.Rows[r].Cells[c];
+
+                    // Mark occupied cells for rowspan/colspan
+                    int effRowSpan = Math.Min(cell.RowSpan, numRows - r);
+                    int effColSpan = Math.Min(cell.ColSpan, numCols - col);
+                    for (int rs = 0; rs < effRowSpan; rs++)
+                    {
+                        for (int cs = 0; cs < effColSpan; cs++)
+                        {
+                            occupied[r + rs, col + cs] = true;
+                        }
+                    }
+
                     if (cell.StyledElement == null) { col += cell.ColSpan; continue; }
 
                     // Check for specified width (resolve deferred percentage)
@@ -1024,7 +1061,7 @@ namespace Rend.Layout.Internal
                     if (!float.IsNaN(specWidth) && specWidth > 0 && cell.ColSpan == 1)
                     {
                         float slotWidth;
-                        if (rawWidth < 0 && !float.IsNaN(rawWidth))
+                        if (DeferredPercent.IsEncoded(rawWidth))
                         {
                             // Percentage width: already represents column slot width (CSS 2.1 §17.5.2.2)
                             slotWidth = specWidth;
@@ -1042,6 +1079,7 @@ namespace Rend.Layout.Internal
                         }
                         if (slotWidth > minWidths[col]) minWidths[col] = slotWidth;
                         if (slotWidth > maxWidths[col]) maxWidths[col] = slotWidth;
+                        constrained[col] = true;
                         col += cell.ColSpan;
                         continue;
                     }
@@ -1129,13 +1167,6 @@ namespace Rend.Layout.Internal
                 totalMax += maxWidths[i];
             }
 
-            if (_debugTable)
-            {
-                for (int i = 0; i < numCols; i++)
-                    Console.WriteLine($"[TABLE] AutoWidth Col {i}: min={minWidths[i]:F4}, max={maxWidths[i]:F4}");
-                Console.WriteLine($"[TABLE] totalMin={totalMin:F4}, totalMax={totalMax:F4}, containerWidth={containerWidth:F4}");
-            }
-
             float[] widths = new float[numCols];
 
             // Chrome's width distribution algorithm (CSS Tables 3 §width-distribution-algorithm)
@@ -1147,8 +1178,8 @@ namespace Rend.Layout.Internal
                 if (hasExplicitWidth)
                 {
                     // kAboveMax: table has explicit width, target exceeds all max-content widths.
-                    // Distribute excess proportionally to max_inline_size (for auto columns).
-                    // Chrome: delta = distributable.MulDiv(col_max, total_auto_max)
+                    // Chrome: distribute excess only to auto (unconstrained) columns.
+                    // If all columns are constrained, distribute to all proportionally.
                     float distributable = containerWidth - totalMax;
                     if (distributable == 0)
                     {
@@ -1158,21 +1189,46 @@ namespace Rend.Layout.Internal
                     }
                     else if (totalMax > 0)
                     {
-                        // Use LayoutUnit-style integer MulDiv for each column,
-                        // track remainder and add to last column
-                        float remainingDeficit = distributable;
-                        int lastCol = -1;
+                        // Compute total max for auto (unconstrained) columns only
+                        float totalAutoMax = 0;
                         for (int i = 0; i < numCols; i++)
                         {
-                            lastCol = i;
-                            // Chrome: MulDiv = (raw * mul_raw) / div_raw in 1/64px integer math
-                            float delta = LayoutUnitMulDiv(distributable, maxWidths[i], totalMax);
+                            if (!constrained[i])
+                            {
+                                totalAutoMax += maxWidths[i];
+                            }
+                        }
+
+                        // If no auto columns, distribute to all proportionally
+                        bool distributeToAll = totalAutoMax <= 0;
+
+                        float remainingDeficit = distributable;
+                        int lastAutoCol = -1;
+                        for (int i = 0; i < numCols; i++)
+                        {
+                            float delta;
+                            if (distributeToAll)
+                            {
+                                delta = LayoutUnitMulDiv(distributable, maxWidths[i], totalMax);
+                                lastAutoCol = i;
+                            }
+                            else if (!constrained[i])
+                            {
+                                delta = LayoutUnitMulDiv(distributable, maxWidths[i], totalAutoMax);
+                                lastAutoCol = i;
+                            }
+                            else
+                            {
+                                delta = 0;
+                            }
                             remainingDeficit -= delta;
                             widths[i] = maxWidths[i] + delta;
                         }
-                        // Add remainder to last column (matches Chrome's rounding behavior)
-                        if (lastCol >= 0 && Math.Abs(remainingDeficit) > 0.001f)
-                            widths[lastCol] += remainingDeficit;
+                        // Add remainder to last auto column (matches Chrome's rounding behavior)
+                        if (lastAutoCol >= 0 && Math.Abs(remainingDeficit) > 0.001f)
+                        {
+                            widths[lastAutoCol] += remainingDeficit;
+                        }
                     }
                     else
                     {
@@ -1258,7 +1314,7 @@ namespace Rend.Layout.Internal
                 // For table children with percentage width, measure their actual content
                 // extent instead of the percentage-resolved width.
                 if (child.BoxType == BoxType.Table && child.StyledNode is StyledElement childEl
-                    && !float.IsNaN(childEl.Style.Width) && childEl.Style.Width < 0)
+                    && DeferredPercent.IsEncoded(childEl.Style.Width))
                 {
                     // Measure the nested table's content width from its laid-out line boxes
                     // and children, not from its assigned percentage width.

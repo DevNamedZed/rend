@@ -158,5 +158,92 @@ namespace Rend.Css.Tests
             var ctx = new MediaContext(1920, 1080) { PrefersContrast = false };
             Assert.False(MediaQueryEvaluator.Evaluate("(prefers-contrast: more)", ctx));
         }
+        // --- Range syntax (Media Queries Level 4) ---
+
+        [Fact]
+        public void RangeSyntax_WidthGte_Matches()
+        {
+            var ctx = new MediaContext(800, 600);
+            Assert.True(MediaQueryEvaluator.Evaluate("(width >= 768px)", ctx));
+        }
+
+        [Fact]
+        public void RangeSyntax_WidthGte_DoesNotMatch()
+        {
+            var ctx = new MediaContext(600, 400);
+            Assert.False(MediaQueryEvaluator.Evaluate("(width >= 768px)", ctx));
+        }
+
+        [Fact]
+        public void RangeSyntax_WidthLt_Matches()
+        {
+            var ctx = new MediaContext(600, 400);
+            Assert.True(MediaQueryEvaluator.Evaluate("(width < 768px)", ctx));
+        }
+
+        [Fact]
+        public void RangeSyntax_WidthLt_DoesNotMatch()
+        {
+            var ctx = new MediaContext(800, 600);
+            Assert.False(MediaQueryEvaluator.Evaluate("(width < 768px)", ctx));
+        }
+
+        [Fact]
+        public void RangeSyntax_WidthLte_Matches()
+        {
+            var ctx = new MediaContext(768, 600);
+            Assert.True(MediaQueryEvaluator.Evaluate("(width <= 768px)", ctx));
+        }
+
+        [Fact]
+        public void RangeSyntax_WidthGt_DoesNotMatchEqual()
+        {
+            var ctx = new MediaContext(768, 600);
+            Assert.False(MediaQueryEvaluator.Evaluate("(width > 768px)", ctx));
+        }
+
+        [Fact]
+        public void RangeSyntax_HeightGte_Matches()
+        {
+            var ctx = new MediaContext(800, 600);
+            Assert.True(MediaQueryEvaluator.Evaluate("(height >= 400px)", ctx));
+        }
+
+        [Fact]
+        public void RangeSyntax_HeightLt_DoesNotMatch()
+        {
+            var ctx = new MediaContext(800, 600);
+            Assert.False(MediaQueryEvaluator.Evaluate("(height < 400px)", ctx));
+        }
+
+        [Fact]
+        public void RangeSyntax_WidthEquals_Matches()
+        {
+            var ctx = new MediaContext(768, 600);
+            Assert.True(MediaQueryEvaluator.Evaluate("(width = 768px)", ctx));
+        }
+
+        [Fact]
+        public void RangeSyntax_WithMediaType_Works()
+        {
+            var ctx = new MediaContext(800, 600);
+            Assert.True(MediaQueryEvaluator.Evaluate("screen and (width >= 768px)", ctx));
+            Assert.False(MediaQueryEvaluator.Evaluate("print and (width >= 768px)", ctx));
+        }
+
+        [Fact]
+        public void RangeSyntax_MultipleConditions_Works()
+        {
+            var ctx = new MediaContext(800, 600);
+            Assert.True(MediaQueryEvaluator.Evaluate("(width >= 768px) and (height >= 400px)", ctx));
+            Assert.False(MediaQueryEvaluator.Evaluate("(width >= 768px) and (height >= 700px)", ctx));
+        }
+
+        [Fact]
+        public void RangeSyntax_NoSpaces_Works()
+        {
+            var ctx = new MediaContext(800, 600);
+            Assert.True(MediaQueryEvaluator.Evaluate("(width>=768px)", ctx));
+        }
     }
 }

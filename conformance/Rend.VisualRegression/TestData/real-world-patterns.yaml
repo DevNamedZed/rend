@@ -1,0 +1,486 @@
+# Real-World Patterns
+# Visual regression tests for real-world patterns
+tests:
+  - id: adv-pattern-breadcrumb
+    name: Breadcrumb Navigation
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="display:flex; align-items:center; gap:4px; background:#f8f9fa; padding:8px 12px; border-radius:4px;">
+                              <span style="color:#3498db;">Home</span>
+                              <span style="color:#999;">/</span>
+                              <span style="color:#3498db;">Products</span>
+                              <span style="color:#999;">/</span>
+                              <span style="color:#3498db;">Category</span>
+                              <span style="color:#999;">/</span>
+                              <span style="color:#333;">Item</span>
+                          </div>
+                      </body></html>
+
+  - id: adv-pattern-tag-list
+    name: Tag List with Colored Tags
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                              <div style="background:#3498db; padding:4px 12px; border-radius:12px; height:16px;"></div>
+                              <div style="background:#e74c3c; padding:4px 16px; border-radius:12px; height:16px;"></div>
+                              <div style="background:#27ae60; padding:4px 20px; border-radius:12px; height:16px;"></div>
+                              <div style="background:#f39c12; padding:4px 10px; border-radius:12px; height:16px;"></div>
+                              <div style="background:#9b59b6; padding:4px 18px; border-radius:12px; height:16px;"></div>
+                              <div style="background:#1abc9c; padding:4px 14px; border-radius:12px; height:16px;"></div>
+                              <div style="background:#e67e22; padding:4px 22px; border-radius:12px; height:16px;"></div>
+                              <div style="background:#2ecc71; padding:4px 12px; border-radius:12px; height:16px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-pattern-pricing-card
+    name: Pricing Card Layout
+    html: |
+      <html><body style="margin:0; padding:10px; background:#f0f0f0;">
+                          <div style="display:flex; gap:10px; align-items:flex-start;">
+                              <div style="flex:1; background:#fff; border-radius:8px; overflow:hidden; border:1px solid #ddd;">
+                                  <div style="background:#3498db; height:8px;"></div>
+                                  <div style="padding:12px;">
+                                      <div style="background:#ecf0f1; height:14px; width:60%; border-radius:2px; margin-bottom:8px;"></div>
+                                      <div style="background:#3498db; height:24px; width:40%; border-radius:2px; margin-bottom:12px;"></div>
+                                      <div style="background:#ecf0f1; height:10px; border-radius:2px; margin-bottom:4px;"></div>
+                                      <div style="background:#ecf0f1; height:10px; border-radius:2px; margin-bottom:4px;"></div>
+                                      <div style="background:#ecf0f1; height:10px; width:70%; border-radius:2px; margin-bottom:12px;"></div>
+                                      <div style="background:#3498db; height:32px; border-radius:4px;"></div>
+                                  </div>
+                              </div>
+                              <div style="flex:1; background:#fff; border-radius:8px; overflow:hidden; border:2px solid #e74c3c;">
+                                  <div style="background:#e74c3c; height:8px;"></div>
+                                  <div style="padding:12px;">
+                                      <div style="background:#ecf0f1; height:14px; width:50%; border-radius:2px; margin-bottom:8px;"></div>
+                                      <div style="background:#e74c3c; height:24px; width:45%; border-radius:2px; margin-bottom:12px;"></div>
+                                      <div style="background:#ecf0f1; height:10px; border-radius:2px; margin-bottom:4px;"></div>
+                                      <div style="background:#ecf0f1; height:10px; border-radius:2px; margin-bottom:4px;"></div>
+                                      <div style="background:#ecf0f1; height:10px; width:80%; border-radius:2px; margin-bottom:12px;"></div>
+                                      <div style="background:#e74c3c; height:32px; border-radius:4px;"></div>
+                                  </div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: adv-pattern-notification
+    name: Notification Banner
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; align-items:center; background:#e8f4fd; border-left:4px solid #3498db; padding:12px 16px; border-radius:0 4px 4px 0; margin-bottom:8px;">
+                              <div style="width:20px; height:20px; background:#3498db; border-radius:50%; margin-right:12px;"></div>
+                              <div style="flex:1;">
+                                  <div style="background:#b0d4f1; height:12px; width:70%; border-radius:2px; margin-bottom:4px;"></div>
+                                  <div style="background:#d4e8f7; height:10px; width:90%; border-radius:2px;"></div>
+                              </div>
+                          </div>
+                          <div style="display:flex; align-items:center; background:#fde8e8; border-left:4px solid #e74c3c; padding:12px 16px; border-radius:0 4px 4px 0; margin-bottom:8px;">
+                              <div style="width:20px; height:20px; background:#e74c3c; border-radius:50%; margin-right:12px;"></div>
+                              <div style="flex:1;">
+                                  <div style="background:#f1b0b0; height:12px; width:60%; border-radius:2px; margin-bottom:4px;"></div>
+                                  <div style="background:#f7d4d4; height:10px; width:85%; border-radius:2px;"></div>
+                              </div>
+                          </div>
+                          <div style="display:flex; align-items:center; background:#e8fde8; border-left:4px solid #27ae60; padding:12px 16px; border-radius:0 4px 4px 0;">
+                              <div style="width:20px; height:20px; background:#27ae60; border-radius:50%; margin-right:12px;"></div>
+                              <div style="flex:1;">
+                                  <div style="background:#a3d9a5; height:12px; width:65%; border-radius:2px; margin-bottom:4px;"></div>
+                                  <div style="background:#d4f0d4; height:10px; width:80%; border-radius:2px;"></div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: adv-pattern-data-table
+    name: Data Table with Header and Rows
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:12px; line-height:1.4;">
+                          <table style="border-collapse:collapse; width:100%;">
+                              <thead>
+                                  <tr style="background:#2c3e50;">
+                                      <th style="padding:8px; text-align:left; color:#fff; border-bottom:2px solid #1a252f;">ID</th>
+                                      <th style="padding:8px; text-align:left; color:#fff; border-bottom:2px solid #1a252f;">Name</th>
+                                      <th style="padding:8px; text-align:right; color:#fff; border-bottom:2px solid #1a252f;">Value</th>
+                                      <th style="padding:8px; text-align:center; color:#fff; border-bottom:2px solid #1a252f;">Status</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  <tr style="background:#ffffff;">
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">001</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">Alpha</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">1,234</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee; text-align:center;"><span style="background:#27ae60; color:#fff; padding:2px 8px; border-radius:10px; font-size:11px;">OK</span></td>
+                                  </tr>
+                                  <tr style="background:#f8f9fa;">
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">002</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">Beta</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">5,678</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee; text-align:center;"><span style="background:#e74c3c; color:#fff; padding:2px 8px; border-radius:10px; font-size:11px;">Err</span></td>
+                                  </tr>
+                                  <tr style="background:#ffffff;">
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">003</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee;">Gamma</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">9,012</td>
+                                      <td style="padding:8px; border-bottom:1px solid #eee; text-align:center;"><span style="background:#f39c12; color:#fff; padding:2px 8px; border-radius:10px; font-size:11px;">Warn</span></td>
+                                  </tr>
+                                  <tr style="background:#f8f9fa;">
+                                      <td style="padding:8px;">004</td>
+                                      <td style="padding:8px;">Delta</td>
+                                      <td style="padding:8px; text-align:right;">3,456</td>
+                                      <td style="padding:8px; text-align:center;"><span style="background:#27ae60; color:#fff; padding:2px 8px; border-radius:10px; font-size:11px;">OK</span></td>
+                                  </tr>
+                              </tbody>
+                          </table>
+                      </body></html>
+
+  - id: pattern-nav-bar
+    name: Navigation Bar Pattern
+    html: |
+      <html><body style="margin:0;">
+                          <div style="display:flex; justify-content:space-between; align-items:center; background:#2c3e50; padding:10px 20px; height:40px;">
+                              <div style="width:80px; height:24px; background:#3498db; border-radius:4px;"></div>
+                              <div style="display:flex; gap:16px;">
+                                  <div style="width:50px; height:20px; background:#ecf0f1; border-radius:3px;"></div>
+                                  <div style="width:50px; height:20px; background:#ecf0f1; border-radius:3px;"></div>
+                                  <div style="width:50px; height:20px; background:#ecf0f1; border-radius:3px;"></div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pattern-sidebar-layout
+    name: Sidebar + Content Layout
+    html: |
+      <html><body style="margin:0;">
+                          <div style="display:flex; height:250px;">
+                              <div style="width:80px; background:#2c3e50; padding:10px;">
+                                  <div style="background:#3498db; height:20px; border-radius:3px; margin-bottom:6px;"></div>
+                                  <div style="background:#3498db; height:20px; border-radius:3px; margin-bottom:6px;"></div>
+                                  <div style="background:#3498db; height:20px; border-radius:3px;"></div>
+                              </div>
+                              <div style="flex:1; padding:15px; background:#ecf0f1;">
+                                  <div style="background:#fff; padding:10px; border-radius:4px; margin-bottom:10px;">
+                                      <div style="background:#bdc3c7; height:15px; border-radius:2px; margin-bottom:6px; width:60%;"></div>
+                                      <div style="background:#bdc3c7; height:15px; border-radius:2px; width:80%;"></div>
+                                  </div>
+                                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                                      <div style="background:#fff; height:60px; border-radius:4px;"></div>
+                                      <div style="background:#fff; height:60px; border-radius:4px;"></div>
+                                  </div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pattern-form-layout
+    name: Form-Like Layout
+    html: |
+      <html><body style="margin:0; padding:20px; background:#f5f5f5;">
+                          <div style="background:#fff; padding:20px; border-radius:8px; max-width:300px;">
+                              <div style="background:#3498db; height:8px; border-radius:4px; margin-bottom:16px; width:40%;"></div>
+                              <div style="background:#ecf0f1; height:32px; border-radius:4px; margin-bottom:10px; border:1px solid #ddd;"></div>
+                              <div style="background:#ecf0f1; height:32px; border-radius:4px; margin-bottom:10px; border:1px solid #ddd;"></div>
+                              <div style="background:#ecf0f1; height:64px; border-radius:4px; margin-bottom:16px; border:1px solid #ddd;"></div>
+                              <div style="background:#3498db; height:36px; border-radius:4px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pattern-grid-gallery
+    name: Photo Gallery Grid
+    html: |
+      <html><body style="margin:0; padding:10px; background:#1a1a1a;">
+                          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px;">
+                              <div style="background:#e74c3c; height:80px; border-radius:4px;"></div>
+                              <div style="background:#3498db; height:80px; border-radius:4px;"></div>
+                              <div style="background:#27ae60; height:80px; border-radius:4px;"></div>
+                              <div style="background:#f39c12; height:80px; border-radius:4px;"></div>
+                              <div style="background:#9b59b6; height:80px; border-radius:4px;"></div>
+                              <div style="background:#1abc9c; height:80px; border-radius:4px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pattern-centered-modal
+    name: Centered Modal Dialog
+    html: |
+      <html><body style="margin:0; background:#b3b3b3;">
+                          <div style="display:flex; justify-content:center; align-items:center; height:300px;">
+                              <div style="background:#fff; padding:20px; border-radius:8px; width:250px;">
+                                  <div style="background:#3498db; height:10px; border-radius:5px; margin-bottom:12px; width:50%;"></div>
+                                  <div style="background:#ecf0f1; height:12px; border-radius:2px; margin-bottom:6px; width:90%;"></div>
+                                  <div style="background:#ecf0f1; height:12px; border-radius:2px; margin-bottom:16px; width:70%;"></div>
+                                  <div style="display:flex; justify-content:flex-end; gap:8px;">
+                                      <div style="background:#bdc3c7; width:60px; height:28px; border-radius:4px;"></div>
+                                      <div style="background:#3498db; width:60px; height:28px; border-radius:4px;"></div>
+                                  </div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pattern-holy-grail
+    name: Holy Grail Layout
+    html: |
+      <html><body style="margin:0; display:flex; flex-direction:column; height:300px;">
+                          <div style="background:#2c3e50; height:40px;"></div>
+                          <div style="display:flex; flex:1;">
+                              <div style="width:60px; background:#34495e;"></div>
+                              <div style="flex:1; background:#ecf0f1; padding:10px;">
+                                  <div style="background:#fff; height:40px; border-radius:4px; margin-bottom:8px;"></div>
+                                  <div style="background:#fff; height:40px; border-radius:4px;"></div>
+                              </div>
+                              <div style="width:60px; background:#34495e;"></div>
+                          </div>
+                          <div style="background:#2c3e50; height:30px;"></div>
+                      </body></html>
+
+  - id: pattern-media-object
+    name: Media Object Pattern
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#fff;">
+                          <div style="display:flex; gap:10px; margin-bottom:10px;">
+                              <div style="width:48px; height:48px; border-radius:50%; background:#3498db; flex-shrink:0;"></div>
+                              <div>
+                                  <div style="font-weight:bold; margin-bottom:2px;">User Name</div>
+                                  <div style="color:#666;">A short description or comment text goes here.</div>
+                              </div>
+                          </div>
+                          <div style="display:flex; gap:10px;">
+                              <div style="width:48px; height:48px; border-radius:50%; background:#e74c3c; flex-shrink:0;"></div>
+                              <div>
+                                  <div style="font-weight:bold; margin-bottom:2px;">Another User</div>
+                                  <div style="color:#666;">Reply to the above comment with more text.</div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pattern-stats-grid
+    name: Stats Dashboard Grid
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; background:#f5f5f5;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                              <div style="background:white; padding:12px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                                  <div style="font-size:11px; color:#999; text-transform:uppercase;">Revenue</div>
+                                  <div style="font-size:22px; font-weight:bold; color:#2c3e50;">$12,450</div>
+                              </div>
+                              <div style="background:white; padding:12px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                                  <div style="font-size:11px; color:#999; text-transform:uppercase;">Users</div>
+                                  <div style="font-size:22px; font-weight:bold; color:#2c3e50;">1,234</div>
+                              </div>
+                              <div style="background:white; padding:12px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                                  <div style="font-size:11px; color:#999; text-transform:uppercase;">Orders</div>
+                                  <div style="font-size:22px; font-weight:bold; color:#27ae60;">567</div>
+                              </div>
+                              <div style="background:white; padding:12px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                                  <div style="font-size:11px; color:#999; text-transform:uppercase;">Growth</div>
+                                  <div style="font-size:22px; font-weight:bold; color:#e74c3c;">+15%</div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pattern-avatar-stack
+    name: Overlapping Avatar Stack
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; padding-left:10px;">
+                              <div style="width:36px; height:36px; border-radius:50%; background:#3498db; border:2px solid white; margin-left:-10px; position:relative; z-index:4;"></div>
+                              <div style="width:36px; height:36px; border-radius:50%; background:#e74c3c; border:2px solid white; margin-left:-10px; position:relative; z-index:3;"></div>
+                              <div style="width:36px; height:36px; border-radius:50%; background:#27ae60; border:2px solid white; margin-left:-10px; position:relative; z-index:2;"></div>
+                              <div style="width:36px; height:36px; border-radius:50%; background:#f39c12; border:2px solid white; margin-left:-10px; position:relative; z-index:1;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pattern-chip-list
+    name: Chip List with Flex Wrap
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:12px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                              <span style="background:#e8f4f8; color:#2980b9; padding:3px 10px; border-radius:12px;">HTML</span>
+                              <span style="background:#fde8e8; color:#c0392b; padding:3px 10px; border-radius:12px;">CSS</span>
+                              <span style="background:#e8f8e8; color:#27ae60; padding:3px 10px; border-radius:12px;">JavaScript</span>
+                              <span style="background:#f8f0e8; color:#d35400; padding:3px 10px; border-radius:12px;">TypeScript</span>
+                              <span style="background:#f0e8f8; color:#8e44ad; padding:3px 10px; border-radius:12px;">React</span>
+                              <span style="background:#e8e8f8; color:#2c3e50; padding:3px 10px; border-radius:12px;">Node.js</span>
+                          </div>
+                      </body></html>
+
+  - id: pattern-progress-steps
+    name: Step Progress Indicator
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:11px; background:#fff;">
+                          <div style="display:flex; align-items:center; gap:0;">
+                              <div style="width:28px; height:28px; border-radius:50%; background:#27ae60; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold;">1</div>
+                              <div style="flex:1; height:3px; background:#27ae60;"></div>
+                              <div style="width:28px; height:28px; border-radius:50%; background:#27ae60; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold;">2</div>
+                              <div style="flex:1; height:3px; background:#bdc3c7;"></div>
+                              <div style="width:28px; height:28px; border-radius:50%; background:#bdc3c7; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold;">3</div>
+                              <div style="flex:1; height:3px; background:#bdc3c7;"></div>
+                              <div style="width:28px; height:28px; border-radius:50%; background:#bdc3c7; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold;">4</div>
+                          </div>
+                      </body></html>
+
+  - id: pattern-skeleton
+    name: Skeleton Loading Placeholder
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:10px; margin-bottom:12px;">
+                              <div style="width:48px; height:48px; border-radius:50%; background:#e0e0e0;"></div>
+                              <div style="flex:1;">
+                                  <div style="height:12px; background:#e0e0e0; border-radius:6px; margin-bottom:6px; width:60%;"></div>
+                                  <div style="height:12px; background:#e0e0e0; border-radius:6px; width:90%;"></div>
+                              </div>
+                          </div>
+                          <div style="height:10px; background:#e0e0e0; border-radius:5px; margin-bottom:6px;"></div>
+                          <div style="height:10px; background:#e0e0e0; border-radius:5px; margin-bottom:6px; width:80%;"></div>
+                          <div style="height:10px; background:#e0e0e0; border-radius:5px; width:60%;"></div>
+                      </body></html>
+
+  - id: pattern-testimonial
+    name: Testimonial Card
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#f5f5f5;">
+                          <div style="background:white; padding:16px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.08); border-left:4px solid #3498db;">
+                              <p style="margin:0 0 10px; color:#555; font-style:italic; line-height:1.5;">"This product changed the way we work. Highly recommended for any team."</p>
+                              <div style="display:flex; align-items:center; gap:8px;">
+                                  <div style="width:32px; height:32px; border-radius:50%; background:#3498db;"></div>
+                                  <div>
+                                      <div style="font-weight:bold; font-size:12px; color:#333;">Jane Doe</div>
+                                      <div style="font-size:11px; color:#999;">CEO, Acme Corp</div>
+                                  </div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pattern-timeline
+    name: Vertical Timeline
+    html: |
+      <html><body style="margin:0; padding:10px 10px 10px 30px; font-family:sans-serif; font-size:12px; background:#fff;">
+                          <div style="position:relative; border-left:2px solid #bdc3c7; padding-left:16px;">
+                              <div style="margin-bottom:16px; position:relative;">
+                                  <div style="position:absolute; left:-23px; top:2px; width:12px; height:12px; border-radius:50%; background:#3498db; border:2px solid white;"></div>
+                                  <div style="font-weight:bold; color:#2c3e50;">Step 1</div>
+                                  <div style="color:#777;">First event description</div>
+                              </div>
+                              <div style="margin-bottom:16px; position:relative;">
+                                  <div style="position:absolute; left:-23px; top:2px; width:12px; height:12px; border-radius:50%; background:#27ae60; border:2px solid white;"></div>
+                                  <div style="font-weight:bold; color:#2c3e50;">Step 2</div>
+                                  <div style="color:#777;">Second event</div>
+                              </div>
+                              <div style="position:relative;">
+                                  <div style="position:absolute; left:-23px; top:2px; width:12px; height:12px; border-radius:50%; background:#bdc3c7; border:2px solid white;"></div>
+                                  <div style="font-weight:bold; color:#2c3e50;">Step 3</div>
+                                  <div style="color:#777;">Pending</div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pattern-card-layout
+    name: Card Grid Layout
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#f5f5f5;">
+                          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                              <div style="background:#fff; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.12); padding:12px;">
+                                  <div style="font-weight:bold; margin-bottom:4px; color:#2c3e50;">Card Title</div>
+                                  <div style="color:#7f8c8d; font-size:12px;">Card description text that provides context.</div>
+                              </div>
+                              <div style="background:#fff; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.12); padding:12px;">
+                                  <div style="font-weight:bold; margin-bottom:4px; color:#2c3e50;">Another Card</div>
+                                  <div style="color:#7f8c8d; font-size:12px;">More descriptive content here.</div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pattern-navbar
+    name: Navigation Bar
+    html: |
+      <html><body style="margin:0; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <nav style="background:#2c3e50; padding:0 16px; display:flex; align-items:center; height:48px;">
+                              <div style="color:#fff; font-weight:bold; font-size:18px; margin-right:24px;">Brand</div>
+                              <a style="color:#ecf0f1; text-decoration:none; margin-right:16px;">Home</a>
+                              <a style="color:#ecf0f1; text-decoration:none; margin-right:16px;">About</a>
+                              <a style="color:#ecf0f1; text-decoration:none;">Contact</a>
+                          </nav>
+                          <div style="padding:16px;">
+                              <p style="margin:0; color:#333;">Page content below the navigation bar.</p>
+                          </div>
+                      </body></html>
+
+  - id: pattern-alerts
+    name: Alert Notifications
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#fff;">
+                          <div style="background:#d4edda; border:1px solid #c3e6cb; color:#155724; padding:10px 14px; border-radius:4px; margin-bottom:8px;">
+                              <strong>Success!</strong> Operation completed successfully.
+                          </div>
+                          <div style="background:#f8d7da; border:1px solid #f5c6cb; color:#721c24; padding:10px 14px; border-radius:4px; margin-bottom:8px;">
+                              <strong>Error!</strong> Something went wrong.
+                          </div>
+                          <div style="background:#fff3cd; border:1px solid #ffeeba; color:#856404; padding:10px 14px; border-radius:4px; margin-bottom:8px;">
+                              <strong>Warning!</strong> Please check your input.
+                          </div>
+                          <div style="background:#cce5ff; border:1px solid #b8daff; color:#004085; padding:10px 14px; border-radius:4px;">
+                              <strong>Info:</strong> New update available.
+                          </div>
+                      </body></html>
+
+  - id: pattern-pricing-table
+    name: Pricing Table
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:13px; background:#f5f5f5;">
+                          <div style="display:flex; gap:10px;">
+                              <div style="flex:1; background:#fff; border:1px solid #ddd; border-radius:6px; padding:16px; text-align:center;">
+                                  <div style="font-size:16px; font-weight:bold; color:#2c3e50;">Basic</div>
+                                  <div style="font-size:28px; font-weight:bold; color:#3498db; margin:8px 0;">$9</div>
+                                  <div style="color:#7f8c8d; font-size:12px; margin-bottom:8px;">per month</div>
+                                  <div style="font-size:12px; color:#555; border-top:1px solid #eee; padding-top:8px;">5 GB Storage</div>
+                              </div>
+                              <div style="flex:1; background:#3498db; border:1px solid #2980b9; border-radius:6px; padding:16px; text-align:center; color:#fff;">
+                                  <div style="font-size:16px; font-weight:bold;">Pro</div>
+                                  <div style="font-size:28px; font-weight:bold; margin:8px 0;">$29</div>
+                                  <div style="font-size:12px; opacity:0.8; margin-bottom:8px;">per month</div>
+                                  <div style="font-size:12px; border-top:1px solid rgba(255,255,255,0.3); padding-top:8px;">50 GB Storage</div>
+                              </div>
+                              <div style="flex:1; background:#fff; border:1px solid #ddd; border-radius:6px; padding:16px; text-align:center;">
+                                  <div style="font-size:16px; font-weight:bold; color:#2c3e50;">Enterprise</div>
+                                  <div style="font-size:28px; font-weight:bold; color:#3498db; margin:8px 0;">$99</div>
+                                  <div style="color:#7f8c8d; font-size:12px; margin-bottom:8px;">per month</div>
+                                  <div style="font-size:12px; color:#555; border-top:1px solid #eee; padding-top:8px;">Unlimited</div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pattern-footer
+    name: Page Footer
+    html: |
+      <html><body style="margin:0; font-family:sans-serif; font-size:13px; background:#fff;">
+                          <div style="padding:16px;"><p style="margin:0;">Page content above footer.</p></div>
+                          <footer style="background:#2c3e50; color:#ecf0f1; padding:20px 16px;">
+                              <div style="display:flex; gap:20px; margin-bottom:12px;">
+                                  <div style="flex:1;">
+                                      <div style="font-weight:bold; margin-bottom:6px;">Company</div>
+                                      <div style="font-size:12px; color:#bdc3c7;">About Us</div>
+                                      <div style="font-size:12px; color:#bdc3c7;">Careers</div>
+                                  </div>
+                                  <div style="flex:1;">
+                                      <div style="font-weight:bold; margin-bottom:6px;">Support</div>
+                                      <div style="font-size:12px; color:#bdc3c7;">Help Center</div>
+                                      <div style="font-size:12px; color:#bdc3c7;">Contact</div>
+                                  </div>
+                              </div>
+                              <div style="border-top:1px solid #34495e; padding-top:10px; font-size:11px; color:#7f8c8d; text-align:center;">
+                                  &copy; 2026 Company Name. All rights reserved.
+                              </div>
+                          </footer>
+                      </body></html>
+
+  - id: pattern-login-form
+    name: Login Form
+    html: |
+      <html><body style="margin:0; padding:20px; font-family:sans-serif; font-size:14px; background:#f0f2f5; display:flex; justify-content:center;">
+                          <div style="background:#fff; padding:24px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); width:280px;">
+                              <h2 style="margin:0 0 16px; font-size:20px; color:#2c3e50; text-align:center;">Sign In</h2>
+                              <div style="margin-bottom:12px;">
+                                  <label style="display:block; font-size:12px; color:#555; margin-bottom:4px;">Email</label>
+                                  <input type="email" value="user@example.com" style="width:100%; box-sizing:border-box;">
+                              </div>
+                              <div style="margin-bottom:16px;">
+                                  <label style="display:block; font-size:12px; color:#555; margin-bottom:4px;">Password</label>
+                                  <input type="password" value="password" style="width:100%; box-sizing:border-box;">
+                              </div>
+                              <div style="background:#3498db; color:#fff; text-align:center; padding:10px; border-radius:4px; font-weight:bold;">Log In</div>
+                          </div>
+                      </body></html>

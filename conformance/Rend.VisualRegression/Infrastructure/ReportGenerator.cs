@@ -150,7 +150,27 @@ namespace Rend.VisualRegression.Infrastructure
 
                 rowIndex++;
                 string htmlEncoded = result.Html != null ? Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(result.Html)) : "";
-                sb.AppendLine($"<tr class=\"result-row {statusClass}\" data-status=\"{statusClass}\" data-sort-index=\"{rowIndex}\" data-sort-status=\"{statusOrder}\" data-sort-name=\"{Escape(result.TestName.ToLower())}\" data-sort-category=\"{Escape(result.Category.ToLower())}\" data-sort-diff=\"{result.DiffPercentage:F4}\" data-sort-duration=\"{result.Duration.TotalMilliseconds:F0}\" data-html=\"{htmlEncoded}\">");
+                string chromeLayoutEncoded = "";
+                if (result.ChromeLayout != null)
+                {
+                    var layoutJson = System.Text.Json.JsonSerializer.Serialize(result.ChromeLayout, new System.Text.Json.JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                    });
+                    chromeLayoutEncoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(layoutJson));
+                }
+                string rendLayoutEncoded = "";
+                if (result.RendLayout != null)
+                {
+                    var rendLayoutJson = System.Text.Json.JsonSerializer.Serialize(result.RendLayout, new System.Text.Json.JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                    });
+                    rendLayoutEncoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(rendLayoutJson));
+                }
+                sb.AppendLine($"<tr class=\"result-row {statusClass}\" data-status=\"{statusClass}\" data-sort-index=\"{rowIndex}\" data-sort-status=\"{statusOrder}\" data-sort-name=\"{Escape(result.TestName.ToLower())}\" data-sort-category=\"{Escape(result.Category.ToLower())}\" data-sort-diff=\"{result.DiffPercentage:F4}\" data-sort-duration=\"{result.Duration.TotalMilliseconds:F0}\" data-html=\"{htmlEncoded}\" data-chrome-layout=\"{chromeLayoutEncoded}\" data-rend-layout=\"{rendLayoutEncoded}\">");
                 sb.AppendLine($"  <td class=\"index-cell\">{rowIndex}</td>");
                 sb.AppendLine($"  <td><span class=\"status-badge status-{statusClass}\">{statusLabel}</span></td>");
                 sb.AppendLine($"  <td class=\"test-name\">{Escape(result.TestName)}</td>");
@@ -230,6 +250,7 @@ namespace Rend.VisualRegression.Infrastructure
             sb.AppendLine("      <div class=\"lightbox-tabs\">");
             sb.AppendLine("        <button class=\"lb-tab active\" data-tab=\"images\" onclick=\"switchLbTab('images')\">Images</button>");
             sb.AppendLine("        <button class=\"lb-tab\" data-tab=\"html\" onclick=\"switchLbTab('html')\">HTML</button>");
+            sb.AppendLine("        <button class=\"lb-tab\" data-tab=\"layout\" onclick=\"switchLbTab('layout')\" id=\"lb-layout-tab\" style=\"display:none\">Layout</button>");
             sb.AppendLine("      </div>");
             sb.AppendLine("      <button class=\"lightbox-close\" onclick=\"closeLightbox()\">&times;</button>");
             sb.AppendLine("    </div>");
@@ -240,6 +261,14 @@ namespace Rend.VisualRegression.Infrastructure
             sb.AppendLine("    </div>");
             sb.AppendLine("    <div class=\"lightbox-html\" id=\"lb-html\" style=\"display:none\">");
             sb.AppendLine("      <pre id=\"lb-html-code\"></pre>");
+            sb.AppendLine("    </div>");
+            sb.AppendLine("    <div class=\"lightbox-layout\" id=\"lb-layout\" style=\"display:none\">");
+            sb.AppendLine("      <div id=\"lb-layout-match\" class=\"layout-match-banner\"></div>");
+            sb.AppendLine("      <div style=\"display:flex; gap:16px;\">");
+            sb.AppendLine("        <div style=\"flex:1; min-width:0;\"><div class=\"lightbox-label\">Chrome Layout</div><div id=\"lb-chrome-layout-tree\"></div></div>");
+            sb.AppendLine("        <div style=\"flex:1; min-width:0;\"><div class=\"lightbox-label\">Rend Layout</div><div id=\"lb-rend-layout-tree\"></div></div>");
+            sb.AppendLine("        <div style=\"flex:1; min-width:0;\"><div class=\"lightbox-label\">Layout Diff</div><div id=\"lb-layout-diff\"></div></div>");
+            sb.AppendLine("      </div>");
             sb.AppendLine("    </div>");
             sb.AppendLine("  </div>");
             sb.AppendLine("</div>");
@@ -741,6 +770,88 @@ tbody tr:hover {
     word-wrap: break-word;
     border: 1px solid rgba(255,255,255,0.1);
 }
+
+/* Layout tree styles */
+.lightbox-layout {
+    padding: 16px;
+    max-height: 75vh;
+    overflow: auto;
+    color: #c9d1d9;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.layout-node {
+    margin-left: 16px;
+    border-left: 1px solid rgba(255,255,255,0.08);
+    padding-left: 8px;
+}
+
+.layout-node-header {
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    white-space: nowrap;
+}
+
+.layout-node-header:hover {
+    background: rgba(255,255,255,0.06);
+}
+
+.layout-tag { color: #7ee787; font-weight: 600; }
+.layout-id { color: #d2a8ff; }
+.layout-class { color: #79c0ff; }
+.layout-rect { color: #ffa657; font-size: 11px; }
+.layout-text { color: #8b949e; font-style: italic; font-size: 11px; }
+.layout-style { color: #8b949e; font-size: 11px; }
+.layout-toggle { display: inline-block; width: 12px; color: #666; }
+
+.layout-props {
+    display: none;
+    margin-left: 28px;
+    padding: 4px 8px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 4px;
+    font-size: 11px;
+    color: #8b949e;
+    margin-bottom: 4px;
+}
+
+.layout-props.open { display: block; }
+
+.layout-prop-key { color: #d2a8ff; }
+.layout-prop-val { color: #a5d6ff; }
+
+.layout-match-banner {
+    padding: 8px 16px;
+    margin-bottom: 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+}
+.layout-match-banner.good { background: rgba(46,160,67,0.2); color: #7ee787; }
+.layout-match-banner.warn { background: rgba(210,153,34,0.2); color: #e3b341; }
+.layout-match-banner.bad { background: rgba(248,81,73,0.2); color: #f85149; }
+
+.layout-diff-node {
+    margin-left: 16px;
+    border-left: 1px solid rgba(255,255,255,0.08);
+    padding-left: 8px;
+}
+.layout-diff-match { color: #7ee787; }
+.layout-diff-mismatch { color: #f85149; }
+.layout-diff-val-chrome { color: #79c0ff; }
+.layout-diff-val-rend { color: #ffa657; }
+.layout-diff-detail {
+    margin-left: 28px;
+    padding: 4px 8px;
+    background: rgba(248,81,73,0.08);
+    border-radius: 4px;
+    font-size: 11px;
+    margin-bottom: 4px;
+}
 ";
         }
 
@@ -994,6 +1105,48 @@ function openLightbox(img, event) {
     try { currentLbHtml = b64 ? decodeURIComponent(escape(atob(b64))) : ''; } catch(e) { currentLbHtml = ''; }
     document.getElementById('lb-html-code').textContent = currentLbHtml;
 
+    // Decode and render layout trees if available
+    var chromeLayoutB64 = row.getAttribute('data-chrome-layout') || '';
+    var rendLayoutB64 = row.getAttribute('data-rend-layout') || '';
+    var layoutTab = document.getElementById('lb-layout-tab');
+    var chromeTree = null;
+    var rendTree = null;
+    if (chromeLayoutB64 || rendLayoutB64) {
+        layoutTab.style.display = '';
+        try {
+            if (chromeLayoutB64) {
+                var chromeJson = decodeURIComponent(escape(atob(chromeLayoutB64)));
+                chromeTree = JSON.parse(chromeJson);
+                document.getElementById('lb-chrome-layout-tree').innerHTML = renderLayoutNode(chromeTree, 0);
+            } else {
+                document.getElementById('lb-chrome-layout-tree').innerHTML = '<span style=""color:#888"">No Chrome layout data</span>';
+            }
+            if (rendLayoutB64) {
+                var rendJson = decodeURIComponent(escape(atob(rendLayoutB64)));
+                rendTree = JSON.parse(rendJson);
+                document.getElementById('lb-rend-layout-tree').innerHTML = renderLayoutNode(rendTree, 0);
+            } else {
+                document.getElementById('lb-rend-layout-tree').innerHTML = '<span style=""color:#888"">No Rend layout data</span>';
+            }
+            // Run layout diff
+            if (chromeTree && rendTree) {
+                var diffResult = diffLayoutTrees(chromeTree, rendTree);
+                document.getElementById('lb-layout-diff').innerHTML = renderDiffResult(diffResult);
+            } else {
+                document.getElementById('lb-layout-diff').innerHTML = '<span style=""color:#888"">Need both trees for diff</span>';
+                document.getElementById('lb-layout-match').textContent = '';
+                document.getElementById('lb-layout-match').className = 'layout-match-banner';
+            }
+        } catch(e) {
+            document.getElementById('lb-chrome-layout-tree').innerHTML = '<span style=""color:#e74c3c"">Error: ' + esc(e.message) + '</span>';
+            document.getElementById('lb-layout-diff').innerHTML = '';
+            document.getElementById('lb-layout-match').textContent = '';
+            document.getElementById('lb-layout-match').className = 'layout-match-banner';
+        }
+    } else {
+        layoutTab.style.display = 'none';
+    }
+
     // Reset to images tab
     switchLbTab('images');
 
@@ -1005,6 +1158,253 @@ function switchLbTab(tab) {
     document.querySelector('.lb-tab[data-tab=""' + tab + '""]').classList.add('active');
     document.getElementById('lb-images').style.display = tab === 'images' ? '' : 'none';
     document.getElementById('lb-html').style.display = tab === 'html' ? '' : 'none';
+    document.getElementById('lb-layout').style.display = tab === 'layout' ? '' : 'none';
+}
+
+function renderLayoutNode(node, depth) {
+    if (!node) return '';
+    var indent = depth > 0 ? '' : '';
+    var toggle = node.children && node.children.length > 0 ? '&#9654;' : '&nbsp;';
+    var idStr = node.id ? ' <span class=""layout-id"">#' + esc(node.id) + '</span>' : '';
+    var clsStr = node.classes ? ' <span class=""layout-class"">.' + esc(String(node.classes).replace(/ /g, '.')) + '</span>' : '';
+    var rectStr = ' <span class=""layout-rect"">[' + node.x + ', ' + node.y + ', ' + node.width + 'x' + node.height + ']</span>';
+    var textStr = node.textContent ? ' <span class=""layout-text"">\""' + esc(node.textContent) + '\""</span>' : '';
+
+    var propsHtml = '<div class=""layout-props"">';
+    var props = [
+        ['display', node.display], ['position', node.position], ['box-sizing', node.boxSizing],
+        ['margin', node.marginTop + ' ' + node.marginRight + ' ' + node.marginBottom + ' ' + node.marginLeft],
+        ['padding', node.paddingTop + ' ' + node.paddingRight + ' ' + node.paddingBottom + ' ' + node.paddingLeft],
+        ['border-width', node.borderTopWidth + ' ' + node.borderRightWidth + ' ' + node.borderBottomWidth + ' ' + node.borderLeftWidth],
+        ['font-size', node.fontSize], ['line-height', node.lineHeight],
+        ['font-family', node.fontFamily || ''],
+        ['color', node.color], ['background', node.backgroundColor]
+    ];
+    for (var i = 0; i < props.length; i++) {
+        propsHtml += '<span class=""layout-prop-key"">' + props[i][0] + '</span>: <span class=""layout-prop-val"">' + esc(props[i][1]) + '</span>; ';
+    }
+    propsHtml += '</div>';
+
+    var childrenHtml = '';
+    if (node.children) {
+        for (var i = 0; i < node.children.length; i++) {
+            childrenHtml += renderLayoutNode(node.children[i], depth + 1);
+        }
+    }
+
+    return '<div class=""layout-node"">' +
+        '<div class=""layout-node-header"" onclick=""toggleLayoutNode(this)"">' +
+        '<span class=""layout-toggle"">' + toggle + '</span>' +
+        '<span class=""layout-tag"">&lt;' + esc(node.tag) + '&gt;</span>' +
+        idStr + clsStr + rectStr + textStr +
+        '</div>' + propsHtml + childrenHtml + '</div>';
+}
+
+function toggleLayoutNode(header) {
+    var props = header.nextElementSibling;
+    if (props && props.classList.contains('layout-props')) {
+        props.classList.toggle('open');
+    }
+    var toggle = header.querySelector('.layout-toggle');
+    if (toggle) {
+        var isOpen = props && props.classList.contains('open');
+        var hasChildren = header.parentElement.querySelectorAll('.layout-node').length > 0;
+        if (hasChildren || (props && props.classList.contains('layout-props'))) {
+            toggle.innerHTML = isOpen ? '&#9660;' : '&#9654;';
+        }
+    }
+}
+
+function parsePx(s) {
+    if (!s) return 0;
+    var v = parseFloat(String(s));
+    return isNaN(v) ? 0 : v;
+}
+
+function nodeSignature(n) {
+    if (!n) return '';
+    var s = n.tag || '';
+    if (n.id) s += '#' + n.id;
+    if (n.classes) s += '.' + n.classes.split(/\s+/).sort().join('.');
+    return s;
+}
+
+function diffLayoutTrees(chrome, rend) {
+    var totalNodes = 0;
+    var matchedNodes = 0;
+    var diffs = [];
+
+    function compareNodes(c, r, path) {
+        if (!c && !r) return;
+        totalNodes++;
+
+        var tag = c ? c.tag : (r ? r.tag : '?');
+        var nodePath = path + '/' + tag;
+        if (c && c.id) nodePath += '#' + c.id;
+
+        if (!c || !r) {
+            diffs.push({ path: nodePath, type: 'missing', chrome: c ? 'present' : 'missing', rend: r ? 'present' : 'missing' });
+            // Count children of whichever exists
+            var existing = c || r;
+            if (existing && existing.children) {
+                for (var i = 0; i < existing.children.length; i++) {
+                    totalNodes++;
+                }
+            }
+            return;
+        }
+
+        var nodeDiffs = [];
+
+        // Compare bounding rect (0.5px threshold)
+        var rectFields = ['x', 'y', 'width', 'height'];
+        for (var i = 0; i < rectFields.length; i++) {
+            var f = rectFields[i];
+            var cv = c[f] || 0;
+            var rv = r[f] || 0;
+            if (Math.abs(cv - rv) > 0.5) {
+                nodeDiffs.push({ prop: f, chrome: cv, rend: rv, diff: Math.abs(cv - rv) });
+            }
+        }
+
+        // Compare box model
+        var boxFields = [
+            ['marginTop', 'margin-top'], ['marginRight', 'margin-right'],
+            ['marginBottom', 'margin-bottom'], ['marginLeft', 'margin-left'],
+            ['paddingTop', 'padding-top'], ['paddingRight', 'padding-right'],
+            ['paddingBottom', 'padding-bottom'], ['paddingLeft', 'padding-left'],
+            ['borderTopWidth', 'border-top'], ['borderRightWidth', 'border-right'],
+            ['borderBottomWidth', 'border-bottom'], ['borderLeftWidth', 'border-left']
+        ];
+        for (var i = 0; i < boxFields.length; i++) {
+            var key = boxFields[i][0];
+            var label = boxFields[i][1];
+            var cv = parsePx(c[key]);
+            var rv = parsePx(r[key]);
+            if (Math.abs(cv - rv) > 0.5) {
+                nodeDiffs.push({ prop: label, chrome: c[key], rend: r[key], diff: Math.abs(cv - rv) });
+            }
+        }
+
+        // Compare font-size and line-height
+        var textFields = [
+            ['fontSize', 'font-size'], ['lineHeight', 'line-height'], ['fontFamily', 'font-family']
+        ];
+        for (var i = 0; i < textFields.length; i++) {
+            var key = textFields[i][0];
+            var label = textFields[i][1];
+            if (key === 'fontFamily') {
+                // String compare for font-family (normalize to lowercase)
+                var cf = (c[key] || '').toLowerCase().trim();
+                var rf = (r[key] || '').toLowerCase().trim();
+                if (cf && rf && cf !== rf) {
+                    nodeDiffs.push({ prop: label, chrome: c[key], rend: r[key], diff: -1 });
+                }
+            } else {
+                var cv = parsePx(c[key]);
+                var rv = parsePx(r[key]);
+                if (Math.abs(cv - rv) > 0.5) {
+                    nodeDiffs.push({ prop: label, chrome: c[key], rend: r[key], diff: Math.abs(cv - rv) });
+                }
+            }
+        }
+
+        if (nodeDiffs.length === 0) {
+            matchedNodes++;
+        } else {
+            diffs.push({ path: nodePath, type: 'mismatch', details: nodeDiffs });
+        }
+
+        // Recurse children — match by tag+id+class signature with occurrence index
+        var cKids = c.children || [];
+        var rKids = r.children || [];
+
+        // Build signature-indexed maps: sig → [indices]
+        var rBySig = {};
+        for (var ri = 0; ri < rKids.length; ri++) {
+            var sig = nodeSignature(rKids[ri]);
+            if (!rBySig[sig]) rBySig[sig] = [];
+            rBySig[sig].push(ri);
+        }
+
+        // Track which Rend children are consumed
+        var rUsed = {};
+        // Track occurrence count per signature for Chrome children
+        var cSigCount = {};
+
+        for (var ci = 0; ci < cKids.length; ci++) {
+            var ck = cKids[ci];
+            var sig = nodeSignature(ck);
+            if (!cSigCount[sig]) cSigCount[sig] = 0;
+            var occIdx = cSigCount[sig]++;
+
+            var matched = false;
+            if (rBySig[sig] && occIdx < rBySig[sig].length) {
+                var ri = rBySig[sig][occIdx];
+                rUsed[ri] = true;
+                compareNodes(ck, rKids[ri], nodePath);
+                matched = true;
+            }
+            if (!matched) {
+                compareNodes(ck, null, nodePath);
+            }
+        }
+        for (var ri = 0; ri < rKids.length; ri++) {
+            if (!rUsed[ri]) {
+                compareNodes(null, rKids[ri], nodePath);
+            }
+        }
+    }
+
+    compareNodes(chrome, rend, '');
+    return { totalNodes: totalNodes, matchedNodes: matchedNodes, diffs: diffs };
+}
+
+function renderDiffResult(result) {
+    if (result.totalNodes === 0) {
+        return '<span style=""color:#888"">No nodes to compare</span>';
+    }
+
+    var pct = Math.round(result.matchedNodes / result.totalNodes * 1000) / 10;
+
+    // Update banner
+    var banner = document.getElementById('lb-layout-match');
+    banner.textContent = 'Layout Match: ' + pct + '% (' + result.matchedNodes + '/' + result.totalNodes + ' nodes within tolerance)';
+    banner.className = 'layout-match-banner ' + (pct >= 95 ? 'good' : pct >= 80 ? 'warn' : 'bad');
+
+    if (result.diffs.length === 0) {
+        return '<div style=""color:#7ee787; padding:8px"">All nodes match within tolerance.</div>';
+    }
+
+    var html = '';
+    for (var i = 0; i < result.diffs.length; i++) {
+        var d = result.diffs[i];
+        html += '<div class=""layout-diff-node"">';
+        if (d.type === 'missing') {
+            html += '<span class=""layout-diff-mismatch"">' + esc(d.path) + '</span> ';
+            html += '<span style=""color:#f85149"">Chrome: ' + esc(d.chrome) + ', Rend: ' + esc(d.rend) + '</span>';
+        } else {
+            html += '<span class=""layout-diff-mismatch"">' + esc(d.path) + '</span>';
+            html += '<div class=""layout-diff-detail"">';
+            for (var j = 0; j < d.details.length; j++) {
+                var det = d.details[j];
+                var diffStr = det.diff >= 0 ? ' (\u0394' + (Math.round(det.diff * 100) / 100) + 'px)' : '';
+                html += '<span class=""layout-prop-key"">' + esc(det.prop) + '</span>: ';
+                html += '<span class=""layout-diff-val-chrome"">' + esc(String(det.chrome)) + '</span>';
+                html += ' \u2192 ';
+                html += '<span class=""layout-diff-val-rend"">' + esc(String(det.rend)) + '</span>';
+                html += diffStr + '<br>';
+            }
+            html += '</div>';
+        }
+        html += '</div>';
+    }
+    return html;
+}
+
+function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/""/g,'&quot;');
 }
 
 function closeLightbox() {

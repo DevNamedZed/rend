@@ -1,0 +1,100 @@
+# Inline Layout
+# Visual regression tests for inline layout
+tests:
+  - id: inline-spans-nested
+    name: Nested Inline Spans
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.6; background:#fff;">
+                          <p style="margin:0;">Normal text <span style="color:red; font-weight:bold;">bold red</span>
+                          then <span style="background:#e8f4f8; padding:2px 4px; border-radius:3px;">highlighted</span>
+                          and <span style="text-decoration:underline; color:#3498db;">underlined blue</span> text.</p>
+                      </body></html>
+
+  - id: inline-badges
+    name: Inline Badge Elements
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <p style="margin:0 0 8px;">Status:
+                              <span style="background:#27ae60; color:#fff; padding:2px 8px; border-radius:10px; font-size:12px;">Active</span>
+                              <span style="background:#e74c3c; color:#fff; padding:2px 8px; border-radius:10px; font-size:12px;">Error</span>
+                              <span style="background:#f39c12; color:#fff; padding:2px 8px; border-radius:10px; font-size:12px;">Warning</span>
+                          </p>
+                          <p style="margin:0;">Priority:
+                              <span style="background:#3498db; color:#fff; padding:1px 6px; border-radius:3px; font-size:11px;">P1</span>
+                              <span style="background:#95a5a6; color:#fff; padding:1px 6px; border-radius:3px; font-size:11px;">P2</span>
+                          </p>
+                      </body></html>
+
+  - id: inline-block-align
+    name: Inline-Block Vertical Alignment
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="line-height:60px; background:#f0f0f0; padding:4px;">
+                              <span style="display:inline-block; width:30px; height:30px; background:#3498db; vertical-align:top;"></span>
+                              <span style="display:inline-block; width:30px; height:40px; background:#e74c3c; vertical-align:middle;"></span>
+                              <span style="display:inline-block; width:30px; height:20px; background:#27ae60; vertical-align:bottom;"></span>
+                          </div>
+                      </body></html>
+
+  - id: pp-inline-block-row
+    name: Inline Block Row
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff; font-size:0;">
+                          <div style="display:inline-block; width:80px; height:60px; background:#3498db;"></div>
+                          <div style="display:inline-block; width:80px; height:60px; background:#e74c3c;"></div>
+                          <div style="display:inline-block; width:80px; height:60px; background:#2ecc71;"></div>
+                      </body></html>
+
+  - id: pp-inline-block-alignment
+    name: Inline Block Vertical Alignment
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div>
+                              <div style="display:inline-block; width:60px; height:30px; background:#3498db; vertical-align:top;"></div>
+                              <div style="display:inline-block; width:60px; height:50px; background:#e74c3c; vertical-align:top;"></div>
+                              <div style="display:inline-block; width:60px; height:40px; background:#2ecc71; vertical-align:top;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-inline-block-no-gap
+    name: Inline Block Elements
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff; font-size:0;">
+                          <div style="display:inline-block; width:80px; height:50px; background:#3498db;"></div>
+                          <div style="display:inline-block; width:80px; height:50px; background:#e74c3c;"></div>
+                          <div style="display:inline-block; width:80px; height:50px; background:#2ecc71;"></div>
+                      </body></html>
+
+  - id: pp-inline-block-width
+    name: Inline Block Shrink to Content
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:inline-block; background:#3498db; padding:10px;">
+                              <div style="width:100px; height:40px; background:#ecf0f1;"></div>
+                          </div>
+                          <div style="display:inline-block; background:#e74c3c; padding:10px; margin-left:10px;">
+                              <div style="width:60px; height:40px; background:#ecf0f1;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-inline-block-vertical-align
+    name: Inline Block Vertical Align Top
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:300px;">
+                              <div style="display:inline-block; width:80px; height:40px; background:#3498db; vertical-align:top;"></div>
+                              <div style="display:inline-block; width:80px; height:80px; background:#e74c3c; vertical-align:top;"></div>
+                              <div style="display:inline-block; width:80px; height:60px; background:#2ecc71; vertical-align:top;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-inline-block-sizes
+    name: Inline Block Different Sizes
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="width:350px;">
+                              <div style="display:inline-block; width:50px; height:50px; background:#3498db; vertical-align:top;"></div>
+                              <div style="display:inline-block; width:100px; height:30px; background:#e74c3c; vertical-align:top;"></div>
+                              <div style="display:inline-block; width:70px; height:70px; background:#2ecc71; vertical-align:top;"></div>
+                          </div>
+                      </body></html>

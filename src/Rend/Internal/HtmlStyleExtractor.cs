@@ -16,7 +16,21 @@ namespace Rend.Internal
             var head = document.Head;
             if (head == null) return stylesheets;
 
-            var child = head.FirstChild;
+            ExtractStylesFromSubtree(head, stylesheets);
+
+            // Also check for <style> elements in <body>
+            var body = document.Body;
+            if (body != null)
+            {
+                ExtractStylesFromSubtree(body, stylesheets);
+            }
+
+            return stylesheets;
+        }
+
+        private static void ExtractStylesFromSubtree(Node node, List<Stylesheet> stylesheets)
+        {
+            var child = node.FirstChild;
             while (child != null)
             {
                 if (child is Element el)
@@ -30,38 +44,10 @@ namespace Rend.Internal
                             stylesheets.Add(sheet);
                         }
                     }
-                    // Note: <link rel="stylesheet"> requires resource loading,
-                    // handled separately by ResourceLoadingContext
-                }
-
-                child = child.NextSibling;
-            }
-
-            // Also check for <style> elements in <body>
-            var body = document.Body;
-            if (body != null)
-                ExtractStylesFromSubtree(body, stylesheets);
-
-            return stylesheets;
-        }
-
-        private static void ExtractStylesFromSubtree(Node node, List<Stylesheet> stylesheets)
-        {
-            var child = node.FirstChild;
-            while (child != null)
-            {
-                if (child is Element el && el.TagName == "style")
-                {
-                    var cssText = el.TextContent;
-                    if (!string.IsNullOrWhiteSpace(cssText))
+                    else
                     {
-                        var sheet = CssParser.Parse(cssText);
-                        stylesheets.Add(sheet);
+                        ExtractStylesFromSubtree(el, stylesheets);
                     }
-                }
-                else if (child is Element container)
-                {
-                    ExtractStylesFromSubtree(container, stylesheets);
                 }
 
                 child = child.NextSibling;

@@ -1,0 +1,1431 @@
+# Flexbox
+# Visual regression tests for flexbox
+tests:
+  - id: flex-grow-ratios
+    name: "Flex Grow Ratios (1:2:1)"
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; gap:4px;">
+                              <div style="flex-grow:1; background:#3498db; height:40px;"></div>
+                              <div style="flex-grow:2; background:#e74c3c; height:40px;"></div>
+                              <div style="flex-grow:1; background:#27ae60; height:40px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-shrink
+    name: Flex Shrink (items exceed container)
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; width:300px;">
+                              <div style="flex-shrink:1; width:200px; background:#3498db; height:40px;"></div>
+                              <div style="flex-shrink:2; width:200px; background:#e74c3c; height:40px;"></div>
+                              <div style="flex-shrink:1; width:200px; background:#27ae60; height:40px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-direction-column-reverse
+    name: Flex Column Reverse
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; flex-direction:column-reverse; height:160px;">
+                              <div style="background:#3498db; height:40px;"></div>
+                              <div style="background:#e74c3c; height:40px;"></div>
+                              <div style="background:#27ae60; height:40px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-align-items-center
+    name: Flex Align Items Center
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; align-items:center; height:100px; background:#f0f0f0; gap:8px; padding:8px;">
+                              <div style="background:#3498db; width:60px; height:30px;"></div>
+                              <div style="background:#e74c3c; width:60px; height:60px;"></div>
+                              <div style="background:#27ae60; width:60px; height:20px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-justify-space-around
+    name: Flex Justify Space Around
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; justify-content:space-around; background:#f0f0f0; padding:8px 0;">
+                              <div style="background:#3498db; width:60px; height:40px;"></div>
+                              <div style="background:#e74c3c; width:60px; height:40px;"></div>
+                              <div style="background:#27ae60; width:60px; height:40px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-align-self
+    name: Flex Align Self (mixed)
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; height:100px; background:#f0f0f0; gap:8px; padding:8px;">
+                              <div style="background:#3498db; width:60px; align-self:flex-start; height:30px;"></div>
+                              <div style="background:#e74c3c; width:60px; align-self:center; height:30px;"></div>
+                              <div style="background:#27ae60; width:60px; align-self:flex-end; height:30px;"></div>
+                              <div style="background:#f39c12; width:60px; align-self:stretch;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-flex-grow-padding
+    name: Flex Grow with Padding on Items
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif;">
+                          <div style="display:flex; gap:4px;">
+                              <div style="flex-grow:1; padding:12px; background:#3498db; height:20px;"></div>
+                              <div style="flex-grow:2; padding:20px; background:#e74c3c; height:20px;"></div>
+                              <div style="flex-grow:1; padding:8px; background:#27ae60; height:20px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-flex-order
+    name: Flex Order Property
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; gap:8px;">
+                              <div style="order:3; width:80px; height:50px; background:#3498db;"></div>
+                              <div style="order:1; width:80px; height:50px; background:#e74c3c;"></div>
+                              <div style="order:2; width:80px; height:50px; background:#27ae60;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-flex-shrink-ratio
+    name: Flex Shrink Ratio Differences
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; width:300px;">
+                              <div style="flex:0 1 200px; background:#3498db; height:50px;"></div>
+                              <div style="flex:0 3 200px; background:#e74c3c; height:50px;"></div>
+                              <div style="flex:0 1 200px; background:#27ae60; height:50px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-flex-nowrap-overflow
+    name: Flex Nowrap Overflow Behavior
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; flex-wrap:nowrap; width:200px; overflow:hidden; background:#f0f0f0;">
+                              <div style="flex:0 0 100px; height:50px; background:#3498db;"></div>
+                              <div style="flex:0 0 100px; height:50px; background:#e74c3c;"></div>
+                              <div style="flex:0 0 100px; height:50px; background:#27ae60;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-flex-nested-3-levels
+    name: Nested Flex 3 Levels Deep
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; gap:6px; height:150px;">
+                              <div style="flex:1; display:flex; flex-direction:column; gap:4px;">
+                                  <div style="flex:1; display:flex; gap:4px;">
+                                      <div style="flex:1; background:#3498db;"></div>
+                                      <div style="flex:1; background:#2980b9;"></div>
+                                  </div>
+                                  <div style="flex:1; background:#1a6fa1;"></div>
+                              </div>
+                              <div style="flex:1; display:flex; flex-direction:column; gap:4px;">
+                                  <div style="flex:1; background:#e74c3c;"></div>
+                                  <div style="flex:1; display:flex; gap:4px;">
+                                      <div style="flex:1; background:#c0392b;"></div>
+                                      <div style="flex:2; background:#a93226;"></div>
+                                  </div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: adv-edge-auto-margin-flex
+    name: Auto Margin in Flex for Push Layout
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; align-items:center; height:50px; background:#f0f0f0; padding:0 10px;">
+                              <div style="width:40px; height:30px; background:#3498db; border-radius:4px;"></div>
+                              <div style="width:40px; height:30px; background:#e74c3c; border-radius:4px; margin-left:auto;"></div>
+                              <div style="width:40px; height:30px; background:#27ae60; border-radius:4px; margin-left:8px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-edge-inline-flex
+    name: Inline Flex Containers
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:inline-flex; gap:4px; background:#f0f0f0; padding:6px; margin-right:8px; border-radius:4px;">
+                              <div style="width:30px; height:30px; background:#3498db; border-radius:4px;"></div>
+                              <div style="width:30px; height:30px; background:#e74c3c; border-radius:4px;"></div>
+                          </div>
+                          <div style="display:inline-flex; gap:4px; background:#f0f0f0; padding:6px; border-radius:4px;">
+                              <div style="width:30px; height:30px; background:#27ae60; border-radius:4px;"></div>
+                              <div style="width:30px; height:30px; background:#f39c12; border-radius:4px;"></div>
+                              <div style="width:30px; height:30px; background:#9b59b6; border-radius:4px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: bug062-anon-block-decoration
+    name: Anonymous block wrappers have no decoration
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px;">
+      <div style="display:flex; gap:8px;">
+          Plain text in flex (should not inherit parent border)
+          <div style="background:#3498db; color:#fff; padding:8px;">Flex child</div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+          Grid text (no decoration)
+          <div style="background:#e74c3c; color:#fff; padding:8px;">Grid child</div>
+      </div>
+      </body></html>
+
+  - id: flex-row-reverse
+    name: Flex Row Reverse
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; flex-direction:row-reverse; gap:8px;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:40px; background:#27ae60;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-justify-center
+    name: Flex Justify Center
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; justify-content:center; gap:8px; background:#f0f0f0; padding:8px;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-justify-end
+    name: Flex Justify End
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; justify-content:flex-end; gap:8px; background:#f0f0f0; padding:8px;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-justify-space-between
+    name: Flex Justify Space Between
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; justify-content:space-between; background:#f0f0f0; padding:8px;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:40px; background:#27ae60;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-justify-space-evenly
+    name: Flex Justify Space Evenly
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; justify-content:space-evenly; background:#f0f0f0; padding:8px;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:40px; background:#27ae60;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-column-grow
+    name: Flex Column with Grow
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; flex-direction:column; height:200px; gap:4px;">
+                              <div style="flex-grow:1; background:#3498db;"></div>
+                              <div style="flex-grow:2; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#27ae60;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-wrap-align-content
+    name: Flex Wrap with Align Content Center
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; flex-wrap:wrap; align-content:center; height:200px; gap:4px; background:#f0f0f0;">
+                              <div style="width:120px; height:40px; background:#3498db;"></div>
+                              <div style="width:120px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:120px; height:40px; background:#27ae60;"></div>
+                              <div style="width:120px; height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-basis-px
+    name: Flex Basis with Pixel Values
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; gap:4px;">
+                              <div style="flex:0 0 100px; height:40px; background:#3498db;"></div>
+                              <div style="flex:1 0 50px; height:40px; background:#e74c3c;"></div>
+                              <div style="flex:0 0 80px; height:40px; background:#27ae60;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-percent-width-items
+    name: Flex Items with Percent Width
+    html: |
+      <html><body style="margin:0; padding:10px;">
+                          <div style="display:flex; gap:8px;">
+                              <div style="width:30%; background:#3498db; height:40px;"></div>
+                              <div style="width:50%; background:#e74c3c; height:40px;"></div>
+                              <div style="width:20%; background:#27ae60; height:40px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-row-space-between
+    name: Flex Row Space Between
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; justify-content:space-between; width:300px;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-row-space-around
+    name: Flex Row Space Around
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; justify-content:space-around; width:300px;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-row-space-evenly
+    name: Flex Row Space Evenly
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; justify-content:space-evenly; width:300px;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-column-basic
+    name: Flex Column Direction
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-direction:column; gap:4px; width:200px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-align-stretch
+    name: Flex Align Items Stretch
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; align-items:stretch; gap:4px; height:100px; width:300px;">
+                              <div style="flex:1; background:#3498db;"></div>
+                              <div style="flex:1; background:#e74c3c;"></div>
+                              <div style="flex:1; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-align-end
+    name: Flex Align Items End
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; align-items:flex-end; gap:4px; height:100px; width:300px; background:#ecf0f1;">
+                              <div style="width:60px; height:30px; background:#3498db;"></div>
+                              <div style="width:60px; height:50px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:70px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-wrap-basic
+    name: Flex Wrap
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; gap:4px; width:200px;">
+                              <div style="width:90px; height:40px; background:#3498db;"></div>
+                              <div style="width:90px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:90px; height:40px; background:#2ecc71;"></div>
+                              <div style="width:90px; height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-grow-shrink
+    name: Flex Grow and Shrink
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:4px; width:300px; margin-bottom:8px;">
+                              <div style="flex:1; height:40px; background:#3498db;"></div>
+                              <div style="flex:2; height:40px; background:#e74c3c;"></div>
+                              <div style="flex:1; height:40px; background:#2ecc71;"></div>
+                          </div>
+                          <div style="display:flex; gap:4px; width:300px;">
+                              <div style="flex:3; height:40px; background:#f39c12;"></div>
+                              <div style="flex:1; height:40px; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-order
+    name: Flex Order Property
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:4px; width:300px;">
+                              <div style="width:60px; height:40px; background:#e74c3c; order:3;"></div>
+                              <div style="width:60px; height:40px; background:#3498db; order:1;"></div>
+                              <div style="width:60px; height:40px; background:#2ecc71; order:2;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-align-self-2
+    name: Flex Align Self
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:4px; height:100px; width:300px; background:#ecf0f1;">
+                              <div style="width:60px; background:#3498db; align-self:flex-start; height:30px;"></div>
+                              <div style="width:60px; background:#e74c3c; align-self:center; height:30px;"></div>
+                              <div style="width:60px; background:#2ecc71; align-self:flex-end; height:30px;"></div>
+                              <div style="width:60px; background:#f39c12; align-self:stretch;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-row-reverse-2
+    name: Flex Row Reverse Direction
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-direction:row-reverse; gap:4px; width:300px;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-column-reverse
+    name: Flex Column Reverse
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-direction:column-reverse; gap:4px; width:200px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-row
+    name: Flex Row
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="display:flex; flex-direction:row; gap:8px;">
+                              <div style="background:#3498db; color:#fff; padding:12px; height:20px;">Item 1</div>
+                              <div style="background:#e74c3c; color:#fff; padding:12px; height:20px;">Item 2</div>
+                              <div style="background:#27ae60; color:#fff; padding:12px; height:20px;">Item 3</div>
+                          </div>
+                      </body></html>
+
+  - id: flex-column
+    name: Flex Column
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="display:flex; flex-direction:column; gap:8px;">
+                              <div style="background:#3498db; color:#fff; padding:12px; height:20px;">Item 1</div>
+                              <div style="background:#e74c3c; color:#fff; padding:12px; height:20px;">Item 2</div>
+                              <div style="background:#27ae60; color:#fff; padding:12px; height:20px;">Item 3</div>
+                          </div>
+                      </body></html>
+
+  - id: flex-wrap
+    name: Flex Wrap
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                              <div style="background:#3498db; color:#fff; padding:12px; width:120px; height:20px;">Item 1</div>
+                              <div style="background:#e74c3c; color:#fff; padding:12px; width:120px; height:20px;">Item 2</div>
+                              <div style="background:#27ae60; color:#fff; padding:12px; width:120px; height:20px;">Item 3</div>
+                              <div style="background:#f39c12; color:#fff; padding:12px; width:120px; height:20px;">Item 4</div>
+                              <div style="background:#9b59b6; color:#fff; padding:12px; width:120px; height:20px;">Item 5</div>
+                          </div>
+                      </body></html>
+
+  - id: flex-alignment
+    name: "Flex Alignment (center, space-between)"
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="display:flex; justify-content:center; align-items:center; height:60px; background:#f0f0f0; margin-bottom:10px;">
+                              <div style="background:#3498db; color:#fff; padding:8px; height:20px;">Centered</div>
+                          </div>
+                          <div style="display:flex; justify-content:space-between; background:#f0f0f0; padding:8px;">
+                              <div style="background:#e74c3c; color:#fff; padding:8px; height:20px;">Left</div>
+                              <div style="background:#27ae60; color:#fff; padding:8px; height:20px;">Middle</div>
+                              <div style="background:#f39c12; color:#fff; padding:8px; height:20px;">Right</div>
+                          </div>
+                      </body></html>
+
+  - id: flex-min-max
+    name: Flex Items with Min/Max Width
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:8px;">
+                              <div style="flex:1; min-width:80px; max-width:150px; height:40px; background:#3498db;"></div>
+                              <div style="flex:2; min-width:100px; height:40px; background:#e74c3c;"></div>
+                              <div style="flex:1; max-width:100px; height:40px; background:#27ae60;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-center
+    name: Flex Center
+    html: |
+      <html><body style="margin:0; background:#ecf0f1; display:flex; align-items:center; justify-content:center; height:300px;">
+                          <div style="width:120px; height:80px; background:#3498db; border-radius:8px;"></div>
+                      </body></html>
+
+  - id: pp-flex-grow-equal
+    name: Flex Grow Equal
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:8px; width:350px;">
+                              <div style="flex:1; height:50px; background:#3498db;"></div>
+                              <div style="flex:1; height:50px; background:#e74c3c;"></div>
+                              <div style="flex:1; height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-space-between
+    name: Flex Space Between
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; justify-content:space-between; width:350px;">
+                              <div style="width:60px; height:60px; background:#3498db;"></div>
+                              <div style="width:60px; height:60px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:60px; background:#2ecc71;"></div>
+                              <div style="width:60px; height:60px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-column-stretch
+    name: Flex Column Stretch
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-direction:column; gap:6px; width:200px;">
+                              <div style="height:30px; background:#3498db;"></div>
+                              <div style="height:50px; background:#e74c3c;"></div>
+                              <div style="height:20px; background:#2ecc71;"></div>
+                              <div style="height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-gap
+    name: Flex Wrap with Gap
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; gap:8px; width:200px;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:40px; background:#2ecc71;"></div>
+                              <div style="width:60px; height:40px; background:#f39c12;"></div>
+                              <div style="width:60px; height:40px; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flexbox-order
+    name: Flexbox Order Property
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:5px;">
+                              <div style="order:3; width:60px; height:60px; background:#3498db;"></div>
+                              <div style="order:1; width:60px; height:60px; background:#e74c3c;"></div>
+                              <div style="order:2; width:60px; height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-align-stretch
+    name: Flex Align Items Stretch
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:10px; height:120px; align-items:stretch;">
+                              <div style="flex:1; background:#3498db;"></div>
+                              <div style="flex:1; background:#e74c3c;"></div>
+                              <div style="flex:1; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-shrink
+    name: Flex Shrink Behavior
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; width:300px;">
+                              <div style="flex:0 0 200px; height:60px; background:#3498db;"></div>
+                              <div style="flex:0 1 200px; height:60px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-reverse
+    name: Flex Row Reverse
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-direction:row-reverse; gap:10px;">
+                              <div style="width:60px; height:60px; background:#3498db;"></div>
+                              <div style="width:60px; height:60px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-grow-unequal
+    name: Flex Grow Unequal
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:5px; width:350px;">
+                              <div style="flex-grow:1; height:60px; background:#3498db;"></div>
+                              <div style="flex-grow:2; height:60px; background:#e74c3c;"></div>
+                              <div style="flex-grow:1; height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-align-end
+    name: Flex Align Items End
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; align-items:flex-end; gap:10px; height:100px; background:#ecf0f1;">
+                              <div style="width:60px; height:30px; background:#3498db;"></div>
+                              <div style="width:60px; height:50px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:70px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-justify-center
+    name: Flex Justify Center
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; justify-content:center; gap:10px;">
+                              <div style="width:60px; height:60px; background:#3498db;"></div>
+                              <div style="width:60px; height:60px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-column-reverse
+    name: Flex Column Reverse
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-direction:column-reverse; gap:5px; height:200px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-basis
+    name: Flex Basis Values
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:5px; width:350px;">
+                              <div style="flex:0 0 100px; height:60px; background:#3498db;"></div>
+                              <div style="flex:1 1 0; height:60px; background:#e74c3c;"></div>
+                              <div style="flex:0 0 80px; height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-align-self
+    name: Flex Align Self
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; height:120px; gap:10px; align-items:flex-start;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c; align-self:center;"></div>
+                              <div style="width:60px; height:40px; background:#2ecc71; align-self:flex-end;"></div>
+                              <div style="width:60px; background:#f39c12; align-self:stretch;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-many
+    name: Flex Wrap Many Items
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; gap:5px; width:200px;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:40px; background:#2ecc71;"></div>
+                              <div style="width:60px; height:40px; background:#f39c12;"></div>
+                              <div style="width:60px; height:40px; background:#9b59b6;"></div>
+                              <div style="width:60px; height:40px; background:#1abc9c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-justify-space-around
+    name: Flex Justify Space Around
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; justify-content:space-around; width:300px; height:60px; background:#ecf0f1;">
+                              <div style="width:50px; height:40px; background:#3498db;"></div>
+                              <div style="width:50px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:50px; height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-justify-space-evenly
+    name: Flex Justify Space Evenly
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; justify-content:space-evenly; width:300px; height:60px; background:#ecf0f1;">
+                              <div style="width:50px; height:40px; background:#3498db;"></div>
+                              <div style="width:50px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:50px; height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-nested-stretch
+    name: Flex Nested Stretch Fill
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; height:120px; gap:10px;">
+                              <div style="flex:1; display:flex; flex-direction:column; gap:5px;">
+                                  <div style="flex:1; background:#3498db;"></div>
+                                  <div style="flex:2; background:#2ecc71;"></div>
+                              </div>
+                              <div style="flex:1; display:flex; flex-direction:column; gap:5px;">
+                                  <div style="flex:2; background:#e74c3c;"></div>
+                                  <div style="flex:1; background:#f39c12;"></div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-gap-wrap-align
+    name: Flex Gap Wrap Align Center
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; gap:8px; width:220px; align-content:flex-start;">
+                              <div style="width:100px; height:30px; background:#3498db;"></div>
+                              <div style="width:100px; height:30px; background:#e74c3c;"></div>
+                              <div style="width:100px; height:30px; background:#2ecc71;"></div>
+                              <div style="width:100px; height:30px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-equal-height-cards
+    name: Flex Equal Height Cards
+    html: |
+      <html><body style="margin:0; padding:10px; background:#ecf0f1;">
+                          <div style="display:flex; gap:10px;">
+                              <div style="flex:1; background:#fff; border:1px solid #ddd; border-radius:4px; padding:10px;">
+                                  <div style="height:30px; background:#3498db; border-radius:2px;"></div>
+                              </div>
+                              <div style="flex:1; background:#fff; border:1px solid #ddd; border-radius:4px; padding:10px;">
+                                  <div style="height:30px; background:#e74c3c; border-radius:2px; margin-bottom:10px;"></div>
+                                  <div style="height:20px; background:#ecf0f1; border-radius:2px;"></div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-center-both
+    name: Flex Center Both Axes
+    html: |
+      <html><body style="margin:0; background:#ecf0f1;">
+                          <div style="display:flex; justify-content:center; align-items:center; height:200px;">
+                              <div style="width:100px; height:60px; background:#3498db; border-radius:8px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-grow-ratio
+    name: Flex Grow Different Ratios
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:5px; width:350px;">
+                              <div style="flex-grow:1; height:50px; background:#3498db;"></div>
+                              <div style="flex-grow:2; height:50px; background:#e74c3c;"></div>
+                              <div style="flex-grow:3; height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-column-height
+    name: Flex Column Fixed Height
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-direction:column; height:200px; gap:5px; width:200px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="flex:1; background:#e74c3c;"></div>
+                              <div style="height:30px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-empty-flex-container
+    name: Empty Flex Container with Size
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; width:200px; height:80px; background:#3498db; border-radius:4px;"></div>
+                      </body></html>
+
+  - id: pp-flex-row-wrap-justify
+    name: Flex Row Wrap Space Between
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; justify-content:space-between; width:250px;">
+                              <div style="width:70px; height:35px; background:#3498db; margin-bottom:8px;"></div>
+                              <div style="width:70px; height:35px; background:#e74c3c; margin-bottom:8px;"></div>
+                              <div style="width:70px; height:35px; background:#2ecc71; margin-bottom:8px;"></div>
+                              <div style="width:70px; height:35px; background:#f39c12;"></div>
+                              <div style="width:70px; height:35px; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-auto-margin-push
+    name: Flex Auto Margin Push Apart
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; width:300px; height:40px; background:#ecf0f1;">
+                              <div style="width:60px; height:30px; background:#3498db;"></div>
+                              <div style="margin-left:auto; width:60px; height:30px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-gap
+    name: Flex Container with Gap
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:10px; flex-wrap:wrap; width:200px;">
+                              <div style="width:55px; height:55px; background:#3498db;"></div>
+                              <div style="width:55px; height:55px; background:#e74c3c;"></div>
+                              <div style="width:55px; height:55px; background:#2ecc71;"></div>
+                              <div style="width:55px; height:55px; background:#f39c12;"></div>
+                              <div style="width:55px; height:55px; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-order
+    name: Flex Items with Order Property
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:5px;">
+                              <div style="order:3; width:60px; height:60px; background:#3498db;"></div>
+                              <div style="order:1; width:60px; height:60px; background:#e74c3c;"></div>
+                              <div style="order:2; width:60px; height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-align-self-options
+    name: Flex Align Self Options
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; height:120px; gap:5px; align-items:stretch;">
+                              <div style="width:50px; background:#3498db; align-self:flex-start; height:40px;"></div>
+                              <div style="width:50px; background:#e74c3c; align-self:center; height:40px;"></div>
+                              <div style="width:50px; background:#2ecc71; align-self:flex-end; height:40px;"></div>
+                              <div style="width:50px; background:#f39c12; align-self:stretch;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-grow-shrink
+    name: Flex Grow and Shrink
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; width:300px; gap:5px;">
+                              <div style="flex:1; height:50px; background:#3498db;"></div>
+                              <div style="flex:2; height:50px; background:#e74c3c;"></div>
+                              <div style="flex:1; height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-reverse
+    name: Flex Wrap Reverse
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap-reverse; width:200px; gap:5px;">
+                              <div style="width:55px; height:40px; background:#3498db;"></div>
+                              <div style="width:55px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:55px; height:40px; background:#2ecc71;"></div>
+                              <div style="width:55px; height:40px; background:#f39c12;"></div>
+                              <div style="width:55px; height:40px; background:#9b59b6;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-basis-fixed
+    name: Flex Basis Override
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; width:300px; gap:5px;">
+                              <div style="flex:0 0 100px; height:50px; background:#3498db;"></div>
+                              <div style="flex:1 0 auto; height:50px; background:#e74c3c;"></div>
+                              <div style="flex:0 0 80px; height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-space-evenly
+    name: Flex Justify Space Evenly
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; justify-content:space-evenly; width:300px; height:60px; background:#ecf0f1;">
+                              <div style="width:40px; height:40px; background:#3498db;"></div>
+                              <div style="width:40px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:40px; height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-row-reverse
+    name: Flex Row Reverse
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-direction:row-reverse; gap:5px; width:250px;">
+                              <div style="width:50px; height:50px; background:#3498db;"></div>
+                              <div style="width:50px; height:50px; background:#e74c3c;"></div>
+                              <div style="width:50px; height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-shrink-overflow
+    name: Flex Items Shrink to Fit
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; width:200px; gap:5px;">
+                              <div style="flex:0 1 120px; height:50px; background:#3498db;"></div>
+                              <div style="flex:0 1 120px; height:50px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-items
+    name: Flex Wrap Multiple Rows
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; width:200px; gap:10px;">
+                              <div style="width:80px; height:40px; background:#3498db;"></div>
+                              <div style="width:80px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:80px; height:40px; background:#2ecc71;"></div>
+                              <div style="width:80px; height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-stretch-ratio
+    name: Flex Align Items Stretch
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; height:120px; gap:10px; align-items:stretch;">
+                              <div style="flex:1; background:#3498db;"></div>
+                              <div style="flex:2; background:#e74c3c;"></div>
+                              <div style="flex:1; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-justify-center-2
+    name: Flex Justify Center
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; justify-content:center; gap:10px;">
+                              <div style="width:60px; height:60px; background:#3498db;"></div>
+                              <div style="width:60px; height:60px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-justify-end
+    name: Flex Justify End
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; justify-content:flex-end; gap:10px;">
+                              <div style="width:60px; height:60px; background:#3498db;"></div>
+                              <div style="width:60px; height:60px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-column-gap
+    name: Flex Column Direction with Gap
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-direction:column; gap:8px; width:200px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-align-self-2
+    name: Flex Align Self Values
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; height:120px; gap:10px; align-items:flex-start;">
+                              <div style="width:50px; height:40px; background:#3498db;"></div>
+                              <div style="width:50px; height:40px; background:#e74c3c; align-self:center;"></div>
+                              <div style="width:50px; height:40px; background:#2ecc71; align-self:flex-end;"></div>
+                              <div style="width:50px; background:#f39c12; align-self:stretch;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-grow-ratio-2
+    name: Flex Grow Different Ratios
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; gap:10px; width:300px;">
+                              <div style="flex:1; height:60px; background:#3498db;"></div>
+                              <div style="flex:2; height:60px; background:#e74c3c;"></div>
+                              <div style="flex:1; height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-order-property
+    name: Flex Order Reordering
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; gap:10px;">
+                              <div style="width:60px; height:60px; background:#3498db; order:3;"></div>
+                              <div style="width:60px; height:60px; background:#e74c3c; order:1;"></div>
+                              <div style="width:60px; height:60px; background:#2ecc71; order:2;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-rows
+    name: Flex Wrap Into Multiple Rows
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; width:200px; gap:5px;">
+                              <div style="width:90px; height:40px; background:#3498db;"></div>
+                              <div style="width:90px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:90px; height:40px; background:#2ecc71;"></div>
+                              <div style="width:90px; height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-basis-auto
+    name: Flex Basis with Content
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; gap:10px; width:300px;">
+                              <div style="flex:0 0 100px; height:60px; background:#3498db;"></div>
+                              <div style="flex:1 0 0; height:60px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-reverse-row
+    name: Flex Row Reverse
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-direction:row-reverse; gap:10px;">
+                              <div style="width:60px; height:60px; background:#3498db;"></div>
+                              <div style="width:80px; height:60px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-align-content
+    name: Flex Align Content Center
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; align-content:center; width:200px; height:200px; gap:5px; background:#ecf0f1;">
+                              <div style="width:80px; height:40px; background:#3498db;"></div>
+                              <div style="width:80px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:80px; height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-gap-wrap-align-2
+    name: Flex Gap with Wrap and Alignment
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; justify-content:space-between; width:250px; gap:10px;">
+                              <div style="width:70px; height:50px; background:#3498db;"></div>
+                              <div style="width:70px; height:50px; background:#e74c3c;"></div>
+                              <div style="width:70px; height:50px; background:#2ecc71;"></div>
+                              <div style="width:70px; height:50px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-shrink-items
+    name: Flex Items Shrinking
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; width:200px;">
+                              <div style="flex:0 1 150px; height:50px; background:#3498db;"></div>
+                              <div style="flex:0 1 150px; height:50px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-column-reverse-2
+    name: Flex Column Reverse Order
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-direction:column-reverse; gap:10px;">
+                              <div style="width:150px; height:40px; background:#3498db;"></div>
+                              <div style="width:150px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:150px; height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-space-between-2
+    name: Flex Space Between Items
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; justify-content:space-between; width:300px;">
+                              <div style="width:60px; height:60px; background:#3498db;"></div>
+                              <div style="width:60px; height:60px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-equal-height
+    name: Flex Equal Height Columns
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; gap:10px;">
+                              <div style="flex:1; background:#3498db; padding:10px;">
+                                  <div style="height:30px; background:#ecf0f1;"></div>
+                              </div>
+                              <div style="flex:1; background:#e74c3c; padding:10px;">
+                                  <div style="height:60px; background:#ecf0f1;"></div>
+                              </div>
+                              <div style="flex:1; background:#2ecc71; padding:10px;">
+                                  <div style="height:45px; background:#ecf0f1;"></div>
+                              </div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-2rows
+    name: Flex Wrap Two Even Rows
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; width:200px; gap:10px;">
+                              <div style="width:90px; height:50px; background:#3498db;"></div>
+                              <div style="width:90px; height:50px; background:#e74c3c;"></div>
+                              <div style="width:90px; height:50px; background:#2ecc71;"></div>
+                              <div style="width:90px; height:50px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-align-items-end
+    name: Flex Align Items End
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; height:120px; gap:10px; align-items:flex-end;">
+                              <div style="width:60px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:60px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:30px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-shrink-uneven
+    name: Flex Shrink Uneven Ratios
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; width:200px;">
+                              <div style="flex:0 1 120px; height:50px; background:#3498db;"></div>
+                              <div style="flex:0 3 120px; height:50px; background:#e74c3c;"></div>
+                              <div style="flex:0 1 120px; height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-column-center
+    name: Flex Column Align Center
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-direction:column; align-items:center; width:200px; background:#ecf0f1; padding:10px;">
+                              <div style="width:120px; height:30px; background:#3498db; margin-bottom:5px;"></div>
+                              <div style="width:80px; height:30px; background:#e74c3c; margin-bottom:5px;"></div>
+                              <div style="width:160px; height:30px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-3rows
+    name: Flex Wrap Three Rows
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; width:180px; gap:8px;">
+                              <div style="width:80px; height:35px; background:#3498db;"></div>
+                              <div style="width:80px; height:35px; background:#e74c3c;"></div>
+                              <div style="width:80px; height:35px; background:#2ecc71;"></div>
+                              <div style="width:80px; height:35px; background:#f39c12;"></div>
+                              <div style="width:80px; height:35px; background:#9b59b6;"></div>
+                              <div style="width:80px; height:35px; background:#1abc9c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-grow-3items
+    name: Flex Grow Three Items Different Ratios
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; width:300px; gap:5px;">
+                              <div style="flex-grow:1; height:50px; background:#3498db;"></div>
+                              <div style="flex-grow:2; height:50px; background:#e74c3c;"></div>
+                              <div style="flex-grow:1; height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-column-grow
+    name: Flex Column with Grow
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-direction:column; height:200px; width:150px; gap:5px;">
+                              <div style="flex-grow:1; background:#3498db;"></div>
+                              <div style="flex-grow:2; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-align-content-center
+    name: Flex Align Content Center
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; align-content:center; width:200px; height:200px; background:#ecf0f1; gap:5px;">
+                              <div style="width:90px; height:40px; background:#3498db;"></div>
+                              <div style="width:90px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:90px; height:40px; background:#2ecc71;"></div>
+                              <div style="width:90px; height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-align-end
+    name: Flex Wrap Align Content End
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; align-content:flex-end; width:200px; height:180px; background:#ecf0f1; gap:5px;">
+                              <div style="width:90px; height:35px; background:#3498db;"></div>
+                              <div style="width:90px; height:35px; background:#e74c3c;"></div>
+                              <div style="width:90px; height:35px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-no-shrink
+    name: Flex Items No Shrink
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; width:300px; gap:10px;">
+                              <div style="flex:0 0 120px; height:50px; background:#3498db;"></div>
+                              <div style="flex:0 0 80px; height:50px; background:#e74c3c;"></div>
+                              <div style="flex:1 0 0; height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-space-between-3
+    name: Flex Space Between Three Items
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; justify-content:space-between; width:300px;">
+                              <div style="width:60px; height:50px; background:#3498db;"></div>
+                              <div style="width:60px; height:50px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-space-around
+    name: Flex Wrap with Space Around
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; align-content:space-around; width:200px; height:200px; background:#ecf0f1; gap:5px;">
+                              <div style="width:90px; height:35px; background:#3498db;"></div>
+                              <div style="width:90px; height:35px; background:#e74c3c;"></div>
+                              <div style="width:90px; height:35px; background:#2ecc71;"></div>
+                              <div style="width:90px; height:35px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-column-reverse-gap
+    name: Flex Column Reverse with Gap
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-direction:column-reverse; height:200px; width:150px; gap:10px;">
+                              <div style="height:40px; background:#3498db;"></div>
+                              <div style="height:40px; background:#e74c3c;"></div>
+                              <div style="height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-gap-align
+    name: Flex Wrap Gap Align Items Center
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; align-items:center; width:200px; gap:8px;">
+                              <div style="width:90px; height:40px; background:#3498db;"></div>
+                              <div style="width:90px; height:60px; background:#e74c3c;"></div>
+                              <div style="width:90px; height:30px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-row-reverse-gap
+    name: Flex Row Reverse with Gap
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-direction:row-reverse; width:300px; gap:10px;">
+                              <div style="width:60px; height:50px; background:#3498db;"></div>
+                              <div style="width:80px; height:50px; background:#e74c3c;"></div>
+                              <div style="width:60px; height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-shrink-different
+    name: Flex Shrink Different Values
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; width:200px;">
+                              <div style="flex:0 1 150px; height:50px; background:#3498db;"></div>
+                              <div style="flex:0 3 150px; height:50px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-order-4items
+    name: Flex Order Four Items Reordered
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; width:300px; gap:5px;">
+                              <div style="order:3; width:60px; height:50px; background:#3498db;"></div>
+                              <div style="order:1; width:60px; height:50px; background:#e74c3c;"></div>
+                              <div style="order:4; width:60px; height:50px; background:#2ecc71;"></div>
+                              <div style="order:2; width:60px; height:50px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-justify-center
+    name: Flex Wrap Justify Content Center
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; justify-content:center; width:200px; gap:8px;">
+                              <div style="width:80px; height:40px; background:#3498db;"></div>
+                              <div style="width:80px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:80px; height:40px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-grow-gap-combined
+    name: Flex Grow with Gap Combined
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; width:300px; gap:15px;">
+                              <div style="flex-grow:1; height:50px; background:#3498db;"></div>
+                              <div style="flex-grow:1; height:50px; background:#e74c3c;"></div>
+                              <div style="flex-grow:1; height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-column-space-between
+    name: Flex Column Space Between
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-direction:column; justify-content:space-between; width:150px; height:200px; background:#ecf0f1;">
+                              <div style="height:30px; background:#3498db;"></div>
+                              <div style="height:30px; background:#e74c3c;"></div>
+                              <div style="height:30px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-center-single
+    name: Flex Center Single Item
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; justify-content:center; align-items:center; width:250px; height:180px; background:#ecf0f1;">
+                              <div style="width:80px; height:60px; background:#3498db;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-reverse-gap
+    name: Flex Wrap Reverse with Gap
+    html: |
+      <html><body style="margin:0; padding:20px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap-reverse; width:200px; gap:8px;">
+                              <div style="width:90px; height:40px; background:#3498db;"></div>
+                              <div style="width:90px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:90px; height:40px; background:#2ecc71;"></div>
+                              <div style="width:90px; height:40px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-column-gap-stretch
+    name: Flex Column Gap with Stretch
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-direction:column; gap:8px; width:200px;">
+                              <div style="height:30px; background:#3498db;"></div>
+                              <div style="height:30px; background:#e74c3c;"></div>
+                              <div style="height:30px; background:#2ecc71;"></div>
+                              <div style="height:30px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-3x2
+    name: Flex Wrap 3x2 Grid Pattern
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap; gap:5px; width:185px;">
+                              <div style="width:55px; height:40px; background:#3498db;"></div>
+                              <div style="width:55px; height:40px; background:#e74c3c;"></div>
+                              <div style="width:55px; height:40px; background:#2ecc71;"></div>
+                              <div style="width:55px; height:40px; background:#f39c12;"></div>
+                              <div style="width:55px; height:40px; background:#9b59b6;"></div>
+                              <div style="width:55px; height:40px; background:#1abc9c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-grow-3-items-equal
+    name: Flex Grow Equal Three Items
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:4px; width:300px;">
+                              <div style="flex:1; height:50px; background:#3498db;"></div>
+                              <div style="flex:1; height:50px; background:#e74c3c;"></div>
+                              <div style="flex:1; height:50px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-align-center-gap
+    name: Flex Align Center with Gap
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; align-items:center; gap:10px; height:80px; background:#ecf0f1; padding:0 10px;">
+                              <div style="width:40px; height:40px; background:#3498db;"></div>
+                              <div style="width:60px; height:20px; background:#e74c3c;"></div>
+                              <div style="width:30px; height:60px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-justify-end-gap
+    name: Flex Justify End with Gap
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; justify-content:flex-end; gap:8px; width:300px; background:#ecf0f1; padding:10px;">
+                              <div style="width:50px; height:40px; background:#3498db;"></div>
+                              <div style="width:50px; height:40px; background:#e74c3c;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-wrap-reverse-gap-2
+    name: Flex Wrap Reverse with Gap Items
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-wrap:wrap-reverse; gap:6px; width:180px;">
+                              <div style="width:50px; height:30px; background:#3498db;"></div>
+                              <div style="width:50px; height:30px; background:#e74c3c;"></div>
+                              <div style="width:50px; height:30px; background:#2ecc71;"></div>
+                              <div style="width:50px; height:30px; background:#f39c12;"></div>
+                          </div>
+                      </body></html>
+
+  - id: pp-flex-column-reverse-gap-2
+    name: Flex Column Reverse Gap Items
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; flex-direction:column-reverse; gap:6px; width:150px;">
+                              <div style="height:30px; background:#3498db;"></div>
+                              <div style="height:30px; background:#e74c3c;"></div>
+                              <div style="height:30px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-nested-centering
+    name: Nested Flex Centering
+    html: |
+      <html><body style="margin:0; background:#f0f0f0; display:flex; align-items:center; justify-content:center; height:300px;">
+                          <div style="width:200px; height:150px; background:#fff; display:flex; align-items:center; justify-content:center; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                              <div style="width:80px; height:80px; background:#3498db; border-radius:50%;"></div>
+                          </div>
+                      </body></html>
+
+  - id: flex-gap-variations
+    name: Flex Gap Variations
+    html: |
+      <html><body style="margin:0; padding:10px; background:#fff;">
+                          <div style="display:flex; gap:4px; margin-bottom:8px;">
+                              <div style="width:40px; height:30px; background:#3498db;"></div>
+                              <div style="width:40px; height:30px; background:#e74c3c;"></div>
+                              <div style="width:40px; height:30px; background:#2ecc71;"></div>
+                          </div>
+                          <div style="display:flex; gap:12px; margin-bottom:8px;">
+                              <div style="width:40px; height:30px; background:#3498db;"></div>
+                              <div style="width:40px; height:30px; background:#e74c3c;"></div>
+                              <div style="width:40px; height:30px; background:#2ecc71;"></div>
+                          </div>
+                          <div style="display:flex; gap:24px;">
+                              <div style="width:40px; height:30px; background:#3498db;"></div>
+                              <div style="width:40px; height:30px; background:#e74c3c;"></div>
+                              <div style="width:40px; height:30px; background:#2ecc71;"></div>
+                          </div>
+                      </body></html>

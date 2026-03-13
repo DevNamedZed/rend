@@ -1,0 +1,111 @@
+# Form Controls
+# Visual regression tests for form controls
+tests:
+  - id: form-text-inputs
+    name: Text Input Fields
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <div style="margin-bottom:8px;"><label>Name: </label><input type="text" value="John Doe"></div>
+                          <div style="margin-bottom:8px;"><label>Email: </label><input type="email" value="john@example.com"></div>
+                          <div style="margin-bottom:8px;"><label>Empty: </label><input type="text" placeholder="Enter text..."></div>
+                      </body></html>
+
+  - id: form-checkboxes-radios
+    name: Checkboxes and Radio Buttons
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <div style="margin-bottom:8px;"><input type="checkbox" checked> Checked</div>
+                          <div style="margin-bottom:8px;"><input type="checkbox"> Unchecked</div>
+                          <div style="margin-bottom:8px;"><input type="radio" checked> Selected</div>
+                          <div style="margin-bottom:8px;"><input type="radio"> Unselected</div>
+                      </body></html>
+
+  - id: form-buttons
+    name: Button Controls
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <div style="margin-bottom:8px;"><input type="submit" value="Submit Form"></div>
+                          <div style="margin-bottom:8px;"><input type="button" value="Click Me"></div>
+                          <div style="margin-bottom:8px;"><input type="reset" value="Reset"></div>
+                          <div style="margin-bottom:8px;"><button style="padding:4px 12px;">Button Element</button></div>
+                      </body></html>
+
+  - id: form-select-textarea
+    name: Select and Textarea
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <div style="margin-bottom:8px;"><label>Choice: </label>
+                              <select><option>Option 1</option><option>Option 2</option></select></div>
+                          <div><label>Message:</label><br>
+                              <textarea rows="3" cols="30">Sample text content</textarea></div>
+                      </body></html>
+
+  - id: meter-element
+    name: Meter Element
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <div style="margin-bottom:8px;">
+                              <span>Optimal: </span>
+                              <meter value="0.7" min="0" max="1" low="0.3" high="0.7" optimum="0.8" style="width:200px; height:16px;"></meter>
+                          </div>
+                          <div style="margin-bottom:8px;">
+                              <span>Warning: </span>
+                              <meter value="0.2" min="0" max="1" low="0.3" high="0.7" optimum="0.8" style="width:200px; height:16px;"></meter>
+                          </div>
+                          <div>
+                              <span>Full: </span>
+                              <meter value="1" style="width:200px; height:16px;"></meter>
+                          </div>
+                      </body></html>
+
+  - id: progress-element
+    name: Progress Element
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <div style="margin-bottom:8px;">
+                              <span>50%: </span>
+                              <progress value="50" max="100" style="width:200px; height:16px;"></progress>
+                          </div>
+                          <div style="margin-bottom:8px;">
+                              <span>75%: </span>
+                              <progress value="75" max="100" style="width:200px; height:16px;"></progress>
+                          </div>
+                          <div>
+                              <span>Indeterminate: </span>
+                              <progress style="width:200px; height:16px;"></progress>
+                          </div>
+                      </body></html>
+
+  - id: form-checkbox-radio
+    name: Checkbox and Radio Buttons
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <div style="margin-bottom:8px;">
+                              <input type="checkbox"> Unchecked
+                          </div>
+                          <div style="margin-bottom:8px;">
+                              <input type="checkbox" checked> Checked
+                          </div>
+                          <div style="margin-bottom:8px;">
+                              <input type="radio" name="opt"> Option A
+                          </div>
+                          <div>
+                              <input type="radio" name="opt" checked> Option B
+                          </div>
+                      </body></html>
+
+  - id: form-text-inputs-2
+    name: Text Input Fields
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <div style="margin-bottom:8px;">
+                              <input type="text" value="Hello World" style="width:200px;">
+                          </div>
+                          <div style="margin-bottom:8px;">
+                              <input type="text" placeholder="Enter name..." style="width:200px;">
+                          </div>
+                          <div>
+                              <input type="submit" value="Submit">
+                              <input type="reset" value="Reset">
+                          </div>
+                      </body></html>

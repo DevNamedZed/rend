@@ -177,6 +177,12 @@ namespace Rend
         /// </summary>
         public Output.Image.SkiaFontMapper? FontMapper { get; set; }
 
+        /// <summary>
+        /// When true, the render result includes a layout tree snapshot for diagnostic
+        /// comparison with browser layout. Default: false.
+        /// </summary>
+        public bool CaptureLayoutTree { get; set; }
+
         /// <summary>Default options.</summary>
         public static RenderOptions Default => new RenderOptions();
     }

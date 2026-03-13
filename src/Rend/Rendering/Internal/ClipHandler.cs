@@ -37,6 +37,9 @@ namespace Rend.Rendering.Internal
                 return false;
             }
 
+
+
+
             // Use rounded clip path when border-radius is set
             var radii = BorderRadiusResolver.Resolve(style, box.BorderRect);
 

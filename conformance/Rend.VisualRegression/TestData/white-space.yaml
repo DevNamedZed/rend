@@ -1,0 +1,44 @@
+# White-space
+# Visual regression tests for white-space
+tests:
+  - id: ws-pre
+    name: "White-space: pre"
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:monospace; font-size:13px; background:#fff;">
+                          <pre style="margin:0; background:#f5f5f5; padding:8px; border:1px solid #ddd;">Line 1
+        indented line
+          double indent
+      Line 4</pre>
+                      </body></html>
+
+  - id: ws-nowrap
+    name: "White-space: nowrap with overflow"
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <div style="width:200px; border:1px solid #ccc; padding:4px; white-space:nowrap; overflow:hidden;">
+                              This is a long text that should not wrap to the next line because white-space is set to nowrap
+                          </div>
+                          <div style="margin-top:8px; width:200px; border:1px solid #ccc; padding:4px; white-space:normal;">
+                              This text should wrap normally within the container width
+                          </div>
+                      </body></html>
+
+  - id: ws-pre-wrap
+    name: "White-space: pre-wrap"
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:monospace; font-size:13px; background:#fff;">
+                          <div style="width:250px; border:1px solid #ccc; padding:8px; white-space:pre-wrap; background:#f9f9f9;">This text   has   extra   spaces   that   should   be   preserved   and   it   wraps.</div>
+                      </body></html>
+
+  - id: css-variables
+    name: CSS Custom Properties
+    html: |
+      <html><head><style>
+                          :root { --main-color: #3498db; --spacing: 10px; --radius: 6px; }
+                          .var-box { background: var(--main-color); padding: var(--spacing);
+                                     border-radius: var(--radius); color: white; margin-bottom: 8px; }
+                      </style></head>
+                      <body style="margin:0; padding:10px; font-family:sans-serif; font-size:14px; background:#fff;">
+                          <div class="var-box">Box using CSS variables</div>
+                          <div class="var-box" style="--main-color: #e74c3c;">Override variable to red</div>
+                      </body></html>

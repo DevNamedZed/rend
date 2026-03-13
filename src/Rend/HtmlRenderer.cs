@@ -120,6 +120,14 @@ namespace Rend
         /// <inheritdoc />
         public byte[] ToImage(string html, RenderOptions? options = null)
         {
+            return ToImageResult(html, options).Data;
+        }
+
+        /// <summary>
+        /// Renders HTML to an image and returns the full result including layout tree snapshot.
+        /// </summary>
+        public RenderResult ToImageResult(string html, RenderOptions? options = null)
+        {
             if (html == null) throw new ArgumentNullException(nameof(html));
             options = options ?? RenderOptions.Default;
 
@@ -132,8 +140,7 @@ namespace Rend
 
             using var target = new SkiaRenderTarget(skiaOptions, options.FontMapper);
             var pipeline = new RenderPipeline(options);
-            var result = pipeline.Execute(html, target);
-            return result.Data;
+            return pipeline.Execute(html, target);
         }
 
         /// <inheritdoc />

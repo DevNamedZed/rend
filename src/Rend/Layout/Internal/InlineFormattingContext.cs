@@ -17,7 +17,7 @@ namespace Rend.Layout.Internal
     /// </summary>
     internal static class InlineFormattingContext
     {
-        internal static bool _debugJustify; // set true for debug logging
+        // BUG-066: _debugJustify removed — was declared but never read.
         /// <summary>
         /// Lazily-initialized hyphenation dictionary for auto-hyphenation (en-US patterns).
         /// </summary>
@@ -150,7 +150,7 @@ namespace Rend.Layout.Internal
                                 {
                                     // Build font descriptor for the first-letter style
                                     var flFontDesc = new Fonts.FontDescriptor(
-                                        flStyle.FontFamily ?? "serif",
+                                        flStyle.FontFamilies,
                                         flStyle.FontWeight,
                                         flStyle.FontStyle,
                                         Fonts.FontDescriptor.StretchToPercentage(flStyle.FontStretch));
@@ -569,7 +569,7 @@ namespace Rend.Layout.Internal
             if (context.TextMeasurer != null)
             {
                 var fontDesc = new FontDescriptor(
-                    style.FontFamily ?? "serif",
+                    style.FontFamilies,
                     style.FontWeight,
                     style.FontStyle,
                     FontDescriptor.StretchToPercentage(style.FontStretch));
@@ -833,7 +833,7 @@ namespace Rend.Layout.Internal
             if (context.TextMeasurer != null)
             {
                 var fontDesc = new FontDescriptor(
-                    style.FontFamily ?? "serif",
+                    style.FontFamilies,
                     style.FontWeight,
                     style.FontStyle,
                     FontDescriptor.StretchToPercentage(style.FontStretch));
@@ -1027,9 +1027,10 @@ namespace Rend.Layout.Internal
                             // First flush accumulated text before hyphenation
                             if (lineTextStart < wordStart)
                             {
+                                bool softHyphenBreak = hasSoftHyphens && wordStart > 0 && text[wordStart - 1] == '\u00AD';
                                 FlushAccumulatedText(text, lineTextStart, wordStart, hasSoftHyphens, fontDesc, fontSize,
                                     context, currentLine, lineFragStartX, accumulatedWidth, lineHeight, ascent,
-                                    inlineAncestor, letterSpacing, wordSpacing);
+                                    inlineAncestor, letterSpacing, wordSpacing, appendHyphen: softHyphenBreak);
                                 cursorX = lineFragStartX + accumulatedWidth;
                                 lineTextStart = wordStart;
                                 lineFragStartX = cursorX;
@@ -1053,9 +1054,10 @@ namespace Rend.Layout.Internal
                             // Flush accumulated text as a single fragment before line break
                             if (lineTextStart < wordStart)
                             {
+                                bool softHyphenBreak = hasSoftHyphens && wordStart > 0 && text[wordStart - 1] == '\u00AD';
                                 FlushAccumulatedText(text, lineTextStart, wordStart, hasSoftHyphens, fontDesc, fontSize,
                                     context, currentLine, lineFragStartX, accumulatedWidth, lineHeight, ascent,
-                                    inlineAncestor, letterSpacing, wordSpacing);
+                                    inlineAncestor, letterSpacing, wordSpacing, appendHyphen: softHyphenBreak);
                                 UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, lineHeight, ascent);
                             }
 
@@ -1143,12 +1145,21 @@ namespace Rend.Layout.Internal
             FontDescriptor fontDesc, float fontSize, LayoutContext context,
             LineBox currentLine, float fragX, float totalWidth,
             float lineHeight, float ascent, StyledElement? inlineAncestor,
-            float letterSpacing, float wordSpacing)
+            float letterSpacing, float wordSpacing, bool appendHyphen = false)
         {
             string segment = fullText.Substring(textStart, textEnd - textStart);
             if (hasSoftHyphens)
+            {
                 segment = segment.Replace("\u00AD", string.Empty);
+            }
             if (segment.Length == 0) return;
+
+            // CSS Text Level 4 §6.3: When a line break occurs at a soft hyphen,
+            // display a visible hyphen character at the end of the line.
+            if (appendHyphen)
+            {
+                segment += "-";
+            }
 
             var shaped = context.TextMeasurer!.Shape(segment, fontDesc, fontSize);
             // Use the shaped width for the combined segment (more accurate than sum of word widths)
@@ -1429,10 +1440,20 @@ namespace Rend.Layout.Internal
                     if (mathSize.Height > 0) intrinsicH = mathSize.Height;
                 }
 
-                // Resolve CSS width (handles percentages encoded as negative fractions)
+                // Fallback: extract dimensions from data: URI for images
+                if ((intrinsicW <= 0 || intrinsicH <= 0) &&
+                    ReplacedElementLayout.TryGetDataUriDimensions(element, out float duW, out float duH))
+                {
+                    if (intrinsicW <= 0) intrinsicW = duW;
+                    if (intrinsicH <= 0) intrinsicH = duH;
+                }
+
+                // Resolve CSS width (handles deferred percentage encoding)
                 float specW = element.Style.Width;
-                if (specW < 0 && specW > -1.01f)
+                if (DeferredPercent.IsEncoded(specW))
+                {
                     contentWidth = DimensionResolver.ResolveWidth(element.Style, containingWidth, box);
+                }
                 else if (float.IsNaN(specW))
                     contentWidth = intrinsicW;
                 else
@@ -1441,8 +1462,10 @@ namespace Rend.Layout.Internal
                 // Resolve CSS height
                 float specH = element.Style.Height;
                 float tempH;
-                if (specH < 0 && specH > -1.01f)
+                if (DeferredPercent.IsEncoded(specH))
+                {
                     tempH = DimensionResolver.ResolveHeight(element.Style, float.NaN, box);
+                }
                 else if (float.IsNaN(specH))
                     tempH = intrinsicH;
                 else
@@ -2113,12 +2136,15 @@ namespace Rend.Layout.Internal
                     if (!line.IsLastLine)
                     {
                         // Count total word gaps (spaces) across all text fragments.
+                        // BUG-059: Also check ShapedRun.OriginalText when frag.Text is null
+                        // (HarfBuzz-shaped text uses ShapedRun, not Text).
                         // Trailing whitespace is excluded — it hangs off the line and
                         // is not a justification opportunity (CSS Text L3 §7.5).
                         int totalGaps = 0;
                         for (int i = 0; i < line.Fragments.Count; i++)
                         {
-                            var ft = line.Fragments[i].Text;
+                            var ft = line.Fragments[i].Text
+                                  ?? line.Fragments[i].ShapedRun?.OriginalText;
                             if (ft != null)
                             {
                                 int end = ft.Length;
@@ -2128,7 +2154,9 @@ namespace Rend.Layout.Internal
                                     while (end > 0 && ft[end - 1] == ' ') end--;
                                 }
                                 for (int c = 0; c < end; c++)
+                                {
                                     if (ft[c] == ' ') totalGaps++;
+                                }
                             }
                         }
                         if (totalGaps > 0)
@@ -2140,11 +2168,15 @@ namespace Rend.Layout.Internal
                             {
                                 var frag = line.Fragments[i];
                                 frag.X += cumulativeShift;
-                                if (frag.Text != null)
+                                var fragText = frag.Text
+                                           ?? frag.ShapedRun?.OriginalText;
+                                if (fragText != null)
                                 {
                                     int gapsInFrag = 0;
-                                    for (int c = 0; c < frag.Text.Length; c++)
-                                        if (frag.Text[c] == ' ') gapsInFrag++;
+                                    for (int c = 0; c < fragText.Length; c++)
+                                    {
+                                        if (fragText[c] == ' ') gapsInFrag++;
+                                    }
                                     if (gapsInFrag > 0)
                                     {
                                         frag.JustifyWordSpacing = extraPerGap;
@@ -2318,7 +2350,7 @@ namespace Rend.Layout.Internal
                     float fontSize = fragStyle?.FontSize ?? 14f;
                     var fontDesc = fragStyle != null
                         ? new FontDescriptor(
-                            fragStyle.FontFamily ?? "serif",
+                            fragStyle.FontFamilies,
                             fragStyle.FontWeight,
                             fragStyle.FontStyle,
                             FontDescriptor.StretchToPercentage(fragStyle.FontStretch))

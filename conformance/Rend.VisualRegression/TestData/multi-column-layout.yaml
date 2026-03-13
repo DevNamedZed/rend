@@ -1,0 +1,74 @@
+# Multi-Column Layout
+# Visual regression tests for multi-column layout
+tests:
+  - id: adv-multicol-count
+    name: Multi-Column Count
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="column-count:3; column-gap:16px;">
+                              <div style="background:#3498db; height:40px; margin-bottom:8px;"></div>
+                              <div style="background:#e74c3c; height:40px; margin-bottom:8px;"></div>
+                              <div style="background:#27ae60; height:40px; margin-bottom:8px;"></div>
+                              <div style="background:#f39c12; height:40px; margin-bottom:8px;"></div>
+                              <div style="background:#9b59b6; height:40px; margin-bottom:8px;"></div>
+                              <div style="background:#1abc9c; height:40px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-multicol-gap
+    name: Multi-Column with Large Gap
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="column-count:2; column-gap:40px;">
+                              <div style="background:#3498db; height:30px; margin-bottom:6px;"></div>
+                              <div style="background:#e74c3c; height:30px; margin-bottom:6px;"></div>
+                              <div style="background:#27ae60; height:30px; margin-bottom:6px;"></div>
+                              <div style="background:#f39c12; height:30px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: adv-multicol-rule
+    name: Multi-Column with Column Rule
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:Arial,sans-serif; font-size:14px; line-height:1.4;">
+                          <div style="column-count:3; column-gap:20px; column-rule:2px solid #333;">
+                              <div style="background:#3498db; height:50px; margin-bottom:8px;"></div>
+                              <div style="background:#e74c3c; height:50px; margin-bottom:8px;"></div>
+                              <div style="background:#27ae60; height:50px; margin-bottom:8px;"></div>
+                              <div style="background:#f39c12; height:50px; margin-bottom:8px;"></div>
+                              <div style="background:#9b59b6; height:50px; margin-bottom:8px;"></div>
+                              <div style="background:#1abc9c; height:50px;"></div>
+                          </div>
+                      </body></html>
+
+  - id: multicol-basic
+    name: Basic Multi-Column
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:12px; background:#fff;">
+                          <div style="column-count:3; column-gap:16px; line-height:1.5;">
+                              <p style="margin:0 0 8px;">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore.</p>
+                              <p style="margin:0 0 8px;">Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip.</p>
+                              <p style="margin:0;">Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat.</p>
+                          </div>
+                      </body></html>
+
+  - id: multicol-rule
+    name: Multi-Column with Rule
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:12px; background:#fff;">
+                          <div style="column-count:2; column-gap:20px; column-rule:1px solid #ccc; line-height:1.5;">
+                              <p style="margin:0 0 8px;">First column content with enough text to fill it properly and demonstrate the column rule.</p>
+                              <p style="margin:0;">Second column content continues here with additional text to demonstrate balanced columns.</p>
+                          </div>
+                      </body></html>
+
+  - id: multicol-span
+    name: Column Span All
+    html: |
+      <html><body style="margin:0; padding:10px; font-family:sans-serif; font-size:12px; background:#fff;">
+                          <div style="column-count:2; column-gap:16px; line-height:1.5;">
+                              <p style="margin:0 0 8px;">Content in columns above the spanning element.</p>
+                              <h3 style="column-span:all; margin:8px 0; font-size:16px; border-bottom:2px solid #3498db; padding-bottom:4px;">Full Width Heading</h3>
+                              <p style="margin:0;">Content after the spanning heading continues in columns.</p>
+                          </div>
+                      </body></html>

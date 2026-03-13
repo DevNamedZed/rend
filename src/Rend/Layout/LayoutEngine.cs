@@ -106,7 +106,7 @@ namespace Rend.Layout
             {
                 var page = new LayoutPage(
                     pageStyle.PageSize.Width,
-                    rootHeight + pageStyle.MarginTop + pageStyle.MarginBottom,
+                    pageStyle.PageSize.Height,
                     rootBox)
                 { PageIndex = 0 };
                 pages = new List<LayoutPage> { page };

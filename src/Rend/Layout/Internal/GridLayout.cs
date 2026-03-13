@@ -80,8 +80,19 @@ namespace Rend.Layout.Internal
                         lineHeight = -lineHeight * fontSize;
                     else if (float.IsNaN(lineHeight) || lineHeight == 0)
                         lineHeight = fontSize * 1.2f;
-                    float estimatedWidth = pseudo.Content.Length * fontSize * 0.6f;
-                    pseudoBox.ContentRect = new RectF(0, 0, estimatedWidth, lineHeight);
+                    float measuredWidth;
+                    if (context.TextMeasurer != null)
+                    {
+                        var fontDesc = new Fonts.FontDescriptor(pseudo.Style.FontFamilies,
+                            pseudo.Style.FontWeight, pseudo.Style.FontStyle);
+                        var shaped = context.TextMeasurer.Shape(pseudo.Content, fontDesc, fontSize);
+                        measuredWidth = shaped.TotalWidth;
+                    }
+                    else
+                    {
+                        measuredWidth = pseudo.Content.Length * fontSize * 0.6f;
+                    }
+                    pseudoBox.ContentRect = new RectF(0, 0, measuredWidth, lineHeight);
                     items.Add(new GridItem { Box = pseudoBox });
                     continue;
                 }
@@ -232,6 +243,26 @@ namespace Rend.Layout.Internal
                 {
                     item.ColStart = Math.Max(0, ResolveNegativeLine(item.ColStart, gridCols));
                 }
+
+                // Resolve negative end lines into spans
+                if (item.RawColEnd != 0)
+                {
+                    int resolvedEnd = Math.Max(0, ResolveNegativeLine(item.RawColEnd, gridCols));
+                    int start = item.ColStart >= 0 ? item.ColStart : 0;
+                    if (resolvedEnd > start)
+                    {
+                        item.ColSpan = resolvedEnd - start;
+                    }
+                }
+                if (item.RawRowEnd != 0)
+                {
+                    int resolvedEnd = Math.Max(0, ResolveNegativeLine(item.RawRowEnd, gridRows));
+                    int start = item.RowStart >= 0 ? item.RowStart : 0;
+                    if (resolvedEnd > start)
+                    {
+                        item.RowSpan = resolvedEnd - start;
+                    }
+                }
             }
 
             // If no explicit columns, determine from item count
@@ -335,7 +366,8 @@ namespace Rend.Layout.Internal
                 else if (flowColumn)
                 {
                     // Column-major auto-placement
-                    int rowLimit = gridRows - item.RowSpan + 1;
+                    // BUG-063: Clamp rowLimit to prevent near-infinite loop when RowSpan > gridRows
+                    int rowLimit = Math.Max(1, gridRows - item.RowSpan + 1);
                     for (int c = autoCol; !found; c++)
                     {
                         int startRow = (c == autoCol) ? autoRow : 0;
@@ -361,7 +393,8 @@ namespace Rend.Layout.Internal
                 else
                 {
                     // Row-major auto-placement (default)
-                    int colLimit = gridCols - item.ColSpan + 1;
+                    // BUG-063: Clamp colLimit to prevent near-infinite loop when ColSpan > gridCols
+                    int colLimit = Math.Max(1, gridCols - item.ColSpan + 1);
                     for (int r = autoRow; !found; r++)
                     {
                         int startCol = (r == autoRow) ? autoCol : 0;
@@ -574,6 +607,21 @@ namespace Rend.Layout.Internal
                     // Apply min-height / max-height (same as BlockFormattingContext)
                     float gridMinH = DimensionResolver.ResolvePercentHeight(item.StyledElement.Style.MinHeight, containerHeight);
                     float gridMaxH = DimensionResolver.ResolvePercentHeight(item.StyledElement.Style.MaxHeight, containerHeight);
+                    // box-sizing: border-box → min/max-height includes padding+border,
+                    // but contentHeight is content-box only, so subtract padding+border.
+                    if (item.StyledElement.Style.BoxSizing == CssBoxSizing.BorderBox)
+                    {
+                        float vExtra = item.Box.PaddingTop + item.Box.PaddingBottom
+                                     + item.Box.BorderTopWidth + item.Box.BorderBottomWidth;
+                        if (!float.IsNaN(gridMinH) && gridMinH >= 0)
+                        {
+                            gridMinH = Math.Max(0, gridMinH - vExtra);
+                        }
+                        if (!float.IsNaN(gridMaxH) && gridMaxH >= 0)
+                        {
+                            gridMaxH = Math.Max(0, gridMaxH - vExtra);
+                        }
+                    }
                     if (!float.IsNaN(gridMaxH) && gridMaxH >= 0 && contentHeight > gridMaxH)
                         contentHeight = gridMaxH;
                     if (!float.IsNaN(gridMinH) && gridMinH >= 0 && contentHeight < gridMinH)
@@ -590,7 +638,18 @@ namespace Rend.Layout.Internal
                     }
                 }
 
-                // Distribute height across spanned rows
+            }
+
+            // CSS Grid §11.5: Size rows in two passes — non-spanning first, then spanning.
+            // Pass 1: Set row heights from non-spanning items
+            for (int i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item.RowSpan != 1)
+                {
+                    continue;
+                }
+
                 float totalHeight = item.ContentHeight;
                 if (item.StyledElement != null)
                 {
@@ -599,22 +658,43 @@ namespace Rend.Layout.Internal
                                  + item.Box.MarginTop + item.Box.MarginBottom;
                 }
 
-                if (item.RowSpan == 1)
+                int r = item.RowStart;
+                if (r < finalRows && totalHeight > rowHeights[r])
                 {
-                    int r = item.RowStart;
-                    if (r < finalRows && totalHeight > rowHeights[r])
-                        rowHeights[r] = totalHeight;
+                    rowHeights[r] = totalHeight;
                 }
-                else
+            }
+
+            // Pass 2: Distribute extra space for spanning items
+            for (int i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item.RowSpan <= 1)
                 {
-                    // For spanning items, subtract inter-row gaps then distribute evenly
-                    float gapTotal = (item.RowSpan - 1) * rowGap;
-                    float distributable = Math.Max(0, totalHeight - gapTotal);
-                    float perRow = distributable / item.RowSpan;
+                    continue;
+                }
+
+                float totalHeight = item.ContentHeight;
+                if (item.StyledElement != null)
+                {
+                    totalHeight += item.Box.PaddingTop + item.Box.PaddingBottom
+                                 + item.Box.BorderTopWidth + item.Box.BorderBottomWidth
+                                 + item.Box.MarginTop + item.Box.MarginBottom;
+                }
+
+                // Only distribute extra space beyond what existing rows + gaps already provide
+                float existing = (item.RowSpan - 1) * rowGap;
+                for (int r = item.RowStart; r < item.RowStart + item.RowSpan && r < finalRows; r++)
+                {
+                    existing += rowHeights[r];
+                }
+                if (totalHeight > existing)
+                {
+                    float extra = totalHeight - existing;
+                    float perRow = extra / item.RowSpan;
                     for (int r = item.RowStart; r < item.RowStart + item.RowSpan && r < finalRows; r++)
                     {
-                        if (perRow > rowHeights[r])
-                            rowHeights[r] = perRow;
+                        rowHeights[r] += perRow;
                     }
                 }
             }
@@ -947,9 +1027,17 @@ namespace Rend.Layout.Internal
             int endRowSpan;
             int rowEnd = ParseLineValue(style.GetRefValue(PropertyId.GridRowEnd), out endRowSpan);
             if (rowEnd >= 0 && item.RowStart >= 0 && rowEnd > item.RowStart)
+            {
                 item.RowSpan = rowEnd - item.RowStart;
+            }
+            else if (rowEnd < 0 && IsNegativeLineNumber(style.GetRefValue(PropertyId.GridRowEnd)))
+            {
+                item.RawRowEnd = rowEnd; // Store for deferred resolution
+            }
             else if (endRowSpan > 1 && item.RowStart >= 0)
+            {
                 item.RowSpan = endRowSpan;
+            }
 
             item.ColStart = ParseLineValue(style.GetRefValue(PropertyId.GridColumnStart), out int colSpan);
             item.ColSpan = colSpan;
@@ -957,9 +1045,17 @@ namespace Rend.Layout.Internal
             int endColSpan;
             int colEnd = ParseLineValue(style.GetRefValue(PropertyId.GridColumnEnd), out endColSpan);
             if (colEnd >= 0 && item.ColStart >= 0 && colEnd > item.ColStart)
+            {
                 item.ColSpan = colEnd - item.ColStart;
+            }
+            else if (colEnd < 0 && IsNegativeLineNumber(style.GetRefValue(PropertyId.GridColumnEnd)))
+            {
+                item.RawColEnd = colEnd; // Store for deferred resolution
+            }
             else if (endColSpan > 1 && item.ColStart >= 0)
+            {
                 item.ColSpan = endColSpan;
+            }
         }
 
         /// <summary>
@@ -1036,6 +1132,37 @@ namespace Rend.Layout.Internal
             }
 
             return -1;
+        }
+
+        /// <summary>
+        /// Returns true if the raw CSS value is a negative integer line number
+        /// (not auto, not null, not a keyword). Distinguishes CSS line -1 from auto.
+        /// </summary>
+        private static bool IsNegativeLineNumber(object? raw)
+        {
+            if (raw is CssNumberValue num && num.Value < 0)
+            {
+                return true;
+            }
+            if (raw is CssDimensionValue dim && dim.Value < 0)
+            {
+                return true;
+            }
+            if (raw is CssListValue list)
+            {
+                for (int i = 0; i < list.Values.Count; i++)
+                {
+                    if (list.Values[i] is CssNumberValue n && n.Value < 0)
+                    {
+                        return true;
+                    }
+                    if (list.Values[i] is CssDimensionValue d && d.Value < 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         /// <summary>
@@ -1549,11 +1676,11 @@ namespace Rend.Layout.Internal
             return tracks;
         }
 
+        // BUG-062: Match FlexLayout.CloneStyleAsBlock — clear visual decoration on anonymous wrappers.
         private static ComputedStyle CloneStyleAsBlock(ComputedStyle source)
         {
             var values = (PropertyValue[])source.GetValues().Clone();
             values[PropertyId.Display] = PropertyValue.FromInt((int)CssDisplay.Block);
-            // Anonymous grid items must not inherit the parent's explicit sizing properties.
             var autoVal = PropertyValue.FromLength(float.NaN);
             values[PropertyId.Width] = autoVal;
             values[PropertyId.Height] = autoVal;
@@ -1561,7 +1688,30 @@ namespace Rend.Layout.Internal
             values[PropertyId.MinHeight] = autoVal;
             values[PropertyId.MaxWidth] = autoVal;
             values[PropertyId.MaxHeight] = autoVal;
+
             var refValues = (object?[])source.GetRefValues().Clone();
+            refValues[PropertyId.BoxShadow] = null;
+            refValues[PropertyId.BackgroundImage] = null;
+            var zero = PropertyValue.FromLength(0);
+            var transparent = PropertyValue.FromColor(new CssColor(0, 0, 0, 0));
+            values[PropertyId.BackgroundColor] = transparent;
+            values[PropertyId.BorderTopWidth] = zero;
+            values[PropertyId.BorderRightWidth] = zero;
+            values[PropertyId.BorderBottomWidth] = zero;
+            values[PropertyId.BorderLeftWidth] = zero;
+            values[PropertyId.BorderTopLeftRadius] = zero;
+            values[PropertyId.BorderTopRightRadius] = zero;
+            values[PropertyId.BorderBottomRightRadius] = zero;
+            values[PropertyId.BorderBottomLeftRadius] = zero;
+            values[PropertyId.PaddingTop] = zero;
+            values[PropertyId.PaddingRight] = zero;
+            values[PropertyId.PaddingBottom] = zero;
+            values[PropertyId.PaddingLeft] = zero;
+            values[PropertyId.MarginTop] = zero;
+            values[PropertyId.MarginRight] = zero;
+            values[PropertyId.MarginBottom] = zero;
+            values[PropertyId.MarginLeft] = zero;
+            values[PropertyId.Position] = PropertyValue.FromInt((int)CssPosition.Static);
             return new ComputedStyle(values, refValues);
         }
 
@@ -1575,6 +1725,10 @@ namespace Rend.Layout.Internal
             public int ColStart { get; set; } = -1;
             public int RowSpan { get; set; } = 1;
             public int ColSpan { get; set; } = 1;
+            /// <summary>Raw negative end line (e.g., -1 for last line). 0 = not set.</summary>
+            public int RawRowEnd { get; set; }
+            /// <summary>Raw negative end line (e.g., -1 for last line). 0 = not set.</summary>
+            public int RawColEnd { get; set; }
             public bool Placed { get; set; }
             public int Order { get; set; }
             public int OriginalIndex { get; set; }

@@ -32,7 +32,7 @@ namespace Rend.Rendering.Internal
             }
 
             float fontSize = style.FontSize;
-            string fontFamily = style.FontFamily;
+            string[] fontFamilies = style.FontFamilies;
             CssFontStyle fontStyle = style.FontStyle;
             float fontWeight = style.FontWeight;
 
@@ -57,7 +57,7 @@ namespace Rend.Rendering.Internal
 
                 var textStyle = new TextStyle
                 {
-                    Font = new Fonts.FontDescriptor(fontFamily, fontWeight, fontStyle, Fonts.FontDescriptor.StretchToPercentage(style.FontStretch)),
+                    Font = new Fonts.FontDescriptor(fontFamilies, fontWeight, fontStyle, Fonts.FontDescriptor.StretchToPercentage(style.FontStretch)),
                     FontSize = fontSize,
                     Color = shadowColor,
                     Bold = fontWeight >= 700f,

@@ -285,7 +285,26 @@ namespace Rend.Pdf
         internal void RecordGlyphUsage(ushort glyphId)
         {
             if (glyphId != 0)
+            {
                 _usedGlyphs.Add(glyphId);
+            }
+        }
+
+        /// <summary>
+        /// Record a glyph ID as used and associate it with a Unicode code point
+        /// for the ToUnicode CMap. Called when glyph IDs come from an external
+        /// shaper (e.g. HarfBuzz) and bypass the normal Encode/GetGlyphId path.
+        /// </summary>
+        public void RecordGlyphWithUnicode(ushort glyphId, int codePoint)
+        {
+            if (glyphId != 0)
+            {
+                _usedGlyphs.Add(glyphId);
+                if (!_glyphToUnicode.ContainsKey(glyphId))
+                {
+                    _glyphToUnicode[glyphId] = codePoint;
+                }
+            }
         }
 
         /// <summary>
@@ -334,9 +353,23 @@ namespace Rend.Pdf
         /// <summary>Font flags for PDF FontDescriptor.</summary>
         public int Flags { get; }
 
+        /// <summary>Underline position in font units (negative = below baseline).</summary>
+        public float UnderlinePosition { get; }
+
+        /// <summary>Underline thickness in font units.</summary>
+        public float UnderlineThickness { get; }
+
+        /// <summary>Strikeout position in font units (positive = above baseline).</summary>
+        public float StrikeoutPosition { get; }
+
+        /// <summary>Strikeout size (thickness) in font units.</summary>
+        public float StrikeoutSize { get; }
+
         public FontMetrics(float ascent, float descent, float capHeight, float xHeight,
                            float stemV, float italicAngle, Core.Values.RectF bBox,
-                           float unitsPerEm, int flags)
+                           float unitsPerEm, int flags,
+                           float underlinePosition = 0, float underlineThickness = 0,
+                           float strikeoutPosition = 0, float strikeoutSize = 0)
         {
             Ascent = ascent;
             Descent = descent;
@@ -347,6 +380,10 @@ namespace Rend.Pdf
             BBox = bBox;
             UnitsPerEm = unitsPerEm;
             Flags = flags;
+            UnderlinePosition = underlinePosition;
+            UnderlineThickness = underlineThickness;
+            StrikeoutPosition = strikeoutPosition;
+            StrikeoutSize = strikeoutSize;
         }
     }
 }
