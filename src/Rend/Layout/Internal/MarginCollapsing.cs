@@ -98,7 +98,17 @@ namespace Rend.Layout.Internal
             if (style.Display == CssDisplay.InlineBlock ||
                 style.Display == CssDisplay.Flex ||
                 style.Display == CssDisplay.Grid)
+            {
                 return true;
+            }
+
+            // Flex items and grid items establish an independent BFC
+            // (CSS Flexbox §4, CSS Grid §6) — child margins don't collapse through
+            if (box.Parent != null &&
+                (box.Parent.BoxType == BoxType.Flex || box.Parent.BoxType == BoxType.Grid))
+            {
+                return true;
+            }
 
             // contain: layout, content, or strict establish a BFC
             var contain = style.Contain;

@@ -7,25 +7,29 @@ using System.Text;
 namespace Rend.VisualRegression.Infrastructure
 {
     /// <summary>
-    /// Generates a standalone HTML report for visual regression test results.
-    /// The report is completely self-contained with inline CSS, JS, and base64-encoded images.
+    /// Generates an HTML report for visual regression test results.
+    /// Images are referenced via relative file paths to keep the report lightweight.
     /// </summary>
     public static class ReportGenerator
     {
         /// <summary>
         /// Generate the HTML report and write it to the specified path.
+        /// Images are referenced via relative file paths (not inlined as base64).
         /// </summary>
-        public static void Generate(IReadOnlyList<ComparisonResult> results, string outputPath)
+        /// <param name="results">The comparison results.</param>
+        /// <param name="outputPath">Where to write the report HTML.</param>
+        /// <param name="imagePathPrefix">Relative path prefix from the report to the image directory (e.g. "" for siblings, "../output/run1/" for results/).</param>
+        public static void Generate(IReadOnlyList<ComparisonResult> results, string outputPath, string imagePathPrefix = "")
         {
             var dir = Path.GetDirectoryName(outputPath);
             if (dir != null && !Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
 
-            var html = BuildReport(results);
+            var html = BuildReport(results, imagePathPrefix);
             File.WriteAllText(outputPath, html, Encoding.UTF8);
         }
 
-        private static string BuildReport(IReadOnlyList<ComparisonResult> results)
+        private static string BuildReport(IReadOnlyList<ComparisonResult> results, string imagePathPrefix)
         {
             int passCount = results.Count(r => r.Outcome == ComparisonOutcome.Pass);
             int nearPassCount = results.Count(r => r.Outcome == ComparisonOutcome.NearPass);
@@ -149,28 +153,11 @@ namespace Rend.VisualRegression.Infrastructure
                 string diffColor = DiffColor(result.DiffPercentage);
 
                 rowIndex++;
-                string htmlEncoded = result.Html != null ? Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(result.Html)) : "";
-                string chromeLayoutEncoded = "";
-                if (result.ChromeLayout != null)
-                {
-                    var layoutJson = System.Text.Json.JsonSerializer.Serialize(result.ChromeLayout, new System.Text.Json.JsonSerializerOptions
-                    {
-                        WriteIndented = true,
-                        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-                    });
-                    chromeLayoutEncoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(layoutJson));
-                }
-                string rendLayoutEncoded = "";
-                if (result.RendLayout != null)
-                {
-                    var rendLayoutJson = System.Text.Json.JsonSerializer.Serialize(result.RendLayout, new System.Text.Json.JsonSerializerOptions
-                    {
-                        WriteIndented = true,
-                        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-                    });
-                    rendLayoutEncoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(rendLayoutJson));
-                }
-                sb.AppendLine($"<tr class=\"result-row {statusClass}\" data-status=\"{statusClass}\" data-sort-index=\"{rowIndex}\" data-sort-status=\"{statusOrder}\" data-sort-name=\"{Escape(result.TestName.ToLower())}\" data-sort-category=\"{Escape(result.Category.ToLower())}\" data-sort-diff=\"{result.DiffPercentage:F4}\" data-sort-duration=\"{result.Duration.TotalMilliseconds:F0}\" data-html=\"{htmlEncoded}\" data-chrome-layout=\"{chromeLayoutEncoded}\" data-rend-layout=\"{rendLayoutEncoded}\">");
+                string testId = result.TestId ?? "";
+                bool hasHtml = result.Html != null;
+                bool hasChromeLayout = result.ChromeLayout != null;
+                bool hasRendLayout = result.RendLayout != null;
+                sb.AppendLine($"<tr class=\"result-row {statusClass}\" data-status=\"{statusClass}\" data-sort-index=\"{rowIndex}\" data-sort-status=\"{statusOrder}\" data-sort-name=\"{Escape(result.TestName.ToLower())}\" data-sort-category=\"{Escape(result.Category.ToLower())}\" data-sort-diff=\"{result.DiffPercentage:F4}\" data-sort-duration=\"{result.Duration.TotalMilliseconds:F0}\" data-test-id=\"{Escape(testId)}\" data-has-html=\"{(hasHtml ? "1" : "")}\" data-has-chrome-layout=\"{(hasChromeLayout ? "1" : "")}\" data-has-rend-layout=\"{(hasRendLayout ? "1" : "")}\">");
                 sb.AppendLine($"  <td class=\"index-cell\">{rowIndex}</td>");
                 sb.AppendLine($"  <td><span class=\"status-badge status-{statusClass}\">{statusLabel}</span></td>");
                 sb.AppendLine($"  <td class=\"test-name\">{Escape(result.TestName)}</td>");
@@ -180,8 +167,8 @@ namespace Rend.VisualRegression.Infrastructure
                 sb.AppendLine("  <td class=\"image-cell\">");
                 if (result.ChromeImagePath != null && File.Exists(result.ChromeImagePath))
                 {
-                    string dataUri = ToDataUri(result.ChromeImagePath);
-                    sb.AppendLine($"    <img src=\"{dataUri}\" alt=\"Chrome\" class=\"thumb\" data-label=\"Chrome\" onclick=\"openLightbox(this, event)\">");
+                    string relPath = imagePathPrefix + Path.GetFileName(result.ChromeImagePath);
+                    sb.AppendLine($"    <img src=\"{relPath}\" alt=\"Chrome\" class=\"thumb\" data-label=\"Chrome\" onclick=\"openLightbox(this, event)\" loading=\"lazy\">");
                 }
                 else
                 {
@@ -193,8 +180,8 @@ namespace Rend.VisualRegression.Infrastructure
                 sb.AppendLine("  <td class=\"image-cell\">");
                 if (result.RendImagePath != null && File.Exists(result.RendImagePath))
                 {
-                    string dataUri = ToDataUri(result.RendImagePath);
-                    sb.AppendLine($"    <img src=\"{dataUri}\" alt=\"Rend\" class=\"thumb\" data-label=\"Rend\" onclick=\"openLightbox(this, event)\">");
+                    string relPath = imagePathPrefix + Path.GetFileName(result.RendImagePath);
+                    sb.AppendLine($"    <img src=\"{relPath}\" alt=\"Rend\" class=\"thumb\" data-label=\"Rend\" onclick=\"openLightbox(this, event)\" loading=\"lazy\">");
                 }
                 else
                 {
@@ -206,8 +193,8 @@ namespace Rend.VisualRegression.Infrastructure
                 sb.AppendLine("  <td class=\"image-cell\">");
                 if (result.DiffImagePath != null && File.Exists(result.DiffImagePath))
                 {
-                    string dataUri = ToDataUri(result.DiffImagePath);
-                    sb.AppendLine($"    <img src=\"{dataUri}\" alt=\"Diff\" class=\"thumb\" data-label=\"Diff\" onclick=\"openLightbox(this, event)\">");
+                    string relPath = imagePathPrefix + Path.GetFileName(result.DiffImagePath);
+                    sb.AppendLine($"    <img src=\"{relPath}\" alt=\"Diff\" class=\"thumb\" data-label=\"Diff\" onclick=\"openLightbox(this, event)\" loading=\"lazy\">");
                 }
                 else
                 {
@@ -294,19 +281,6 @@ namespace Rend.VisualRegression.Infrastructure
             return "#c0392b";                          // dark red
         }
 
-        private static string ToDataUri(string filePath)
-        {
-            try
-            {
-                var bytes = File.ReadAllBytes(filePath);
-                var base64 = Convert.ToBase64String(bytes);
-                return $"data:image/png;base64,{base64}";
-            }
-            catch
-            {
-                return "";
-            }
-        }
 
         private static string Escape(string text)
         {
@@ -1100,49 +1074,55 @@ function openLightbox(img, event) {
     document.getElementById('lb-rend').src = srcs[1] || '';
     document.getElementById('lb-diff').src = srcs[2] || '';
 
-    // Decode and store HTML
-    var b64 = row.getAttribute('data-html') || '';
-    try { currentLbHtml = b64 ? decodeURIComponent(escape(atob(b64))) : ''; } catch(e) { currentLbHtml = ''; }
-    document.getElementById('lb-html-code').textContent = currentLbHtml;
+    // Load HTML and layout data on demand from external files
+    var testId = row.getAttribute('data-test-id') || '';
+    var hasHtml = row.getAttribute('data-has-html') === '1';
+    var hasChromeLayout = row.getAttribute('data-has-chrome-layout') === '1';
+    var hasRendLayout = row.getAttribute('data-has-rend-layout') === '1';
 
-    // Decode and render layout trees if available
-    var chromeLayoutB64 = row.getAttribute('data-chrome-layout') || '';
-    var rendLayoutB64 = row.getAttribute('data-rend-layout') || '';
+    // Resolve base path from the first image src (same directory as images)
+    var firstImg = images[0];
+    var basePath = firstImg ? firstImg.getAttribute('src').replace(/[^/]*$/, '') : '';
+
+    // Load HTML
+    document.getElementById('lb-html-code').textContent = 'Loading...';
+    if (hasHtml && testId) {
+        fetch(basePath + testId + '.html')
+            .then(function(r) { return r.ok ? r.text() : ''; })
+            .then(function(t) { currentLbHtml = t; document.getElementById('lb-html-code').textContent = t; })
+            .catch(function() { currentLbHtml = ''; document.getElementById('lb-html-code').textContent = '(failed to load)'; });
+    } else {
+        currentLbHtml = '';
+        document.getElementById('lb-html-code').textContent = '';
+    }
+
+    // Load layout trees
     var layoutTab = document.getElementById('lb-layout-tab');
-    var chromeTree = null;
-    var rendTree = null;
-    if (chromeLayoutB64 || rendLayoutB64) {
+    if (hasChromeLayout || hasRendLayout) {
         layoutTab.style.display = '';
-        try {
-            if (chromeLayoutB64) {
-                var chromeJson = decodeURIComponent(escape(atob(chromeLayoutB64)));
-                chromeTree = JSON.parse(chromeJson);
-                document.getElementById('lb-chrome-layout-tree').innerHTML = renderLayoutNode(chromeTree, 0);
-            } else {
-                document.getElementById('lb-chrome-layout-tree').innerHTML = '<span style=""color:#888"">No Chrome layout data</span>';
-            }
-            if (rendLayoutB64) {
-                var rendJson = decodeURIComponent(escape(atob(rendLayoutB64)));
-                rendTree = JSON.parse(rendJson);
-                document.getElementById('lb-rend-layout-tree').innerHTML = renderLayoutNode(rendTree, 0);
-            } else {
-                document.getElementById('lb-rend-layout-tree').innerHTML = '<span style=""color:#888"">No Rend layout data</span>';
-            }
-            // Run layout diff
+        document.getElementById('lb-chrome-layout-tree').innerHTML = 'Loading...';
+        document.getElementById('lb-rend-layout-tree').innerHTML = 'Loading...';
+        document.getElementById('lb-layout-diff').innerHTML = '';
+        document.getElementById('lb-layout-match').textContent = '';
+        document.getElementById('lb-layout-match').className = 'layout-match-banner';
+
+        var chromeTreeP = hasChromeLayout
+            ? fetch(basePath + testId + '-chrome-layout.json').then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
+            : Promise.resolve(null);
+        var rendTreeP = hasRendLayout
+            ? fetch(basePath + testId + '-rend-layout.json').then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
+            : Promise.resolve(null);
+        Promise.all([chromeTreeP, rendTreeP]).then(function(trees) {
+            var chromeTree = trees[0], rendTree = trees[1];
+            document.getElementById('lb-chrome-layout-tree').innerHTML = chromeTree ? renderLayoutNode(chromeTree, 0) : '<span style=""color:#888"">No Chrome layout data</span>';
+            document.getElementById('lb-rend-layout-tree').innerHTML = rendTree ? renderLayoutNode(rendTree, 0) : '<span style=""color:#888"">No Rend layout data</span>';
             if (chromeTree && rendTree) {
                 var diffResult = diffLayoutTrees(chromeTree, rendTree);
                 document.getElementById('lb-layout-diff').innerHTML = renderDiffResult(diffResult);
             } else {
                 document.getElementById('lb-layout-diff').innerHTML = '<span style=""color:#888"">Need both trees for diff</span>';
-                document.getElementById('lb-layout-match').textContent = '';
-                document.getElementById('lb-layout-match').className = 'layout-match-banner';
             }
-        } catch(e) {
-            document.getElementById('lb-chrome-layout-tree').innerHTML = '<span style=""color:#e74c3c"">Error: ' + esc(e.message) + '</span>';
-            document.getElementById('lb-layout-diff').innerHTML = '';
-            document.getElementById('lb-layout-match').textContent = '';
-            document.getElementById('lb-layout-match').className = 'layout-match-banner';
-        }
+        });
     } else {
         layoutTab.style.display = 'none';
     }

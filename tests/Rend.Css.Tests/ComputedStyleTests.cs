@@ -136,9 +136,20 @@ namespace Rend.Css.Tests
         }
 
         [Fact]
-        public void Default_BorderWidth_IsMedium()
+        public void Default_BorderWidth_IsZero_WhenStyleIsNone()
         {
+            // CSS 2.1 §8.5.1: border-width computes to 0 when border-style is none (the default)
             var style = ResolveElement("");
+            Assert.Equal(0f, style.BorderTopWidth);
+            Assert.Equal(0f, style.BorderRightWidth);
+            Assert.Equal(0f, style.BorderBottomWidth);
+            Assert.Equal(0f, style.BorderLeftWidth);
+        }
+
+        [Fact]
+        public void Default_BorderWidth_IsMedium_WhenStyleIsSet()
+        {
+            var style = ResolveElement("div { border-style: solid; }");
             Assert.Equal(3f, style.BorderTopWidth);
             Assert.Equal(3f, style.BorderRightWidth);
             Assert.Equal(3f, style.BorderBottomWidth);
@@ -674,7 +685,7 @@ namespace Rend.Css.Tests
         [Fact]
         public void BorderWidth_ResolvesPxValues()
         {
-            var style = ResolveElement("div { border-top-width: 1px; border-right-width: 2px; border-bottom-width: 3px; border-left-width: 4px; }");
+            var style = ResolveElement("div { border-style: solid; border-top-width: 1px; border-right-width: 2px; border-bottom-width: 3px; border-left-width: 4px; }");
             Assert.Equal(1f, style.BorderTopWidth);
             Assert.Equal(2f, style.BorderRightWidth);
             Assert.Equal(3f, style.BorderBottomWidth);

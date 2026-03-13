@@ -462,8 +462,9 @@ namespace Rend.Rendering.Internal
             float outerX1, float outerY1, float outerX2, float outerY2,
             float innerX2, float innerY2, float innerX1, float innerY1)
         {
-            // Groove: outer half darker, inner half lighter.
-            // Ridge: outer half lighter, inner half darker.
+            // Groove: top/left outer=dark inner=light; bottom/right outer=light inner=dark.
+            // Ridge: opposite of groove.
+            // Detect which side: same approach as PaintInsetOutset.
             CssColor dark = DarkenColor(color);
             CssColor light = LightenColor(color);
 
@@ -479,8 +480,33 @@ namespace Rend.Rendering.Internal
             float midX2 = outerX2 + dx2 * ratio;
             float midY2 = outerY2 + dy2 * ratio;
 
-            CssColor outerColor = isGroove ? dark : light;
-            CssColor innerColor = isGroove ? light : dark;
+            // Determine if this is a top/left side or bottom/right side
+            float edgeDx = outerX2 - outerX1;
+            float edgeDy = outerY2 - outerY1;
+            bool isTopOrLeft;
+            if (Math.Abs(edgeDx) > Math.Abs(edgeDy))
+            {
+                isTopOrLeft = outerY1 <= (outerY1 + innerY1) * 0.5f; // horizontal → top if y is smaller
+            }
+            else
+            {
+                isTopOrLeft = outerX1 <= (outerX1 + innerX1) * 0.5f; // vertical → left if x is smaller
+            }
+
+            // Groove top/left: outer=dark, inner=light
+            // Groove bottom/right: outer=light, inner=dark (swapped)
+            // Ridge is the opposite of groove
+            CssColor outerColor, innerColor;
+            if (isGroove)
+            {
+                outerColor = isTopOrLeft ? dark : light;
+                innerColor = isTopOrLeft ? light : dark;
+            }
+            else
+            {
+                outerColor = isTopOrLeft ? light : dark;
+                innerColor = isTopOrLeft ? dark : light;
+            }
 
             FillTrapezoid(target, outerColor, outerX1, outerY1, outerX2, outerY2, midX2, midY2, midX1, midY1);
             FillTrapezoid(target, innerColor, midX1, midY1, midX2, midY2, innerX2, innerY2, innerX1, innerY1);
@@ -567,7 +593,103 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
-            // Fallback: clip to outer rounded rect and fill each side as a rectangle.
+            // Fieldset + legend with border-radius: stroke a custom open path
+            // that follows the rounded rect outline with a gap for the legend.
+            var legendGapR = GetFieldsetLegendGap(box);
+            float topShift = legendGapR?.TopOffset ?? 0f;
+
+            if (legendGapR.HasValue && topShift > 0f)
+            {
+                // Build the effective rect with shifted top
+                float shiftedTop = borderRect.Top + topShift;
+                RectF effRect = new RectF(borderRect.Left, shiftedTop,
+                                          borderRect.Width, borderRect.Height - topShift);
+
+                // For uniform solid border, stroke a custom path with the legend gap.
+                // Chrome strokes at the center of the border width.
+                CssColor strokeColor = style.BorderTopColor;
+                float strokeW = topW;
+                float halfW = strokeW / 2f;
+
+                // Inset rect by half stroke width (stroke is centered on the path)
+                float left = effRect.Left + halfW;
+                float top = effRect.Top + halfW;
+                float right = effRect.Right - halfW;
+                float bottom = effRect.Bottom - halfW;
+
+                // Clamp radii for the inset rect
+                float tlr = Math.Max(0, radii.TlRx - halfW);
+                float trr = Math.Max(0, radii.TrRx - halfW);
+                float brr = Math.Max(0, radii.BrRx - halfW);
+                float blr = Math.Max(0, radii.BlRx - halfW);
+
+                float gapLeft = legendGapR.Value.Left;
+                float gapRight = legendGapR.Value.Right;
+
+                const float kappa = 0.5522847498f;
+
+                // Path 1: from gapRight along the top, around right/bottom/left, back to gapLeft
+                var path = new PathData();
+
+                // Start at gap right edge on top
+                path.MoveTo(gapRight, top);
+
+                // Top border right segment → top-right corner
+                if (trr > 0)
+                {
+                    path.LineTo(right - trr, top);
+                    float cp = trr * kappa;
+                    path.CubicBezierTo(right - trr + cp, top, right, top + trr - cp, right, top + trr);
+                }
+                else
+                {
+                    path.LineTo(right, top);
+                }
+
+                // Right border → bottom-right corner
+                if (brr > 0)
+                {
+                    path.LineTo(right, bottom - brr);
+                    float cp = brr * kappa;
+                    path.CubicBezierTo(right, bottom - brr + cp, right - brr + cp, bottom, right - brr, bottom);
+                }
+                else
+                {
+                    path.LineTo(right, bottom);
+                }
+
+                // Bottom border → bottom-left corner
+                if (blr > 0)
+                {
+                    path.LineTo(left + blr, bottom);
+                    float cp = blr * kappa;
+                    path.CubicBezierTo(left + blr - cp, bottom, left, bottom - blr + cp, left, bottom - blr);
+                }
+                else
+                {
+                    path.LineTo(left, bottom);
+                }
+
+                // Left border → top-left corner
+                if (tlr > 0)
+                {
+                    path.LineTo(left, top + tlr);
+                    float cp = tlr * kappa;
+                    path.CubicBezierTo(left, top + tlr - cp, left + tlr - cp, top, left + tlr, top);
+                }
+                else
+                {
+                    path.LineTo(left, top);
+                }
+
+                // Top border left segment → gap left edge
+                path.LineTo(gapLeft, top);
+
+                target.StrokePath(path, new PenInfo(strokeColor, strokeW));
+                return;
+            }
+
+            // Non-fieldset case: clip to outer rounded rect and fill each side as a rectangle.
             var outerPath = new PathData();
             radii.AddToPath(outerPath, borderRect);
 
@@ -581,31 +703,8 @@ namespace Rend.Rendering.Internal
                 CssColor color = style.BorderTopColor;
                 if (color.A > 0)
                 {
-                    var legendGap = GetFieldsetLegendGap(box);
-                    if (legendGap.HasValue)
-                    {
-                        float gapLeft = legendGap.Value.Left;
-                        float gapRight = legendGap.Value.Right;
-                        // Left segment
-                        if (gapLeft > borderRect.Left)
-                        {
-                            var leftRect = new RectF(borderRect.Left, borderRect.Top,
-                                                     gapLeft - borderRect.Left, topW);
-                            target.FillRect(leftRect, BrushInfo.Solid(color));
-                        }
-                        // Right segment
-                        if (gapRight < borderRect.Right)
-                        {
-                            var rightRect = new RectF(gapRight, borderRect.Top,
-                                                      borderRect.Right - gapRight, topW);
-                            target.FillRect(rightRect, BrushInfo.Solid(color));
-                        }
-                    }
-                    else
-                    {
-                        var rect = new RectF(borderRect.Left, borderRect.Top, borderRect.Width, topW);
-                        target.FillRect(rect, BrushInfo.Solid(color));
-                    }
+                    var rect = new RectF(borderRect.Left, borderRect.Top, borderRect.Width, topW);
+                    target.FillRect(rect, BrushInfo.Solid(color));
                 }
             }
 
@@ -615,7 +714,8 @@ namespace Rend.Rendering.Internal
                 CssColor color = style.BorderRightColor;
                 if (color.A > 0)
                 {
-                    var rect = new RectF(borderRect.Right - rightW, borderRect.Top, rightW, borderRect.Height);
+                    var rect = new RectF(borderRect.Right - rightW, borderRect.Top,
+                                         rightW, borderRect.Height);
                     target.FillRect(rect, BrushInfo.Solid(color));
                 }
             }
@@ -626,7 +726,8 @@ namespace Rend.Rendering.Internal
                 CssColor color = style.BorderBottomColor;
                 if (color.A > 0)
                 {
-                    var rect = new RectF(borderRect.Left, borderRect.Bottom - bottomW, borderRect.Width, bottomW);
+                    var rect = new RectF(borderRect.Left, borderRect.Bottom - bottomW,
+                                         borderRect.Width, bottomW);
                     target.FillRect(rect, BrushInfo.Solid(color));
                 }
             }
@@ -637,7 +738,8 @@ namespace Rend.Rendering.Internal
                 CssColor color = style.BorderLeftColor;
                 if (color.A > 0)
                 {
-                    var rect = new RectF(borderRect.Left, borderRect.Top, leftW, borderRect.Height);
+                    var rect = new RectF(borderRect.Left, borderRect.Top,
+                                         leftW, borderRect.Height);
                     target.FillRect(rect, BrushInfo.Solid(color));
                 }
             }

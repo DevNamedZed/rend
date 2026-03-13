@@ -567,7 +567,7 @@ namespace Rend.Layout.Internal
             float hi = contentHeight;
 
             // Binary search: find minimum height where content fits with line-level splitting
-            for (int iter = 0; iter < 20 && hi - lo > 0.5f; iter++)
+            for (int iter = 0; iter < 40 && hi - lo > 0.01f; iter++)
             {
                 float mid = (lo + hi) * 0.5f;
                 if (FitsInColumnsWithSplitting(columnBox, columnCount, mid))
@@ -580,8 +580,8 @@ namespace Rend.Layout.Internal
                 }
             }
 
-            // Add a small epsilon to avoid edge-case rounding issues
-            return hi + 0.5f;
+            // Add minimal epsilon to avoid edge-case rounding issues
+            return hi + 0.01f;
         }
 
         /// <summary>
@@ -734,31 +734,6 @@ namespace Rend.Layout.Internal
                 {
                     float lineBottom = line.Y + line.Height - box.ContentRect.Y;
                     if (lineBottom > height) height = lineBottom;
-                }
-            }
-            return height;
-        }
-
-        /// <summary>
-        /// Calculates the total margin-box height of block children with proper margin collapsing.
-        /// This gives the true content extent that must be distributed across columns.
-        /// </summary>
-        private static float CalculateMarginBoxHeight(LayoutBox box)
-        {
-            float height = 0;
-            float prevMB = 0;
-            foreach (var child in box.Children)
-            {
-                float mc = (height > 0) ? Math.Min(prevMB, child.MarginTop) : 0;
-                float childVisH = child.BorderRect.Height + child.MarginTop - mc;
-                height += childVisH + child.MarginBottom;
-                prevMB = child.MarginBottom;
-            }
-            if (box.LineBoxes != null)
-            {
-                foreach (var line in box.LineBoxes)
-                {
-                    height += line.Height;
                 }
             }
             return height;

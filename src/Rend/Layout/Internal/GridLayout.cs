@@ -583,6 +583,10 @@ namespace Rend.Layout.Internal
 
                     item.Box.ContentRect = new RectF(0, 0, contentWidth, 0);
 
+                    // Set parent reference before layout so margin collapsing
+                    // can detect that this box is a grid item (establishes BFC).
+                    item.Box.Parent = parent;
+
                     // Propagate parent grid context so nested subgrids can inherit tracks.
                     // Save and restore to avoid leaking context to sibling items.
                     var savedParentGridCtx = context.ParentGridContext;

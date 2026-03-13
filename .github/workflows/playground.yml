@@ -6,7 +6,7 @@ on:
     paths:
       - 'playground/**'
       - 'src/**'
-      - 'conformance/results/**'
+      - 'conformance/**'
   workflow_dispatch:
 
 permissions:
@@ -19,7 +19,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  visual-regression:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build
+        run: dotnet build conformance/Rend.VisualRegression/Rend.VisualRegression.csproj --configuration Release
+
+      - name: Run visual regression tests
+        run: dotnet run --project conformance/Rend.VisualRegression/Rend.VisualRegression.csproj --configuration Release
+        continue-on-error: true
+
+      - name: Upload visual regression results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-regression-results
+          path: conformance/Rend.VisualRegression/results/
+          retention-days: 30
+
   deploy:
+    needs: visual-regression
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -45,6 +73,12 @@ jobs:
           dotnet clean playground/Rend.Playground/Rend.Playground.csproj -c Release
           dotnet publish playground/Rend.Playground/Rend.Playground.csproj -c Release -o release
 
+      - name: Download visual regression results
+        uses: actions/download-artifact@v4
+        with:
+          name: visual-regression-results
+          path: visual-regression-results
+
       # Blazor WASM on GitHub Pages needs .nojekyll, 404.html, and correct base href
       - name: Prepare for GitHub Pages
         run: |
@@ -52,10 +86,9 @@ jobs:
           REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
           sed -i "s|<base href=\"/\"|<base href=\"/${REPO_NAME}/\"|g" release/wwwroot/index.html
           cp release/wwwroot/index.html release/wwwroot/404.html
-          # Include visual regression report if it exists
-          if [ -f conformance/results/report.html ]; then
-            cp conformance/results/report.html release/wwwroot/report.html
-          fi
+          cp visual-regression-results/report.html release/wwwroot/report.html
+          cp visual-regression-results/results.json release/wwwroot/results.json
+          cp -r visual-regression-results/resources release/wwwroot/resources
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

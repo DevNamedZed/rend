@@ -67,10 +67,14 @@ namespace Rend.Layout.Internal
                 cursorX = startX;
             }
 
+            // CSS 2.1 §10.8.1: The "strut" — an invisible inline box with the parent's
+            // font and line-height that establishes the minimum line-box height.
+            ComputeStrut(parent, context.TextMeasurer, out float strutLineHeight, out float strutBaseline);
+
             var lineBoxes = new List<LineBox>();
             var currentLine = new LineBox { X = startX, Y = cursorY, Width = containingWidth };
-            float maxLineHeight = 0;
-            float lineBaseline = 0;
+            float maxLineHeight = strutLineHeight;
+            float lineBaseline = strutBaseline;
 
             // ::first-letter tracking
             bool firstLetterProcessed = styledElement.FirstLetterStyle == null;
@@ -1352,8 +1356,7 @@ namespace Rend.Layout.Internal
 
             currentLine = new LineBox { X = startX, Y = cursorY, Width = containingWidth };
             cursorX = startX;
-            maxLineHeight = 0;
-            lineBaseline = 0;
+            ComputeStrut(parent, context?.TextMeasurer, out maxLineHeight, out lineBaseline);
         }
 
         private static void WrapTextSimple(
@@ -1382,8 +1385,7 @@ namespace Rend.Layout.Internal
                     cursorY += currentLine.Height;
                     currentLine = new LineBox { X = startX, Y = cursorY, Width = containingWidth };
                     cursorX = startX;
-                    maxLineHeight = 0;
-                    lineBaseline = 0;
+                    ComputeStrut(parent, null, out maxLineHeight, out lineBaseline);
                     word = word.TrimStart();
                     wordWidth = word.Length * charWidth;
                 }
@@ -1535,8 +1537,7 @@ namespace Rend.Layout.Internal
                 cursorY += currentLine.Height;
                 currentLine = new LineBox { X = startX, Y = cursorY, Width = containingWidth };
                 cursorX = startX;
-                maxLineHeight = 0;
-                lineBaseline = 0;
+                ComputeStrut(parent, context.TextMeasurer, out maxLineHeight, out lineBaseline);
 
                 // Place the backtracked trailing word on the new line
                 if (overflowFrag != null)
@@ -1996,6 +1997,61 @@ namespace Rend.Layout.Internal
         {
             if (height > maxLineHeight) maxLineHeight = height;
             if (baseline > lineBaseline) lineBaseline = baseline;
+        }
+
+        /// <summary>
+        /// CSS 2.1 §10.8.1: Compute the strut (invisible inline box with parent's font/line-height)
+        /// that establishes the minimum line-box height.
+        /// </summary>
+        private static void ComputeStrut(LayoutBox parent, TextMeasurer? textMeasurer,
+            out float strutLineHeight, out float strutBaseline)
+        {
+            var se = parent.StyledNode as StyledElement;
+            if (se == null)
+            {
+                strutLineHeight = 0;
+                strutBaseline = 0;
+                return;
+            }
+
+            var style = se.Style;
+            float fontSize = style.FontSize;
+            float lh = style.LineHeight;
+            float ascent = fontSize * 0.8f;
+            bool isNormal = float.IsNaN(lh) || lh == 0;
+
+            if (lh < 0)
+            {
+                lh = -lh * fontSize;
+            }
+            else if (isNormal)
+            {
+                lh = fontSize * 1.2f;
+            }
+
+            if (textMeasurer != null)
+            {
+                var fd = new FontDescriptor(
+                    style.FontFamilies,
+                    style.FontWeight,
+                    style.FontStyle,
+                    FontDescriptor.StretchToPercentage(style.FontStretch));
+                ascent = textMeasurer.GetAscent(fd, fontSize);
+                if (isNormal)
+                {
+                    float metricsLH = textMeasurer.GetNormalLineHeight(fd, fontSize);
+                    if (!float.IsNaN(metricsLH) && metricsLH > 0)
+                    {
+                        lh = metricsLH;
+                    }
+                }
+                float descent = textMeasurer.GetDescent(fd, fontSize);
+                float contentArea = ascent + descent;
+                ascent += (lh - contentArea) / 2f;
+            }
+
+            strutLineHeight = lh;
+            strutBaseline = ascent;
         }
 
         private static void FinalizeLineBox(LineBox line, float height, float baseline, CssTextAlign textAlign,

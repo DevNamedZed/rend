@@ -481,22 +481,82 @@ namespace Rend.Layout.Internal
                             contentMain, contentCross);
                     }
 
+                    // Set parent reference before layout so margin collapsing
+                    // can detect that this box is a flex item (establishes BFC).
+                    box.Parent = parent;
+
                     // Layout item contents.
                     // For anonymous text items (which already have line boxes from initial
                     // inline layout), skip re-layout but offset line boxes to match the
                     // positioned ContentRect. Re-running IFC would use ContentRect.X as
                     // startX, double-counting the flex offset.
+                    // However, if flex-shrink reduced the main size, text must re-wrap.
                     if (box.LineBoxes != null && box.LineBoxes.Count > 0)
                     {
-                        // Offset existing line boxes to match the new ContentRect position
-                        float lbDx = box.ContentRect.X;
-                        float lbDy = box.ContentRect.Y;
-                        if (lbDx != 0 || lbDy != 0)
+                        // Check if the resolved width differs from the original layout width —
+                        // if so, text needs to re-wrap at the new constrained width.
+                        bool needsRelayout = false;
+                        if (!isColumn)
                         {
-                            for (int lbi = 0; lbi < box.LineBoxes.Count; lbi++)
+                            float origWidth = 0;
+                            for (int lb = 0; lb < box.LineBoxes.Count; lb++)
                             {
-                                box.LineBoxes[lbi].X += lbDx;
-                                box.LineBoxes[lbi].Y += lbDy;
+                                float lw = 0;
+                                for (int f = 0; f < box.LineBoxes[lb].Fragments.Count; f++)
+                                {
+                                    lw += box.LineBoxes[lb].Fragments[f].Width;
+                                }
+                                if (lw > origWidth) origWidth = lw;
+                            }
+                            if (contentMain < origWidth - 0.5f)
+                            {
+                                needsRelayout = true;
+                            }
+                        }
+
+                        if (needsRelayout)
+                        {
+                            // Clear line boxes and re-layout with constrained width.
+                            // Save ContentRect position, then reset for IFC layout.
+                            float savedX = box.ContentRect.X;
+                            float savedY = box.ContentRect.Y;
+                            box.LineBoxes.Clear();
+                            box.ClearChildren();
+                            box.ContentRect = new RectF(0, 0, contentMain, 0);
+                            var savedFloatCtx2 = context.FloatContext;
+                            context.FloatContext = null;
+                            InlineFormattingContext.Layout(box, context);
+                            context.FloatContext = savedFloatCtx2;
+                            // Recalculate height from re-wrapped line boxes
+                            float newHeight = 0;
+                            if (box.LineBoxes != null && box.LineBoxes.Count > 0)
+                            {
+                                var lastLb = box.LineBoxes[box.LineBoxes.Count - 1];
+                                newHeight = lastLb.Y + lastLb.Height;
+                            }
+                            box.ContentRect = new RectF(savedX, savedY, contentMain, newHeight);
+                            // Offset line boxes to final position
+                            if (savedX != 0 || savedY != 0)
+                            {
+                                for (int lbi = 0; lbi < box.LineBoxes!.Count; lbi++)
+                                {
+                                    box.LineBoxes[lbi].X += savedX;
+                                    box.LineBoxes[lbi].Y += savedY;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Offset existing line boxes to match the new ContentRect position
+                            float lbDx = box.ContentRect.X;
+                            float lbDy = box.ContentRect.Y;
+                            if (lbDx != 0 || lbDy != 0)
+                            {
+                                for (int lbi = 0; lbi < box.LineBoxes.Count; lbi++)
+                                {
+                                    box.LineBoxes[lbi].X += lbDx;
+                                    box.LineBoxes[lbi].Y += lbDy;
+                                }
                             }
                         }
                     }
@@ -518,6 +578,12 @@ namespace Rend.Layout.Internal
                     else if (float.IsNaN(item.Style.Height))
                     {
                         contentCross = CalculateAutoHeight(box);
+                        // Replaced elements (form controls, images) have intrinsic cross size
+                        if (contentCross <= 0 && box.StyledNode is StyledElement stEl
+                            && ReplacedElementLayout.IsReplaced(stEl))
+                        {
+                            contentCross = ReplacedElementLayout.GetFormControlIntrinsicHeight(stEl);
+                        }
                         box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y,
                                                     box.ContentRect.Width, contentCross);
                     }
@@ -884,6 +950,31 @@ namespace Rend.Layout.Internal
                     }
                     return size;
                 }
+            }
+
+            // Replaced elements (img, input, select, textarea, etc.) have intrinsic dimensions.
+            // Use those instead of trial layout.
+            if (ReplacedElementLayout.IsReplaced(element))
+            {
+                float intrW = ReplacedElementLayout.GetFormControlIntrinsicWidth(element);
+                float intrH = ReplacedElementLayout.GetFormControlIntrinsicHeight(element);
+                if (element.TagName == "img" || element.TagName == "svg")
+                {
+                    // For images, check data URI or attributes
+                    if (ReplacedElementLayout.TryGetDataUriDimensions(element, out float dw, out float dh))
+                    {
+                        intrW = dw;
+                        intrH = dh;
+                    }
+                    else
+                    {
+                        string widthAttr = element.GetAttribute("width") ?? "";
+                        string heightAttr = element.GetAttribute("height") ?? "";
+                        if (float.TryParse(widthAttr, out float aw)) { intrW = aw; }
+                        if (float.TryParse(heightAttr, out float ah)) { intrH = ah; }
+                    }
+                }
+                return isColumn ? intrH : intrW;
             }
 
             // Auto: measure content size via trial layout

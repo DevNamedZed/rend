@@ -74,14 +74,12 @@ jobs:
         run: dotnet run --project conformance/Rend.VisualRegression/Rend.VisualRegression.csproj --configuration Release
         continue-on-error: true
 
-      - name: Upload visual regression report
+      - name: Upload visual regression results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: visual-regression-report
-          path: |
-            conformance/Rend.VisualRegression/results/report.html
-            conformance/Rend.VisualRegression/results/results.json
+          name: visual-regression-results
+          path: conformance/Rend.VisualRegression/results/
           retention-days: 30
 
       - name: Upload full visual regression output

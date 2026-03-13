@@ -22,15 +22,17 @@ class Program
         Console.WriteLine();
 
         // Create output directories:
-        //   output/          — per-run working directory for images, layout JSON, etc.
-        //   results/         — latest report.html + results.json (checked in)
-        //   results/history/ — timestamped copies of report + results (gitignored)
+        //   output/{runId}/            — per-run output (report + resources/)
+        //   output/{runId}/resources/  — images, layout JSON, test HTML
+        //   results/                   — latest run copy (self-contained for GH Pages)
+        //   results/history/{runId}/   — archived report + results.json (lightweight)
         var projectRoot = FindProjectRoot();
         var runId = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
         var outputDir = Path.Combine(projectRoot, "output", runId);
+        var resourcesDir = Path.Combine(outputDir, "resources");
         var resultsDir = Path.Combine(projectRoot, "results");
         var historyDir = Path.Combine(resultsDir, "history", runId);
-        Directory.CreateDirectory(outputDir);
+        Directory.CreateDirectory(resourcesDir);
         Directory.CreateDirectory(resultsDir);
         Directory.CreateDirectory(historyDir);
 
@@ -164,7 +166,7 @@ class Program
             async (testCase, ct) =>
             {
                 var res = renderResources.Value;
-                var result = await RunTest(testCase, browserPool, fontProvider, res.shaper, res.mapper, outputDir);
+                var result = await RunTest(testCase, browserPool, fontProvider, res.shaper, res.mapper, resourcesDir);
                 results.Add(result);
             });
 
@@ -185,10 +187,10 @@ class Program
         var jsonPath = Path.Combine(outputDir, "results.json");
         WriteResultsJson(sortedResults, jsonPath, runId, totalSw.Elapsed);
 
-        // Generate HTML report.
+        // Generate HTML report — all reports use "resources/" prefix.
         Console.WriteLine();
         var reportPath = Path.Combine(outputDir, "report.html");
-        ReportGenerator.Generate(sortedResults, reportPath);
+        ReportGenerator.Generate(sortedResults, reportPath, "resources/");
 
         double avgDiff = sortedResults.Where(r => r.Outcome != ComparisonOutcome.Error)
             .Select(r => r.DiffPercentage)
@@ -202,13 +204,14 @@ class Program
         Console.WriteLine($"Results: {sortedResults.Count} tests, {passCount} passed, {failCount} failed, {errorCount} errors, avg diff {avgDiff:F4}%");
         Console.WriteLine($"Duration: {totalSw.Elapsed.TotalSeconds:F1}s");
 
-        // Copy report and results to results/ (latest, for check-in)
+        // Copy self-contained output to results/ (latest — for CI publishing / GH Pages).
         var latestReportPath = Path.Combine(resultsDir, "report.html");
         var latestJsonPath = Path.Combine(resultsDir, "results.json");
         File.Copy(reportPath, latestReportPath, overwrite: true);
         File.Copy(jsonPath, latestJsonPath, overwrite: true);
+        CopyDirectory(resourcesDir, Path.Combine(resultsDir, "resources"));
 
-        // Copy to results/history/{runId}/ for archive
+        // Archive lightweight copy to history (report + results.json only, no resources).
         File.Copy(reportPath, Path.Combine(historyDir, "report.html"), overwrite: true);
         File.Copy(jsonPath, Path.Combine(historyDir, "results.json"), overwrite: true);
 
@@ -227,7 +230,7 @@ class Program
         Rend.Fonts.IFontProvider fontProvider,
         Rend.Output.Image.SkiaTextShaper textShaper,
         Rend.Output.Image.SkiaFontMapper fontMapper,
-        string outputDir)
+        string resourcesDir)
     {
         var sw = Stopwatch.StartNew();
         var result = new ComparisonResult
@@ -275,7 +278,7 @@ class Program
                             WriteIndented = true,
                             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                         });
-                        var layoutPath = Path.Combine(outputDir, $"{testCase.Id}-chrome-layout.json");
+                        var layoutPath = Path.Combine(resourcesDir, $"{testCase.Id}-chrome-layout.json");
                         File.WriteAllText(layoutPath, layoutJson);
                         result.ChromeLayoutPath = layoutPath;
                     }
@@ -296,9 +299,13 @@ class Program
                 });
             }
 
-            var chromePath = Path.Combine(outputDir, $"{testCase.Id}-chrome.png");
+            var chromePath = Path.Combine(resourcesDir, $"{testCase.Id}-chrome.png");
             File.WriteAllBytes(chromePath, chromePng);
             result.ChromeImagePath = chromePath;
+
+            // Write test HTML for report lightbox
+            var htmlPath = Path.Combine(resourcesDir, $"{testCase.Id}.html");
+            File.WriteAllText(htmlPath, html);
 
             // --- Rend render ---
             byte[] rendPng;
@@ -328,7 +335,7 @@ class Program
                             WriteIndented = true,
                             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                         });
-                        var rendLayoutPath = Path.Combine(outputDir, $"{testCase.Id}-rend-layout.json");
+                        var rendLayoutPath = Path.Combine(resourcesDir, $"{testCase.Id}-rend-layout.json");
                         File.WriteAllText(rendLayoutPath, rendLayoutJson);
                         result.RendLayoutPath = rendLayoutPath;
                     }
@@ -348,7 +355,7 @@ class Program
                 return result;
             }
 
-            var rendPath = Path.Combine(outputDir, $"{testCase.Id}-rend.png");
+            var rendPath = Path.Combine(resourcesDir, $"{testCase.Id}-rend.png");
             File.WriteAllBytes(rendPath, rendPng);
             result.RendImagePath = rendPath;
 
@@ -364,7 +371,7 @@ class Program
 
             if (cmpResult.DiffPng != null)
             {
-                var diffPath = Path.Combine(outputDir, $"{testCase.Id}-diff.png");
+                var diffPath = Path.Combine(resourcesDir, $"{testCase.Id}-diff.png");
                 File.WriteAllBytes(diffPath, cmpResult.DiffPng);
                 result.DiffImagePath = diffPath;
             }
@@ -469,6 +476,21 @@ class Program
         catch { }
 
         return collection;
+    }
+
+    private static void CopyDirectory(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            File.Copy(file, Path.Combine(destDir, Path.GetFileName(file)), overwrite: true);
+        }
+
+        foreach (var subDir in Directory.GetDirectories(sourceDir))
+        {
+            CopyDirectory(subDir, Path.Combine(destDir, Path.GetFileName(subDir)));
+        }
     }
 
     private static bool IsNativeLibraryFailure(Exception ex)

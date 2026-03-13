@@ -210,8 +210,19 @@ namespace Rend.Rendering.Internal
             // Chrome's native theme draws on the border rect (the full control area)
             RectF borderRect = box.BorderRect;
 
-            // White background
-            target.FillRect(borderRect, BrushInfo.Solid(CssColor.White));
+            // Use CSS background-color if author-specified, else white (native theme default).
+            // BackgroundPainter may have already painted it, but for form controls the native
+            // theme paints on top — so we need to use the correct color here.
+            CssColor bgColor = CssColor.White;
+            if (box.StyledNode?.Style != null)
+            {
+                CssColor cssBg = box.StyledNode.Style.BackgroundColor;
+                if (cssBg.A > 0)
+                {
+                    bgColor = cssBg;
+                }
+            }
+            target.FillRect(borderRect, BrushInfo.Solid(bgColor));
 
             // 1px stroke border at 0.5px inset (matches Chrome native_theme_base.cc)
             // skrect.inset(0.5f, 0.5f); canvas->drawRect(skrect, stroke_flags);
@@ -427,23 +438,45 @@ namespace Rend.Rendering.Internal
             RectF rect = box.ContentRect;
             RectF borderRect = box.BorderRect;
 
-            // Chrome native theme: white background + 1px stroke border
-            target.FillRect(borderRect, BrushInfo.Solid(CssColor.White));
+            // Use CSS background-color if author-specified, else white (native theme default).
+            CssColor selectBg = CssColor.White;
+            if (box.StyledNode?.Style != null)
+            {
+                CssColor cssBg = box.StyledNode.Style.BackgroundColor;
+                if (cssBg.A > 0)
+                {
+                    selectBg = cssBg;
+                }
+            }
+            target.FillRect(borderRect, BrushInfo.Solid(selectBg));
             var strokeRect = new RectF(borderRect.X + 0.5f, borderRect.Y + 0.5f,
                                         borderRect.Width - 1f, borderRect.Height - 1f);
             target.StrokeRect(strokeRect, new PenInfo(BorderColor, 1f));
 
-            // Find first <option> text
+            // Find selected <option> text (or first option as fallback)
             string displayText = "";
+            string firstOptionText = "";
             var child = element.Element.FirstChild;
             while (child != null)
             {
                 if (child is Html.Element optionElement && optionElement.TagName == "option")
                 {
-                    displayText = optionElement.TextContent?.Trim() ?? "";
-                    break;
+                    string optText = optionElement.TextContent?.Trim() ?? "";
+                    if (string.IsNullOrEmpty(firstOptionText))
+                    {
+                        firstOptionText = optText;
+                    }
+                    if (optionElement.GetAttribute("selected") != null)
+                    {
+                        displayText = optText;
+                        break;
+                    }
                 }
                 child = child.NextSibling;
+            }
+            if (string.IsNullOrEmpty(displayText))
+            {
+                displayText = firstOptionText;
             }
 
             // Draw text (clip to content minus arrow area)
@@ -495,8 +528,17 @@ namespace Rend.Rendering.Internal
             RectF rect = box.ContentRect;
             RectF borderRect = box.BorderRect;
 
-            // Chrome native theme: white background + 1px stroke border
-            target.FillRect(borderRect, BrushInfo.Solid(CssColor.White));
+            // Use CSS background-color if author-specified, else white (native theme default).
+            CssColor textareaBg = CssColor.White;
+            if (box.StyledNode?.Style != null)
+            {
+                CssColor cssBg = box.StyledNode.Style.BackgroundColor;
+                if (cssBg.A > 0)
+                {
+                    textareaBg = cssBg;
+                }
+            }
+            target.FillRect(borderRect, BrushInfo.Solid(textareaBg));
             var strokeRect = new RectF(borderRect.X + 0.5f, borderRect.Y + 0.5f,
                                         borderRect.Width - 1f, borderRect.Height - 1f);
             target.StrokeRect(strokeRect, new PenInfo(BorderColor, 1f));
@@ -514,25 +556,62 @@ namespace Rend.Rendering.Internal
                 // For Courier New at 13.333px: ascent ≈ 11px (from WinAscent)
                 float textY = rect.Y + 11f;
 
-                // Split content into lines and draw each
-                string[] lines = content.Split('\n');
-                for (int i = 0; i < lines.Length; i++)
-                {
-                    if (textY + FormFontSize > rect.Y + rect.Height)
-                        break; // Stop if text overflows
+                // Word-wrap and draw text lines
+                // Textarea uses monospace font; Chrome wraps at character boundary
+                // that fits within the content area width.
+                float charWidth = 8.001f; // HarfBuzz Courier New 13.333px advance
+                int charsPerLine = (int)(rect.Width / charWidth);
+                if (charsPerLine < 1) { charsPerLine = 1; }
 
-                    string line = lines[i].TrimEnd('\r');
-                    if (line.Length > 0)
+                string[] hardLines = content.Split('\n');
+                var textStyle = new TextStyle
+                {
+                    Font = new FontDescriptor("monospace", 400f),
+                    FontSize = FormFontSize,
+                    Color = CssColor.Black
+                };
+
+                for (int i = 0; i < hardLines.Length; i++)
+                {
+                    string remaining = hardLines[i].TrimEnd('\r');
+                    // Wrap long lines at word boundaries (or character if no space)
+                    while (remaining.Length > 0)
                     {
-                        target.DrawText(line, textX, textY,
-                            new TextStyle
+                        if (textY + FormFontSize > rect.Y + rect.Height)
+                        {
+                            break;
+                        }
+
+                        string segment;
+                        if (remaining.Length <= charsPerLine)
+                        {
+                            segment = remaining;
+                            remaining = "";
+                        }
+                        else
+                        {
+                            // Find last space within charsPerLine
+                            int breakAt = remaining.LastIndexOf(' ', charsPerLine - 1);
+                            if (breakAt <= 0)
                             {
-                                Font = new FontDescriptor("monospace", 400f),
-                                FontSize = FormFontSize,
-                                Color = CssColor.Black
-                            });
+                                breakAt = charsPerLine;
+                            }
+                            segment = remaining.Substring(0, breakAt);
+                            remaining = remaining.Substring(breakAt).TrimStart(' ');
+                        }
+
+                        if (segment.Length > 0)
+                        {
+                            target.DrawText(segment, textX, textY, textStyle);
+                        }
+                        textY += lineHeight;
                     }
-                    textY += lineHeight;
+
+                    // Empty hard line still advances
+                    if (hardLines[i].TrimEnd('\r').Length == 0)
+                    {
+                        textY += lineHeight;
+                    }
                 }
 
                 target.PopClip();

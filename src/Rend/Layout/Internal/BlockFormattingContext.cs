@@ -613,6 +613,21 @@ namespace Rend.Layout.Internal
                     if (isFieldset && !legendHandled && childElement.TagName == "legend")
                     {
                         legendHandled = true;
+
+                        // WHATWG rendering: legend uses shrink-to-fit width (like fit-content),
+                        // not the full fieldset content width. Measure from line boxes or children.
+                        float legendFitWidth = contentWidth;
+                        if (float.IsNaN(childStyle.Width))
+                        {
+                            // auto width → shrink-to-fit
+                            float maxLineW = GetContentExtent(childBox);
+                            if (maxLineW > 0)
+                            {
+                                legendFitWidth = Math.Min(maxLineW, contentWidth);
+                            }
+                        }
+                        contentWidth = legendFitWidth;
+
                         float legendBorderBoxH = childBox.BorderTopWidth + childBox.PaddingTop
                             + contentHeight + childBox.PaddingBottom + childBox.BorderBottomWidth;
                         // Chrome positions the legend's top edge at the fieldset's border-box top

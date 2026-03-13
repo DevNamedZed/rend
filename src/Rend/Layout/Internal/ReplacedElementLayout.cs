@@ -400,6 +400,31 @@ namespace Rend.Layout.Internal
                 minW = DeferredPercent.Resolve(minW, containingWidth);
             }
 
+            // box-sizing: border-box — min/max height/width values include padding+border,
+            // but 'height' and 'width' here are content-box. Subtract padding+border so
+            // the comparison is in the same coordinate space.
+            if (style.BoxSizing == CssBoxSizing.BorderBox)
+            {
+                float hAdj = box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth;
+                float wAdj = box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth;
+                if (!float.IsNaN(minH))
+                {
+                    minH -= hAdj;
+                }
+                if (!float.IsNaN(maxH) && maxH > 0)
+                {
+                    maxH -= hAdj;
+                }
+                if (!float.IsNaN(minW))
+                {
+                    minW -= wAdj;
+                }
+                if (!float.IsNaN(maxW) && maxW > 0)
+                {
+                    maxW -= wAdj;
+                }
+            }
+
             if (!float.IsNaN(maxW) && maxW > 0 && width > maxW)
             {
                 width = maxW;
