@@ -23,10 +23,11 @@
     <PackageReference Include="HarfBuzzSharp.NativeAssets.WebAssembly" Version="7.3.0.2" />
   </ItemGroup>
 
-  <!-- HarfBuzzSharp.NativeAssets.WebAssembly doesn't add NativeFileReference for Blazor WASM (only Uno).
-       We must reference the static library manually so it gets linked into dotnet.native.wasm.
-       Match the emscripten version (3.1.34) and threading mode (st=single-threaded) used by SkiaSharp. -->
+  <!-- SkiaSharp and HarfBuzz NativeAssets.WebAssembly auto-detection can fail for Blazor WASM.
+       Reference the static libraries manually so they get linked into dotnet.native.wasm.
+       Match the emscripten version (3.1.34) and threading mode (st=single-threaded). -->
   <ItemGroup Condition="'$(UsingMicrosoftNETSdkBlazorWebAssembly)' == 'true'">
+    <NativeFileReference Include="$(NuGetPackageRoot)skiasharp.nativeassets.webassembly\3.116.1\buildTransitive\netstandard1.0\libSkiaSharp.a\3.1.34\st\libSkiaSharp.a" />
     <NativeFileReference Include="$(NuGetPackageRoot)harfbuzzsharp.nativeassets.webassembly\7.3.0.2\build\netstandard1.0\libHarfBuzzSharp.a\3.1.34\st\libHarfBuzzSharp.a" />
   </ItemGroup>
   <!-- Clean the custom publish output folder -->

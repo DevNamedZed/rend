@@ -71,7 +71,6 @@ watch:
 
 # Build and publish the playground WASM app (full native recompile)
 playground-build:
-    rm -rf playground/Rend.Playground/bin playground/Rend.Playground/obj playground/release
     {{dotnet}} publish playground/Rend.Playground/Rend.Playground.csproj -c Release -o playground/release
 
 # Quick republish playground (skips native recompile if wasm is cached)
