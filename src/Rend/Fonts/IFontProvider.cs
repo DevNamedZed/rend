@@ -29,5 +29,12 @@ namespace Rend.Fonts
         /// Scans a directory for font files and registers all found fonts.
         /// </summary>
         void RegisterFontDirectory(string directoryPath);
+
+        /// <summary>
+        /// Searches all registered fonts for one that contains the given Unicode code point.
+        /// Returns the raw font data bytes, or null if no registered font contains the character.
+        /// Used as a fallback when the system font manager cannot find a font for a character.
+        /// </summary>
+        byte[]? FindFontDataForCharacter(int codePoint);
     }
 }

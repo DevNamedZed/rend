@@ -98,6 +98,13 @@ namespace Rend
             // 7. Create or reuse text shaper
             var textShaper = _options.TextShaper ?? DefaultTextShaper.Value;
 
+            // Wire font provider into text shaper for character-level fallback
+            // (needed in WASM where SKFontManager has no system fonts)
+            if (textShaper is Text.HarfBuzzTextShaper harfBuzzShaper)
+            {
+                harfBuzzShaper.FallbackFontProvider = fontProvider;
+            }
+
             // 8. Layout
             progress?.Report(new RenderProgress(50, RenderStage.Layout, "Computing layout"));
             var layoutEngine = new LayoutEngine(fontProvider, textShaper);
@@ -232,6 +239,12 @@ namespace Rend
 
             // 7. Create or reuse text shaper
             var textShaper = _options.TextShaper ?? DefaultTextShaper.Value;
+
+            // Wire font provider into text shaper for character-level fallback
+            if (textShaper is Text.HarfBuzzTextShaper harfBuzzShaper2)
+            {
+                harfBuzzShaper2.FallbackFontProvider = fontProvider;
+            }
 
             // 8. Layout
             progress?.Report(new RenderProgress(50, RenderStage.Layout, "Computing layout"));

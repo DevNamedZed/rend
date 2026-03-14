@@ -23,6 +23,12 @@ namespace Rend.Text
         private static readonly Dictionary<string, byte[]> s_fallbackFontDataCache = new();
         private static readonly object s_fallbackLock = new();
 
+        /// <summary>
+        /// Optional font provider used as secondary fallback when SKFontManager cannot
+        /// find a system font for a missing character (e.g., in WASM environments).
+        /// </summary>
+        internal Fonts.IFontProvider? FallbackFontProvider { get; set; }
+
         /// <inheritdoc />
         public ShapedTextRun Shape(string text, byte[] fontData, float fontSize, string? language = null, string? script = null)
         {
@@ -138,15 +144,19 @@ namespace Rend.Text
                     : text[charIndex];
 
                 // Find a fallback typeface for this character.
-                using var fallbackTypeface = SKFontManager.Default.MatchCharacter(codepoint);
-                if (fallbackTypeface == null)
+                // Try system font manager first, then registered font collection.
+                byte[]? fallbackData = null;
+                using (var fallbackTypeface = SKFontManager.Default.MatchCharacter(codepoint))
                 {
-                    i2++;
-                    continue;
+                    if (fallbackTypeface != null)
+                    {
+                        fallbackData = GetFontDataFromTypeface(fallbackTypeface);
+                    }
                 }
-
-                // Get font data from the fallback typeface.
-                byte[]? fallbackData = GetFontDataFromTypeface(fallbackTypeface);
+                if (fallbackData == null && FallbackFontProvider != null)
+                {
+                    fallbackData = FallbackFontProvider.FindFontDataForCharacter(codepoint);
+                }
                 if (fallbackData == null)
                 {
                     i2++;

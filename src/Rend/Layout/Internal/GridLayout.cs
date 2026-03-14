@@ -587,6 +587,13 @@ namespace Rend.Layout.Internal
                     // can detect that this box is a grid item (establishes BFC).
                     item.Box.Parent = parent;
 
+                    // Grid items establish their own BFC (CSS Grid §6). Isolate the
+                    // float context so child IFC doesn't pick up the parent's floats
+                    // and misalign line boxes.
+                    var savedFloatCtx = context.FloatContext;
+                    context.FloatContext = new FloatContext(
+                        item.Box.ContentRect.X, item.Box.ContentRect.Width);
+
                     // Propagate parent grid context so nested subgrids can inherit tracks.
                     // Save and restore to avoid leaking context to sibling items.
                     var savedParentGridCtx = context.ParentGridContext;
@@ -603,6 +610,7 @@ namespace Rend.Layout.Internal
                     };
                     BlockFormattingContext.LayoutChildren(item.Box, context);
                     context.ParentGridContext = savedParentGridCtx;
+                    context.FloatContext = savedFloatCtx;
 
                     float contentHeight = DimensionResolver.ResolveHeight(item.StyledElement.Style, float.NaN, item.Box);
                     if (float.IsNaN(contentHeight))
@@ -913,6 +921,8 @@ namespace Rend.Layout.Internal
                         item.Box.ClearChildren();
                         item.Box.LineBoxes = null;
                         item.Box.ContentRect = new RectF(0, 0, finalWidth, finalHeight);
+                        var savedFloatCtx2 = context.FloatContext;
+                        context.FloatContext = new FloatContext(0, finalWidth);
                         var savedCtx = context.ParentGridContext;
                         context.ParentGridContext = new ParentGridContext
                         {
@@ -927,6 +937,7 @@ namespace Rend.Layout.Internal
                         };
                         BlockFormattingContext.LayoutChildren(item.Box, context);
                         context.ParentGridContext = savedCtx;
+                        context.FloatContext = savedFloatCtx2;
                     }
                     else if (itemDisplay == CssDisplay.Flex || itemDisplay == CssDisplay.InlineFlex)
                     {
@@ -935,7 +946,10 @@ namespace Rend.Layout.Internal
                         item.Box.ClearChildren();
                         item.Box.LineBoxes = null;
                         item.Box.ContentRect = new RectF(0, 0, finalWidth, finalHeight);
+                        var savedFloatCtx3 = context.FloatContext;
+                        context.FloatContext = new FloatContext(0, finalWidth);
                         BlockFormattingContext.LayoutChildren(item.Box, context);
+                        context.FloatContext = savedFloatCtx3;
                     }
                 }
 

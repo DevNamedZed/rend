@@ -741,7 +741,10 @@ namespace Rend.Layout.Internal
                                         {
                                             box.ClearChildren();
                                             box.LineBoxes?.Clear();
+                                            var savedFc = context.FloatContext;
+                                            context.FloatContext = null;
                                             BlockFormattingContext.LayoutChildren(box, context);
+                                            context.FloatContext = savedFc;
                                         }
                                     }
                                 }

@@ -7,11 +7,48 @@ using Rend.Style;
 namespace Rend.Layout.Internal
 {
     /// <summary>
-    /// Breaks a continuous layout into pages, respecting page-break properties,
-    /// orphans, widows, and page size/margins.
+    /// Post-layout paginator modeled on Chrome's LayoutNG block fragmentation.
+    /// Greedy fill: pack as much content as possible on each page, then break
+    /// at the best available candidate. Uses a 4-level break appeal system
+    /// matching CSS Fragmentation Level 3 §4.
+    ///
+    /// Break selection per page:
+    /// 1. Find the latest candidate at or below pageEnd (greedy)
+    /// 2. For good candidates (Perfect/ViolatingOrphansAndWidows): use if gap
+    ///    is small, otherwise slice at pageEnd for maximum fill
+    /// 3. For ViolatingBreakAvoid: backtrack to push the avoid section to the
+    ///    next page (if it fits on a fresh page), matching Chrome's behavior
+    /// 4. Slice at pageEnd as absolute last resort (no candidates at all)
     /// </summary>
     internal static class Paginator
     {
+        private enum BreakAppeal
+        {
+            LastResort = 0,
+            ViolatingBreakAvoid = 1,
+            ViolatingOrphansAndWidows = 2,
+            Perfect = 3
+        }
+
+        private const float SliceGapThreshold = 0.10f;
+
+        private readonly struct BreakCandidate : IComparable<BreakCandidate>
+        {
+            public readonly float Y;
+            public readonly BreakAppeal Appeal;
+
+            public BreakCandidate(float y, BreakAppeal appeal)
+            {
+                Y = y;
+                Appeal = appeal;
+            }
+
+            public int CompareTo(BreakCandidate other)
+            {
+                return Y.CompareTo(other.Y);
+            }
+        }
+
         public static List<LayoutPage> Paginate(LayoutBox rootBox, LayoutOptions options, PageStyleInfo pageStyle)
         {
             var pages = new List<LayoutPage>();
@@ -22,23 +59,20 @@ namespace Rend.Layout.Internal
 
             if (contentHeight <= 0)
             {
-                // Fallback: single page
                 pages.Add(new LayoutPage(pageWidth, pageHeight, rootBox) { PageIndex = 0 });
                 return pages;
             }
 
-            // Calculate total content height
             float totalHeight = CalculateTotalHeight(rootBox);
 
             if (totalHeight <= contentHeight)
             {
-                // Everything fits on one page
                 pages.Add(new LayoutPage(pageWidth, pageHeight, rootBox) { PageIndex = 0 });
                 return pages;
             }
 
-            // Multi-page: find break points
-            var breakPoints = FindBreakPoints(rootBox, contentHeight);
+            float bottomMargin = pageStyle.MarginBottom;
+            var breakPoints = FindBreakPoints(rootBox, contentHeight, bottomMargin);
 
             float documentStartY = rootBox.ContentRect.Y;
             float documentEndY = documentStartY + totalHeight;
@@ -49,13 +83,15 @@ namespace Rend.Layout.Internal
                 float startY = (i == 0) ? documentStartY : breakPoints[i - 1];
                 float endY = (i < breakPoints.Count) ? breakPoints[i] : documentEndY;
 
-                // Skip degenerate pages
-                if (endY - startY < 1f) continue;
+                if (endY - startY < 1f)
+                {
+                    continue;
+                }
 
                 float offsetY = pageStyle.MarginTop - startY;
-                float pageContentHeight = Math.Min(endY - startY, contentHeight);
+                float maxContentHeight = contentHeight + bottomMargin;
+                float pageContentHeight = Math.Min(endY - startY, maxContentHeight);
 
-                // Create a page box that contains the sliced content
                 var pageBox = new LayoutBox(null, BoxType.Block);
                 pageBox.ContentRect = new RectF(
                     pageStyle.MarginLeft,
@@ -77,10 +113,6 @@ namespace Rend.Layout.Internal
             return pages;
         }
 
-        /// <summary>
-        /// Returns the absolute Y coordinate of the bottom edge of the box and all its descendants.
-        /// BUG-030: Fixed to consistently use absolute Y coordinates throughout (not heights).
-        /// </summary>
         private static float CalculateAbsoluteBottom(LayoutBox box)
         {
             float bottom = box.BorderRect.Bottom;
@@ -104,30 +136,342 @@ namespace Rend.Layout.Internal
             return absBottom - absTop;
         }
 
-        private static List<float> FindBreakPoints(LayoutBox rootBox, float pageContentHeight)
+        private static List<float> FindBreakPoints(LayoutBox rootBox, float pageContentHeight, float bottomMargin)
         {
-            var breakPoints = new List<float>();
             float startY = rootBox.ContentRect.Y;
-            float currentPageEnd = startY + pageContentHeight;
+            float documentEndY = startY + CalculateTotalHeight(rootBox);
 
-            CollectBreakPoints(rootBox, breakPoints, ref currentPageEnd, pageContentHeight, startY);
+            var forcedBreaks = new List<float>();
+            CollectForcedBreaks(rootBox, forcedBreaks, startY);
+            forcedBreaks.Sort();
 
-            // Sort and deduplicate break points to prevent overlapping pages
-            breakPoints.Sort();
-            var deduped = new List<float>();
-            for (int i = 0; i < breakPoints.Count; i++)
+            var dedupedForced = new List<float>();
+            for (int i = 0; i < forcedBreaks.Count; i++)
             {
-                if (i == 0 || breakPoints[i] - deduped[deduped.Count - 1] > 1f)
+                if (i == 0 || forcedBreaks[i] - dedupedForced[dedupedForced.Count - 1] > 1f)
                 {
-                    deduped.Add(breakPoints[i]);
+                    dedupedForced.Add(forcedBreaks[i]);
                 }
             }
 
-            return deduped;
+            var sectionBounds = new List<(float Start, float End)>();
+            float sectionStart = startY;
+            for (int i = 0; i < dedupedForced.Count; i++)
+            {
+                sectionBounds.Add((sectionStart, dedupedForced[i]));
+                sectionStart = dedupedForced[i];
+            }
+            sectionBounds.Add((sectionStart, documentEndY));
+
+            var allBreaks = new List<float>();
+            foreach (var (secStart, secEnd) in sectionBounds)
+            {
+                float sectionHeight = secEnd - secStart;
+                if (sectionHeight <= pageContentHeight)
+                {
+                    if (secEnd < documentEndY)
+                    {
+                        allBreaks.Add(secEnd);
+                    }
+                    continue;
+                }
+
+                var sectionBreaks = FindSectionBreaks(rootBox, secStart, secEnd, pageContentHeight, bottomMargin);
+                foreach (float breakY in sectionBreaks)
+                {
+                    allBreaks.Add(breakY);
+                }
+
+                if (secEnd < documentEndY)
+                {
+                    allBreaks.Add(secEnd);
+                }
+            }
+
+            allBreaks.Sort();
+            var result = new List<float>();
+            for (int i = 0; i < allBreaks.Count; i++)
+            {
+                if (i == 0 || allBreaks[i] - result[result.Count - 1] > 1f)
+                {
+                    result.Add(allBreaks[i]);
+                }
+            }
+
+            return result;
         }
 
-        private static void CollectBreakPoints(LayoutBox box, List<float> breakPoints,
-                                                ref float currentPageEnd, float pageContentHeight, float startY)
+        private static List<float> FindSectionBreaks(LayoutBox rootBox, float sectionStart,
+            float sectionEnd, float pageContentHeight, float bottomMargin)
+        {
+            var candidates = new List<BreakCandidate>();
+            CollectBreakCandidates(rootBox, candidates, sectionStart, sectionEnd);
+            candidates.Sort();
+
+            var breaks = new List<float>();
+            float currentPageStart = sectionStart;
+
+            while (currentPageStart + pageContentHeight < sectionEnd - 0.5f)
+            {
+                float pageEnd = currentPageStart + pageContentHeight;
+                float breakY = SelectGreedyBreak(candidates, currentPageStart, pageEnd, pageContentHeight);
+
+                if (breakY <= currentPageStart + 0.5f)
+                {
+                    breaks.Add(pageEnd);
+                    currentPageStart = pageEnd;
+                }
+                else
+                {
+                    breaks.Add(breakY);
+                    currentPageStart = breakY;
+                }
+            }
+
+            if (breaks.Count > 0)
+            {
+                float lastBreak = breaks[breaks.Count - 1];
+                float remaining = sectionEnd - lastBreak;
+                if (remaining > 0 && remaining < pageContentHeight * 0.10f)
+                {
+                    breaks.RemoveAt(breaks.Count - 1);
+                }
+            }
+
+            return breaks;
+        }
+
+        /// <summary>
+        /// Selects the best break point within a page using greedy fill.
+        ///
+        /// Chrome always prefers a valid CSS break candidate over element
+        /// fragmentation (slicing). Our post-layout slicing clips content
+        /// without proper border/padding handling, so we should strongly
+        /// prefer candidates. Only slice as absolute last resort when no
+        /// candidates exist at all on the page.
+        ///
+        /// For good candidates (Perfect/ViolatingOrphansAndWidows):
+        ///   - Always use the latest (greediest) candidate
+        ///
+        /// For ViolatingBreakAvoid candidates:
+        ///   - Backtrack to the last good candidate on the page to push the
+        ///     avoid section to the next page (matching Chrome's behavior)
+        ///   - Only backtrack if the avoid section fits on a fresh page
+        ///   - If it doesn't fit, use the latest avoid candidate (progressive
+        ///     relaxation — violating avoid is better than slicing)
+        /// </summary>
+        private static float SelectGreedyBreak(List<BreakCandidate> candidates,
+            float pageStart, float pageEnd, float pageContentHeight)
+        {
+            float latestY = -1f;
+            BreakAppeal latestAppeal = BreakAppeal.LastResort;
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                float candidateY = candidates[i].Y;
+
+                if (candidateY <= pageStart + 0.5f)
+                {
+                    continue;
+                }
+                if (candidateY > pageEnd + 0.5f)
+                {
+                    break;
+                }
+
+                BreakAppeal appeal = candidates[i].Appeal;
+
+                if (candidateY > latestY + 0.5f)
+                {
+                    latestY = candidateY;
+                    latestAppeal = appeal;
+                }
+                else if (Math.Abs(candidateY - latestY) <= 0.5f && appeal > latestAppeal)
+                {
+                    latestAppeal = appeal;
+                }
+            }
+
+            // No candidates at all — slice at page boundary (absolute last resort).
+            if (latestY < 0f)
+            {
+                return pageEnd;
+            }
+
+            // Good appeal: use the latest candidate. Only slice when the gap
+            // exceeds the threshold — our post-layout slicing clips without
+            // proper borders/padding, so prefer candidates when possible.
+            if (latestAppeal >= BreakAppeal.ViolatingOrphansAndWidows)
+            {
+                float gap = pageEnd - latestY;
+                if (gap > pageContentHeight * SliceGapThreshold)
+                {
+                    return pageEnd;
+                }
+                return latestY;
+            }
+
+            // ViolatingBreakAvoid: the latest candidate is inside a break-inside:avoid
+            // section. Chrome pushes such sections to the next page when they fit on
+            // a fresh page. Backtrack to the last good candidate anywhere on this page.
+            float lastGoodY = -1f;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                float candidateY = candidates[i].Y;
+                if (candidateY <= pageStart + 0.5f)
+                {
+                    continue;
+                }
+                if (candidateY > pageEnd + 0.5f)
+                {
+                    break;
+                }
+
+                if (candidates[i].Appeal >= BreakAppeal.ViolatingOrphansAndWidows)
+                {
+                    if (candidateY > lastGoodY + 0.5f)
+                    {
+                        lastGoodY = candidateY;
+                    }
+                }
+            }
+
+            if (lastGoodY > 0f)
+            {
+                float avoidSectionEnd = FindNextGoodCandidateY(candidates, lastGoodY);
+                float avoidHeight;
+                if (avoidSectionEnd > 0f)
+                {
+                    avoidHeight = avoidSectionEnd - lastGoodY;
+                }
+                else
+                {
+                    avoidHeight = candidates[candidates.Count - 1].Y - lastGoodY;
+                }
+
+                if (avoidHeight <= pageContentHeight)
+                {
+                    return lastGoodY;
+                }
+            }
+
+            // Progressive relaxation: the avoid section is too large for a fresh
+            // page, or the entire page is inside an avoid section. Apply the
+            // slice-gap logic: if gap is large, slice at pageEnd for max fill.
+            float avoidGap = pageEnd - latestY;
+            if (avoidGap > pageContentHeight * SliceGapThreshold)
+            {
+                return pageEnd;
+            }
+            return latestY;
+        }
+
+        /// <summary>
+        /// Finds the next candidate with good appeal after the given Y position.
+        /// Searches the full candidates list (not bounded by pageEnd).
+        /// </summary>
+        private static float FindNextGoodCandidateY(List<BreakCandidate> candidates, float afterY)
+        {
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (candidates[i].Y <= afterY + 0.5f)
+                {
+                    continue;
+                }
+                if (candidates[i].Appeal >= BreakAppeal.ViolatingOrphansAndWidows)
+                {
+                    return candidates[i].Y;
+                }
+            }
+            return -1f;
+        }
+
+        private static void CollectBreakCandidates(LayoutBox box, List<BreakCandidate> candidates,
+            float sectionStart, float sectionEnd)
+        {
+            if (box.LineBoxes != null && box.LineBoxes.Count > 1)
+            {
+                var style = box.StyledNode?.Style;
+                int orphans = style != null ? Math.Max(1, style.Orphans) : 2;
+                int widows = style != null ? Math.Max(1, style.Widows) : 2;
+                int totalLines = box.LineBoxes.Count;
+                bool avoidInside = HasAvoidInsideAncestor(box);
+
+                for (int lineIndex = 0; lineIndex < totalLines - 1; lineIndex++)
+                {
+                    var lineBox = box.LineBoxes[lineIndex];
+                    float lineBottom = lineBox.Y + lineBox.Height;
+                    if (lineBottom <= sectionStart || lineBottom >= sectionEnd)
+                    {
+                        continue;
+                    }
+
+                    BreakAppeal appeal;
+                    if (avoidInside)
+                    {
+                        appeal = BreakAppeal.ViolatingBreakAvoid;
+                    }
+                    else
+                    {
+                        int linesAbove = lineIndex + 1;
+                        int linesBelow = totalLines - lineIndex - 1;
+                        if (linesAbove < orphans || linesBelow < widows)
+                        {
+                            appeal = BreakAppeal.ViolatingOrphansAndWidows;
+                        }
+                        else
+                        {
+                            appeal = BreakAppeal.Perfect;
+                        }
+                    }
+
+                    candidates.Add(new BreakCandidate(lineBottom, appeal));
+                }
+                return;
+            }
+
+            bool ancestorAvoidInside = ShouldAvoidBreak(box.StyledNode?.Style) || HasAvoidInsideAncestor(box);
+
+            for (int childIndex = 0; childIndex < box.Children.Count; childIndex++)
+            {
+                var child = box.Children[childIndex];
+                float childBottom = child.BorderRect.Bottom;
+
+                if (childBottom > sectionStart && childBottom < sectionEnd)
+                {
+                    BreakAppeal appeal = BreakAppeal.Perfect;
+
+                    if (ancestorAvoidInside)
+                    {
+                        appeal = BreakAppeal.ViolatingBreakAvoid;
+                    }
+                    else if (IsHeadingElement(child))
+                    {
+                        appeal = BreakAppeal.ViolatingOrphansAndWidows;
+                    }
+
+                    candidates.Add(new BreakCandidate(childBottom, appeal));
+                }
+
+                CollectBreakCandidates(child, candidates, sectionStart, sectionEnd);
+            }
+        }
+
+        private static bool HasAvoidInsideAncestor(LayoutBox box)
+        {
+            LayoutBox? current = box.Parent;
+            while (current != null)
+            {
+                if (ShouldAvoidBreak(current.StyledNode?.Style))
+                {
+                    return true;
+                }
+                current = current.Parent;
+            }
+            return false;
+        }
+
+        private static void CollectForcedBreaks(LayoutBox box, List<float> breaks, float startY)
         {
             for (int i = 0; i < box.Children.Count; i++)
             {
@@ -136,137 +480,38 @@ namespace Rend.Layout.Internal
                 float childTop = child.BorderRect.Top;
                 float childBottom = child.BorderRect.Bottom;
 
-                // Resolve effective break values: modern break-* overrides legacy page-break-*.
-                bool forceBreakBefore = ShouldForceBreak(style, before: true);
-                bool forceBreakAfter = ShouldForceBreak(style, before: false);
-                bool avoidBreakInside = ShouldAvoidBreak(style);
-
-                // Check break-before / page-break-before
-                if (forceBreakBefore && childTop > startY)
+                if (ShouldForceBreak(style, before: true) && childTop > startY)
                 {
-                    if (childTop < currentPageEnd)
-                    {
-                        breakPoints.Add(childTop);
-                        currentPageEnd = childTop + pageContentHeight;
-                    }
+                    breaks.Add(childTop);
                 }
 
-                // Check if child overflows current page
-                if (childBottom > currentPageEnd)
+                if (ShouldForceBreak(style, before: false))
                 {
-                    // Check orphans/widows for elements with multiple line boxes
-                    if (child.LineBoxes != null && child.LineBoxes.Count > 1)
-                    {
-                        float breakY = FindOrphansWidowsBreak(child, currentPageEnd, pageContentHeight, style);
-                        breakPoints.Add(breakY);
-                        currentPageEnd = breakY + pageContentHeight;
-                    }
-                    else if (avoidBreakInside)
-                    {
-                        // Try to keep together — break before if possible
-                        breakPoints.Add(childTop);
-                        currentPageEnd = childTop + pageContentHeight;
-                    }
-                    else if (child.Children.Count > 0)
-                    {
-                        // Has block children — find the best break point between them
-                        // instead of breaking at the raw page boundary (which clips text mid-line).
-                        float bestBreak = FindBestBreakInside(child, currentPageEnd);
-                        breakPoints.Add(bestBreak);
-                        currentPageEnd = bestBreak + pageContentHeight;
-                    }
-                    else
-                    {
-                        // Leaf element (image, empty box, single-line text) —
-                        // break at the page boundary. The element will be clipped on
-                        // this page and continue on the next page. Breaking BEFORE
-                        // the element would push it entirely off this page.
-                        breakPoints.Add(currentPageEnd);
-                        currentPageEnd += pageContentHeight;
-                    }
+                    breaks.Add(childBottom);
                 }
 
-                // Check break-after / page-break-after
-                if (forceBreakAfter)
-                {
-                    breakPoints.Add(childBottom);
-                    currentPageEnd = childBottom + pageContentHeight;
-                }
-
-                // Recurse into children
-                CollectBreakPoints(child, breakPoints, ref currentPageEnd, pageContentHeight, startY);
+                CollectForcedBreaks(child, breaks, startY);
             }
         }
 
-        /// <summary>
-        /// Finds the best break point inside a box near the page boundary.
-        /// Prefers breaking between block children, then between text lines.
-        /// Falls back to the page boundary if no better break is found.
-        /// This avoids clipping text mid-line and produces cleaner page breaks.
-        /// </summary>
-        private static float FindBestBreakInside(LayoutBox box, float pageEnd)
+        private static bool IsHeadingElement(LayoutBox box)
         {
-            // If box has line boxes, break between lines
-            if (box.LineBoxes != null && box.LineBoxes.Count > 0)
+            if (box.StyledNode is StyledElement element)
             {
-                for (int l = box.LineBoxes.Count - 1; l >= 0; l--)
-                {
-                    float lineBottom = box.LineBoxes[l].Y + box.LineBoxes[l].Height;
-                    if (lineBottom <= pageEnd)
-                        return lineBottom;
-                }
-                // No line fits — break at box top if it's before pageEnd
-                float top = box.BorderRect.Top;
-                return top < pageEnd ? top : pageEnd;
+                string tag = element.TagName;
+                return tag == "h1" || tag == "h2" || tag == "h3" ||
+                       tag == "h4" || tag == "h5" || tag == "h6";
             }
-
-            // Try to break between block children
-            float lastFittingBottom = -1;
-            for (int i = 0; i < box.Children.Count; i++)
-            {
-                var child = box.Children[i];
-                float childTop = child.BorderRect.Top;
-                float childBottom = child.BorderRect.Bottom;
-
-                if (childBottom <= pageEnd)
-                {
-                    // This child fits entirely — record as potential break point
-                    lastFittingBottom = childBottom;
-                }
-                else if (childTop < pageEnd)
-                {
-                    // This child straddles the page boundary — try to break inside it
-                    float innerBreak = FindBestBreakInside(child, pageEnd);
-                    if (innerBreak < pageEnd)
-                        return innerBreak;
-                    // Can't break inside this child — break at page boundary.
-                    // Don't fall back to lastFittingBottom as that would push this
-                    // child entirely to the next page even though it's partially visible.
-                    return pageEnd;
-                }
-                else
-                {
-                    // This child starts at or after pageEnd — break before it
-                    break;
-                }
-            }
-
-            // All children fit within the page — the overflow comes from the
-            // parent's padding/border/margin, not from any child. Break at pageEnd
-            // to show all content that fits, rather than breaking early at the
-            // last child's bottom (which would waste space and clip transforms).
-            return pageEnd;
+            return false;
         }
 
-        /// <summary>
-        /// Returns true if a forced page break should occur before or after the element.
-        /// Modern break-before/break-after overrides legacy page-break-before/page-break-after.
-        /// </summary>
         private static bool ShouldForceBreak(ComputedStyle? style, bool before)
         {
-            if (style == null) return false;
+            if (style == null)
+            {
+                return false;
+            }
 
-            // Modern property takes priority
             CssBreakValue breakVal = before ? style.BreakBefore : style.BreakAfter;
             if (breakVal != CssBreakValue.Auto)
             {
@@ -276,20 +521,17 @@ namespace Rend.Layout.Internal
                        breakVal == CssBreakValue.Right;
             }
 
-            // Fall back to legacy property
             CssPageBreak pageBreak = before ? style.PageBreakBefore : style.PageBreakAfter;
             return pageBreak == CssPageBreak.Always;
         }
 
-        /// <summary>
-        /// Returns true if break-inside should be avoided for the element.
-        /// Modern break-inside overrides legacy page-break-inside.
-        /// </summary>
         private static bool ShouldAvoidBreak(ComputedStyle? style)
         {
-            if (style == null) return false;
+            if (style == null)
+            {
+                return false;
+            }
 
-            // Modern property takes priority
             CssBreakValue breakInside = style.BreakInside;
             if (breakInside != CssBreakValue.Auto)
             {
@@ -298,76 +540,9 @@ namespace Rend.Layout.Internal
                        breakInside == CssBreakValue.AvoidColumn;
             }
 
-            // Fall back to legacy property
             return style.PageBreakInside == CssPageBreak.Avoid;
         }
 
-        /// <summary>
-        /// Finds the best break point inside an element with line boxes,
-        /// respecting CSS orphans and widows properties.
-        /// </summary>
-        private static float FindOrphansWidowsBreak(LayoutBox box, float currentPageEnd,
-            float pageContentHeight, ComputedStyle? style)
-        {
-            var lineBoxes = box.LineBoxes!;
-            int totalLines = lineBoxes.Count;
-            int orphans = style != null ? Math.Max(1, style.Orphans) : 2;
-            int widows = style != null ? Math.Max(1, style.Widows) : 2;
-
-            // Find how many lines fit on the current page
-            int linesFitting = 0;
-            for (int l = 0; l < totalLines; l++)
-            {
-                float lineBottom = lineBoxes[l].Y + lineBoxes[l].Height;
-                if (lineBottom <= currentPageEnd)
-                    linesFitting++;
-                else
-                    break;
-            }
-
-            // Remaining lines go to the next page
-            int linesRemaining = totalLines - linesFitting;
-
-            // Enforce orphans: at least 'orphans' lines must stay on the current page
-            if (linesFitting < orphans)
-            {
-                // Not enough lines on current page — break before this element entirely
-                return box.BorderRect.Top;
-            }
-
-            // Enforce widows: at least 'widows' lines must go to the next page
-            if (linesRemaining > 0 && linesRemaining < widows)
-            {
-                // Move lines from current page to satisfy widows
-                int linesToMove = widows - linesRemaining;
-                int adjustedFitting = linesFitting - linesToMove;
-
-                // But don't violate orphans
-                if (adjustedFitting >= orphans && adjustedFitting > 0)
-                {
-                    linesFitting = adjustedFitting;
-                }
-                else
-                {
-                    // Can't satisfy both — break before element
-                    return box.BorderRect.Top;
-                }
-            }
-
-            // Break after the last fitting line
-            if (linesFitting > 0 && linesFitting < totalLines)
-            {
-                return lineBoxes[linesFitting - 1].Y + lineBoxes[linesFitting - 1].Height;
-            }
-
-            return currentPageEnd;
-        }
-
-        /// <summary>
-        /// Creates a page slice of the layout tree for a specific Y range.
-        /// Copies box properties and offsets Y coordinates into page-local space.
-        /// Line boxes are shared by reference with LineBoxOffsetY applied during painting.
-        /// </summary>
         private static LayoutBox CreatePageSlice(LayoutBox original, float startY, float endY, float offsetY)
         {
             var slice = new LayoutBox(original.StyledNode, original.BoxType);
@@ -405,7 +580,6 @@ namespace Rend.Layout.Internal
                 float childTop = child.BorderRect.Top;
                 float childBottom = child.BorderRect.Bottom;
 
-                // Include child if it overlaps this page's range
                 if (childBottom > startY && childTop < endY)
                 {
                     var childSlice = CreatePageSlice(child, startY, endY, offsetY);

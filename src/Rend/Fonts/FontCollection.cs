@@ -67,6 +67,23 @@ namespace Rend.Fonts
         }
 
         /// <inheritdoc />
+        public byte[]? FindFontDataForCharacter(int codePoint)
+        {
+            lock (_lock)
+            {
+                for (int i = 0; i < _entries.Count; i++)
+                {
+                    var entry = _entries[i];
+                    if (entry.HasGlyph(codePoint))
+                    {
+                        return entry.FontData;
+                    }
+                }
+            }
+            return null;
+        }
+
+        /// <inheritdoc />
         public void RegisterFont(byte[] fontData, string? familyNameOverride = null)
         {
             if (fontData == null) throw new ArgumentNullException(nameof(fontData));

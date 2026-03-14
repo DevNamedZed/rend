@@ -65,6 +65,18 @@ namespace Rend.Fonts
         }
 
         /// <summary>
+        /// Returns true if this font contains a glyph for the given Unicode code point.
+        /// </summary>
+        public bool HasGlyph(int codePoint)
+        {
+            if (_fontData != null)
+            {
+                return _fontData.GetGlyphId(codePoint) > 0;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Returns the advance width of the given code point at the specified font size, in pixels.
         /// Falls back to an average width estimate if the glyph is not found.
         /// </summary>

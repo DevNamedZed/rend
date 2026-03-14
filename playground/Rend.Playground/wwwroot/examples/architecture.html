@@ -15,7 +15,6 @@
     pre { background: #2d2d2d; color: #f8f8f2; padding: 16px; border-radius: 6px; font-family: 'Courier New', monospace; font-size: 11px; overflow: hidden; line-height: 1.5; }
     ul, ol { font-size: 12px; padding-left: 24px; }
     li { margin-bottom: 4px; }
-    .page-break { page-break-before: always; }
     .highlight { background: linear-gradient(to right, #fff9c4, #fff176); padding: 8px 12px; border-radius: 4px; font-size: 12px; }
     table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 11px; }
     th { background: #e8ecf8; padding: 8px; text-align: left; border: 1px solid #ccc; }
@@ -73,8 +72,6 @@
         full audit trails, temporal queries, and replay capabilities for disaster recovery.
     </div>
 
-    <div class='page-break'></div>
-
     <h2>3. Component Design</h2>
     <h3>3.1 Ingestion Service</h3>
     <p>The ingestion service accepts data via REST API, gRPC, and WebSocket connections.
@@ -115,8 +112,6 @@ public async Task&lt;IActionResult&gt; IngestEvent(EventPayload payload)
         <li>Materialized views are updated in read-optimized stores</li>
         <li>WebSocket push delivers real-time updates to connected dashboards</li>
     </ol>
-
-    <div class='page-break'></div>
 
     <h2>5. API Specification</h2>
     <pre>

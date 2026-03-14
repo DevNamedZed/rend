@@ -228,12 +228,9 @@ dialog {
     width: fit-content;
 }
 
-/* Print defaults: prevent awkward page breaks */
+/* Print defaults */
 @media print {
     img, svg { page-break-inside: avoid; }
-    h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }
-    table, figure, blockquote { page-break-inside: avoid; }
-    p { orphans: 2; widows: 2; }
 }
 ";
     }
