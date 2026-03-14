@@ -15,13 +15,25 @@ packages/
 
 ## Test output
 test-output/
+tmp_pdftest/
+tmp-render/
+BenchmarkDotNet.Artifacts/
+debug_flex.txt
+grid_debug.txt
 
 ## Visual regression — generated during build, not checked in
 conformance/Rend.VisualRegression/output/
 conformance/Rend.VisualRegression/results/
 
-## Playground publish output
+## Playground publish output and test artifacts
 playground/release/
+playground/**/examples/*-pages/
+playground/**/examples/*.pdf
+
+## Debug artifacts
+*.png
+!playground/**/*.png
+!conformance/**/*.png
 
 ## OS
 .DS_Store
