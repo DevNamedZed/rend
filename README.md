@@ -43,12 +43,37 @@ var options = new RenderOptions
 Render.ToPdf(html, output, options);
 ```
 
+### PDF Options
+
+```csharp
+using Rend.Pdf;
+
+var options = new RenderOptions
+{
+    PdfOptions = new PdfDocumentOptions
+    {
+        FontEmbedMode = FontEmbedMode.Subset, // Subset (default), Full, or None
+        Compression = PdfCompression.FlateFast, // FlateFast (default), Flate, FlateOptimal, or None
+    }
+};
+
+Render.ToPdf(html, output, options);
+```
+
+Font embed modes:
+
+| Mode | Speed | File Size | Use Case |
+|------|-------|-----------|----------|
+| `Subset` | Default | Smallest | Production documents with correct fonts |
+| `Full` | Faster | Larger | Skip subsetting when file size doesn't matter |
+| `None` | Fastest | Smallest | Maximum throughput, renders in Helvetica |
+
 ### Image Output
 
 ```csharp
 var options = new RenderOptions
 {
-    ImageFormat = "jpeg", // png, jpeg, webp
+    ImageFormat = ImageOutputFormat.Jpeg, // Png, Jpeg, Webp
     ImageQuality = 85,
     Dpi = 150f,
 };
@@ -261,18 +286,38 @@ doc.Save(stream);
 
 ### PDF Output
 
-- PDF 1.7 writer with TrueType and CFF/OpenType font subsetting
+- PDF 1.4–1.7 writer with TrueType and CFF/OpenType font subsetting
+- Configurable font embedding: Subset (used glyphs only), Full, or None (Standard14)
 - Bookmarks, clickable links, and document metadata
 - AcroForms: text fields, checkboxes, and dropdowns
 - Digital signatures using local PKCS#12 certificates or external `IPdfSigner` implementations
 - Content overlays: draw text and images onto existing PDFs
 - Encryption: RC4-128 and AES-128
+- PDF/A conformance (A1b, A2b, A3b) with ICC output intents
+- Linearization for fast web view
+- Object streams and cross-reference streams (PDF 1.5+)
 - ICC color profiles and XMP metadata
 
 ### Image Output
 
 - PNG, JPEG, and WebP via SkiaSharp
 - Configurable DPI
+
+## Performance
+
+Rend is benchmarked against [iText pdfHTML](https://itextpdf.com/products/itext-pdfhtml), the most widely used .NET HTML-to-PDF library.
+
+| Test | Rend | iText pdfHTML | Speed | Memory |
+|------|------|---------------|-------|--------|
+| Simple HTML | 1.17 ms / 498 KB | 10.98 ms / 29 MB | **9.4x faster** | **58x less** |
+| Styled HTML | 1.27 ms / 748 KB | 14.46 ms / 30 MB | **11.4x faster** | **41x less** |
+| Images | 1.42 ms / 912 KB | 22.08 ms / 35 MB | **15.5x faster** | **40x less** |
+| 50 Lines | 1.56 ms / 1.3 MB | 16.59 ms / 33 MB | **10.6x faster** | **26x less** |
+| Table (50 rows) | 7.86 ms / 4.7 MB | 70.08 ms / 66 MB | **8.9x faster** | **14x less** |
+
+With `FontEmbedMode.None` (Standard14 Helvetica): **126 µs** for Simple HTML — **87x faster** than iText.
+
+Measured with BenchmarkDotNet on .NET 8, warm font provider. See [docs/performance.md](docs/performance.md) for details.
 
 ## Dependency Injection
 
@@ -331,7 +376,7 @@ The [Playground](https://devnamedzed.github.io/rend/) runs Rend entirely in the 
 
 ## Visual Regression
 
-Rend is tested against Chrome using a pixel-level comparison suite of 825+ test cases covering layout, typography, gradients, shadows, tables, forms, and more.
+Rend is tested against Chrome using a pixel-level comparison suite of 871 test cases covering layout, typography, gradients, shadows, tables, forms, and more.
 
 The [latest report](https://devnamedzed.github.io/rend/report.html) shows Chrome vs Rend screenshots with diff overlays for every test.
 

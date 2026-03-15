@@ -62,6 +62,13 @@ namespace Rend.Pdf
         /// Default: false (single-threaded for deterministic output).
         /// </summary>
         public bool ParallelPageGeneration { get; set; }
+
+        /// <summary>
+        /// Font embedding mode. Controls how fonts are embedded in the PDF.
+        /// Subset (default) embeds only used glyphs for smallest file size.
+        /// Full embeds entire font files — larger output but faster rendering.
+        /// </summary>
+        public FontEmbedMode FontEmbedMode { get; set; } = FontEmbedMode.Subset;
     }
 
     /// <summary>PDF version identifiers.</summary>

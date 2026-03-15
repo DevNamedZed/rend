@@ -624,12 +624,14 @@ namespace Rend.Output.Pdf
                 if (entry != null)
                     fontData = entry.FontData;
             }
-            return _fontCache.GetOrAdd(descriptor, fontData, _doc);
+            var embedMode = _options.DocumentOptions?.FontEmbedMode ?? Rend.Pdf.FontEmbedMode.Subset;
+            return _fontCache.GetOrAdd(descriptor, fontData, _doc, embedMode);
         }
 
         private PdfFont ResolvePdfFont(FontDescriptor descriptor, byte[]? fontData)
         {
-            return _fontCache.GetOrAdd(descriptor, fontData, _doc);
+            var embedMode = _options.DocumentOptions?.FontEmbedMode ?? Rend.Pdf.FontEmbedMode.Subset;
+            return _fontCache.GetOrAdd(descriptor, fontData, _doc, embedMode);
         }
 
         private static void SetFillFromBrush(BrushInfo brush, PdfContentStream content,

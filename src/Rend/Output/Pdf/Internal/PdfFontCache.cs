@@ -1,37 +1,31 @@
 using System.Collections.Generic;
-using System.IO;
+using System.Runtime.CompilerServices;
 using Rend.Fonts;
 using Rend.Pdf;
 
 namespace Rend.Output.Pdf.Internal
 {
-    /// <summary>
-    /// Caches PDF font instances by font descriptor to avoid re-adding the same font
-    /// to a PDF document multiple times.
-    /// </summary>
     internal sealed class PdfFontCache
     {
+        private static readonly ConditionalWeakTable<byte[], PdfFontData> ParsedFontDataCache =
+            new ConditionalWeakTable<byte[], PdfFontData>();
+
         private readonly Dictionary<FontDescriptor, PdfFont> _cache = new Dictionary<FontDescriptor, PdfFont>();
         private PdfFont? _fallbackFont;
 
-        /// <summary>
-        /// Gets an existing cached font or adds a new one to the PDF document.
-        /// Falls back to Helvetica if no font data is available.
-        /// </summary>
-        /// <param name="descriptor">The font descriptor to look up.</param>
-        /// <param name="fontData">Raw font data bytes, or null to use fallback.</param>
-        /// <param name="doc">The PDF document to add the font to.</param>
-        /// <returns>A PDF font suitable for use in content streams.</returns>
-        internal PdfFont GetOrAdd(FontDescriptor descriptor, byte[]? fontData, PdfDocument doc)
+        internal PdfFont GetOrAdd(FontDescriptor descriptor, byte[]? fontData,
+                                  PdfDocument doc, FontEmbedMode embedMode)
         {
+            if (embedMode == FontEmbedMode.None)
+            {
+                return GetFallbackFont(doc);
+            }
+
             if (_cache.TryGetValue(descriptor, out var existing))
             {
-                // If we have real font data but the cached entry is a Standard14 fallback,
-                // replace it with the embedded font. This handles the case where DrawText
-                // (no font data) cached a fallback before DrawGlyphs (with font data) runs.
                 if (fontData != null && fontData.Length > 0 && existing.IsStandard14)
                 {
-                    var embedded = doc.AddFont(fontData, FontEmbedMode.Subset);
+                    var embedded = AddFontWithCache(fontData, doc, embedMode);
                     _cache[descriptor] = embedded;
                     return embedded;
                 }
@@ -41,7 +35,7 @@ namespace Rend.Output.Pdf.Internal
             PdfFont pdfFont;
             if (fontData != null && fontData.Length > 0)
             {
-                pdfFont = doc.AddFont(fontData, FontEmbedMode.Subset);
+                pdfFont = AddFontWithCache(fontData, doc, embedMode);
             }
             else
             {
@@ -50,6 +44,14 @@ namespace Rend.Output.Pdf.Internal
 
             _cache[descriptor] = pdfFont;
             return pdfFont;
+        }
+
+        private static PdfFont AddFontWithCache(byte[] fontData, PdfDocument doc,
+                                                 FontEmbedMode embedMode)
+        {
+            var parsedData = ParsedFontDataCache.GetValue(fontData,
+                bytes => PdfFontData.FromBytes(bytes, FontEmbedMode.Subset));
+            return doc.AddFont(parsedData, embedMode);
         }
 
         private PdfFont GetFallbackFont(PdfDocument doc)

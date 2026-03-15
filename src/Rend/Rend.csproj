@@ -12,6 +12,7 @@
     <InternalsVisibleTo Include="Rend.VisualRegression" />
     <InternalsVisibleTo Include="tmp-render" />
     <InternalsVisibleTo Include="tmp_pdftest" />
+    <InternalsVisibleTo Include="Rend.Benchmarks" />
   </ItemGroup>
 
   <ItemGroup>

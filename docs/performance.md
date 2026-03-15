@@ -1,5 +1,86 @@
 # Performance
 
+## Benchmarks
+
+Rend is benchmarked against [iText pdfHTML](https://itextpdf.com/products/itext-pdfhtml), the most widely used .NET HTML-to-PDF library. Measured with BenchmarkDotNet on .NET 8, warm font provider.
+
+### HTML to PDF (default settings)
+
+| Test | Rend | iText pdfHTML | Speed | Memory |
+|------|------|---------------|-------|--------|
+| Simple HTML | 1.17 ms / 498 KB | 10.98 ms / 29 MB | **9.4x faster** | **58x less** |
+| Styled HTML | 1.27 ms / 748 KB | 14.46 ms / 30 MB | **11.4x faster** | **41x less** |
+| Images | 1.42 ms / 912 KB | 22.08 ms / 35 MB | **15.5x faster** | **40x less** |
+| 50 Lines | 1.56 ms / 1.3 MB | 16.59 ms / 33 MB | **10.6x faster** | **26x less** |
+| Table (50 rows) | 7.86 ms / 4.7 MB | 70.08 ms / 66 MB | **8.9x faster** | **14x less** |
+
+### Raw PDF Generation (no HTML/CSS parsing)
+
+| Test | Rend | QuestPDF | PDFsharp | iText7 |
+|------|------|----------|----------|--------|
+| Simple | 10.6 µs / 74 KB | 981 µs / 56 KB | 1,218 µs / 629 KB | 257 µs / 380 KB |
+| 50 Lines | 680 µs / 354 KB | 3,724 µs / 202 KB | 1,546 µs / 893 KB | 2,820 µs / 1,380 KB |
+| Table | 558 µs / 331 KB | 6,992 µs / 1,027 KB | — | 29,164 µs / 7,018 KB |
+
+### Pipeline Stage Breakdown (Simple HTML)
+
+| Stage | Time | Memory |
+|-------|------|--------|
+| HTML parsing | 4 µs | 12 KB |
+| CSS cascade + style resolution | 72 µs | 108 KB |
+| Layout (block, inline, flex, grid, table) | 22 µs | 13 KB |
+| Paint + PDF output | 1,069 µs | 355 KB |
+| **Total** | **1,167 µs** | **498 KB** |
+
+Parse, style, and layout together account for less than 10% of rendering time. The bottleneck is font subsetting and PDF serialization.
+
+## PDF Options
+
+### Font Embed Mode
+
+Controls how fonts are embedded in the PDF output. Choose based on your speed/size tradeoff:
+
+```csharp
+using Rend.Pdf;
+
+var options = new RenderOptions
+{
+    PdfOptions = new PdfDocumentOptions
+    {
+        FontEmbedMode = FontEmbedMode.None
+    }
+};
+
+Render.ToPdf(html, output, options);
+```
+
+| Mode | Simple HTML Time | File Size | Description |
+|------|-----------------|-----------|-------------|
+| `Subset` (default) | 1.17 ms | Smallest | Embeds only used glyphs. Correct fonts in output. |
+| `Full` | Varies | Largest | Embeds entire font files. Skips subsetting step. |
+| `None` | 0.13 ms | Smallest | No embedding. Renders in Helvetica. Maximum speed. |
+
+`FontEmbedMode.None` is useful for high-throughput scenarios like bulk report generation where exact font fidelity is not required. Text renders in Helvetica regardless of CSS `font-family`.
+
+### Compression
+
+```csharp
+var options = new RenderOptions
+{
+    PdfOptions = new PdfDocumentOptions
+    {
+        Compression = PdfCompression.FlateFast // Default for Rend HTML-to-PDF
+    }
+};
+```
+
+| Mode | Description |
+|------|-------------|
+| `FlateFast` | Fast Deflate compression. Default for HTML-to-PDF rendering. |
+| `Flate` | Optimal Deflate compression. Smaller output, slower encoding. |
+| `FlateOptimal` | Explicit alias for best compression ratio. |
+| `None` | No compression. Useful for debugging PDF structure. |
+
 ## Shared Resources
 
 The most expensive part of rendering is font loading and native memory allocation. For batch rendering, share these across calls:
@@ -56,3 +137,13 @@ Render.ToPdf(html, Response.Body, options);
 - `IImageResolver` is called once per unique URL — results are cached internally.
 - Data URIs are decoded in-place without network calls.
 - For large images, Rend decodes them to determine dimensions but passes raw bytes to the output target.
+
+## Internal Caching
+
+Rend caches expensive operations across render calls automatically:
+
+- **Parsed font data**: TrueType table parsing is cached per font byte array. Cleared when the font provider is collected.
+- **Subsetted fonts**: Font subsetting results are cached per font when the same glyph set is used. Cleared when the font provider is collected.
+- **System fonts**: The default font provider scans system fonts once and reuses across all renders.
+
+All caches use `ConditionalWeakTable` — entries are automatically garbage-collected when the owning font provider is no longer referenced. No manual cleanup or unbounded growth.

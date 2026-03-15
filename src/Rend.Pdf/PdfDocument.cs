@@ -174,11 +174,11 @@ namespace Rend.Pdf
         /// Use <see cref="PdfFontData.FromFile"/> or <see cref="PdfFontData.FromBytes"/> to parse once,
         /// then reuse across multiple documents.
         /// </summary>
-        public PdfFont AddFont(PdfFontData fontData)
+        public PdfFont AddFont(PdfFontData fontData, FontEmbedMode? embedModeOverride = null)
         {
             if (fontData == null) throw new ArgumentNullException(nameof(fontData));
 
-            var pdfFont = TrueTypeParser.CreatePdfFont(fontData, _fontCounter++);
+            var pdfFont = TrueTypeParser.CreatePdfFont(fontData, _fontCounter++, embedModeOverride);
             _embeddedFonts.Add(pdfFont);
             _fontRawData[pdfFont] = fontData.RawFontBytes;
             return pdfFont;

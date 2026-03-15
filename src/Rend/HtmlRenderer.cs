@@ -25,7 +25,8 @@ namespace Rend
                 GenerateBookmarks = options.GenerateBookmarks,
                 GenerateLinks = options.GenerateLinks,
                 Title = options.Title,
-                Author = options.Author
+                Author = options.Author,
+                DocumentOptions = options.PdfOptions ?? DefaultPdfDocumentOptions()
             };
 
             var target = new PdfRenderTarget(pdfOptions);
@@ -70,7 +71,8 @@ namespace Rend
                 GenerateBookmarks = options.GenerateBookmarks,
                 GenerateLinks = options.GenerateLinks,
                 Title = options.Title,
-                Author = options.Author
+                Author = options.Author,
+                DocumentOptions = options.PdfOptions ?? DefaultPdfDocumentOptions()
             };
 
             var target = new PdfRenderTarget(pdfOptions);
@@ -223,6 +225,14 @@ namespace Rend
             var text = await html.ReadToEndAsync().ConfigureAwait(false);
 #endif
             await ToImageAsync(text, output, options, cancellationToken).ConfigureAwait(false);
+        }
+
+        private static Pdf.PdfDocumentOptions DefaultPdfDocumentOptions()
+        {
+            return new Pdf.PdfDocumentOptions
+            {
+                Compression = Pdf.PdfCompression.FlateFast
+            };
         }
     }
 }

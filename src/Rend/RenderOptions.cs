@@ -183,6 +183,12 @@ namespace Rend
         /// </summary>
         public bool CaptureLayoutTree { get; set; }
 
+        /// <summary>
+        /// PDF document options. Controls compression, version, encryption, and other
+        /// PDF-specific settings. When null, defaults are used (FlateFast compression).
+        /// </summary>
+        public Pdf.PdfDocumentOptions? PdfOptions { get; set; }
+
         /// <summary>Default options.</summary>
         public static RenderOptions Default => new RenderOptions();
     }

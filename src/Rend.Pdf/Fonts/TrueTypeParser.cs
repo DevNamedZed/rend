@@ -135,12 +135,14 @@ namespace Rend.Pdf.Fonts
         /// <summary>
         /// Create a fresh PdfFont from pre-parsed PdfFontData. Very cheap — no parsing.
         /// </summary>
-        internal static PdfFont CreatePdfFont(PdfFontData data, int fontIndex)
+        internal static PdfFont CreatePdfFont(PdfFontData data, int fontIndex,
+                                                FontEmbedMode? embedModeOverride = null)
         {
+            var embedMode = embedModeOverride ?? data.EmbedMode;
             return new PdfFont(data.BaseFontName, data.Metrics, data.CharToGlyph,
                                data.AdvanceWidths, data.SupplementaryMap,
                                isStandard14: false, kerningPairs: data.KerningPairs,
-                               embedMode: data.EmbedMode,
+                               embedMode: embedMode,
                                isCff: data.IsCff, cffTableData: data.CffTableData,
                                isType1: data.IsType1, type1Header: data.Type1Header,
                                type1Encrypted: data.Type1Encrypted, type1Trailer: data.Type1Trailer);

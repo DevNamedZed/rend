@@ -31,7 +31,7 @@ All methods are also available on `HtmlRenderer`, which implements `IRenderer` f
 | `FontProvider` | `IFontProvider?` | null | Font provider. If null, system fonts are used |
 | `GenerateBookmarks` | `bool` | true | Generate PDF bookmarks from h1-h6 headings |
 | `GenerateLinks` | `bool` | true | Generate PDF link annotations from `<a>` elements |
-| `ImageFormat` | `string` | "png" | Image output format: "png", "jpeg", "webp" |
+| `ImageFormat` | `ImageOutputFormat` | Png | Image output format: Png, Jpeg, Webp |
 | `ImageQuality` | `int` | 90 | JPEG/WebP quality (1-100) |
 | `Title` | `string?` | null | PDF document title metadata |
 | `Author` | `string?` | null | PDF document author metadata |
@@ -43,6 +43,8 @@ All methods are also available on `HtmlRenderer`, which implements `IRenderer` f
 | `Progress` | `IProgress<RenderProgress>?` | null | Progress reporter |
 | `TextShaper` | `ITextShaper?` | null | Shared text shaper for reuse across renders. Caller owns disposal |
 | `FontMapper` | `SkiaFontMapper?` | null | Shared Skia font mapper for image output. Caller owns disposal |
+| `CaptureLayoutTree` | `bool` | false | Include layout tree snapshot in render result for diagnostic comparison |
+| `PdfOptions` | `PdfDocumentOptions?` | null | PDF-specific options (compression, font embedding, encryption, etc.) |
 
 ### `IImageResolver`
 
@@ -213,6 +215,7 @@ Full PDF document builder. See [standalone-pdf.md](standalone-pdf.md) for detail
 |----------|------|---------|-------------|
 | `Version` | `PdfVersion` | Pdf17 | PDF version (1.4, 1.5, 1.6, 1.7) |
 | `Compression` | `PdfCompression` | Flate | Stream compression (None, Flate, FlateFast, FlateOptimal) |
+| `FontEmbedMode` | `FontEmbedMode` | Subset | Font embedding: Subset (used glyphs), Full (entire file), None (Standard14 only) |
 | `Signature` | `PdfSignatureOptions?` | null | Sign the document on save |
 | `Linearize` | `bool` | false | Enable fast web view |
 | `UserPassword` | `string?` | null | Set to enable encryption |
@@ -220,8 +223,14 @@ Full PDF document builder. See [standalone-pdf.md](standalone-pdf.md) for detail
 | `Permissions` | `PdfPermissions` | All | Document permissions |
 | `EncryptionMethod` | `PdfEncryptionMethod` | Aes128 | RC4-128 or AES-128 |
 | `PdfAConformance` | `PdfALevel?` | null | PDF/A level (A1b, A2b, A3b) |
+| `OutputIntentProfile` | `byte[]?` | null | ICC profile data for PDF/A output intent |
+| `OutputCondition` | `string` | "sRGB IEC61966-2.1" | Output condition identifier |
 | `UseObjectStreams` | `bool` | false | Cross-ref streams for smaller files (PDF 1.5+) |
 | `ParallelPageGeneration` | `bool` | false | Parallel content stream generation |
+| `IncludeXmpMetadata` | `bool` | false | Include XMP metadata in PDF catalog |
+| `EnableTaggedPdf` | `bool` | false | Produce tagged PDF with structure tree |
+| `PageTreeFanOut` | `int` | 32 | Fan-out for balanced page tree |
+| `ContentStreamBufferSize` | `int` | 65536 | Initial buffer size for content streams |
 
 ---
 
