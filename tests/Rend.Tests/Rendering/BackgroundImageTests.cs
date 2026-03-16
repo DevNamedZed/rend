@@ -214,8 +214,11 @@ namespace Rend.Tests.Rendering
 
             BackgroundPainter.Paint(box, target, resolver);
 
-            // 100/50 = 2 tiles in each direction = 4 total
-            Assert.Equal(4, target.DrawnImages.Count);
+            // Tiling now uses a single DrawTiledImage call with shader-based repeat
+            Assert.Single(target.TiledImages);
+            var tiled = target.TiledImages[0];
+            Assert.Equal(50f, tiled.TileWidth, 0.01);
+            Assert.Equal(50f, tiled.TileHeight, 0.01);
         }
 
         [Fact]
@@ -230,8 +233,9 @@ namespace Rend.Tests.Rendering
 
             BackgroundPainter.Paint(box, target, resolver);
 
-            // 100/50 = 2 tiles horizontally, 1 vertically = 2 total
-            Assert.Equal(2, target.DrawnImages.Count);
+            // Tiling now uses a single DrawTiledImage call (repeat-x only)
+            Assert.Single(target.TiledImages);
+            Assert.Equal(50f, target.TiledImages[0].TileWidth, 0.01);
         }
 
         [Fact]
@@ -246,8 +250,9 @@ namespace Rend.Tests.Rendering
 
             BackgroundPainter.Paint(box, target, resolver);
 
-            // 1 horizontally, 100/50 = 2 vertically = 2 total
-            Assert.Equal(2, target.DrawnImages.Count);
+            // Tiling now uses a single DrawTiledImage call (repeat-y only)
+            Assert.Single(target.TiledImages);
+            Assert.Equal(50f, target.TiledImages[0].TileHeight, 0.01);
         }
 
         [Fact]
@@ -464,7 +469,12 @@ namespace Rend.Tests.Rendering
                 DrawnImages.Add((image, destRect));
             }
 
-            public void DrawTiledImage(ImageData image, RectF fillArea, float tileWidth, float tileHeight, float originX, float originY) { }
+            public List<(ImageData Image, RectF FillArea, float TileWidth, float TileHeight)> TiledImages { get; } = new List<(ImageData, RectF, float, float)>();
+
+            public void DrawTiledImage(ImageData image, RectF fillArea, float tileWidth, float tileHeight, float originX, float originY)
+            {
+                TiledImages.Add((image, fillArea, tileWidth, tileHeight));
+            }
         }
     }
 }

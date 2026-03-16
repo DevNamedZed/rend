@@ -48,8 +48,9 @@ namespace Rend.Tests.Rendering
 
             OutlinePainter.Paint(box, target);
 
-            Assert.Single(target.StrokedRects);
-            var (_, pen) = target.StrokedRects[0];
+            // Dashed outlines now stroke each side independently (4 paths)
+            Assert.Equal(4, target.StrokedPaths.Count);
+            var (_, pen) = target.StrokedPaths[0];
             Assert.NotNull(pen.DashPattern);
         }
 
@@ -61,8 +62,9 @@ namespace Rend.Tests.Rendering
 
             OutlinePainter.Paint(box, target);
 
-            Assert.Single(target.StrokedRects);
-            var (_, pen) = target.StrokedRects[0];
+            // Dotted outlines now stroke each side independently (4 paths)
+            Assert.Equal(4, target.StrokedPaths.Count);
+            var (_, pen) = target.StrokedPaths[0];
             Assert.NotNull(pen.DashPattern);
         }
 
@@ -159,7 +161,12 @@ namespace Rend.Tests.Rendering
             public void PopClip() { }
             public void FillRect(RectF rect, BrushInfo brush) { }
             public void FillPath(PathData path, BrushInfo brush) { }
-            public void StrokePath(PathData path, PenInfo pen) { }
+            public List<(PathData Path, PenInfo Pen)> StrokedPaths { get; } = new List<(PathData, PenInfo)>();
+
+            public void StrokePath(PathData path, PenInfo pen)
+            {
+                StrokedPaths.Add((path, pen));
+            }
             public void DrawImage(ImageData image, RectF destRect) { }
             public void DrawTiledImage(ImageData image, RectF fillArea, float tileWidth, float tileHeight, float originX, float originY) { }
             public void DrawText(string text, float x, float y, TextStyle style) { }

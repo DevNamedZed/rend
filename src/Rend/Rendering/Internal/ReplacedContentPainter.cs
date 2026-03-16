@@ -159,7 +159,7 @@ namespace Rend.Rendering.Internal
             if (imageRendering != CssImageRendering.Auto)
                 target.SetImageRendering(imageRendering);
 
-            target.DrawImage(imageData, destRect);
+            target.DrawImage(imageData, destRect.PixelSnap());
 
             // Restore image-rendering
             if (imageRendering != CssImageRendering.Auto)
@@ -1085,7 +1085,7 @@ namespace Rend.Rendering.Internal
                     CssObjectFit objectFit = element.Style.ObjectFit;
                     var (posX, posY) = ParseObjectPosition(element.Style);
                     RectF destRect = ComputeObjectFitRect(rect, posterImage.Width, posterImage.Height, objectFit, posX, posY);
-                    target.DrawImage(posterImage, destRect);
+                    target.DrawImage(posterImage, destRect.PixelSnap());
                     return;
                 }
             }
