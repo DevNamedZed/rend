@@ -1364,7 +1364,11 @@ namespace Rend.Layout.Internal
         private static float MeasureBoxContentWidth(LayoutBox box)
         {
             float maxRight = 0;
-            // For tables, look at cell contents within rows
+            float outerHalfLeft = 0;
+            float outerHalfRight = 0;
+            bool isCollapsed = box.StyledNode is StyledElement tableEl
+                && tableEl.Style.BorderCollapse == CssBorderCollapse.Collapse;
+
             for (int ri = 0; ri < box.Children.Count; ri++)
             {
                 var row = box.Children[ri];
@@ -1372,7 +1376,23 @@ namespace Rend.Layout.Internal
                 for (int ci = 0; ci < row.Children.Count; ci++)
                 {
                     var cell = row.Children[ci];
-                    // Measure cell's actual text/content width
+
+                    // For collapsed tables, track outer border halves.
+                    // After CollapseBorders, outer-edge cell borders store the inner half.
+                    // The outer half (same value) extends beyond the cells and must be
+                    // added to the table's total intrinsic width.
+                    if (isCollapsed)
+                    {
+                        if (ci == 0 && cell.BorderLeftWidth > outerHalfLeft)
+                        {
+                            outerHalfLeft = cell.BorderLeftWidth;
+                        }
+                        if (ci == row.Children.Count - 1 && cell.BorderRightWidth > outerHalfRight)
+                        {
+                            outerHalfRight = cell.BorderRightWidth;
+                        }
+                    }
+
                     float cellContentRight = 0;
                     if (cell.LineBoxes != null)
                     {
@@ -1390,16 +1410,20 @@ namespace Rend.Layout.Internal
                                       - cell.ContentRect.X;
                         if (ccRight > cellContentRight) cellContentRight = ccRight;
                     }
-                    // Add cell's box model
                     float cellTotal = cellContentRight + cell.PaddingLeft + cell.PaddingRight
                                     + cell.BorderLeftWidth + cell.BorderRightWidth;
                     rowRight += cellTotal;
                 }
                 if (rowRight > maxRight) maxRight = rowRight;
             }
-            // Add table's own box model
-            return maxRight + box.PaddingLeft + box.PaddingRight
-                 + box.BorderLeftWidth + box.BorderRightWidth;
+
+            float tableBoxModel = box.PaddingLeft + box.PaddingRight
+                + box.BorderLeftWidth + box.BorderRightWidth;
+            if (isCollapsed)
+            {
+                tableBoxModel += outerHalfLeft + outerHalfRight;
+            }
+            return maxRight + tableBoxModel;
         }
 
         private static float CalculateAutoHeight(LayoutBox box)

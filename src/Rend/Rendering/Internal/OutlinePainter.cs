@@ -45,18 +45,27 @@ namespace Rend.Rendering.Internal
             {
                 case CssBorderStyle.Dashed:
                 {
-                    float dashLen = Math.Max(width * 3f, 1f);
-                    var pen = new PenInfo(color, width, new[] { dashLen, dashLen });
-                    target.StrokeRect(outlineRect, pen);
+                    float dashLen, gapLen;
+                    if (width >= 3f)
+                    {
+                        dashLen = width * 2f;
+                        gapLen = width;
+                    }
+                    else
+                    {
+                        dashLen = width * 3f;
+                        gapLen = width * 2f;
+                    }
+                    dashLen = Math.Max(dashLen, 1f);
+                    gapLen = Math.Max(gapLen, 1f);
+                    StrokeOutlinePerSide(target, outlineRect, color, width, dashLen, gapLen);
                     break;
                 }
 
                 case CssBorderStyle.Dotted:
                 {
-                    // Chrome: dot = width, gap = width
                     float dotLen = Math.Max(width, 1f);
-                    var pen = new PenInfo(color, width, new[] { dotLen, dotLen });
-                    target.StrokeRect(outlineRect, pen);
+                    StrokeOutlinePerSide(target, outlineRect, color, width, dotLen, dotLen);
                     break;
                 }
 
@@ -160,6 +169,65 @@ namespace Rend.Rendering.Internal
         {
             var drawColor = isInset ? Darken(color, 0.4f) : Lighten(color, 0.4f);
             target.StrokeRect(outlineRect, new PenInfo(drawColor, width));
+        }
+
+        private static void StrokeOutlinePerSide(IRenderTarget target, RectF rect,
+            CssColor color, float width, float dashLen, float gapLen)
+        {
+            float halfW = width * 0.5f;
+            float left = rect.X;
+            float top = rect.Y;
+            float right = rect.X + rect.Width;
+            float bottom = rect.Y + rect.Height;
+
+            float horizontalLength = rect.Width + width;
+            float verticalLength = rect.Height + width;
+
+            StrokeOneSide(target, color, width, dashLen, gapLen, horizontalLength,
+                left - halfW, top, right + halfW, top);
+            StrokeOneSide(target, color, width, dashLen, gapLen, verticalLength,
+                right, top - halfW, right, bottom + halfW);
+            StrokeOneSide(target, color, width, dashLen, gapLen, horizontalLength,
+                right + halfW, bottom, left - halfW, bottom);
+            StrokeOneSide(target, color, width, dashLen, gapLen, verticalLength,
+                left, bottom + halfW, left, top - halfW);
+        }
+
+        private static void StrokeOneSide(IRenderTarget target, CssColor color, float width,
+            float dashLen, float gapLen, float sideLength,
+            float x1, float y1, float x2, float y2)
+        {
+            if (sideLength <= 0f)
+            {
+                return;
+            }
+
+            float adjustedGap = Math.Max(SelectBestDashGap(sideLength, dashLen, gapLen), 1f);
+            float[] dashPattern = new[] { dashLen, adjustedGap };
+            var pen = new PenInfo(color, width, dashPattern);
+
+            var path = new PathData();
+            path.MoveTo(x1, y1);
+            path.LineTo(x2, y2);
+            target.StrokePath(path, pen);
+        }
+
+        private static float SelectBestDashGap(float strokeLength, float dashLength, float gapLength)
+        {
+            float availableLength = strokeLength + gapLength;
+            float minNumDashes = (float)Math.Floor(availableLength / (dashLength + gapLength));
+            float maxNumDashes = minNumDashes + 1;
+            float minNumGaps = minNumDashes - 1;
+            float maxNumGaps = maxNumDashes - 1;
+            if (minNumGaps <= 0 || maxNumGaps <= 0)
+            {
+                return gapLength;
+            }
+            float minGap = (strokeLength - minNumDashes * dashLength) / minNumGaps;
+            float maxGap = (strokeLength - maxNumDashes * dashLength) / maxNumGaps;
+            return (maxGap <= 0) || (Math.Abs(minGap - gapLength) < Math.Abs(maxGap - gapLength))
+                ? minGap
+                : maxGap;
         }
 
         private static CssColor Darken(CssColor c, float factor)

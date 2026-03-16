@@ -300,10 +300,9 @@ namespace Rend.Layout.Internal
                     if (intrinsicW <= 0 && childElement.TagName == "math")
                     {
                         var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(
-                            childElement.Element, 16f);
+                            childElement.Element, 16f, context.TextMeasurer);
                         intrinsicW = mathSize.Width + 4f;
                     }
-                    // Fallback: extract width from data: URI for images
                     if (intrinsicW <= 0 &&
                         ReplacedElementLayout.TryGetDataUriDimensions(childElement, out float duW0, out _))
                     {
@@ -400,7 +399,7 @@ namespace Rend.Layout.Internal
                         }
                         if (childElement.TagName == "math" && (intrinsicW <= 0 || intrinsicH <= 0))
                         {
-                            var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(childElement.Element, 16f);
+                            var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(childElement.Element, 16f, context.TextMeasurer);
                             if (intrinsicW <= 0) intrinsicW = mathSize.Width + 4f;
                             if (intrinsicH <= 0) intrinsicH = mathSize.Height;
                         }
@@ -489,7 +488,7 @@ namespace Rend.Layout.Internal
                         }
                         if (childElement.TagName == "math" && (intrinsicW <= 0 || intrinsicH <= 0))
                         {
-                            var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(childElement.Element, 16f);
+                            var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(childElement.Element, 16f, context.TextMeasurer);
                             if (intrinsicW <= 0) intrinsicW = mathSize.Width + 4f;
                             if (intrinsicH <= 0) intrinsicH = mathSize.Height;
                         }

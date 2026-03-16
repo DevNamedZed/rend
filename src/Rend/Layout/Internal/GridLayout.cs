@@ -58,7 +58,10 @@ namespace Rend.Layout.Internal
 
                     var textBox = new LayoutBox(anonStyled, BoxType.Block);
                     textBox.ContentRect = new RectF(0, 0, parent.ContentRect.Width, 0);
+                    var savedFloatCtx = context.FloatContext;
+                    context.FloatContext = null;
                     InlineFormattingContext.Layout(textBox, context);
+                    context.FloatContext = savedFloatCtx;
                     float textHeight = 0;
                     if (textBox.LineBoxes != null && textBox.LineBoxes.Count > 0)
                     {
@@ -638,6 +641,25 @@ namespace Rend.Layout.Internal
                         contentHeight = gridMaxH;
                     if (!float.IsNaN(gridMinH) && gridMinH >= 0 && contentHeight < gridMinH)
                         contentHeight = gridMinH;
+
+                    // If the final content height differs from what was used during layout
+                    // (initially 0), flex containers need re-layout so cross-axis alignment
+                    // (align-items: center/flex-end) works with the actual height.
+                    float layoutHeight = item.Box.ContentRect.Height;
+                    if (Math.Abs(contentHeight - layoutHeight) > 0.01f)
+                    {
+                        var itemDisplay = item.StyledElement.Style.Display;
+                        if (itemDisplay == CssDisplay.Flex || itemDisplay == CssDisplay.InlineFlex)
+                        {
+                            item.Box.ClearChildren();
+                            item.Box.LineBoxes = null;
+                            item.Box.ContentRect = new RectF(0, 0, contentWidth, contentHeight);
+                            var savedFloatCtx2 = context.FloatContext;
+                            context.FloatContext = new FloatContext(0, contentWidth);
+                            BlockFormattingContext.LayoutChildren(item.Box, context);
+                            context.FloatContext = savedFloatCtx2;
+                        }
+                    }
 
                     item.ContentWidth = contentWidth;
                     item.ContentHeight = contentHeight;
@@ -1375,8 +1397,18 @@ namespace Rend.Layout.Internal
             int frRemainder = totalFrInt > 0 ? remainingRaw % totalFrInt : 0;
             float frSize = totalFr > 0 ? remaining / totalFr : 0;
 
+            // Count total fr tracks for remainder distribution from end
+            int totalFrTracks = 0;
+            for (int i = 0; i < sizes.Count; i++)
+            {
+                if (sizes[i].isFr && sizes[i].value > 0 && !hasIntrinsic)
+                {
+                    totalFrTracks++;
+                }
+            }
+
             var tracks = new float[sizes.Count];
-            int frIndex = 0; // track which fr track we're on for remainder distribution
+            int frIndex = 0;
             for (int i = 0; i < sizes.Count; i++)
             {
                 if (sizes[i].value < 0)
@@ -1399,12 +1431,18 @@ namespace Rend.Layout.Internal
                     if (trackFr > 0 && totalFrInt > 0)
                     {
                         int trackRaw = frSizeRaw * trackFr;
-                        // Distribute remainder: first tracks get +1/64px each
-                        if (frIndex < frRemainder)
+                        // Chrome distributes remainder to LAST tracks, not first.
+                        // frIndex counts from 0; remainder goes to the last frRemainder tracks.
+                        int distanceFromEnd = totalFrTracks - 1 - frIndex;
+                        if (distanceFromEnd < frRemainder)
+                        {
                             trackRaw += 1;
+                        }
                         float resolved = trackRaw / 64f;
                         if (minFloors[i] > 0 && resolved < minFloors[i])
+                        {
                             resolved = minFloors[i];
+                        }
                         tracks[i] = resolved;
                     }
                     else
@@ -1412,7 +1450,9 @@ namespace Rend.Layout.Internal
                         // Non-integer fr: fall back to float division
                         float resolved = sizes[i].value * frSize;
                         if (minFloors[i] > 0 && resolved < minFloors[i])
+                        {
                             resolved = minFloors[i];
+                        }
                         tracks[i] = resolved;
                     }
                     frIndex++;

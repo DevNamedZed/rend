@@ -9,7 +9,7 @@ namespace Rend.Pdf.Reading
 {
     public sealed class PdfDocumentReader : IDisposable
     {
-        private readonly byte[] _data;
+        private byte[] _data;
         private int _pos;
         private readonly Dictionary<int, (long offset, int gen)> _xrefTable = new Dictionary<int, (long, int)>();
         private readonly Dictionary<int, PdfObj> _objectCache = new Dictionary<int, PdfObj>();
@@ -229,7 +229,7 @@ namespace Rend.Pdf.Reading
 
         private long FindStartXRef()
         {
-            int searchStart = Math.Max(0, _data.Length - 1024);
+            int searchStart = Math.Max(0, _data.Length - 4096);
             string tail = Encoding.ASCII.GetString(_data, searchStart, _data.Length - searchStart);
             int idx = tail.LastIndexOf("startxref", StringComparison.Ordinal);
             if (idx < 0)
@@ -423,59 +423,71 @@ namespace Rend.Pdf.Reading
         private PdfObj ParseCompressedObject(int streamObjNum, long originalOffset)
         {
             // Find which object we're looking for by scanning xref for this offset
-            int targetIndex = -1;
             int targetObjNum = -1;
             foreach (var kvp in _xrefTable)
             {
                 if (kvp.Value.offset == originalOffset)
                 {
                     targetObjNum = kvp.Key;
-                    targetIndex = kvp.Value.gen; // gen field holds the index for type 2
                     break;
                 }
             }
-            if (targetObjNum < 0) return PdfObj.Null;
+            if (targetObjNum < 0)
+            {
+                return PdfObj.Null;
+            }
 
             var streamObj = Resolve(new PdfRef(streamObjNum, 0));
-            if (!(streamObj is PdfStream objStream)) return PdfObj.Null;
+            if (!(streamObj is PdfStream objStream))
+            {
+                return PdfObj.Null;
+            }
 
             byte[] decoded = GetStreamBytes(objStream);
             int n = (int)Resolve(objStream["N"]).AsInt();
             int first = (int)Resolve(objStream["First"]).AsInt();
 
-            // Parse the N pairs of (objNum offset) from the beginning of decoded data
+            // Temporarily swap _data and _pos to parse from decoded object stream bytes.
+            // The previous approach of creating a new PdfDocumentReader(decoded) was broken
+            // because the constructor calls Parse() which requires startxref (not present
+            // in object stream data).
             var savedPos = _pos;
             var savedData = _data;
+            _data = decoded;
+            _pos = 0;
 
-            // We need to parse from the decoded byte array
-            // Temporarily work with decoded data
-            var reader = new PdfDocumentReader(decoded);
-            reader._pos = 0;
-
-            var objNums = new int[n];
-            var offsets = new int[n];
-            for (int i = 0; i < n; i++)
+            try
             {
-                reader.SkipWhitespaceAndComments();
-                objNums[i] = reader.ReadIntDirect();
-                reader.SkipWhitespaceAndComments();
-                offsets[i] = reader.ReadIntDirect();
-                reader.SkipWhitespaceAndComments();
-            }
-
-            // Find our target object
-            for (int i = 0; i < n; i++)
-            {
-                if (objNums[i] == targetObjNum || i == targetIndex)
+                var objNums = new int[n];
+                var offsets = new int[n];
+                for (int i = 0; i < n; i++)
                 {
-                    reader._pos = first + offsets[i];
-                    reader.SkipWhitespaceAndComments();
-                    var result = reader.ParseObject();
-                    return result;
+                    SkipWhitespaceAndComments();
+                    objNums[i] = ReadIntDirect();
+                    SkipWhitespaceAndComments();
+                    offsets[i] = ReadIntDirect();
+                    SkipWhitespaceAndComments();
                 }
-            }
 
-            return PdfObj.Null;
+                // Find our target object by object number only
+                for (int i = 0; i < n; i++)
+                {
+                    if (objNums[i] == targetObjNum)
+                    {
+                        _pos = first + offsets[i];
+                        SkipWhitespaceAndComments();
+                        var result = ParseObject();
+                        return result;
+                    }
+                }
+
+                return PdfObj.Null;
+            }
+            finally
+            {
+                _data = savedData;
+                _pos = savedPos;
+            }
         }
 
         private PdfObj ParseIndirectObject()

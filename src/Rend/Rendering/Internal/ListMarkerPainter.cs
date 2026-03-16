@@ -303,7 +303,7 @@ namespace Rend.Rendering.Internal
         /// <summary>
         /// Paint a disclosure triangle for a &lt;summary&gt; element.
         /// ▼ for open, ▶ for closed.
-        /// Chrome renders these as Unicode text glyphs (U+25BE/U+25B8) in list_marker.cc,
+        /// Chrome renders these as Unicode text glyphs (U+25BC/U+25B6) in list_marker.cc,
         /// falling back to Segoe UI Symbol or similar. We draw as paths to avoid font fallback
         /// issues, but match Chrome's sizing and positioning.
         /// </summary>

@@ -216,6 +216,7 @@ namespace Rend.Tests.Rendering
             public void FillPath(PathData path, BrushInfo brush) { }
             public void StrokePath(PathData path, PenInfo pen) { }
             public void DrawImage(ImageData image, RectF destRect) { }
+            public void DrawTiledImage(ImageData image, RectF fillArea, float tileWidth, float tileHeight, float originX, float originY) { }
             public void Finish(Stream output) { }
             public void AddLink(RectF rect, string uri) { }
             public void AddBookmark(string title, int level, float yPosition) { }

@@ -44,8 +44,6 @@ namespace Rend.PdfRendering
             var state = new GraphicsState();
             var stateStack = new Stack<GraphicsState>();
             var path = new SKPath();
-            bool pendingClipNonZero = false;
-            bool pendingClipEvenOdd = false;
 
             var contentBytes = GetPageContentBytes(pageDict);
             var operators = ParseContentStream(contentBytes);
@@ -54,8 +52,7 @@ namespace Rend.PdfRendering
             {
                 try
                 {
-                    ExecuteOperator(canvas, op, state, stateStack, path,
-                        ref pendingClipNonZero, ref pendingClipEvenOdd, pageDict);
+                    ExecuteOperator(canvas, op, state, stateStack, path, pageDict);
                 }
                 catch
                 {
@@ -642,8 +639,7 @@ namespace Rend.PdfRendering
         #region Operator Execution
 
         private void ExecuteOperator(SKCanvas canvas, PdfOperator op, GraphicsState state,
-            Stack<GraphicsState> stateStack, SKPath path,
-            ref bool pendingClipNonZero, ref bool pendingClipEvenOdd, PdfObj pageDict)
+            Stack<GraphicsState> stateStack, SKPath path, PdfObj pageDict)
         {
             var args = op.Operands;
 
@@ -687,20 +683,20 @@ namespace Rend.PdfRendering
                 case "re": OpRect(path, state, args); break;
 
                 // Path painting
-                case "S": PaintPath(canvas, path, state, false, true, false, ref pendingClipNonZero, ref pendingClipEvenOdd); break;
-                case "s": path.Close(); PaintPath(canvas, path, state, false, true, false, ref pendingClipNonZero, ref pendingClipEvenOdd); break;
+                case "S": PaintPath(canvas, path, state, false, true, false); break;
+                case "s": path.Close(); PaintPath(canvas, path, state, false, true, false); break;
                 case "f":
-                case "F": PaintPath(canvas, path, state, true, false, false, ref pendingClipNonZero, ref pendingClipEvenOdd); break;
-                case "f*": PaintPath(canvas, path, state, true, false, true, ref pendingClipNonZero, ref pendingClipEvenOdd); break;
-                case "B": PaintPath(canvas, path, state, true, true, false, ref pendingClipNonZero, ref pendingClipEvenOdd); break;
-                case "B*": PaintPath(canvas, path, state, true, true, true, ref pendingClipNonZero, ref pendingClipEvenOdd); break;
-                case "b": path.Close(); PaintPath(canvas, path, state, true, true, false, ref pendingClipNonZero, ref pendingClipEvenOdd); break;
-                case "b*": path.Close(); PaintPath(canvas, path, state, true, true, true, ref pendingClipNonZero, ref pendingClipEvenOdd); break;
-                case "n": ApplyPendingClip(canvas, path, ref pendingClipNonZero, ref pendingClipEvenOdd); path.Reset(); break;
+                case "F": PaintPath(canvas, path, state, true, false, false); break;
+                case "f*": PaintPath(canvas, path, state, true, false, true); break;
+                case "B": PaintPath(canvas, path, state, true, true, false); break;
+                case "B*": PaintPath(canvas, path, state, true, true, true); break;
+                case "b": path.Close(); PaintPath(canvas, path, state, true, true, false); break;
+                case "b*": path.Close(); PaintPath(canvas, path, state, true, true, true); break;
+                case "n": ApplyPendingClip(canvas, path, state); path.Reset(); break;
 
                 // Clipping
-                case "W": pendingClipNonZero = true; break;
-                case "W*": pendingClipEvenOdd = true; break;
+                case "W": state.PendingClipNonZero = true; break;
+                case "W*": state.PendingClipEvenOdd = true; break;
 
                 // Color
                 case "g": state.FillColor = GrayToColor(GetFloat(args, 0)); break;
@@ -845,10 +841,9 @@ namespace Rend.PdfRendering
         }
 
         private void PaintPath(SKCanvas canvas, SKPath path, GraphicsState state,
-            bool fill, bool stroke, bool evenOdd,
-            ref bool pendingClipNonZero, ref bool pendingClipEvenOdd)
+            bool fill, bool stroke, bool evenOdd)
         {
-            ApplyPendingClip(canvas, path, ref pendingClipNonZero, ref pendingClipEvenOdd);
+            ApplyPendingClip(canvas, path, state);
 
             if (fill)
             {
@@ -872,17 +867,16 @@ namespace Rend.PdfRendering
             path.Reset();
         }
 
-        private void ApplyPendingClip(SKCanvas canvas, SKPath path,
-            ref bool pendingClipNonZero, ref bool pendingClipEvenOdd)
+        private void ApplyPendingClip(SKCanvas canvas, SKPath path, GraphicsState state)
         {
-            if (pendingClipNonZero || pendingClipEvenOdd)
+            if (state.PendingClipNonZero || state.PendingClipEvenOdd)
             {
                 var clipPath = new SKPath(path);
-                clipPath.FillType = pendingClipEvenOdd ? SKPathFillType.EvenOdd : SKPathFillType.Winding;
+                clipPath.FillType = state.PendingClipEvenOdd ? SKPathFillType.EvenOdd : SKPathFillType.Winding;
                 canvas.ClipPath(clipPath, SKClipOperation.Intersect, true);
                 clipPath.Dispose();
-                pendingClipNonZero = false;
-                pendingClipEvenOdd = false;
+                state.PendingClipNonZero = false;
+                state.PendingClipEvenOdd = false;
             }
         }
 
@@ -2161,15 +2155,13 @@ namespace Rend.PdfRendering
             formState.CopyFrom(state);
             var formStateStack = new Stack<GraphicsState>();
             var formPath = new SKPath();
-            bool formClipNZ = false, formClipEO = false;
 
             var operators = ParseContentStream(formData);
             foreach (var op in operators)
             {
                 try
                 {
-                    ExecuteOperator(canvas, op, formState, formStateStack, formPath,
-                        ref formClipNZ, ref formClipEO, effectivePage);
+                    ExecuteOperator(canvas, op, formState, formStateStack, formPath, effectivePage);
                 }
                 catch
                 {
@@ -2292,9 +2284,11 @@ namespace Rend.PdfRendering
             public int TextRenderMode;
             public float TextRise;
 
-            // Path state
+            // Path / clip state
             public float CurrentX;
             public float CurrentY;
+            public bool PendingClipNonZero;
+            public bool PendingClipEvenOdd;
 
             public GraphicsState Clone()
             {
@@ -2333,6 +2327,8 @@ namespace Rend.PdfRendering
                     TextRise = TextRise,
                     CurrentX = CurrentX,
                     CurrentY = CurrentY,
+                    PendingClipNonZero = PendingClipNonZero,
+                    PendingClipEvenOdd = PendingClipEvenOdd,
                 };
             }
 
@@ -2371,6 +2367,8 @@ namespace Rend.PdfRendering
                 TextRise = other.TextRise;
                 CurrentX = other.CurrentX;
                 CurrentY = other.CurrentY;
+                PendingClipNonZero = other.PendingClipNonZero;
+                PendingClipEvenOdd = other.PendingClipEvenOdd;
             }
         }
 

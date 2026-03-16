@@ -731,6 +731,7 @@ namespace Rend.Css.Parser.Internal
             origin = new CssKeywordValue("padding-box");
             var positionParts = new List<CssValue>();
             bool sizeNext = false;
+            bool sawBoxKeyword = false;
             var sizeParts = new List<CssValue>();
 
             for (int i = 0; i < parts.Count; i++)
@@ -793,17 +794,16 @@ namespace Rend.Css.Parser.Internal
                     }
                     else if (k == "border-box" || k == "padding-box" || k == "content-box")
                     {
-                        // BUG-052: Per CSS Backgrounds L3 §3.2, if only one <box> value,
+                        // CSS Backgrounds L3 §3.2: if only one <box> value,
                         // it sets both origin AND clip. If two, first is origin, second is clip.
-                        if (origin is CssKeywordValue origKw && origKw.Keyword == "padding-box")
+                        if (!sawBoxKeyword)
                         {
-                            // First box keyword: set origin (and tentatively clip to same value)
                             origin = p;
                             clip = p;
+                            sawBoxKeyword = true;
                         }
                         else
                         {
-                            // Second box keyword: override clip only
                             clip = p;
                         }
                     }

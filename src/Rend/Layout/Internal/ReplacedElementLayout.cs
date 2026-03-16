@@ -80,9 +80,10 @@ namespace Rend.Layout.Internal
                         return Math.Max(40f, textW + 16f);
                     default:
                         // text, password, email, url, search, tel, number, etc.
-                        // Chrome: size=20 chars * ~6.7px avg char width ≈ 134px content-box
-                        // Total 140px with 2px border + 1px padding on each side (set in UA CSS)
-                        return 134f;
+                        // Chrome: size=20 chars × AvgCharWidth() (font '0' glyph advance)
+                        // Chrome measured: 177px border-box = 169px content-box
+                        // (with UA CSS: border:2px + padding:1px 2px → 8px total horizontal)
+                        return 169f;
                 }
             }
 

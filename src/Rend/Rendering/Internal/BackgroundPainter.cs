@@ -253,19 +253,22 @@ namespace Rend.Rendering.Internal
             }
             else
             {
-                // Tile the image.
-                float startX = repeatX ? GetTileStart(posX, scaledW, clipRect.X) : posX;
-                float startY = repeatY ? GetTileStart(posY, scaledH, clipRect.Y) : posY;
-                float endX = repeatX ? clipRect.X + clipRect.Width : posX + scaledW;
-                float endY = repeatY ? clipRect.Y + clipRect.Height : posY + scaledH;
-
-                for (float ty = startY; ty < endY; ty += scaledH)
+                // Tile the image using shader-based tiling for seamless boundaries.
+                RectF fillArea;
+                if (repeatX && repeatY)
                 {
-                    for (float tx = startX; tx < endX; tx += scaledW)
-                    {
-                        target.DrawImage(imageData, new RectF(tx, ty, scaledW, scaledH));
-                    }
+                    fillArea = clipRect;
                 }
+                else if (repeatX)
+                {
+                    fillArea = new RectF(clipRect.X, posY, clipRect.Width, scaledH);
+                }
+                else
+                {
+                    fillArea = new RectF(posX, clipRect.Y, scaledW, clipRect.Height);
+                }
+
+                target.DrawTiledImage(imageData, fillArea, scaledW, scaledH, posX, posY);
             }
 
             if (needsClip)

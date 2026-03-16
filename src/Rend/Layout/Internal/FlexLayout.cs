@@ -198,6 +198,22 @@ namespace Rend.Layout.Internal
                 var item = items[i];
                 // CSS Flexbox §9.3: hypothetical main size = flex base size clamped by min/max.
                 float minMain = GetFlexItemMinMain(item, isColumn);
+
+                // CSS Flexbox §4.5: automatic minimum size for column flex items.
+                // When min-height is auto (no explicit min-height) and overflow is visible,
+                // the automatic minimum = content-based minimum height.
+                // This prevents flex-basis:0 items from collapsing in auto-height containers.
+                if (isColumn && isAutoMainSize && minMain <= 0
+                    && item.Style.OverflowY == CssOverflow.Visible)
+                {
+                    float contentMin = ComputeContentMinHeight(item, containerWidth, context);
+                    if (contentMin > minMain)
+                    {
+                        minMain = contentMin;
+                        item.AutoMinMain = contentMin;
+                    }
+                }
+
                 float maxMain = isColumn ? item.Style.MaxHeight : item.Style.MaxWidth;
                 float clampedBase = Math.Max(item.BaseSize, minMain);
                 if (!float.IsNaN(maxMain) && maxMain >= 0)
@@ -236,7 +252,11 @@ namespace Rend.Layout.Internal
                     totalBase += line.Items[i].BaseSize + GetItemMainMargins(line.Items[i], isColumn);
 
                 // CSS Flexbox spec §9.7: Resolve flexible lengths with freeze-redistribute loop.
-                float initialFreeSpace = mainSize - totalBase - totalGaps;
+                // When the container's main size is indefinite (auto-height column),
+                // there is no definite free space — flex-grow must not distribute space.
+                float initialFreeSpace = isAutoMainSize
+                    ? 0
+                    : mainSize - totalBase - totalGaps;
                 bool isGrowing = initialFreeSpace > 0;
                 var frozen = new bool[line.Items.Count];
 
@@ -291,7 +311,9 @@ namespace Rend.Layout.Internal
                         }
                     }
 
-                    float remainingSpace = mainSize - frozenSpace - unfrozenBaseTotal;
+                    float remainingSpace = isAutoMainSize
+                        ? 0
+                        : mainSize - frozenSpace - unfrozenBaseTotal;
                     bool anyNewlyFrozen = false;
 
                     // Chrome's sequential consumption approach (line_flexer.cc):
@@ -871,26 +893,33 @@ namespace Rend.Layout.Internal
                 }
                 return basis;
             }
-            // Resolve deferred percentage flex-basis against the flex container's main size
+            // Resolve deferred percentage flex-basis against the flex container's main size.
+            // CSS Flexbox §9.2 step 3E: if the percentage resolves against an indefinite
+            // size, treat the flex basis as content (fall through to auto path below).
             if (DeferredPercent.IsEncoded(basis))
             {
-                float resolved = DeferredPercent.Resolve(basis, isColumn ? containerHeight : containerWidth);
-                if (style.BoxSizing == CssBoxSizing.BorderBox)
+                float refSize = isColumn ? containerHeight : containerWidth;
+                if (!float.IsNaN(refSize) && refSize > 0)
                 {
-                    if (isColumn)
+                    float resolved = DeferredPercent.Resolve(basis, refSize);
+                    if (style.BoxSizing == CssBoxSizing.BorderBox)
                     {
-                        resolved -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
+                        if (isColumn)
+                        {
+                            resolved -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
+                        }
+                        else
+                        {
+                            resolved -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
+                        }
+                        if (resolved < 0)
+                        {
+                            resolved = 0;
+                        }
                     }
-                    else
-                    {
-                        resolved -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
-                    }
-                    if (resolved < 0)
-                    {
-                        resolved = 0;
-                    }
+                    return resolved;
                 }
-                return resolved;
+                // Indefinite reference size — fall through to content-based measurement
             }
 
             // Use width/height as fallback (resolve deferred percentages and calc)
@@ -986,8 +1015,13 @@ namespace Rend.Layout.Internal
 
             if (isColumn)
             {
-                // Column: main axis is height, measure content height
+                // Column: main axis is height, measure content height.
+                // Width (cross axis) defaults to available width when auto.
                 float w = DimensionResolver.ResolveWidth(style, containerWidth, measureBox);
+                if (float.IsNaN(w))
+                {
+                    w = containerWidth - BoxModelCalculator.GetHorizontalSpacing(measureBox);
+                }
                 measureBox.ContentRect = new RectF(0, 0, w, 0);
                 BlockFormattingContext.LayoutChildren(measureBox, context);
                 return CalculateAutoHeight(measureBox);
@@ -1011,17 +1045,43 @@ namespace Rend.Layout.Internal
         // measures auto-width block children.
 
         /// <summary>
+        /// CSS Flexbox §4.5: Compute content-based minimum height for a column flex item.
+        /// Used when min-height is auto and the container has indefinite main size.
+        /// </summary>
+        private static float ComputeContentMinHeight(FlexItem item, float containerWidth, LayoutContext context)
+        {
+            if (item.Box.StyledNode is not StyledElement element)
+            {
+                return 0;
+            }
+            var measureBox = new LayoutBox(element, BoxType.Block);
+            BoxModelCalculator.ApplyBoxModel(measureBox, item.Style, containerWidth);
+            float w = DimensionResolver.ResolveWidth(item.Style, containerWidth, measureBox);
+            if (float.IsNaN(w))
+            {
+                w = containerWidth - BoxModelCalculator.GetHorizontalSpacing(measureBox);
+            }
+            measureBox.ContentRect = new RectF(0, 0, w, 0);
+            BlockFormattingContext.LayoutChildren(measureBox, context);
+            return CalculateAutoHeight(measureBox);
+        }
+
+        /// <summary>
         /// Returns the effective min-main-size for a flex item.
-        /// Uses the explicit min-width/min-height if set, otherwise 0.
-        /// CSS spec §4.5: min-width:auto = min(content_min, specified_size),
-        /// but computing content_min is expensive; 0 is a safe approximation
-        /// that allows normal shrinking while still respecting explicit minimums.
+        /// Uses the explicit min-width/min-height if set, then falls back to
+        /// the CSS §4.5 automatic minimum (content-based) if computed.
         /// </summary>
         private static float GetFlexItemMinMain(FlexItem item, bool isColumn)
         {
             float explicitMin = isColumn ? item.Style.MinHeight : item.Style.MinWidth;
             if (!float.IsNaN(explicitMin) && explicitMin > 0)
+            {
                 return explicitMin;
+            }
+            if (item.AutoMinMain > 0)
+            {
+                return item.AutoMinMain;
+            }
             return 0;
         }
 
@@ -1156,6 +1216,7 @@ namespace Rend.Layout.Internal
             public float BaseSize { get; set; }
             public float ResolvedMainSize { get; set; }
             public int Order { get; set; }
+            public float AutoMinMain { get; set; }
         }
 
         private sealed class FlexLine

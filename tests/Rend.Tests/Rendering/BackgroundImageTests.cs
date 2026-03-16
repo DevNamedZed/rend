@@ -463,6 +463,8 @@ namespace Rend.Tests.Rendering
             {
                 DrawnImages.Add((image, destRect));
             }
+
+            public void DrawTiledImage(ImageData image, RectF fillArea, float tileWidth, float tileHeight, float originX, float originY) { }
         }
     }
 }

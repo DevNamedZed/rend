@@ -1,13 +1,13 @@
 {
-  "runId": "2026-03-14_022845",
-  "timestamp": "2026-03-14T02:30:13.6689406-07:00",
-  "totalDurationMs": 87399,
+  "runId": "2026-03-15_200804",
+  "timestamp": "2026-03-15T20:10:20.7830453-07:00",
+  "totalDurationMs": 135092,
   "summary": {
     "total": 871,
-    "passed": 719,
-    "failed": 152,
+    "passed": 723,
+    "failed": 148,
     "errors": 0,
-    "avgDiffPercentage": 0.1104
+    "avgDiffPercentage": 0.0917
   },
   "tests": [
     {
@@ -20,7 +20,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 1970,
+      "durationMs": 2719,
       "errorMessage": null
     },
     {
@@ -33,7 +33,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 1973,
+      "durationMs": 2711,
       "errorMessage": null
     },
     {
@@ -46,7 +46,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 1962,
+      "durationMs": 2716,
       "errorMessage": null
     },
     {
@@ -59,7 +59,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 247,
+      "durationMs": 716,
       "errorMessage": null
     },
     {
@@ -67,12 +67,12 @@
       "testName": "Mixed Border Styles Per Side",
       "category": "Borders",
       "outcome": "Fail",
-      "diffPercentage": 1.2633,
-      "shiftTolerantDiffPercentage": 0.4783,
-      "diffPixels": 1516,
-      "shiftTolerantDiffPixels": 574,
+      "diffPercentage": 0.7242,
+      "shiftTolerantDiffPercentage": 0.3192,
+      "diffPixels": 869,
+      "shiftTolerantDiffPixels": 383,
       "totalPixels": 120000,
-      "durationMs": 999,
+      "durationMs": 2386,
       "errorMessage": null
     },
     {
@@ -85,7 +85,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 277,
+      "durationMs": 732,
       "errorMessage": null
     },
     {
@@ -98,7 +98,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 244,
+      "durationMs": 680,
       "errorMessage": null
     },
     {
@@ -111,7 +111,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 200,
+      "durationMs": 690,
       "errorMessage": null
     },
     {
@@ -124,7 +124,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 167,
+      "durationMs": 676,
       "errorMessage": null
     },
     {
@@ -137,7 +137,7 @@
       "diffPixels": 54,
       "shiftTolerantDiffPixels": 36,
       "totalPixels": 120000,
-      "durationMs": 808,
+      "durationMs": 2550,
       "errorMessage": null
     },
     {
@@ -150,7 +150,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 165,
+      "durationMs": 665,
       "errorMessage": null
     },
     {
@@ -163,7 +163,7 @@
       "diffPixels": 82,
       "shiftTolerantDiffPixels": 58,
       "totalPixels": 120000,
-      "durationMs": 793,
+      "durationMs": 2518,
       "errorMessage": null
     },
     {
@@ -176,7 +176,7 @@
       "diffPixels": 1017,
       "shiftTolerantDiffPixels": 501,
       "totalPixels": 120000,
-      "durationMs": 743,
+      "durationMs": 2131,
       "errorMessage": null
     },
     {
@@ -189,7 +189,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 241,
+      "durationMs": 675,
       "errorMessage": null
     },
     {
@@ -202,7 +202,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 255,
+      "durationMs": 415,
       "errorMessage": null
     },
     {
@@ -215,7 +215,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 254,
+      "durationMs": 771,
       "errorMessage": null
     },
     {
@@ -228,7 +228,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 204,
+      "durationMs": 705,
       "errorMessage": null
     },
     {
@@ -241,7 +241,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 161,
+      "durationMs": 526,
       "errorMessage": null
     },
     {
@@ -254,7 +254,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 123,
+      "durationMs": 763,
       "errorMessage": null
     },
     {
@@ -267,7 +267,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 219,
+      "durationMs": 619,
       "errorMessage": null
     },
     {
@@ -280,7 +280,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 156,
+      "durationMs": 622,
       "errorMessage": null
     },
     {
@@ -293,7 +293,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 136,
+      "durationMs": 635,
       "errorMessage": null
     },
     {
@@ -306,7 +306,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 225,
+      "durationMs": 622,
       "errorMessage": null
     },
     {
@@ -319,7 +319,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 254,
+      "durationMs": 595,
       "errorMessage": null
     },
     {
@@ -332,7 +332,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 261,
+      "durationMs": 569,
       "errorMessage": null
     },
     {
@@ -345,7 +345,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 133,
+      "durationMs": 646,
       "errorMessage": null
     },
     {
@@ -358,7 +358,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 265,
+      "durationMs": 729,
       "errorMessage": null
     },
     {
@@ -367,11 +367,11 @@
       "category": "List Styles",
       "outcome": "Fail",
       "diffPercentage": 0.09,
-      "shiftTolerantDiffPercentage": 0.0158,
+      "shiftTolerantDiffPercentage": 0.0167,
       "diffPixels": 108,
-      "shiftTolerantDiffPixels": 19,
+      "shiftTolerantDiffPixels": 20,
       "totalPixels": 120000,
-      "durationMs": 849,
+      "durationMs": 2592,
       "errorMessage": null
     },
     {
@@ -384,7 +384,7 @@
       "diffPixels": 124,
       "shiftTolerantDiffPixels": 28,
       "totalPixels": 120000,
-      "durationMs": 779,
+      "durationMs": 2609,
       "errorMessage": null
     },
     {
@@ -397,7 +397,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 236,
+      "durationMs": 761,
       "errorMessage": null
     },
     {
@@ -410,7 +410,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 211,
+      "durationMs": 763,
       "errorMessage": null
     },
     {
@@ -423,7 +423,7 @@
       "diffPixels": 12,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 668,
+      "durationMs": 2464,
       "errorMessage": null
     },
     {
@@ -436,7 +436,7 @@
       "diffPixels": 420,
       "shiftTolerantDiffPixels": 20,
       "totalPixels": 120000,
-      "durationMs": 719,
+      "durationMs": 2708,
       "errorMessage": null
     },
     {
@@ -449,7 +449,7 @@
       "diffPixels": 1712,
       "shiftTolerantDiffPixels": 152,
       "totalPixels": 120000,
-      "durationMs": 841,
+      "durationMs": 2776,
       "errorMessage": null
     },
     {
@@ -462,7 +462,7 @@
       "diffPixels": 243,
       "shiftTolerantDiffPixels": 156,
       "totalPixels": 120000,
-      "durationMs": 899,
+      "durationMs": 2646,
       "errorMessage": null
     },
     {
@@ -475,7 +475,7 @@
       "diffPixels": 178,
       "shiftTolerantDiffPixels": 72,
       "totalPixels": 120000,
-      "durationMs": 877,
+      "durationMs": 2680,
       "errorMessage": null
     },
     {
@@ -488,7 +488,7 @@
       "diffPixels": 538,
       "shiftTolerantDiffPixels": 412,
       "totalPixels": 120000,
-      "durationMs": 882,
+      "durationMs": 2683,
       "errorMessage": null
     },
     {
@@ -501,7 +501,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 213,
+      "durationMs": 746,
       "errorMessage": null
     },
     {
@@ -514,7 +514,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 216,
+      "durationMs": 756,
       "errorMessage": null
     },
     {
@@ -527,7 +527,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 219,
+      "durationMs": 783,
       "errorMessage": null
     },
     {
@@ -540,7 +540,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 206,
+      "durationMs": 765,
       "errorMessage": null
     },
     {
@@ -553,7 +553,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 230,
+      "durationMs": 709,
       "errorMessage": null
     },
     {
@@ -566,7 +566,7 @@
       "diffPixels": 183,
       "shiftTolerantDiffPixels": 32,
       "totalPixels": 120000,
-      "durationMs": 642,
+      "durationMs": 2527,
       "errorMessage": null
     },
     {
@@ -579,7 +579,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 234,
+      "durationMs": 744,
       "errorMessage": null
     },
     {
@@ -587,12 +587,12 @@
       "testName": "Nested Tables",
       "category": "Tables",
       "outcome": "Fail",
-      "diffPercentage": 0.6675,
-      "shiftTolerantDiffPercentage": 0.2367,
-      "diffPixels": 801,
-      "shiftTolerantDiffPixels": 284,
+      "diffPercentage": 0.0358,
+      "shiftTolerantDiffPercentage": 0.0258,
+      "diffPixels": 43,
+      "shiftTolerantDiffPixels": 31,
       "totalPixels": 120000,
-      "durationMs": 783,
+      "durationMs": 2451,
       "errorMessage": null
     },
     {
@@ -605,7 +605,7 @@
       "diffPixels": 253,
       "shiftTolerantDiffPixels": 95,
       "totalPixels": 120000,
-      "durationMs": 766,
+      "durationMs": 2459,
       "errorMessage": null
     },
     {
@@ -613,12 +613,12 @@
       "testName": "Text Indent",
       "category": "Typography",
       "outcome": "Pass",
-      "diffPercentage": 0.0017,
-      "shiftTolerantDiffPercentage": 0.0017,
-      "diffPixels": 2,
-      "shiftTolerantDiffPixels": 2,
+      "diffPercentage": 0,
+      "shiftTolerantDiffPercentage": 0,
+      "diffPixels": 0,
+      "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 779,
+      "durationMs": 698,
       "errorMessage": null
     },
     {
@@ -626,12 +626,12 @@
       "testName": "Text Overflow Ellipsis",
       "category": "Typography",
       "outcome": "Pass",
-      "diffPercentage": 0,
-      "shiftTolerantDiffPercentage": 0,
-      "diffPixels": 0,
-      "shiftTolerantDiffPixels": 0,
+      "diffPercentage": 0.0033,
+      "shiftTolerantDiffPercentage": 0.0008,
+      "diffPixels": 4,
+      "shiftTolerantDiffPixels": 1,
       "totalPixels": 120000,
-      "durationMs": 202,
+      "durationMs": 2459,
       "errorMessage": null
     },
     {
@@ -644,7 +644,7 @@
       "diffPixels": 1308,
       "shiftTolerantDiffPixels": 650,
       "totalPixels": 120000,
-      "durationMs": 815,
+      "durationMs": 2506,
       "errorMessage": null
     },
     {
@@ -657,7 +657,7 @@
       "diffPixels": 828,
       "shiftTolerantDiffPixels": 406,
       "totalPixels": 120000,
-      "durationMs": 856,
+      "durationMs": 2486,
       "errorMessage": null
     },
     {
@@ -670,7 +670,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 149,
+      "durationMs": 620,
       "errorMessage": null
     },
     {
@@ -683,7 +683,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 275,
+      "durationMs": 564,
       "errorMessage": null
     },
     {
@@ -696,7 +696,7 @@
       "diffPixels": 324,
       "shiftTolerantDiffPixels": 50,
       "totalPixels": 120000,
-      "durationMs": 971,
+      "durationMs": 2572,
       "errorMessage": null
     },
     {
@@ -709,7 +709,7 @@
       "diffPixels": 87,
       "shiftTolerantDiffPixels": 20,
       "totalPixels": 120000,
-      "durationMs": 965,
+      "durationMs": 2508,
       "errorMessage": null
     },
     {
@@ -722,7 +722,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 227,
+      "durationMs": 692,
       "errorMessage": null
     },
     {
@@ -735,7 +735,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 255,
+      "durationMs": 781,
       "errorMessage": null
     },
     {
@@ -748,7 +748,7 @@
       "diffPixels": 87,
       "shiftTolerantDiffPixels": 18,
       "totalPixels": 120000,
-      "durationMs": 973,
+      "durationMs": 2272,
       "errorMessage": null
     },
     {
@@ -761,7 +761,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 568,
+      "durationMs": 2685,
       "errorMessage": null
     },
     {
@@ -774,7 +774,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 1965,
+      "durationMs": 2712,
       "errorMessage": null
     },
     {
@@ -787,7 +787,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 170,
+      "durationMs": 788,
       "errorMessage": null
     },
     {
@@ -800,7 +800,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 213,
+      "durationMs": 610,
       "errorMessage": null
     },
     {
@@ -813,7 +813,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 342,
+      "durationMs": 749,
       "errorMessage": null
     },
     {
@@ -826,7 +826,7 @@
       "diffPixels": 4,
       "shiftTolerantDiffPixels": 4,
       "totalPixels": 120000,
-      "durationMs": 736,
+      "durationMs": 2450,
       "errorMessage": null
     },
     {
@@ -839,7 +839,7 @@
       "diffPixels": 2,
       "shiftTolerantDiffPixels": 2,
       "totalPixels": 120000,
-      "durationMs": 1352,
+      "durationMs": 2352,
       "errorMessage": null
     },
     {
@@ -852,7 +852,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 206,
+      "durationMs": 679,
       "errorMessage": null
     },
     {
@@ -860,12 +860,12 @@
       "testName": "Mixed Border Styles",
       "category": "Borders",
       "outcome": "Fail",
-      "diffPercentage": 0.7742,
-      "shiftTolerantDiffPercentage": 0.0517,
-      "diffPixels": 929,
-      "shiftTolerantDiffPixels": 62,
+      "diffPercentage": 0.3883,
+      "shiftTolerantDiffPercentage": 0.0042,
+      "diffPixels": 466,
+      "shiftTolerantDiffPixels": 5,
       "totalPixels": 120000,
-      "durationMs": 812,
+      "durationMs": 2473,
       "errorMessage": null
     },
     {
@@ -878,7 +878,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 371,
+      "durationMs": 723,
       "errorMessage": null
     },
     {
@@ -891,7 +891,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 222,
+      "durationMs": 667,
       "errorMessage": null
     },
     {
@@ -904,7 +904,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 210,
+      "durationMs": 641,
       "errorMessage": null
     },
     {
@@ -917,7 +917,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 233,
+      "durationMs": 588,
       "errorMessage": null
     },
     {
@@ -930,7 +930,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 214,
+      "durationMs": 603,
       "errorMessage": null
     },
     {
@@ -943,7 +943,7 @@
       "diffPixels": 2,
       "shiftTolerantDiffPixels": 1,
       "totalPixels": 120000,
-      "durationMs": 574,
+      "durationMs": 2202,
       "errorMessage": null
     },
     {
@@ -956,7 +956,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 225,
+      "durationMs": 576,
       "errorMessage": null
     },
     {
@@ -969,7 +969,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 208,
+      "durationMs": 612,
       "errorMessage": null
     },
     {
@@ -982,7 +982,7 @@
       "diffPixels": 888,
       "shiftTolerantDiffPixels": 20,
       "totalPixels": 120000,
-      "durationMs": 766,
+      "durationMs": 2480,
       "errorMessage": null
     },
     {
@@ -995,7 +995,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 239,
+      "durationMs": 611,
       "errorMessage": null
     },
     {
@@ -1008,7 +1008,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 183,
+      "durationMs": 610,
       "errorMessage": null
     },
     {
@@ -1021,7 +1021,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 150,
+      "durationMs": 668,
       "errorMessage": null
     },
     {
@@ -1034,7 +1034,7 @@
       "diffPixels": 16,
       "shiftTolerantDiffPixels": 16,
       "totalPixels": 120000,
-      "durationMs": 705,
+      "durationMs": 2441,
       "errorMessage": null
     },
     {
@@ -1047,7 +1047,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 199,
+      "durationMs": 578,
       "errorMessage": null
     },
     {
@@ -1060,7 +1060,7 @@
       "diffPixels": 3,
       "shiftTolerantDiffPixels": 3,
       "totalPixels": 120000,
-      "durationMs": 704,
+      "durationMs": 2381,
       "errorMessage": null
     },
     {
@@ -1073,7 +1073,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 175,
+      "durationMs": 628,
       "errorMessage": null
     },
     {
@@ -1086,7 +1086,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 215,
+      "durationMs": 583,
       "errorMessage": null
     },
     {
@@ -1099,7 +1099,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 269,
+      "durationMs": 640,
       "errorMessage": null
     },
     {
@@ -1112,7 +1112,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 244,
+      "durationMs": 589,
       "errorMessage": null
     },
     {
@@ -1125,7 +1125,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 179,
+      "durationMs": 605,
       "errorMessage": null
     },
     {
@@ -1138,7 +1138,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 151,
+      "durationMs": 595,
       "errorMessage": null
     },
     {
@@ -1151,7 +1151,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 218,
+      "durationMs": 681,
       "errorMessage": null
     },
     {
@@ -1164,7 +1164,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 208,
+      "durationMs": 616,
       "errorMessage": null
     },
     {
@@ -1177,7 +1177,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 192,
+      "durationMs": 599,
       "errorMessage": null
     },
     {
@@ -1190,7 +1190,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 249,
+      "durationMs": 658,
       "errorMessage": null
     },
     {
@@ -1203,7 +1203,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 153,
+      "durationMs": 680,
       "errorMessage": null
     },
     {
@@ -1216,7 +1216,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 203,
+      "durationMs": 630,
       "errorMessage": null
     },
     {
@@ -1229,7 +1229,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 234,
+      "durationMs": 760,
       "errorMessage": null
     },
     {
@@ -1242,7 +1242,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 155,
+      "durationMs": 614,
       "errorMessage": null
     },
     {
@@ -1255,7 +1255,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 255,
+      "durationMs": 749,
       "errorMessage": null
     },
     {
@@ -1268,7 +1268,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 126,
+      "durationMs": 608,
       "errorMessage": null
     },
     {
@@ -1281,7 +1281,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 269,
+      "durationMs": 646,
       "errorMessage": null
     },
     {
@@ -1294,7 +1294,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 130,
+      "durationMs": 594,
       "errorMessage": null
     },
     {
@@ -1307,7 +1307,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 168,
+      "durationMs": 776,
       "errorMessage": null
     },
     {
@@ -1320,7 +1320,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 180,
+      "durationMs": 690,
       "errorMessage": null
     },
     {
@@ -1333,7 +1333,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 281,
+      "durationMs": 738,
       "errorMessage": null
     },
     {
@@ -1346,7 +1346,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 212,
+      "durationMs": 746,
       "errorMessage": null
     },
     {
@@ -1359,7 +1359,7 @@
       "diffPixels": 98,
       "shiftTolerantDiffPixels": 27,
       "totalPixels": 120000,
-      "durationMs": 599,
+      "durationMs": 2279,
       "errorMessage": null
     },
     {
@@ -1372,7 +1372,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 175,
+      "durationMs": 740,
       "errorMessage": null
     },
     {
@@ -1385,7 +1385,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 273,
+      "durationMs": 725,
       "errorMessage": null
     },
     {
@@ -1398,7 +1398,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 287,
+      "durationMs": 701,
       "errorMessage": null
     },
     {
@@ -1411,7 +1411,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 327,
+      "durationMs": 740,
       "errorMessage": null
     },
     {
@@ -1424,7 +1424,7 @@
       "diffPixels": 3280,
       "shiftTolerantDiffPixels": 2312,
       "totalPixels": 120000,
-      "durationMs": 1249,
+      "durationMs": 4019,
       "errorMessage": null
     },
     {
@@ -1437,7 +1437,7 @@
       "diffPixels": 1380,
       "shiftTolerantDiffPixels": 604,
       "totalPixels": 120000,
-      "durationMs": 1260,
+      "durationMs": 3977,
       "errorMessage": null
     },
     {
@@ -1450,7 +1450,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 291,
+      "durationMs": 709,
       "errorMessage": null
     },
     {
@@ -1463,7 +1463,7 @@
       "diffPixels": 508,
       "shiftTolerantDiffPixels": 384,
       "totalPixels": 120000,
-      "durationMs": 637,
+      "durationMs": 2501,
       "errorMessage": null
     },
     {
@@ -1476,7 +1476,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 169,
+      "durationMs": 615,
       "errorMessage": null
     },
     {
@@ -1489,7 +1489,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 247,
+      "durationMs": 770,
       "errorMessage": null
     },
     {
@@ -1502,7 +1502,7 @@
       "diffPixels": 232,
       "shiftTolerantDiffPixels": 95,
       "totalPixels": 120000,
-      "durationMs": 726,
+      "durationMs": 2645,
       "errorMessage": null
     },
     {
@@ -1510,12 +1510,12 @@
       "testName": "Anonymous block wrappers have no decoration",
       "category": "Flexbox",
       "outcome": "Fail",
-      "diffPercentage": 1.3533,
-      "shiftTolerantDiffPercentage": 0.395,
-      "diffPixels": 1624,
-      "shiftTolerantDiffPixels": 474,
+      "diffPercentage": 0.34,
+      "shiftTolerantDiffPercentage": 0.1325,
+      "diffPixels": 408,
+      "shiftTolerantDiffPixels": 159,
       "totalPixels": 120000,
-      "durationMs": 756,
+      "durationMs": 2513,
       "errorMessage": null
     },
     {
@@ -1528,7 +1528,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 154,
+      "durationMs": 654,
       "errorMessage": null
     },
     {
@@ -1541,7 +1541,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 178,
+      "durationMs": 675,
       "errorMessage": null
     },
     {
@@ -1554,7 +1554,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 249,
+      "durationMs": 663,
       "errorMessage": null
     },
     {
@@ -1567,7 +1567,7 @@
       "diffPixels": 212,
       "shiftTolerantDiffPixels": 113,
       "totalPixels": 120000,
-      "durationMs": 806,
+      "durationMs": 2482,
       "errorMessage": null
     },
     {
@@ -1575,12 +1575,12 @@
       "testName": "Table overlapping rowspans (no double-inflation)",
       "category": "Tables",
       "outcome": "Fail",
-      "diffPercentage": 0.05,
-      "shiftTolerantDiffPercentage": 0.0292,
-      "diffPixels": 60,
-      "shiftTolerantDiffPixels": 35,
+      "diffPercentage": 0.06,
+      "shiftTolerantDiffPercentage": 0.0325,
+      "diffPixels": 72,
+      "shiftTolerantDiffPixels": 39,
       "totalPixels": 120000,
-      "durationMs": 748,
+      "durationMs": 2452,
       "errorMessage": null
     },
     {
@@ -1588,12 +1588,12 @@
       "testName": "Soft hyphen visible at line break",
       "category": "Typography",
       "outcome": "Fail",
-      "diffPercentage": 1.595,
-      "shiftTolerantDiffPercentage": 0.595,
-      "diffPixels": 1914,
-      "shiftTolerantDiffPixels": 714,
+      "diffPercentage": 0.74,
+      "shiftTolerantDiffPercentage": 0.3633,
+      "diffPixels": 888,
+      "shiftTolerantDiffPixels": 436,
       "totalPixels": 120000,
-      "durationMs": 737,
+      "durationMs": 2484,
       "errorMessage": null
     },
     {
@@ -1606,7 +1606,7 @@
       "diffPixels": 4,
       "shiftTolerantDiffPixels": 3,
       "totalPixels": 120000,
-      "durationMs": 762,
+      "durationMs": 2542,
       "errorMessage": null
     },
     {
@@ -1619,7 +1619,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 203,
+      "durationMs": 736,
       "errorMessage": null
     },
     {
@@ -1632,7 +1632,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 259,
+      "durationMs": 728,
       "errorMessage": null
     },
     {
@@ -1645,7 +1645,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 232,
+      "durationMs": 733,
       "errorMessage": null
     },
     {
@@ -1658,7 +1658,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 223,
+      "durationMs": 644,
       "errorMessage": null
     },
     {
@@ -1671,7 +1671,7 @@
       "diffPixels": 408,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 754,
+      "durationMs": 2632,
       "errorMessage": null
     },
     {
@@ -1684,7 +1684,7 @@
       "diffPixels": 473,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 779,
+      "durationMs": 2498,
       "errorMessage": null
     },
     {
@@ -1697,7 +1697,7 @@
       "diffPixels": 96,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 852,
+      "durationMs": 2502,
       "errorMessage": null
     },
     {
@@ -1710,7 +1710,7 @@
       "diffPixels": 386,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 857,
+      "durationMs": 2553,
       "errorMessage": null
     },
     {
@@ -1723,7 +1723,7 @@
       "diffPixels": 32,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 755,
+      "durationMs": 2290,
       "errorMessage": null
     },
     {
@@ -1736,7 +1736,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 288,
+      "durationMs": 657,
       "errorMessage": null
     },
     {
@@ -1744,12 +1744,12 @@
       "testName": "Background Image Tiling",
       "category": "Color \u0026 Background",
       "outcome": "Fail",
-      "diffPercentage": 3.7842,
-      "shiftTolerantDiffPercentage": 0.005,
-      "diffPixels": 4541,
-      "shiftTolerantDiffPixels": 6,
+      "diffPercentage": 0.02,
+      "shiftTolerantDiffPercentage": 0.0067,
+      "diffPixels": 24,
+      "shiftTolerantDiffPixels": 8,
       "totalPixels": 120000,
-      "durationMs": 792,
+      "durationMs": 2517,
       "errorMessage": null
     },
     {
@@ -1762,7 +1762,7 @@
       "diffPixels": 32,
       "shiftTolerantDiffPixels": 32,
       "totalPixels": 120000,
-      "durationMs": 572,
+      "durationMs": 2416,
       "errorMessage": null
     },
     {
@@ -1775,7 +1775,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 282,
+      "durationMs": 568,
       "errorMessage": null
     },
     {
@@ -1788,7 +1788,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 251,
+      "durationMs": 725,
       "errorMessage": null
     },
     {
@@ -1801,7 +1801,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 238,
+      "durationMs": 683,
       "errorMessage": null
     },
     {
@@ -1814,7 +1814,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 267,
+      "durationMs": 588,
       "errorMessage": null
     },
     {
@@ -1827,7 +1827,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 247,
+      "durationMs": 656,
       "errorMessage": null
     },
     {
@@ -1840,7 +1840,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 256,
+      "durationMs": 710,
       "errorMessage": null
     },
     {
@@ -1853,7 +1853,7 @@
       "diffPixels": 4,
       "shiftTolerantDiffPixels": 4,
       "totalPixels": 120000,
-      "durationMs": 771,
+      "durationMs": 2333,
       "errorMessage": null
     },
     {
@@ -1866,7 +1866,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 232,
+      "durationMs": 646,
       "errorMessage": null
     },
     {
@@ -1879,7 +1879,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 231,
+      "durationMs": 602,
       "errorMessage": null
     },
     {
@@ -1892,7 +1892,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 283,
+      "durationMs": 609,
       "errorMessage": null
     },
     {
@@ -1905,7 +1905,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 243,
+      "durationMs": 723,
       "errorMessage": null
     },
     {
@@ -1918,7 +1918,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 243,
+      "durationMs": 728,
       "errorMessage": null
     },
     {
@@ -1931,7 +1931,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 131,
+      "durationMs": 699,
       "errorMessage": null
     },
     {
@@ -1944,7 +1944,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 168,
+      "durationMs": 255,
       "errorMessage": null
     },
     {
@@ -1952,12 +1952,12 @@
       "testName": "Definition List (dl/dt/dd)",
       "category": "Semantic Elements",
       "outcome": "Pass",
-      "diffPercentage": 0.0033,
-      "shiftTolerantDiffPercentage": 0.0008,
-      "diffPixels": 4,
-      "shiftTolerantDiffPixels": 1,
+      "diffPercentage": 0,
+      "shiftTolerantDiffPercentage": 0,
+      "diffPixels": 0,
+      "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 741,
+      "durationMs": 670,
       "errorMessage": null
     },
     {
@@ -1970,7 +1970,7 @@
       "diffPixels": 1257,
       "shiftTolerantDiffPixels": 556,
       "totalPixels": 120000,
-      "durationMs": 755,
+      "durationMs": 2503,
       "errorMessage": null
     },
     {
@@ -1983,7 +1983,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 250,
+      "durationMs": 841,
       "errorMessage": null
     },
     {
@@ -1996,7 +1996,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 199,
+      "durationMs": 550,
       "errorMessage": null
     },
     {
@@ -2009,7 +2009,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 250,
+      "durationMs": 723,
       "errorMessage": null
     },
     {
@@ -2022,7 +2022,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 171,
+      "durationMs": 713,
       "errorMessage": null
     },
     {
@@ -2035,7 +2035,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 166,
+      "durationMs": 425,
       "errorMessage": null
     },
     {
@@ -2048,7 +2048,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 225,
+      "durationMs": 709,
       "errorMessage": null
     },
     {
@@ -2061,7 +2061,7 @@
       "diffPixels": 8,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 692,
+      "durationMs": 2499,
       "errorMessage": null
     },
     {
@@ -2074,7 +2074,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 242,
+      "durationMs": 686,
       "errorMessage": null
     },
     {
@@ -2087,7 +2087,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 249,
+      "durationMs": 677,
       "errorMessage": null
     },
     {
@@ -2100,7 +2100,7 @@
       "diffPixels": 230,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 653,
+      "durationMs": 2156,
       "errorMessage": null
     },
     {
@@ -2113,7 +2113,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 143,
+      "durationMs": 721,
       "errorMessage": null
     },
     {
@@ -2126,7 +2126,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 222,
+      "durationMs": 707,
       "errorMessage": null
     },
     {
@@ -2139,7 +2139,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 139,
+      "durationMs": 757,
       "errorMessage": null
     },
     {
@@ -2152,7 +2152,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 235,
+      "durationMs": 748,
       "errorMessage": null
     },
     {
@@ -2165,7 +2165,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 200,
+      "durationMs": 637,
       "errorMessage": null
     },
     {
@@ -2178,7 +2178,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 204,
+      "durationMs": 556,
       "errorMessage": null
     },
     {
@@ -2191,7 +2191,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 183,
+      "durationMs": 619,
       "errorMessage": null
     },
     {
@@ -2204,7 +2204,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 258,
+      "durationMs": 557,
       "errorMessage": null
     },
     {
@@ -2217,7 +2217,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 229,
+      "durationMs": 704,
       "errorMessage": null
     },
     {
@@ -2230,7 +2230,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 174,
+      "durationMs": 593,
       "errorMessage": null
     },
     {
@@ -2243,7 +2243,7 @@
       "diffPixels": 27,
       "shiftTolerantDiffPixels": 20,
       "totalPixels": 120000,
-      "durationMs": 603,
+      "durationMs": 2299,
       "errorMessage": null
     },
     {
@@ -2256,7 +2256,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 171,
+      "durationMs": 709,
       "errorMessage": null
     },
     {
@@ -2269,7 +2269,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 188,
+      "durationMs": 597,
       "errorMessage": null
     },
     {
@@ -2282,7 +2282,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 170,
+      "durationMs": 594,
       "errorMessage": null
     },
     {
@@ -2295,7 +2295,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 149,
+      "durationMs": 686,
       "errorMessage": null
     },
     {
@@ -2308,7 +2308,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 188,
+      "durationMs": 610,
       "errorMessage": null
     },
     {
@@ -2321,7 +2321,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 225,
+      "durationMs": 694,
       "errorMessage": null
     },
     {
@@ -2334,7 +2334,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 243,
+      "durationMs": 640,
       "errorMessage": null
     },
     {
@@ -2347,7 +2347,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 215,
+      "durationMs": 692,
       "errorMessage": null
     },
     {
@@ -2360,7 +2360,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 202,
+      "durationMs": 696,
       "errorMessage": null
     },
     {
@@ -2373,7 +2373,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 229,
+      "durationMs": 712,
       "errorMessage": null
     },
     {
@@ -2386,7 +2386,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 143,
+      "durationMs": 724,
       "errorMessage": null
     },
     {
@@ -2399,7 +2399,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 300,
+      "durationMs": 605,
       "errorMessage": null
     },
     {
@@ -2412,7 +2412,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 130,
+      "durationMs": 707,
       "errorMessage": null
     },
     {
@@ -2425,7 +2425,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 155,
+      "durationMs": 733,
       "errorMessage": null
     },
     {
@@ -2438,7 +2438,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 245,
+      "durationMs": 746,
       "errorMessage": null
     },
     {
@@ -2451,7 +2451,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 199,
+      "durationMs": 678,
       "errorMessage": null
     },
     {
@@ -2464,7 +2464,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 197,
+      "durationMs": 710,
       "errorMessage": null
     },
     {
@@ -2477,7 +2477,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 236,
+      "durationMs": 807,
       "errorMessage": null
     },
     {
@@ -2490,7 +2490,7 @@
       "diffPixels": 67,
       "shiftTolerantDiffPixels": 51,
       "totalPixels": 120000,
-      "durationMs": 730,
+      "durationMs": 2256,
       "errorMessage": null
     },
     {
@@ -2503,7 +2503,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 266,
+      "durationMs": 685,
       "errorMessage": null
     },
     {
@@ -2516,7 +2516,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 210,
+      "durationMs": 716,
       "errorMessage": null
     },
     {
@@ -2529,7 +2529,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 205,
+      "durationMs": 754,
       "errorMessage": null
     },
     {
@@ -2542,7 +2542,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 216,
+      "durationMs": 744,
       "errorMessage": null
     },
     {
@@ -2555,7 +2555,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 188,
+      "durationMs": 647,
       "errorMessage": null
     },
     {
@@ -2568,7 +2568,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 201,
+      "durationMs": 693,
       "errorMessage": null
     },
     {
@@ -2581,7 +2581,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 250,
+      "durationMs": 639,
       "errorMessage": null
     },
     {
@@ -2594,7 +2594,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 159,
+      "durationMs": 685,
       "errorMessage": null
     },
     {
@@ -2607,7 +2607,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 174,
+      "durationMs": 688,
       "errorMessage": null
     },
     {
@@ -2620,7 +2620,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 206,
+      "durationMs": 605,
       "errorMessage": null
     },
     {
@@ -2633,7 +2633,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 214,
+      "durationMs": 655,
       "errorMessage": null
     },
     {
@@ -2646,7 +2646,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 226,
+      "durationMs": 658,
       "errorMessage": null
     },
     {
@@ -2659,7 +2659,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 179,
+      "durationMs": 675,
       "errorMessage": null
     },
     {
@@ -2672,7 +2672,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 220,
+      "durationMs": 650,
       "errorMessage": null
     },
     {
@@ -2685,7 +2685,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 207,
+      "durationMs": 666,
       "errorMessage": null
     },
     {
@@ -2698,7 +2698,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 237,
+      "durationMs": 678,
       "errorMessage": null
     },
     {
@@ -2711,7 +2711,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 214,
+      "durationMs": 655,
       "errorMessage": null
     },
     {
@@ -2724,7 +2724,7 @@
       "diffPixels": 585,
       "shiftTolerantDiffPixels": 152,
       "totalPixels": 120000,
-      "durationMs": 893,
+      "durationMs": 2541,
       "errorMessage": null
     },
     {
@@ -2737,7 +2737,7 @@
       "diffPixels": 2198,
       "shiftTolerantDiffPixels": 260,
       "totalPixels": 120000,
-      "durationMs": 803,
+      "durationMs": 2580,
       "errorMessage": null
     },
     {
@@ -2750,7 +2750,7 @@
       "diffPixels": 2372,
       "shiftTolerantDiffPixels": 258,
       "totalPixels": 120000,
-      "durationMs": 870,
+      "durationMs": 2540,
       "errorMessage": null
     },
     {
@@ -2758,12 +2758,12 @@
       "testName": "Select and Textarea",
       "category": "Form Controls",
       "outcome": "Fail",
-      "diffPercentage": 0.8075,
-      "shiftTolerantDiffPercentage": 0.0633,
-      "diffPixels": 969,
-      "shiftTolerantDiffPixels": 76,
+      "diffPercentage": 0.3675,
+      "shiftTolerantDiffPercentage": 0.065,
+      "diffPixels": 441,
+      "shiftTolerantDiffPixels": 78,
       "totalPixels": 120000,
-      "durationMs": 865,
+      "durationMs": 2573,
       "errorMessage": null
     },
     {
@@ -2771,12 +2771,12 @@
       "testName": "Text Input Fields",
       "category": "Form Controls",
       "outcome": "Fail",
-      "diffPercentage": 2.175,
-      "shiftTolerantDiffPercentage": 0.1625,
-      "diffPixels": 2610,
-      "shiftTolerantDiffPixels": 195,
+      "diffPercentage": 0.9183,
+      "shiftTolerantDiffPercentage": 0.2658,
+      "diffPixels": 1102,
+      "shiftTolerantDiffPixels": 319,
       "totalPixels": 120000,
-      "durationMs": 760,
+      "durationMs": 2539,
       "errorMessage": null
     },
     {
@@ -2784,12 +2784,12 @@
       "testName": "Text Input Fields",
       "category": "Form Controls",
       "outcome": "Fail",
-      "diffPercentage": 0.9517,
-      "shiftTolerantDiffPercentage": 0.2233,
-      "diffPixels": 1142,
-      "shiftTolerantDiffPixels": 268,
+      "diffPercentage": 0.4483,
+      "shiftTolerantDiffPercentage": 0.3167,
+      "diffPixels": 538,
+      "shiftTolerantDiffPixels": 380,
       "totalPixels": 120000,
-      "durationMs": 814,
+      "durationMs": 2636,
       "errorMessage": null
     },
     {
@@ -2802,7 +2802,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 244,
+      "durationMs": 630,
       "errorMessage": null
     },
     {
@@ -2815,7 +2815,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 270,
+      "durationMs": 607,
       "errorMessage": null
     },
     {
@@ -2828,7 +2828,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 214,
+      "durationMs": 612,
       "errorMessage": null
     },
     {
@@ -2841,7 +2841,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 219,
+      "durationMs": 621,
       "errorMessage": null
     },
     {
@@ -2854,7 +2854,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 278,
+      "durationMs": 655,
       "errorMessage": null
     },
     {
@@ -2867,7 +2867,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 266,
+      "durationMs": 715,
       "errorMessage": null
     },
     {
@@ -2880,7 +2880,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 286,
+      "durationMs": 617,
       "errorMessage": null
     },
     {
@@ -2893,7 +2893,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 174,
+      "durationMs": 719,
       "errorMessage": null
     },
     {
@@ -2906,7 +2906,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 386,
+      "durationMs": 673,
       "errorMessage": null
     },
     {
@@ -2919,7 +2919,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 262,
+      "durationMs": 657,
       "errorMessage": null
     },
     {
@@ -2932,7 +2932,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 185,
+      "durationMs": 698,
       "errorMessage": null
     },
     {
@@ -2945,7 +2945,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 276,
+      "durationMs": 675,
       "errorMessage": null
     },
     {
@@ -2958,7 +2958,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 251,
+      "durationMs": 644,
       "errorMessage": null
     },
     {
@@ -2971,7 +2971,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 251,
+      "durationMs": 717,
       "errorMessage": null
     },
     {
@@ -2979,12 +2979,12 @@
       "testName": "Grid Items with Flex Centering",
       "category": "Grid",
       "outcome": "Fail",
-      "diffPercentage": 0.0625,
-      "shiftTolerantDiffPercentage": 0.0358,
-      "diffPixels": 75,
-      "shiftTolerantDiffPixels": 43,
+      "diffPercentage": 0.0292,
+      "shiftTolerantDiffPercentage": 0.0133,
+      "diffPixels": 35,
+      "shiftTolerantDiffPixels": 16,
       "totalPixels": 120000,
-      "durationMs": 749,
+      "durationMs": 2331,
       "errorMessage": null
     },
     {
@@ -2997,7 +2997,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 167,
+      "durationMs": 675,
       "errorMessage": null
     },
     {
@@ -3010,7 +3010,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 274,
+      "durationMs": 636,
       "errorMessage": null
     },
     {
@@ -3023,7 +3023,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 134,
+      "durationMs": 672,
       "errorMessage": null
     },
     {
@@ -3036,7 +3036,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 189,
+      "durationMs": 659,
       "errorMessage": null
     },
     {
@@ -3049,7 +3049,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 263,
+      "durationMs": 656,
       "errorMessage": null
     },
     {
@@ -3062,7 +3062,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 289,
+      "durationMs": 746,
       "errorMessage": null
     },
     {
@@ -3075,7 +3075,7 @@
       "diffPixels": 466,
       "shiftTolerantDiffPixels": 51,
       "totalPixels": 120000,
-      "durationMs": 751,
+      "durationMs": 2341,
       "errorMessage": null
     },
     {
@@ -3088,7 +3088,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 364,
+      "durationMs": 679,
       "errorMessage": null
     },
     {
@@ -3101,7 +3101,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 140,
+      "durationMs": 613,
       "errorMessage": null
     },
     {
@@ -3114,7 +3114,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 125,
+      "durationMs": 637,
       "errorMessage": null
     },
     {
@@ -3127,7 +3127,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 186,
+      "durationMs": 540,
       "errorMessage": null
     },
     {
@@ -3140,7 +3140,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 197,
+      "durationMs": 651,
       "errorMessage": null
     },
     {
@@ -3153,7 +3153,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 216,
+      "durationMs": 685,
       "errorMessage": null
     },
     {
@@ -3166,7 +3166,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 263,
+      "durationMs": 712,
       "errorMessage": null
     },
     {
@@ -3179,7 +3179,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 282,
+      "durationMs": 691,
       "errorMessage": null
     },
     {
@@ -3192,7 +3192,7 @@
       "diffPixels": 2,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 760,
+      "durationMs": 2434,
       "errorMessage": null
     },
     {
@@ -3205,20 +3205,20 @@
       "diffPixels": 276,
       "shiftTolerantDiffPixels": 157,
       "totalPixels": 120000,
-      "durationMs": 818,
+      "durationMs": 2418,
       "errorMessage": null
     },
     {
       "testId": "inline-block-align",
       "testName": "Inline-Block Vertical Alignment",
       "category": "Inline Layout",
-      "outcome": "Fail",
-      "diffPercentage": 0.25,
-      "shiftTolerantDiffPercentage": 0.14,
-      "diffPixels": 300,
-      "shiftTolerantDiffPixels": 168,
+      "outcome": "Pass",
+      "diffPercentage": 0,
+      "shiftTolerantDiffPercentage": 0,
+      "diffPixels": 0,
+      "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 764,
+      "durationMs": 700,
       "errorMessage": null
     },
     {
@@ -3231,7 +3231,7 @@
       "diffPixels": 756,
       "shiftTolerantDiffPixels": 312,
       "totalPixels": 120000,
-      "durationMs": 857,
+      "durationMs": 2228,
       "errorMessage": null
     },
     {
@@ -3244,7 +3244,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 201,
+      "durationMs": 722,
       "errorMessage": null
     },
     {
@@ -3252,12 +3252,12 @@
       "testName": "Nested Lists",
       "category": "List Styles",
       "outcome": "Fail",
-      "diffPercentage": 0.1075,
-      "shiftTolerantDiffPercentage": 0.0175,
-      "diffPixels": 129,
-      "shiftTolerantDiffPixels": 21,
+      "diffPercentage": 0.1017,
+      "shiftTolerantDiffPercentage": 0.0133,
+      "diffPixels": 122,
+      "shiftTolerantDiffPixels": 16,
       "totalPixels": 120000,
-      "durationMs": 838,
+      "durationMs": 2556,
       "errorMessage": null
     },
     {
@@ -3270,7 +3270,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 304,
+      "durationMs": 800,
       "errorMessage": null
     },
     {
@@ -3283,7 +3283,7 @@
       "diffPixels": 1208,
       "shiftTolerantDiffPixels": 566,
       "totalPixels": 120000,
-      "durationMs": 729,
+      "durationMs": 2453,
       "errorMessage": null
     },
     {
@@ -3296,7 +3296,7 @@
       "diffPixels": 184,
       "shiftTolerantDiffPixels": 26,
       "totalPixels": 120000,
-      "durationMs": 843,
+      "durationMs": 2525,
       "errorMessage": null
     },
     {
@@ -3309,7 +3309,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 129,
+      "durationMs": 605,
       "errorMessage": null
     },
     {
@@ -3322,7 +3322,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 150,
+      "durationMs": 621,
       "errorMessage": null
     },
     {
@@ -3335,7 +3335,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 223,
+      "durationMs": 712,
       "errorMessage": null
     },
     {
@@ -3348,7 +3348,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 231,
+      "durationMs": 733,
       "errorMessage": null
     },
     {
@@ -3361,7 +3361,7 @@
       "diffPixels": 99,
       "shiftTolerantDiffPixels": 7,
       "totalPixels": 120000,
-      "durationMs": 705,
+      "durationMs": 2519,
       "errorMessage": null
     },
     {
@@ -3369,12 +3369,12 @@
       "testName": "MathML Quadratic Formula",
       "category": "MathML",
       "outcome": "Fail",
-      "diffPercentage": 0.7658,
-      "shiftTolerantDiffPercentage": 0.0908,
-      "diffPixels": 919,
-      "shiftTolerantDiffPixels": 109,
+      "diffPercentage": 0.7367,
+      "shiftTolerantDiffPercentage": 0.0933,
+      "diffPixels": 884,
+      "shiftTolerantDiffPixels": 112,
       "totalPixels": 120000,
-      "durationMs": 760,
+      "durationMs": 2497,
       "errorMessage": null
     },
     {
@@ -3387,7 +3387,7 @@
       "diffPixels": 1035,
       "shiftTolerantDiffPixels": 205,
       "totalPixels": 120000,
-      "durationMs": 637,
+      "durationMs": 2527,
       "errorMessage": null
     },
     {
@@ -3400,7 +3400,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 122,
+      "durationMs": 758,
       "errorMessage": null
     },
     {
@@ -3413,7 +3413,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 211,
+      "durationMs": 803,
       "errorMessage": null
     },
     {
@@ -3426,7 +3426,7 @@
       "diffPixels": 144,
       "shiftTolerantDiffPixels": 72,
       "totalPixels": 120000,
-      "durationMs": 678,
+      "durationMs": 2447,
       "errorMessage": null
     },
     {
@@ -3439,7 +3439,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 183,
+      "durationMs": 799,
       "errorMessage": null
     },
     {
@@ -3452,7 +3452,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 262,
+      "durationMs": 611,
       "errorMessage": null
     },
     {
@@ -3465,7 +3465,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 221,
+      "durationMs": 648,
       "errorMessage": null
     },
     {
@@ -3478,7 +3478,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 253,
+      "durationMs": 713,
       "errorMessage": null
     },
     {
@@ -3491,7 +3491,7 @@
       "diffPixels": 87,
       "shiftTolerantDiffPixels": 33,
       "totalPixels": 120000,
-      "durationMs": 462,
+      "durationMs": 2208,
       "errorMessage": null
     },
     {
@@ -3504,7 +3504,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 206,
+      "durationMs": 689,
       "errorMessage": null
     },
     {
@@ -3517,7 +3517,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 150,
+      "durationMs": 723,
       "errorMessage": null
     },
     {
@@ -3530,7 +3530,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 166,
+      "durationMs": 738,
       "errorMessage": null
     },
     {
@@ -3543,7 +3543,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 248,
+      "durationMs": 676,
       "errorMessage": null
     },
     {
@@ -3556,7 +3556,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 196,
+      "durationMs": 692,
       "errorMessage": null
     },
     {
@@ -3569,7 +3569,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 200,
+      "durationMs": 769,
       "errorMessage": null
     },
     {
@@ -3582,7 +3582,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 236,
+      "durationMs": 627,
       "errorMessage": null
     },
     {
@@ -3595,7 +3595,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 274,
+      "durationMs": 679,
       "errorMessage": null
     },
     {
@@ -3608,7 +3608,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 260,
+      "durationMs": 683,
       "errorMessage": null
     },
     {
@@ -3616,12 +3616,12 @@
       "testName": "CSS Outline Styles",
       "category": "Borders",
       "outcome": "Fail",
-      "diffPercentage": 0.4992,
-      "shiftTolerantDiffPercentage": 0.1883,
-      "diffPixels": 599,
-      "shiftTolerantDiffPixels": 226,
+      "diffPercentage": 0.12,
+      "shiftTolerantDiffPercentage": 0.1,
+      "diffPixels": 144,
+      "shiftTolerantDiffPixels": 120,
       "totalPixels": 120000,
-      "durationMs": 820,
+      "durationMs": 2535,
       "errorMessage": null
     },
     {
@@ -3634,7 +3634,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 232,
+      "durationMs": 599,
       "errorMessage": null
     },
     {
@@ -3647,7 +3647,7 @@
       "diffPixels": 137,
       "shiftTolerantDiffPixels": 32,
       "totalPixels": 120000,
-      "durationMs": 622,
+      "durationMs": 2387,
       "errorMessage": null
     },
     {
@@ -3660,7 +3660,7 @@
       "diffPixels": 118,
       "shiftTolerantDiffPixels": 12,
       "totalPixels": 120000,
-      "durationMs": 642,
+      "durationMs": 2487,
       "errorMessage": null
     },
     {
@@ -3673,7 +3673,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 256,
+      "durationMs": 681,
       "errorMessage": null
     },
     {
@@ -3686,7 +3686,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 176,
+      "durationMs": 695,
       "errorMessage": null
     },
     {
@@ -3699,7 +3699,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 224,
+      "durationMs": 618,
       "errorMessage": null
     },
     {
@@ -3712,7 +3712,7 @@
       "diffPixels": 78,
       "shiftTolerantDiffPixels": 29,
       "totalPixels": 120000,
-      "durationMs": 711,
+      "durationMs": 2479,
       "errorMessage": null
     },
     {
@@ -3725,7 +3725,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 245,
+      "durationMs": 737,
       "errorMessage": null
     },
     {
@@ -3738,7 +3738,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 197,
+      "durationMs": 681,
       "errorMessage": null
     },
     {
@@ -3751,7 +3751,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 270,
+      "durationMs": 706,
       "errorMessage": null
     },
     {
@@ -3764,7 +3764,7 @@
       "diffPixels": 169,
       "shiftTolerantDiffPixels": 54,
       "totalPixels": 120000,
-      "durationMs": 793,
+      "durationMs": 2687,
       "errorMessage": null
     },
     {
@@ -3777,7 +3777,7 @@
       "diffPixels": 755,
       "shiftTolerantDiffPixels": 322,
       "totalPixels": 120000,
-      "durationMs": 852,
+      "durationMs": 2693,
       "errorMessage": null
     },
     {
@@ -3790,7 +3790,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 243,
+      "durationMs": 758,
       "errorMessage": null
     },
     {
@@ -3803,7 +3803,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 271,
+      "durationMs": 719,
       "errorMessage": null
     },
     {
@@ -3811,12 +3811,12 @@
       "testName": "Chip List with Flex Wrap",
       "category": "Real-World Patterns",
       "outcome": "Fail",
-      "diffPercentage": 0.1892,
+      "diffPercentage": 0.1858,
       "shiftTolerantDiffPercentage": 0.0267,
-      "diffPixels": 227,
+      "diffPixels": 223,
       "shiftTolerantDiffPixels": 32,
       "totalPixels": 120000,
-      "durationMs": 859,
+      "durationMs": 2645,
       "errorMessage": null
     },
     {
@@ -3829,7 +3829,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 166,
+      "durationMs": 746,
       "errorMessage": null
     },
     {
@@ -3842,7 +3842,7 @@
       "diffPixels": 65,
       "shiftTolerantDiffPixels": 23,
       "totalPixels": 120000,
-      "durationMs": 776,
+      "durationMs": 2678,
       "errorMessage": null
     },
     {
@@ -3855,7 +3855,7 @@
       "diffPixels": 123,
       "shiftTolerantDiffPixels": 56,
       "totalPixels": 120000,
-      "durationMs": 785,
+      "durationMs": 2626,
       "errorMessage": null
     },
     {
@@ -3864,11 +3864,11 @@
       "category": "Real-World Patterns",
       "outcome": "Fail",
       "diffPercentage": 0.5817,
-      "shiftTolerantDiffPercentage": 0.0633,
+      "shiftTolerantDiffPercentage": 0.0667,
       "diffPixels": 698,
-      "shiftTolerantDiffPixels": 76,
+      "shiftTolerantDiffPixels": 80,
       "totalPixels": 120000,
-      "durationMs": 788,
+      "durationMs": 2574,
       "errorMessage": null
     },
     {
@@ -3881,7 +3881,7 @@
       "diffPixels": 52,
       "shiftTolerantDiffPixels": 19,
       "totalPixels": 120000,
-      "durationMs": 801,
+      "durationMs": 2545,
       "errorMessage": null
     },
     {
@@ -3894,7 +3894,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 220,
+      "durationMs": 715,
       "errorMessage": null
     },
     {
@@ -3902,12 +3902,12 @@
       "testName": "Login Form",
       "category": "Real-World Patterns",
       "outcome": "Fail",
-      "diffPercentage": 0.7133,
-      "shiftTolerantDiffPercentage": 0,
-      "diffPixels": 856,
-      "shiftTolerantDiffPixels": 0,
+      "diffPercentage": 0.0117,
+      "shiftTolerantDiffPercentage": 0.0008,
+      "diffPixels": 14,
+      "shiftTolerantDiffPixels": 1,
       "totalPixels": 120000,
-      "durationMs": 775,
+      "durationMs": 2731,
       "errorMessage": null
     },
     {
@@ -3920,7 +3920,7 @@
       "diffPixels": 2,
       "shiftTolerantDiffPixels": 2,
       "totalPixels": 120000,
-      "durationMs": 584,
+      "durationMs": 2678,
       "errorMessage": null
     },
     {
@@ -3933,7 +3933,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 253,
+      "durationMs": 610,
       "errorMessage": null
     },
     {
@@ -3941,12 +3941,12 @@
       "testName": "Navigation Bar",
       "category": "Real-World Patterns",
       "outcome": "Fail",
-      "diffPercentage": 0.1108,
-      "shiftTolerantDiffPercentage": 0.06,
-      "diffPixels": 133,
-      "shiftTolerantDiffPixels": 72,
+      "diffPercentage": 0.1058,
+      "shiftTolerantDiffPercentage": 0.0592,
+      "diffPixels": 127,
+      "shiftTolerantDiffPixels": 71,
       "totalPixels": 120000,
-      "durationMs": 808,
+      "durationMs": 2584,
       "errorMessage": null
     },
     {
@@ -3959,7 +3959,7 @@
       "diffPixels": 119,
       "shiftTolerantDiffPixels": 74,
       "totalPixels": 120000,
-      "durationMs": 777,
+      "durationMs": 2631,
       "errorMessage": null
     },
     {
@@ -3972,7 +3972,7 @@
       "diffPixels": 328,
       "shiftTolerantDiffPixels": 205,
       "totalPixels": 120000,
-      "durationMs": 713,
+      "durationMs": 2628,
       "errorMessage": null
     },
     {
@@ -3985,7 +3985,7 @@
       "diffPixels": 30,
       "shiftTolerantDiffPixels": 6,
       "totalPixels": 120000,
-      "durationMs": 836,
+      "durationMs": 2593,
       "errorMessage": null
     },
     {
@@ -3998,7 +3998,7 @@
       "diffPixels": 9,
       "shiftTolerantDiffPixels": 4,
       "totalPixels": 120000,
-      "durationMs": 767,
+      "durationMs": 2605,
       "errorMessage": null
     },
     {
@@ -4011,7 +4011,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 299,
+      "durationMs": 730,
       "errorMessage": null
     },
     {
@@ -4024,7 +4024,7 @@
       "diffPixels": 14,
       "shiftTolerantDiffPixels": 6,
       "totalPixels": 120000,
-      "durationMs": 750,
+      "durationMs": 2551,
       "errorMessage": null
     },
     {
@@ -4037,7 +4037,7 @@
       "diffPixels": 131,
       "shiftTolerantDiffPixels": 93,
       "totalPixels": 120000,
-      "durationMs": 774,
+      "durationMs": 2486,
       "errorMessage": null
     },
     {
@@ -4050,7 +4050,7 @@
       "diffPixels": 419,
       "shiftTolerantDiffPixels": 38,
       "totalPixels": 120000,
-      "durationMs": 853,
+      "durationMs": 2603,
       "errorMessage": null
     },
     {
@@ -4063,7 +4063,7 @@
       "diffPixels": 221,
       "shiftTolerantDiffPixels": 72,
       "totalPixels": 120000,
-      "durationMs": 790,
+      "durationMs": 2548,
       "errorMessage": null
     },
     {
@@ -4076,7 +4076,7 @@
       "diffPixels": 30,
       "shiftTolerantDiffPixels": 10,
       "totalPixels": 120000,
-      "durationMs": 851,
+      "durationMs": 2511,
       "errorMessage": null
     },
     {
@@ -4089,7 +4089,7 @@
       "diffPixels": 7,
       "shiftTolerantDiffPixels": 7,
       "totalPixels": 480000,
-      "durationMs": 3309,
+      "durationMs": 10513,
       "errorMessage": null
     },
     {
@@ -4097,12 +4097,12 @@
       "testName": "Playground: Architecture",
       "category": "Playground",
       "outcome": "Fail",
-      "diffPercentage": 5.9612,
-      "shiftTolerantDiffPercentage": 1.6675,
-      "diffPixels": 28614,
-      "shiftTolerantDiffPixels": 8004,
+      "diffPercentage": 4.4744,
+      "shiftTolerantDiffPercentage": 1.3675,
+      "diffPixels": 21477,
+      "shiftTolerantDiffPixels": 6564,
       "totalPixels": 480000,
-      "durationMs": 3068,
+      "durationMs": 10640,
       "errorMessage": null
     },
     {
@@ -4115,7 +4115,7 @@
       "diffPixels": 172,
       "shiftTolerantDiffPixels": 99,
       "totalPixels": 480000,
-      "durationMs": 3008,
+      "durationMs": 10645,
       "errorMessage": null
     },
     {
@@ -4128,7 +4128,7 @@
       "diffPixels": 1536,
       "shiftTolerantDiffPixels": 813,
       "totalPixels": 480000,
-      "durationMs": 2974,
+      "durationMs": 10629,
       "errorMessage": null
     },
     {
@@ -4141,7 +4141,7 @@
       "diffPixels": 6058,
       "shiftTolerantDiffPixels": 1581,
       "totalPixels": 480000,
-      "durationMs": 2994,
+      "durationMs": 10460,
       "errorMessage": null
     },
     {
@@ -4149,12 +4149,12 @@
       "testName": "Playground: Dashboard",
       "category": "Playground",
       "outcome": "Fail",
-      "diffPercentage": 0.9481,
-      "shiftTolerantDiffPercentage": 0.7046,
-      "diffPixels": 4551,
-      "shiftTolerantDiffPixels": 3382,
+      "diffPercentage": 0.3652,
+      "shiftTolerantDiffPercentage": 0.1423,
+      "diffPixels": 1753,
+      "shiftTolerantDiffPixels": 683,
       "totalPixels": 480000,
-      "durationMs": 3096,
+      "durationMs": 10476,
       "errorMessage": null
     },
     {
@@ -4167,7 +4167,7 @@
       "diffPixels": 681,
       "shiftTolerantDiffPixels": 253,
       "totalPixels": 480000,
-      "durationMs": 2931,
+      "durationMs": 9999,
       "errorMessage": null
     },
     {
@@ -4180,7 +4180,7 @@
       "diffPixels": 1142,
       "shiftTolerantDiffPixels": 58,
       "totalPixels": 480000,
-      "durationMs": 3000,
+      "durationMs": 10631,
       "errorMessage": null
     },
     {
@@ -4188,12 +4188,12 @@
       "testName": "Playground: Forms",
       "category": "Playground",
       "outcome": "Fail",
-      "diffPercentage": 2.5683,
-      "shiftTolerantDiffPercentage": 1.3277,
-      "diffPixels": 12328,
-      "shiftTolerantDiffPixels": 6373,
+      "diffPercentage": 2.3808,
+      "shiftTolerantDiffPercentage": 1.6419,
+      "diffPixels": 11428,
+      "shiftTolerantDiffPixels": 7881,
       "totalPixels": 480000,
-      "durationMs": 3442,
+      "durationMs": 10940,
       "errorMessage": null
     },
     {
@@ -4206,7 +4206,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 480000,
-      "durationMs": 747,
+      "durationMs": 2849,
       "errorMessage": null
     },
     {
@@ -4214,12 +4214,12 @@
       "testName": "Playground: Grid Layouts",
       "category": "Playground",
       "outcome": "Fail",
-      "diffPercentage": 0.3544,
-      "shiftTolerantDiffPercentage": 0.0815,
-      "diffPixels": 1701,
-      "shiftTolerantDiffPixels": 391,
+      "diffPercentage": 0.3102,
+      "shiftTolerantDiffPercentage": 0.0565,
+      "diffPixels": 1489,
+      "shiftTolerantDiffPixels": 271,
       "totalPixels": 480000,
-      "durationMs": 3126,
+      "durationMs": 10577,
       "errorMessage": null
     },
     {
@@ -4227,12 +4227,12 @@
       "testName": "Playground: CSS Grid Mosaic",
       "category": "Playground",
       "outcome": "Fail",
-      "diffPercentage": 0.7978,
-      "shiftTolerantDiffPercentage": 0.1214,
-      "diffPixels": 3997,
-      "shiftTolerantDiffPixels": 608,
+      "diffPercentage": 0.4713,
+      "shiftTolerantDiffPercentage": 0.0271,
+      "diffPixels": 2361,
+      "shiftTolerantDiffPixels": 136,
       "totalPixels": 500990,
-      "durationMs": 3406,
+      "durationMs": 11038,
       "errorMessage": null
     },
     {
@@ -4240,12 +4240,12 @@
       "testName": "Playground: Hello from Rend",
       "category": "Playground",
       "outcome": "Fail",
-      "diffPercentage": 1.3831,
-      "shiftTolerantDiffPercentage": 0.6495,
-      "diffPixels": 6929,
-      "shiftTolerantDiffPixels": 3254,
+      "diffPercentage": 0.6693,
+      "shiftTolerantDiffPercentage": 0.0114,
+      "diffPixels": 3353,
+      "shiftTolerantDiffPixels": 57,
       "totalPixels": 500990,
-      "durationMs": 3360,
+      "durationMs": 10874,
       "errorMessage": null
     },
     {
@@ -4258,7 +4258,7 @@
       "diffPixels": 400,
       "shiftTolerantDiffPixels": 208,
       "totalPixels": 480000,
-      "durationMs": 3072,
+      "durationMs": 10633,
       "errorMessage": null
     },
     {
@@ -4266,12 +4266,12 @@
       "testName": "Playground: Landing Page",
       "category": "Playground",
       "outcome": "Fail",
-      "diffPercentage": 0.4131,
-      "shiftTolerantDiffPercentage": 0.0617,
-      "diffPixels": 1983,
-      "shiftTolerantDiffPixels": 296,
+      "diffPercentage": 0.4102,
+      "shiftTolerantDiffPercentage": 0.0608,
+      "diffPixels": 1969,
+      "shiftTolerantDiffPixels": 292,
       "totalPixels": 480000,
-      "durationMs": 3143,
+      "durationMs": 10527,
       "errorMessage": null
     },
     {
@@ -4284,7 +4284,7 @@
       "diffPixels": 695,
       "shiftTolerantDiffPixels": 338,
       "totalPixels": 480000,
-      "durationMs": 3141,
+      "durationMs": 10364,
       "errorMessage": null
     },
     {
@@ -4297,7 +4297,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 480000,
-      "durationMs": 791,
+      "durationMs": 2875,
       "errorMessage": null
     },
     {
@@ -4310,7 +4310,7 @@
       "diffPixels": 84587,
       "shiftTolerantDiffPixels": 10044,
       "totalPixels": 480000,
-      "durationMs": 3063,
+      "durationMs": 10691,
       "errorMessage": null
     },
     {
@@ -4319,11 +4319,11 @@
       "category": "Playground",
       "outcome": "Fail",
       "diffPercentage": 5.1375,
-      "shiftTolerantDiffPercentage": 1.0181,
+      "shiftTolerantDiffPercentage": 1.0104,
       "diffPixels": 24660,
-      "shiftTolerantDiffPixels": 4887,
+      "shiftTolerantDiffPixels": 4850,
       "totalPixels": 480000,
-      "durationMs": 3118,
+      "durationMs": 10489,
       "errorMessage": null
     },
     {
@@ -4331,12 +4331,12 @@
       "testName": "Playground: Print Document",
       "category": "Playground",
       "outcome": "Fail",
-      "diffPercentage": 0.8052,
-      "shiftTolerantDiffPercentage": 0.4175,
-      "diffPixels": 3865,
-      "shiftTolerantDiffPixels": 2004,
+      "diffPercentage": 0.7715,
+      "shiftTolerantDiffPercentage": 0.4131,
+      "diffPixels": 3703,
+      "shiftTolerantDiffPixels": 1983,
       "totalPixels": 480000,
-      "durationMs": 3111,
+      "durationMs": 10588,
       "errorMessage": null
     },
     {
@@ -4349,7 +4349,7 @@
       "diffPixels": 2870,
       "shiftTolerantDiffPixels": 560,
       "totalPixels": 480000,
-      "durationMs": 3220,
+      "durationMs": 10520,
       "errorMessage": null
     },
     {
@@ -4362,7 +4362,7 @@
       "diffPixels": 10165,
       "shiftTolerantDiffPixels": 3180,
       "totalPixels": 480000,
-      "durationMs": 2925,
+      "durationMs": 9846,
       "errorMessage": null
     },
     {
@@ -4375,7 +4375,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 480000,
-      "durationMs": 839,
+      "durationMs": 3094,
       "errorMessage": null
     },
     {
@@ -4388,7 +4388,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 275,
+      "durationMs": 683,
       "errorMessage": null
     },
     {
@@ -4401,7 +4401,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 250,
+      "durationMs": 777,
       "errorMessage": null
     },
     {
@@ -4414,7 +4414,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 153,
+      "durationMs": 590,
       "errorMessage": null
     },
     {
@@ -4427,7 +4427,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 325,
+      "durationMs": 682,
       "errorMessage": null
     },
     {
@@ -4440,7 +4440,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 313,
+      "durationMs": 717,
       "errorMessage": null
     },
     {
@@ -4453,7 +4453,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 266,
+      "durationMs": 579,
       "errorMessage": null
     },
     {
@@ -4466,7 +4466,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 168,
+      "durationMs": 741,
       "errorMessage": null
     },
     {
@@ -4479,7 +4479,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 345,
+      "durationMs": 654,
       "errorMessage": null
     },
     {
@@ -4492,7 +4492,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 247,
+      "durationMs": 747,
       "errorMessage": null
     },
     {
@@ -4505,7 +4505,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 248,
+      "durationMs": 793,
       "errorMessage": null
     },
     {
@@ -4518,7 +4518,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 318,
+      "durationMs": 711,
       "errorMessage": null
     },
     {
@@ -4531,7 +4531,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 174,
+      "durationMs": 695,
       "errorMessage": null
     },
     {
@@ -4544,7 +4544,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 255,
+      "durationMs": 598,
       "errorMessage": null
     },
     {
@@ -4557,7 +4557,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 333,
+      "durationMs": 720,
       "errorMessage": null
     },
     {
@@ -4570,7 +4570,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 189,
+      "durationMs": 747,
       "errorMessage": null
     },
     {
@@ -4583,7 +4583,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 239,
+      "durationMs": 750,
       "errorMessage": null
     },
     {
@@ -4596,7 +4596,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 259,
+      "durationMs": 547,
       "errorMessage": null
     },
     {
@@ -4609,7 +4609,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 319,
+      "durationMs": 579,
       "errorMessage": null
     },
     {
@@ -4622,7 +4622,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 305,
+      "durationMs": 683,
       "errorMessage": null
     },
     {
@@ -4635,7 +4635,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 274,
+      "durationMs": 732,
       "errorMessage": null
     },
     {
@@ -4648,7 +4648,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 281,
+      "durationMs": 678,
       "errorMessage": null
     },
     {
@@ -4661,7 +4661,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 269,
+      "durationMs": 656,
       "errorMessage": null
     },
     {
@@ -4674,7 +4674,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 311,
+      "durationMs": 774,
       "errorMessage": null
     },
     {
@@ -4687,7 +4687,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 205,
+      "durationMs": 718,
       "errorMessage": null
     },
     {
@@ -4700,7 +4700,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 276,
+      "durationMs": 668,
       "errorMessage": null
     },
     {
@@ -4713,7 +4713,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 137,
+      "durationMs": 786,
       "errorMessage": null
     },
     {
@@ -4726,7 +4726,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 172,
+      "durationMs": 646,
       "errorMessage": null
     },
     {
@@ -4739,7 +4739,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 249,
+      "durationMs": 721,
       "errorMessage": null
     },
     {
@@ -4752,7 +4752,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 313,
+      "durationMs": 581,
       "errorMessage": null
     },
     {
@@ -4765,7 +4765,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 243,
+      "durationMs": 707,
       "errorMessage": null
     },
     {
@@ -4778,7 +4778,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 281,
+      "durationMs": 657,
       "errorMessage": null
     },
     {
@@ -4791,7 +4791,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 280,
+      "durationMs": 743,
       "errorMessage": null
     },
     {
@@ -4804,7 +4804,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 292,
+      "durationMs": 664,
       "errorMessage": null
     },
     {
@@ -4817,7 +4817,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 168,
+      "durationMs": 676,
       "errorMessage": null
     },
     {
@@ -4830,7 +4830,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 298,
+      "durationMs": 686,
       "errorMessage": null
     },
     {
@@ -4843,7 +4843,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 243,
+      "durationMs": 701,
       "errorMessage": null
     },
     {
@@ -4856,7 +4856,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 250,
+      "durationMs": 753,
       "errorMessage": null
     },
     {
@@ -4869,7 +4869,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 308,
+      "durationMs": 760,
       "errorMessage": null
     },
     {
@@ -4882,7 +4882,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 149,
+      "durationMs": 619,
       "errorMessage": null
     },
     {
@@ -4895,7 +4895,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 149,
+      "durationMs": 429,
       "errorMessage": null
     },
     {
@@ -4908,7 +4908,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 251,
+      "durationMs": 749,
       "errorMessage": null
     },
     {
@@ -4921,7 +4921,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 219,
+      "durationMs": 519,
       "errorMessage": null
     },
     {
@@ -4934,7 +4934,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 167,
+      "durationMs": 715,
       "errorMessage": null
     },
     {
@@ -4947,7 +4947,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 149,
+      "durationMs": 675,
       "errorMessage": null
     },
     {
@@ -4960,7 +4960,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 160,
+      "durationMs": 664,
       "errorMessage": null
     },
     {
@@ -4973,7 +4973,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 250,
+      "durationMs": 683,
       "errorMessage": null
     },
     {
@@ -4986,7 +4986,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 330,
+      "durationMs": 699,
       "errorMessage": null
     },
     {
@@ -4999,7 +4999,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 327,
+      "durationMs": 658,
       "errorMessage": null
     },
     {
@@ -5012,7 +5012,7 @@
       "diffPixels": 16,
       "shiftTolerantDiffPixels": 16,
       "totalPixels": 120000,
-      "durationMs": 1263,
+      "durationMs": 2375,
       "errorMessage": null
     },
     {
@@ -5025,7 +5025,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 189,
+      "durationMs": 739,
       "errorMessage": null
     },
     {
@@ -5038,7 +5038,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 253,
+      "durationMs": 661,
       "errorMessage": null
     },
     {
@@ -5051,7 +5051,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 240,
+      "durationMs": 677,
       "errorMessage": null
     },
     {
@@ -5064,7 +5064,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 244,
+      "durationMs": 671,
       "errorMessage": null
     },
     {
@@ -5077,7 +5077,7 @@
       "diffPixels": 16,
       "shiftTolerantDiffPixels": 1,
       "totalPixels": 120000,
-      "durationMs": 717,
+      "durationMs": 2494,
       "errorMessage": null
     },
     {
@@ -5090,7 +5090,7 @@
       "diffPixels": 24,
       "shiftTolerantDiffPixels": 24,
       "totalPixels": 120000,
-      "durationMs": 758,
+      "durationMs": 2370,
       "errorMessage": null
     },
     {
@@ -5103,7 +5103,7 @@
       "diffPixels": 384,
       "shiftTolerantDiffPixels": 120,
       "totalPixels": 120000,
-      "durationMs": 796,
+      "durationMs": 2419,
       "errorMessage": null
     },
     {
@@ -5116,7 +5116,7 @@
       "diffPixels": 384,
       "shiftTolerantDiffPixels": 60,
       "totalPixels": 120000,
-      "durationMs": 710,
+      "durationMs": 2377,
       "errorMessage": null
     },
     {
@@ -5129,7 +5129,7 @@
       "diffPixels": 384,
       "shiftTolerantDiffPixels": 120,
       "totalPixels": 120000,
-      "durationMs": 797,
+      "durationMs": 2450,
       "errorMessage": null
     },
     {
@@ -5142,7 +5142,7 @@
       "diffPixels": 810,
       "shiftTolerantDiffPixels": 92,
       "totalPixels": 120000,
-      "durationMs": 518,
+      "durationMs": 2396,
       "errorMessage": null
     },
     {
@@ -5155,7 +5155,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 183,
+      "durationMs": 703,
       "errorMessage": null
     },
     {
@@ -5168,7 +5168,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 214,
+      "durationMs": 696,
       "errorMessage": null
     },
     {
@@ -5181,7 +5181,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 234,
+      "durationMs": 668,
       "errorMessage": null
     },
     {
@@ -5194,7 +5194,7 @@
       "diffPixels": 32,
       "shiftTolerantDiffPixels": 32,
       "totalPixels": 120000,
-      "durationMs": 754,
+      "durationMs": 2425,
       "errorMessage": null
     },
     {
@@ -5207,7 +5207,7 @@
       "diffPixels": 16,
       "shiftTolerantDiffPixels": 16,
       "totalPixels": 120000,
-      "durationMs": 728,
+      "durationMs": 2584,
       "errorMessage": null
     },
     {
@@ -5220,7 +5220,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 258,
+      "durationMs": 670,
       "errorMessage": null
     },
     {
@@ -5233,7 +5233,7 @@
       "diffPixels": 852,
       "shiftTolerantDiffPixels": 554,
       "totalPixels": 120000,
-      "durationMs": 765,
+      "durationMs": 2454,
       "errorMessage": null
     },
     {
@@ -5246,7 +5246,7 @@
       "diffPixels": 2,
       "shiftTolerantDiffPixels": 2,
       "totalPixels": 120000,
-      "durationMs": 890,
+      "durationMs": 2384,
       "errorMessage": null
     },
     {
@@ -5259,7 +5259,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 164,
+      "durationMs": 653,
       "errorMessage": null
     },
     {
@@ -5272,7 +5272,7 @@
       "diffPixels": 137,
       "shiftTolerantDiffPixels": 36,
       "totalPixels": 120000,
-      "durationMs": 774,
+      "durationMs": 2391,
       "errorMessage": null
     },
     {
@@ -5285,7 +5285,7 @@
       "diffPixels": 512,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 778,
+      "durationMs": 2470,
       "errorMessage": null
     },
     {
@@ -5298,7 +5298,7 @@
       "diffPixels": 2,
       "shiftTolerantDiffPixels": 2,
       "totalPixels": 120000,
-      "durationMs": 690,
+      "durationMs": 2375,
       "errorMessage": null
     },
     {
@@ -5311,7 +5311,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 370,
+      "durationMs": 681,
       "errorMessage": null
     },
     {
@@ -5324,7 +5324,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 228,
+      "durationMs": 702,
       "errorMessage": null
     },
     {
@@ -5337,7 +5337,7 @@
       "diffPixels": 20,
       "shiftTolerantDiffPixels": 20,
       "totalPixels": 120000,
-      "durationMs": 798,
+      "durationMs": 2433,
       "errorMessage": null
     },
     {
@@ -5350,7 +5350,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 248,
+      "durationMs": 627,
       "errorMessage": null
     },
     {
@@ -5363,7 +5363,7 @@
       "diffPixels": 8,
       "shiftTolerantDiffPixels": 8,
       "totalPixels": 120000,
-      "durationMs": 773,
+      "durationMs": 2507,
       "errorMessage": null
     },
     {
@@ -5376,7 +5376,7 @@
       "diffPixels": 48,
       "shiftTolerantDiffPixels": 48,
       "totalPixels": 120000,
-      "durationMs": 811,
+      "durationMs": 2411,
       "errorMessage": null
     },
     {
@@ -5389,7 +5389,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 304,
+      "durationMs": 635,
       "errorMessage": null
     },
     {
@@ -5402,7 +5402,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 288,
+      "durationMs": 620,
       "errorMessage": null
     },
     {
@@ -5415,7 +5415,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 136,
+      "durationMs": 595,
       "errorMessage": null
     },
     {
@@ -5428,7 +5428,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 303,
+      "durationMs": 656,
       "errorMessage": null
     },
     {
@@ -5441,7 +5441,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 231,
+      "durationMs": 700,
       "errorMessage": null
     },
     {
@@ -5454,7 +5454,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 240,
+      "durationMs": 658,
       "errorMessage": null
     },
     {
@@ -5467,7 +5467,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 202,
+      "durationMs": 659,
       "errorMessage": null
     },
     {
@@ -5480,7 +5480,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 141,
+      "durationMs": 658,
       "errorMessage": null
     },
     {
@@ -5493,7 +5493,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 245,
+      "durationMs": 690,
       "errorMessage": null
     },
     {
@@ -5506,7 +5506,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 250,
+      "durationMs": 618,
       "errorMessage": null
     },
     {
@@ -5519,7 +5519,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 207,
+      "durationMs": 731,
       "errorMessage": null
     },
     {
@@ -5532,7 +5532,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 567,
+      "durationMs": 2710,
       "errorMessage": null
     },
     {
@@ -5545,7 +5545,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 243,
+      "durationMs": 690,
       "errorMessage": null
     },
     {
@@ -5558,7 +5558,7 @@
       "diffPixels": 7,
       "shiftTolerantDiffPixels": 3,
       "totalPixels": 120000,
-      "durationMs": 587,
+      "durationMs": 2334,
       "errorMessage": null
     },
     {
@@ -5571,7 +5571,7 @@
       "diffPixels": 7,
       "shiftTolerantDiffPixels": 3,
       "totalPixels": 120000,
-      "durationMs": 627,
+      "durationMs": 2321,
       "errorMessage": null
     },
     {
@@ -5584,7 +5584,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 245,
+      "durationMs": 729,
       "errorMessage": null
     },
     {
@@ -5597,7 +5597,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 193,
+      "durationMs": 778,
       "errorMessage": null
     },
     {
@@ -5610,7 +5610,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 253,
+      "durationMs": 737,
       "errorMessage": null
     },
     {
@@ -5623,7 +5623,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 266,
+      "durationMs": 700,
       "errorMessage": null
     },
     {
@@ -5636,7 +5636,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 176,
+      "durationMs": 488,
       "errorMessage": null
     },
     {
@@ -5649,7 +5649,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 216,
+      "durationMs": 699,
       "errorMessage": null
     },
     {
@@ -5662,7 +5662,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 275,
+      "durationMs": 761,
       "errorMessage": null
     },
     {
@@ -5675,7 +5675,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 170,
+      "durationMs": 667,
       "errorMessage": null
     },
     {
@@ -5688,7 +5688,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 277,
+      "durationMs": 682,
       "errorMessage": null
     },
     {
@@ -5701,7 +5701,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 330,
+      "durationMs": 624,
       "errorMessage": null
     },
     {
@@ -5714,7 +5714,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 235,
+      "durationMs": 570,
       "errorMessage": null
     },
     {
@@ -5727,7 +5727,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 283,
+      "durationMs": 695,
       "errorMessage": null
     },
     {
@@ -5740,7 +5740,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 159,
+      "durationMs": 728,
       "errorMessage": null
     },
     {
@@ -5753,7 +5753,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 309,
+      "durationMs": 615,
       "errorMessage": null
     },
     {
@@ -5766,7 +5766,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 182,
+      "durationMs": 662,
       "errorMessage": null
     },
     {
@@ -5779,7 +5779,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 175,
+      "durationMs": 716,
       "errorMessage": null
     },
     {
@@ -5792,7 +5792,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 212,
+      "durationMs": 642,
       "errorMessage": null
     },
     {
@@ -5805,7 +5805,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 153,
+      "durationMs": 727,
       "errorMessage": null
     },
     {
@@ -5818,7 +5818,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 255,
+      "durationMs": 686,
       "errorMessage": null
     },
     {
@@ -5831,7 +5831,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 276,
+      "durationMs": 691,
       "errorMessage": null
     },
     {
@@ -5844,7 +5844,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 224,
+      "durationMs": 734,
       "errorMessage": null
     },
     {
@@ -5857,7 +5857,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 279,
+      "durationMs": 729,
       "errorMessage": null
     },
     {
@@ -5870,7 +5870,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 272,
+      "durationMs": 650,
       "errorMessage": null
     },
     {
@@ -5883,7 +5883,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 250,
+      "durationMs": 689,
       "errorMessage": null
     },
     {
@@ -5896,7 +5896,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 314,
+      "durationMs": 716,
       "errorMessage": null
     },
     {
@@ -5909,7 +5909,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 171,
+      "durationMs": 641,
       "errorMessage": null
     },
     {
@@ -5922,7 +5922,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 312,
+      "durationMs": 612,
       "errorMessage": null
     },
     {
@@ -5935,7 +5935,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 210,
+      "durationMs": 710,
       "errorMessage": null
     },
     {
@@ -5948,7 +5948,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 211,
+      "durationMs": 619,
       "errorMessage": null
     },
     {
@@ -5961,7 +5961,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 215,
+      "durationMs": 577,
       "errorMessage": null
     },
     {
@@ -5974,7 +5974,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 277,
+      "durationMs": 692,
       "errorMessage": null
     },
     {
@@ -5987,7 +5987,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 135,
+      "durationMs": 678,
       "errorMessage": null
     },
     {
@@ -6000,7 +6000,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 301,
+      "durationMs": 658,
       "errorMessage": null
     },
     {
@@ -6013,7 +6013,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 141,
+      "durationMs": 658,
       "errorMessage": null
     },
     {
@@ -6026,7 +6026,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 177,
+      "durationMs": 639,
       "errorMessage": null
     },
     {
@@ -6039,7 +6039,7 @@
       "diffPixels": 50,
       "shiftTolerantDiffPixels": 18,
       "totalPixels": 120000,
-      "durationMs": 742,
+      "durationMs": 2317,
       "errorMessage": null
     },
     {
@@ -6052,7 +6052,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 161,
+      "durationMs": 684,
       "errorMessage": null
     },
     {
@@ -6065,7 +6065,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 181,
+      "durationMs": 504,
       "errorMessage": null
     },
     {
@@ -6078,7 +6078,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 146,
+      "durationMs": 663,
       "errorMessage": null
     },
     {
@@ -6091,7 +6091,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 220,
+      "durationMs": 604,
       "errorMessage": null
     },
     {
@@ -6104,7 +6104,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 335,
+      "durationMs": 665,
       "errorMessage": null
     },
     {
@@ -6117,7 +6117,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 191,
+      "durationMs": 753,
       "errorMessage": null
     },
     {
@@ -6130,7 +6130,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 155,
+      "durationMs": 682,
       "errorMessage": null
     },
     {
@@ -6143,7 +6143,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 284,
+      "durationMs": 683,
       "errorMessage": null
     },
     {
@@ -6156,7 +6156,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 310,
+      "durationMs": 553,
       "errorMessage": null
     },
     {
@@ -6169,7 +6169,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 139,
+      "durationMs": 714,
       "errorMessage": null
     },
     {
@@ -6182,7 +6182,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 293,
+      "durationMs": 701,
       "errorMessage": null
     },
     {
@@ -6195,7 +6195,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 233,
+      "durationMs": 731,
       "errorMessage": null
     },
     {
@@ -6208,7 +6208,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 264,
+      "durationMs": 718,
       "errorMessage": null
     },
     {
@@ -6221,7 +6221,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 142,
+      "durationMs": 715,
       "errorMessage": null
     },
     {
@@ -6234,7 +6234,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 203,
+      "durationMs": 661,
       "errorMessage": null
     },
     {
@@ -6247,7 +6247,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 293,
+      "durationMs": 574,
       "errorMessage": null
     },
     {
@@ -6260,7 +6260,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 240,
+      "durationMs": 526,
       "errorMessage": null
     },
     {
@@ -6273,7 +6273,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 213,
+      "durationMs": 320,
       "errorMessage": null
     },
     {
@@ -6286,7 +6286,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 141,
+      "durationMs": 624,
       "errorMessage": null
     },
     {
@@ -6299,7 +6299,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 190,
+      "durationMs": 636,
       "errorMessage": null
     },
     {
@@ -6312,7 +6312,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 313,
+      "durationMs": 685,
       "errorMessage": null
     },
     {
@@ -6325,7 +6325,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 291,
+      "durationMs": 592,
       "errorMessage": null
     },
     {
@@ -6338,7 +6338,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 168,
+      "durationMs": 721,
       "errorMessage": null
     },
     {
@@ -6351,7 +6351,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 287,
+      "durationMs": 674,
       "errorMessage": null
     },
     {
@@ -6364,7 +6364,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 221,
+      "durationMs": 558,
       "errorMessage": null
     },
     {
@@ -6377,7 +6377,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 309,
+      "durationMs": 626,
       "errorMessage": null
     },
     {
@@ -6390,7 +6390,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 244,
+      "durationMs": 712,
       "errorMessage": null
     },
     {
@@ -6403,7 +6403,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 195,
+      "durationMs": 730,
       "errorMessage": null
     },
     {
@@ -6416,7 +6416,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 319,
+      "durationMs": 625,
       "errorMessage": null
     },
     {
@@ -6429,7 +6429,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 156,
+      "durationMs": 673,
       "errorMessage": null
     },
     {
@@ -6442,7 +6442,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 172,
+      "durationMs": 589,
       "errorMessage": null
     },
     {
@@ -6455,7 +6455,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 282,
+      "durationMs": 712,
       "errorMessage": null
     },
     {
@@ -6468,7 +6468,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 194,
+      "durationMs": 719,
       "errorMessage": null
     },
     {
@@ -6481,7 +6481,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 213,
+      "durationMs": 582,
       "errorMessage": null
     },
     {
@@ -6494,7 +6494,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 277,
+      "durationMs": 633,
       "errorMessage": null
     },
     {
@@ -6507,7 +6507,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 271,
+      "durationMs": 694,
       "errorMessage": null
     },
     {
@@ -6520,7 +6520,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 267,
+      "durationMs": 702,
       "errorMessage": null
     },
     {
@@ -6533,7 +6533,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 110,
+      "durationMs": 665,
       "errorMessage": null
     },
     {
@@ -6546,7 +6546,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 223,
+      "durationMs": 701,
       "errorMessage": null
     },
     {
@@ -6559,7 +6559,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 138,
+      "durationMs": 647,
       "errorMessage": null
     },
     {
@@ -6572,7 +6572,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 311,
+      "durationMs": 652,
       "errorMessage": null
     },
     {
@@ -6585,7 +6585,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 168,
+      "durationMs": 612,
       "errorMessage": null
     },
     {
@@ -6598,7 +6598,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 174,
+      "durationMs": 670,
       "errorMessage": null
     },
     {
@@ -6611,7 +6611,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 280,
+      "durationMs": 688,
       "errorMessage": null
     },
     {
@@ -6624,7 +6624,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 298,
+      "durationMs": 654,
       "errorMessage": null
     },
     {
@@ -6637,7 +6637,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 270,
+      "durationMs": 700,
       "errorMessage": null
     },
     {
@@ -6650,7 +6650,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 274,
+      "durationMs": 704,
       "errorMessage": null
     },
     {
@@ -6663,7 +6663,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 292,
+      "durationMs": 675,
       "errorMessage": null
     },
     {
@@ -6676,7 +6676,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 162,
+      "durationMs": 688,
       "errorMessage": null
     },
     {
@@ -6689,7 +6689,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 263,
+      "durationMs": 670,
       "errorMessage": null
     },
     {
@@ -6702,7 +6702,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 279,
+      "durationMs": 652,
       "errorMessage": null
     },
     {
@@ -6715,7 +6715,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 180,
+      "durationMs": 731,
       "errorMessage": null
     },
     {
@@ -6728,7 +6728,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 227,
+      "durationMs": 658,
       "errorMessage": null
     },
     {
@@ -6741,7 +6741,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 246,
+      "durationMs": 598,
       "errorMessage": null
     },
     {
@@ -6754,7 +6754,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 234,
+      "durationMs": 621,
       "errorMessage": null
     },
     {
@@ -6767,7 +6767,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 212,
+      "durationMs": 666,
       "errorMessage": null
     },
     {
@@ -6780,7 +6780,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 227,
+      "durationMs": 603,
       "errorMessage": null
     },
     {
@@ -6793,7 +6793,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 196,
+      "durationMs": 621,
       "errorMessage": null
     },
     {
@@ -6806,7 +6806,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 218,
+      "durationMs": 640,
       "errorMessage": null
     },
     {
@@ -6819,7 +6819,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 206,
+      "durationMs": 632,
       "errorMessage": null
     },
     {
@@ -6832,7 +6832,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 244,
+      "durationMs": 642,
       "errorMessage": null
     },
     {
@@ -6845,7 +6845,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 200,
+      "durationMs": 630,
       "errorMessage": null
     },
     {
@@ -6858,7 +6858,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 171,
+      "durationMs": 698,
       "errorMessage": null
     },
     {
@@ -6871,7 +6871,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 145,
+      "durationMs": 637,
       "errorMessage": null
     },
     {
@@ -6884,7 +6884,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 171,
+      "durationMs": 633,
       "errorMessage": null
     },
     {
@@ -6897,7 +6897,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 246,
+      "durationMs": 626,
       "errorMessage": null
     },
     {
@@ -6910,7 +6910,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 155,
+      "durationMs": 700,
       "errorMessage": null
     },
     {
@@ -6923,7 +6923,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 157,
+      "durationMs": 697,
       "errorMessage": null
     },
     {
@@ -6936,7 +6936,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 159,
+      "durationMs": 671,
       "errorMessage": null
     },
     {
@@ -6949,7 +6949,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 183,
+      "durationMs": 702,
       "errorMessage": null
     },
     {
@@ -6962,7 +6962,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 186,
+      "durationMs": 658,
       "errorMessage": null
     },
     {
@@ -6975,7 +6975,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 193,
+      "durationMs": 723,
       "errorMessage": null
     },
     {
@@ -6988,7 +6988,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 185,
+      "durationMs": 703,
       "errorMessage": null
     },
     {
@@ -7001,7 +7001,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 215,
+      "durationMs": 671,
       "errorMessage": null
     },
     {
@@ -7014,7 +7014,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 216,
+      "durationMs": 581,
       "errorMessage": null
     },
     {
@@ -7027,7 +7027,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 144,
+      "durationMs": 674,
       "errorMessage": null
     },
     {
@@ -7040,7 +7040,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 267,
+      "durationMs": 643,
       "errorMessage": null
     },
     {
@@ -7053,7 +7053,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 195,
+      "durationMs": 664,
       "errorMessage": null
     },
     {
@@ -7066,7 +7066,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 203,
+      "durationMs": 690,
       "errorMessage": null
     },
     {
@@ -7079,7 +7079,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 291,
+      "durationMs": 723,
       "errorMessage": null
     },
     {
@@ -7092,7 +7092,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 167,
+      "durationMs": 666,
       "errorMessage": null
     },
     {
@@ -7105,7 +7105,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 296,
+      "durationMs": 622,
       "errorMessage": null
     },
     {
@@ -7118,7 +7118,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 238,
+      "durationMs": 663,
       "errorMessage": null
     },
     {
@@ -7131,7 +7131,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 309,
+      "durationMs": 635,
       "errorMessage": null
     },
     {
@@ -7144,7 +7144,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 169,
+      "durationMs": 637,
       "errorMessage": null
     },
     {
@@ -7157,7 +7157,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 352,
+      "durationMs": 660,
       "errorMessage": null
     },
     {
@@ -7170,7 +7170,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 311,
+      "durationMs": 646,
       "errorMessage": null
     },
     {
@@ -7183,7 +7183,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 214,
+      "durationMs": 646,
       "errorMessage": null
     },
     {
@@ -7196,7 +7196,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 206,
+      "durationMs": 691,
       "errorMessage": null
     },
     {
@@ -7209,7 +7209,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 195,
+      "durationMs": 650,
       "errorMessage": null
     },
     {
@@ -7222,7 +7222,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 242,
+      "durationMs": 633,
       "errorMessage": null
     },
     {
@@ -7235,7 +7235,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 157,
+      "durationMs": 669,
       "errorMessage": null
     },
     {
@@ -7248,7 +7248,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 194,
+      "durationMs": 656,
       "errorMessage": null
     },
     {
@@ -7261,7 +7261,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 175,
+      "durationMs": 628,
       "errorMessage": null
     },
     {
@@ -7274,7 +7274,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 192,
+      "durationMs": 643,
       "errorMessage": null
     },
     {
@@ -7287,7 +7287,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 232,
+      "durationMs": 674,
       "errorMessage": null
     },
     {
@@ -7300,7 +7300,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 270,
+      "durationMs": 678,
       "errorMessage": null
     },
     {
@@ -7313,7 +7313,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 174,
+      "durationMs": 649,
       "errorMessage": null
     },
     {
@@ -7326,7 +7326,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 269,
+      "durationMs": 675,
       "errorMessage": null
     },
     {
@@ -7339,7 +7339,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 257,
+      "durationMs": 692,
       "errorMessage": null
     },
     {
@@ -7352,7 +7352,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 168,
+      "durationMs": 619,
       "errorMessage": null
     },
     {
@@ -7365,7 +7365,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 317,
+      "durationMs": 629,
       "errorMessage": null
     },
     {
@@ -7378,7 +7378,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 222,
+      "durationMs": 658,
       "errorMessage": null
     },
     {
@@ -7391,7 +7391,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 307,
+      "durationMs": 689,
       "errorMessage": null
     },
     {
@@ -7404,7 +7404,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 198,
+      "durationMs": 647,
       "errorMessage": null
     },
     {
@@ -7417,7 +7417,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 196,
+      "durationMs": 654,
       "errorMessage": null
     },
     {
@@ -7430,7 +7430,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 182,
+      "durationMs": 651,
       "errorMessage": null
     },
     {
@@ -7443,7 +7443,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 167,
+      "durationMs": 658,
       "errorMessage": null
     },
     {
@@ -7456,7 +7456,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 241,
+      "durationMs": 672,
       "errorMessage": null
     },
     {
@@ -7469,7 +7469,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 219,
+      "durationMs": 628,
       "errorMessage": null
     },
     {
@@ -7482,7 +7482,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 275,
+      "durationMs": 657,
       "errorMessage": null
     },
     {
@@ -7495,7 +7495,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 219,
+      "durationMs": 655,
       "errorMessage": null
     },
     {
@@ -7508,7 +7508,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 154,
+      "durationMs": 660,
       "errorMessage": null
     },
     {
@@ -7521,7 +7521,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 288,
+      "durationMs": 709,
       "errorMessage": null
     },
     {
@@ -7534,7 +7534,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 161,
+      "durationMs": 633,
       "errorMessage": null
     },
     {
@@ -7547,7 +7547,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 301,
+      "durationMs": 703,
       "errorMessage": null
     },
     {
@@ -7560,7 +7560,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 187,
+      "durationMs": 678,
       "errorMessage": null
     },
     {
@@ -7573,7 +7573,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 203,
+      "durationMs": 669,
       "errorMessage": null
     },
     {
@@ -7586,7 +7586,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 190,
+      "durationMs": 639,
       "errorMessage": null
     },
     {
@@ -7599,7 +7599,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 173,
+      "durationMs": 633,
       "errorMessage": null
     },
     {
@@ -7612,7 +7612,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 219,
+      "durationMs": 673,
       "errorMessage": null
     },
     {
@@ -7625,7 +7625,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 132,
+      "durationMs": 661,
       "errorMessage": null
     },
     {
@@ -7638,7 +7638,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 207,
+      "durationMs": 660,
       "errorMessage": null
     },
     {
@@ -7651,7 +7651,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 240,
+      "durationMs": 661,
       "errorMessage": null
     },
     {
@@ -7664,7 +7664,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 230,
+      "durationMs": 643,
       "errorMessage": null
     },
     {
@@ -7677,7 +7677,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 149,
+      "durationMs": 639,
       "errorMessage": null
     },
     {
@@ -7690,7 +7690,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 247,
+      "durationMs": 651,
       "errorMessage": null
     },
     {
@@ -7703,7 +7703,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 134,
+      "durationMs": 628,
       "errorMessage": null
     },
     {
@@ -7716,7 +7716,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 200,
+      "durationMs": 657,
       "errorMessage": null
     },
     {
@@ -7729,7 +7729,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 181,
+      "durationMs": 658,
       "errorMessage": null
     },
     {
@@ -7742,7 +7742,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 299,
+      "durationMs": 645,
       "errorMessage": null
     },
     {
@@ -7755,7 +7755,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 163,
+      "durationMs": 644,
       "errorMessage": null
     },
     {
@@ -7768,7 +7768,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 247,
+      "durationMs": 671,
       "errorMessage": null
     },
     {
@@ -7781,7 +7781,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 235,
+      "durationMs": 645,
       "errorMessage": null
     },
     {
@@ -7794,7 +7794,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 308,
+      "durationMs": 667,
       "errorMessage": null
     },
     {
@@ -7807,7 +7807,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 180,
+      "durationMs": 659,
       "errorMessage": null
     },
     {
@@ -7820,7 +7820,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 201,
+      "durationMs": 640,
       "errorMessage": null
     },
     {
@@ -7833,7 +7833,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 157,
+      "durationMs": 656,
       "errorMessage": null
     },
     {
@@ -7846,7 +7846,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 227,
+      "durationMs": 649,
       "errorMessage": null
     },
     {
@@ -7859,7 +7859,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 334,
+      "durationMs": 713,
       "errorMessage": null
     },
     {
@@ -7872,7 +7872,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 188,
+      "durationMs": 690,
       "errorMessage": null
     },
     {
@@ -7885,7 +7885,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 130,
+      "durationMs": 680,
       "errorMessage": null
     },
     {
@@ -7898,7 +7898,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 297,
+      "durationMs": 656,
       "errorMessage": null
     },
     {
@@ -7911,7 +7911,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 278,
+      "durationMs": 677,
       "errorMessage": null
     },
     {
@@ -7924,7 +7924,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 198,
+      "durationMs": 654,
       "errorMessage": null
     },
     {
@@ -7937,7 +7937,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 247,
+      "durationMs": 746,
       "errorMessage": null
     },
     {
@@ -7950,7 +7950,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 260,
+      "durationMs": 679,
       "errorMessage": null
     },
     {
@@ -7963,7 +7963,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 185,
+      "durationMs": 689,
       "errorMessage": null
     },
     {
@@ -7976,7 +7976,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 280,
+      "durationMs": 661,
       "errorMessage": null
     },
     {
@@ -7989,7 +7989,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 130,
+      "durationMs": 612,
       "errorMessage": null
     },
     {
@@ -8002,7 +8002,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 218,
+      "durationMs": 654,
       "errorMessage": null
     },
     {
@@ -8015,7 +8015,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 229,
+      "durationMs": 696,
       "errorMessage": null
     },
     {
@@ -8028,7 +8028,7 @@
       "diffPixels": 59,
       "shiftTolerantDiffPixels": 12,
       "totalPixels": 120000,
-      "durationMs": 567,
+      "durationMs": 2222,
       "errorMessage": null
     },
     {
@@ -8041,7 +8041,7 @@
       "diffPixels": 281,
       "shiftTolerantDiffPixels": 52,
       "totalPixels": 120000,
-      "durationMs": 876,
+      "durationMs": 2422,
       "errorMessage": null
     },
     {
@@ -8049,12 +8049,12 @@
       "testName": "Line-through Arial 16px",
       "category": "Typography",
       "outcome": "Pass",
-      "diffPercentage": 0.0042,
+      "diffPercentage": 0,
       "shiftTolerantDiffPercentage": 0,
-      "diffPixels": 5,
+      "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 673,
+      "durationMs": 726,
       "errorMessage": null
     },
     {
@@ -8067,7 +8067,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 239,
+      "durationMs": 691,
       "errorMessage": null
     },
     {
@@ -8080,7 +8080,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 197,
+      "durationMs": 677,
       "errorMessage": null
     },
     {
@@ -8093,7 +8093,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 201,
+      "durationMs": 640,
       "errorMessage": null
     },
     {
@@ -8106,7 +8106,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 247,
+      "durationMs": 661,
       "errorMessage": null
     },
     {
@@ -8119,7 +8119,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 201,
+      "durationMs": 679,
       "errorMessage": null
     },
     {
@@ -8132,7 +8132,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 187,
+      "durationMs": 652,
       "errorMessage": null
     },
     {
@@ -8145,7 +8145,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 123,
+      "durationMs": 610,
       "errorMessage": null
     },
     {
@@ -8158,7 +8158,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 224,
+      "durationMs": 679,
       "errorMessage": null
     },
     {
@@ -8171,7 +8171,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 243,
+      "durationMs": 579,
       "errorMessage": null
     },
     {
@@ -8184,7 +8184,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 306,
+      "durationMs": 625,
       "errorMessage": null
     },
     {
@@ -8197,7 +8197,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 245,
+      "durationMs": 594,
       "errorMessage": null
     },
     {
@@ -8210,7 +8210,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 230,
+      "durationMs": 650,
       "errorMessage": null
     },
     {
@@ -8223,7 +8223,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 244,
+      "durationMs": 629,
       "errorMessage": null
     },
     {
@@ -8236,7 +8236,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 261,
+      "durationMs": 608,
       "errorMessage": null
     },
     {
@@ -8249,7 +8249,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 180,
+      "durationMs": 635,
       "errorMessage": null
     },
     {
@@ -8262,7 +8262,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 285,
+      "durationMs": 639,
       "errorMessage": null
     },
     {
@@ -8275,7 +8275,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 134,
+      "durationMs": 594,
       "errorMessage": null
     },
     {
@@ -8288,7 +8288,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 199,
+      "durationMs": 636,
       "errorMessage": null
     },
     {
@@ -8301,7 +8301,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 346,
+      "durationMs": 624,
       "errorMessage": null
     },
     {
@@ -8314,7 +8314,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 184,
+      "durationMs": 729,
       "errorMessage": null
     },
     {
@@ -8327,7 +8327,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 199,
+      "durationMs": 609,
       "errorMessage": null
     },
     {
@@ -8340,7 +8340,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 221,
+      "durationMs": 694,
       "errorMessage": null
     },
     {
@@ -8353,7 +8353,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 259,
+      "durationMs": 741,
       "errorMessage": null
     },
     {
@@ -8366,7 +8366,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 238,
+      "durationMs": 604,
       "errorMessage": null
     },
     {
@@ -8379,7 +8379,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 162,
+      "durationMs": 678,
       "errorMessage": null
     },
     {
@@ -8392,7 +8392,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 205,
+      "durationMs": 634,
       "errorMessage": null
     },
     {
@@ -8405,7 +8405,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 301,
+      "durationMs": 704,
       "errorMessage": null
     },
     {
@@ -8418,7 +8418,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 223,
+      "durationMs": 689,
       "errorMessage": null
     },
     {
@@ -8431,7 +8431,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 258,
+      "durationMs": 679,
       "errorMessage": null
     },
     {
@@ -8444,7 +8444,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 171,
+      "durationMs": 715,
       "errorMessage": null
     },
     {
@@ -8457,7 +8457,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 170,
+      "durationMs": 724,
       "errorMessage": null
     },
     {
@@ -8470,7 +8470,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 160,
+      "durationMs": 677,
       "errorMessage": null
     },
     {
@@ -8483,7 +8483,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 177,
+      "durationMs": 641,
       "errorMessage": null
     },
     {
@@ -8496,7 +8496,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 236,
+      "durationMs": 618,
       "errorMessage": null
     },
     {
@@ -8509,7 +8509,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 314,
+      "durationMs": 803,
       "errorMessage": null
     },
     {
@@ -8522,7 +8522,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 259,
+      "durationMs": 670,
       "errorMessage": null
     },
     {
@@ -8535,7 +8535,7 @@
       "diffPixels": 18,
       "shiftTolerantDiffPixels": 18,
       "totalPixels": 120000,
-      "durationMs": 781,
+      "durationMs": 2408,
       "errorMessage": null
     },
     {
@@ -8548,7 +8548,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 135,
+      "durationMs": 566,
       "errorMessage": null
     },
     {
@@ -8561,7 +8561,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 288,
+      "durationMs": 627,
       "errorMessage": null
     },
     {
@@ -8574,7 +8574,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 228,
+      "durationMs": 597,
       "errorMessage": null
     },
     {
@@ -8587,7 +8587,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 278,
+      "durationMs": 672,
       "errorMessage": null
     },
     {
@@ -8600,7 +8600,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 162,
+      "durationMs": 698,
       "errorMessage": null
     },
     {
@@ -8613,7 +8613,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 279,
+      "durationMs": 685,
       "errorMessage": null
     },
     {
@@ -8626,7 +8626,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 277,
+      "durationMs": 646,
       "errorMessage": null
     },
     {
@@ -8639,7 +8639,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 231,
+      "durationMs": 689,
       "errorMessage": null
     },
     {
@@ -8652,7 +8652,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 298,
+      "durationMs": 761,
       "errorMessage": null
     },
     {
@@ -8665,7 +8665,7 @@
       "diffPixels": 2,
       "shiftTolerantDiffPixels": 2,
       "totalPixels": 120000,
-      "durationMs": 697,
+      "durationMs": 2452,
       "errorMessage": null
     },
     {
@@ -8678,7 +8678,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 256,
+      "durationMs": 706,
       "errorMessage": null
     },
     {
@@ -8691,7 +8691,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 263,
+      "durationMs": 648,
       "errorMessage": null
     },
     {
@@ -8704,7 +8704,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 298,
+      "durationMs": 680,
       "errorMessage": null
     },
     {
@@ -8717,7 +8717,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 255,
+      "durationMs": 695,
       "errorMessage": null
     },
     {
@@ -8730,7 +8730,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 177,
+      "durationMs": 679,
       "errorMessage": null
     },
     {
@@ -8743,7 +8743,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 300,
+      "durationMs": 682,
       "errorMessage": null
     },
     {
@@ -8756,7 +8756,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 256,
+      "durationMs": 681,
       "errorMessage": null
     },
     {
@@ -8769,7 +8769,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 260,
+      "durationMs": 725,
       "errorMessage": null
     },
     {
@@ -8782,7 +8782,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 240,
+      "durationMs": 607,
       "errorMessage": null
     },
     {
@@ -8795,7 +8795,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 267,
+      "durationMs": 650,
       "errorMessage": null
     },
     {
@@ -8808,7 +8808,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 272,
+      "durationMs": 711,
       "errorMessage": null
     },
     {
@@ -8821,7 +8821,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 133,
+      "durationMs": 709,
       "errorMessage": null
     },
     {
@@ -8834,7 +8834,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 173,
+      "durationMs": 624,
       "errorMessage": null
     },
     {
@@ -8847,7 +8847,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 158,
+      "durationMs": 592,
       "errorMessage": null
     },
     {
@@ -8860,7 +8860,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 135,
+      "durationMs": 702,
       "errorMessage": null
     },
     {
@@ -8873,7 +8873,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 219,
+      "durationMs": 718,
       "errorMessage": null
     },
     {
@@ -8886,7 +8886,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 288,
+      "durationMs": 743,
       "errorMessage": null
     },
     {
@@ -8899,7 +8899,7 @@
       "diffPixels": 96,
       "shiftTolerantDiffPixels": 19,
       "totalPixels": 120000,
-      "durationMs": 754,
+      "durationMs": 2357,
       "errorMessage": null
     },
     {
@@ -8912,7 +8912,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 296,
+      "durationMs": 703,
       "errorMessage": null
     },
     {
@@ -8925,7 +8925,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 249,
+      "durationMs": 588,
       "errorMessage": null
     },
     {
@@ -8938,7 +8938,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 280,
+      "durationMs": 607,
       "errorMessage": null
     },
     {
@@ -8951,7 +8951,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 242,
+      "durationMs": 747,
       "errorMessage": null
     },
     {
@@ -8964,7 +8964,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 134,
+      "durationMs": 686,
       "errorMessage": null
     },
     {
@@ -8977,7 +8977,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 134,
+      "durationMs": 704,
       "errorMessage": null
     },
     {
@@ -8990,7 +8990,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 202,
+      "durationMs": 769,
       "errorMessage": null
     },
     {
@@ -9003,7 +9003,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 144,
+      "durationMs": 653,
       "errorMessage": null
     },
     {
@@ -9016,7 +9016,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 155,
+      "durationMs": 665,
       "errorMessage": null
     },
     {
@@ -9029,7 +9029,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 188,
+      "durationMs": 741,
       "errorMessage": null
     },
     {
@@ -9042,7 +9042,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 168,
+      "durationMs": 687,
       "errorMessage": null
     },
     {
@@ -9055,7 +9055,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 169,
+      "durationMs": 633,
       "errorMessage": null
     },
     {
@@ -9068,7 +9068,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 132,
+      "durationMs": 636,
       "errorMessage": null
     },
     {
@@ -9081,20 +9081,20 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 242,
+      "durationMs": 715,
       "errorMessage": null
     },
     {
       "testId": "pp-outline-styles",
       "testName": "Outline Styles",
       "category": "Borders",
-      "outcome": "Fail",
-      "diffPercentage": 0.4033,
+      "outcome": "Pass",
+      "diffPercentage": 0,
       "shiftTolerantDiffPercentage": 0,
-      "diffPixels": 484,
+      "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 785,
+      "durationMs": 695,
       "errorMessage": null
     },
     {
@@ -9107,7 +9107,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 271,
+      "durationMs": 672,
       "errorMessage": null
     },
     {
@@ -9120,7 +9120,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 172,
+      "durationMs": 588,
       "errorMessage": null
     },
     {
@@ -9133,7 +9133,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 182,
+      "durationMs": 617,
       "errorMessage": null
     },
     {
@@ -9146,7 +9146,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 344,
+      "durationMs": 713,
       "errorMessage": null
     },
     {
@@ -9159,7 +9159,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 154,
+      "durationMs": 736,
       "errorMessage": null
     },
     {
@@ -9172,7 +9172,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 171,
+      "durationMs": 708,
       "errorMessage": null
     },
     {
@@ -9185,7 +9185,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 357,
+      "durationMs": 618,
       "errorMessage": null
     },
     {
@@ -9198,7 +9198,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 255,
+      "durationMs": 639,
       "errorMessage": null
     },
     {
@@ -9211,7 +9211,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 184,
+      "durationMs": 753,
       "errorMessage": null
     },
     {
@@ -9224,7 +9224,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 252,
+      "durationMs": 527,
       "errorMessage": null
     },
     {
@@ -9237,7 +9237,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 237,
+      "durationMs": 606,
       "errorMessage": null
     },
     {
@@ -9250,7 +9250,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 211,
+      "durationMs": 427,
       "errorMessage": null
     },
     {
@@ -9263,7 +9263,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 235,
+      "durationMs": 534,
       "errorMessage": null
     },
     {
@@ -9276,7 +9276,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 171,
+      "durationMs": 687,
       "errorMessage": null
     },
     {
@@ -9289,7 +9289,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 222,
+      "durationMs": 694,
       "errorMessage": null
     },
     {
@@ -9302,7 +9302,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 229,
+      "durationMs": 659,
       "errorMessage": null
     },
     {
@@ -9315,7 +9315,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 211,
+      "durationMs": 669,
       "errorMessage": null
     },
     {
@@ -9328,7 +9328,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 159,
+      "durationMs": 349,
       "errorMessage": null
     },
     {
@@ -9341,7 +9341,7 @@
       "diffPixels": 2,
       "shiftTolerantDiffPixels": 2,
       "totalPixels": 120000,
-      "durationMs": 1066,
+      "durationMs": 2327,
       "errorMessage": null
     },
     {
@@ -9354,7 +9354,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 292,
+      "durationMs": 721,
       "errorMessage": null
     },
     {
@@ -9367,7 +9367,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 249,
+      "durationMs": 734,
       "errorMessage": null
     },
     {
@@ -9380,7 +9380,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 275,
+      "durationMs": 719,
       "errorMessage": null
     },
     {
@@ -9393,7 +9393,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 332,
+      "durationMs": 629,
       "errorMessage": null
     },
     {
@@ -9406,7 +9406,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 306,
+      "durationMs": 742,
       "errorMessage": null
     },
     {
@@ -9419,7 +9419,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 132,
+      "durationMs": 668,
       "errorMessage": null
     },
     {
@@ -9432,7 +9432,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 288,
+      "durationMs": 635,
       "errorMessage": null
     },
     {
@@ -9445,7 +9445,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 317,
+      "durationMs": 734,
       "errorMessage": null
     },
     {
@@ -9458,7 +9458,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 132,
+      "durationMs": 638,
       "errorMessage": null
     },
     {
@@ -9471,7 +9471,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 133,
+      "durationMs": 674,
       "errorMessage": null
     },
     {
@@ -9484,7 +9484,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 173,
+      "durationMs": 644,
       "errorMessage": null
     },
     {
@@ -9497,7 +9497,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 222,
+      "durationMs": 638,
       "errorMessage": null
     },
     {
@@ -9510,7 +9510,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 219,
+      "durationMs": 665,
       "errorMessage": null
     },
     {
@@ -9523,7 +9523,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 229,
+      "durationMs": 728,
       "errorMessage": null
     },
     {
@@ -9536,7 +9536,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 247,
+      "durationMs": 618,
       "errorMessage": null
     },
     {
@@ -9549,7 +9549,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 273,
+      "durationMs": 767,
       "errorMessage": null
     },
     {
@@ -9562,7 +9562,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 155,
+      "durationMs": 664,
       "errorMessage": null
     },
     {
@@ -9575,7 +9575,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 274,
+      "durationMs": 803,
       "errorMessage": null
     },
     {
@@ -9588,7 +9588,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 178,
+      "durationMs": 614,
       "errorMessage": null
     },
     {
@@ -9601,7 +9601,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 461,
+      "durationMs": 621,
       "errorMessage": null
     },
     {
@@ -9614,7 +9614,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 281,
+      "durationMs": 647,
       "errorMessage": null
     },
     {
@@ -9627,7 +9627,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 239,
+      "durationMs": 616,
       "errorMessage": null
     },
     {
@@ -9640,7 +9640,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 186,
+      "durationMs": 630,
       "errorMessage": null
     },
     {
@@ -9653,7 +9653,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 282,
+      "durationMs": 631,
       "errorMessage": null
     },
     {
@@ -9666,7 +9666,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 226,
+      "durationMs": 663,
       "errorMessage": null
     },
     {
@@ -9679,7 +9679,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 293,
+      "durationMs": 639,
       "errorMessage": null
     },
     {
@@ -9692,7 +9692,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 238,
+      "durationMs": 728,
       "errorMessage": null
     },
     {
@@ -9705,7 +9705,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 203,
+      "durationMs": 756,
       "errorMessage": null
     },
     {
@@ -9718,7 +9718,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 303,
+      "durationMs": 797,
       "errorMessage": null
     },
     {
@@ -9731,7 +9731,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 141,
+      "durationMs": 774,
       "errorMessage": null
     },
     {
@@ -9744,7 +9744,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 279,
+      "durationMs": 764,
       "errorMessage": null
     },
     {
@@ -9757,7 +9757,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 231,
+      "durationMs": 703,
       "errorMessage": null
     },
     {
@@ -9770,7 +9770,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 320,
+      "durationMs": 741,
       "errorMessage": null
     },
     {
@@ -9783,7 +9783,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 303,
+      "durationMs": 714,
       "errorMessage": null
     },
     {
@@ -9796,7 +9796,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 267,
+      "durationMs": 755,
       "errorMessage": null
     },
     {
@@ -9809,7 +9809,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 146,
+      "durationMs": 669,
       "errorMessage": null
     },
     {
@@ -9822,7 +9822,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 192,
+      "durationMs": 684,
       "errorMessage": null
     },
     {
@@ -9835,7 +9835,7 @@
       "diffPixels": 54,
       "shiftTolerantDiffPixels": 6,
       "totalPixels": 120000,
-      "durationMs": 810,
+      "durationMs": 2404,
       "errorMessage": null
     },
     {
@@ -9848,7 +9848,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 157,
+      "durationMs": 703,
       "errorMessage": null
     },
     {
@@ -9861,7 +9861,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 154,
+      "durationMs": 693,
       "errorMessage": null
     },
     {
@@ -9874,7 +9874,7 @@
       "diffPixels": 56,
       "shiftTolerantDiffPixels": 21,
       "totalPixels": 120000,
-      "durationMs": 696,
+      "durationMs": 2558,
       "errorMessage": null
     },
     {
@@ -9882,12 +9882,12 @@
       "testName": "Text on Colored Background",
       "category": "Typography",
       "outcome": "Pass",
-      "diffPercentage": 0.0017,
+      "diffPercentage": 0,
       "shiftTolerantDiffPercentage": 0,
-      "diffPixels": 2,
+      "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 691,
+      "durationMs": 686,
       "errorMessage": null
     },
     {
@@ -9900,7 +9900,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 149,
+      "durationMs": 695,
       "errorMessage": null
     },
     {
@@ -9908,12 +9908,12 @@
       "testName": "Justified text in 200px",
       "category": "Typography",
       "outcome": "Pass",
-      "diffPercentage": 0,
-      "shiftTolerantDiffPercentage": 0,
-      "diffPixels": 0,
-      "shiftTolerantDiffPixels": 0,
+      "diffPercentage": 0.0042,
+      "shiftTolerantDiffPercentage": 0.0008,
+      "diffPixels": 5,
+      "shiftTolerantDiffPixels": 1,
       "totalPixels": 120000,
-      "durationMs": 253,
+      "durationMs": 2398,
       "errorMessage": null
     },
     {
@@ -9926,7 +9926,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 197,
+      "durationMs": 627,
       "errorMessage": null
     },
     {
@@ -9939,7 +9939,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 198,
+      "durationMs": 588,
       "errorMessage": null
     },
     {
@@ -9952,7 +9952,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 166,
+      "durationMs": 674,
       "errorMessage": null
     },
     {
@@ -9960,12 +9960,12 @@
       "testName": "Multi-line text line-height:1.2",
       "category": "Typography",
       "outcome": "Pass",
-      "diffPercentage": 0,
+      "diffPercentage": 0.005,
       "shiftTolerantDiffPercentage": 0,
-      "diffPixels": 0,
+      "diffPixels": 6,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 189,
+      "durationMs": 2552,
       "errorMessage": null
     },
     {
@@ -9978,7 +9978,7 @@
       "diffPixels": 17,
       "shiftTolerantDiffPixels": 10,
       "totalPixels": 120000,
-      "durationMs": 647,
+      "durationMs": 2389,
       "errorMessage": null
     },
     {
@@ -9991,7 +9991,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 255,
+      "durationMs": 714,
       "errorMessage": null
     },
     {
@@ -10004,7 +10004,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 219,
+      "durationMs": 635,
       "errorMessage": null
     },
     {
@@ -10017,20 +10017,20 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 182,
+      "durationMs": 723,
       "errorMessage": null
     },
     {
       "testId": "pp-text-wrap-14",
       "testName": "Text wrapping at 14px in 200px",
       "category": "Typography",
-      "outcome": "Fail",
-      "diffPercentage": 0.015,
-      "shiftTolerantDiffPercentage": 0.005,
-      "diffPixels": 18,
-      "shiftTolerantDiffPixels": 6,
+      "outcome": "Pass",
+      "diffPercentage": 0.0042,
+      "shiftTolerantDiffPercentage": 0,
+      "diffPixels": 5,
+      "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 677,
+      "durationMs": 2409,
       "errorMessage": null
     },
     {
@@ -10043,7 +10043,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 246,
+      "durationMs": 742,
       "errorMessage": null
     },
     {
@@ -10056,7 +10056,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 160,
+      "durationMs": 604,
       "errorMessage": null
     },
     {
@@ -10069,7 +10069,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 170,
+      "durationMs": 625,
       "errorMessage": null
     },
     {
@@ -10082,7 +10082,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 135,
+      "durationMs": 631,
       "errorMessage": null
     },
     {
@@ -10095,7 +10095,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 213,
+      "durationMs": 598,
       "errorMessage": null
     },
     {
@@ -10108,7 +10108,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 197,
+      "durationMs": 691,
       "errorMessage": null
     },
     {
@@ -10121,7 +10121,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 236,
+      "durationMs": 662,
       "errorMessage": null
     },
     {
@@ -10134,7 +10134,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 184,
+      "durationMs": 656,
       "errorMessage": null
     },
     {
@@ -10147,7 +10147,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 252,
+      "durationMs": 697,
       "errorMessage": null
     },
     {
@@ -10160,7 +10160,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 212,
+      "durationMs": 634,
       "errorMessage": null
     },
     {
@@ -10173,7 +10173,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 185,
+      "durationMs": 612,
       "errorMessage": null
     },
     {
@@ -10186,7 +10186,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 188,
+      "durationMs": 608,
       "errorMessage": null
     },
     {
@@ -10199,7 +10199,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 240,
+      "durationMs": 659,
       "errorMessage": null
     },
     {
@@ -10212,7 +10212,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 146,
+      "durationMs": 645,
       "errorMessage": null
     },
     {
@@ -10225,7 +10225,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 243,
+      "durationMs": 735,
       "errorMessage": null
     },
     {
@@ -10238,7 +10238,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 232,
+      "durationMs": 600,
       "errorMessage": null
     },
     {
@@ -10251,7 +10251,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 173,
+      "durationMs": 691,
       "errorMessage": null
     },
     {
@@ -10264,7 +10264,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 139,
+      "durationMs": 627,
       "errorMessage": null
     },
     {
@@ -10277,7 +10277,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 201,
+      "durationMs": 736,
       "errorMessage": null
     },
     {
@@ -10285,12 +10285,12 @@
       "testName": "Underline Arial 16px",
       "category": "Typography",
       "outcome": "Pass",
-      "diffPercentage": 0,
+      "diffPercentage": 0.0017,
       "shiftTolerantDiffPercentage": 0,
-      "diffPixels": 0,
+      "diffPixels": 2,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 142,
+      "durationMs": 2280,
       "errorMessage": null
     },
     {
@@ -10303,7 +10303,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 217,
+      "durationMs": 687,
       "errorMessage": null
     },
     {
@@ -10316,7 +10316,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 245,
+      "durationMs": 719,
       "errorMessage": null
     },
     {
@@ -10329,7 +10329,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 150,
+      "durationMs": 699,
       "errorMessage": null
     },
     {
@@ -10342,7 +10342,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 218,
+      "durationMs": 720,
       "errorMessage": null
     },
     {
@@ -10355,7 +10355,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 173,
+      "durationMs": 588,
       "errorMessage": null
     },
     {
@@ -10368,7 +10368,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 218,
+      "durationMs": 731,
       "errorMessage": null
     },
     {
@@ -10381,7 +10381,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 267,
+      "durationMs": 481,
       "errorMessage": null
     },
     {
@@ -10394,7 +10394,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 176,
+      "durationMs": 758,
       "errorMessage": null
     },
     {
@@ -10407,7 +10407,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 143,
+      "durationMs": 552,
       "errorMessage": null
     },
     {
@@ -10420,7 +10420,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 258,
+      "durationMs": 629,
       "errorMessage": null
     },
     {
@@ -10433,7 +10433,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 215,
+      "durationMs": 742,
       "errorMessage": null
     },
     {
@@ -10446,7 +10446,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 313,
+      "durationMs": 704,
       "errorMessage": null
     },
     {
@@ -10459,7 +10459,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 134,
+      "durationMs": 764,
       "errorMessage": null
     },
     {
@@ -10472,7 +10472,7 @@
       "diffPixels": 1474,
       "shiftTolerantDiffPixels": 417,
       "totalPixels": 120000,
-      "durationMs": 820,
+      "durationMs": 2689,
       "errorMessage": null
     },
     {
@@ -10485,7 +10485,7 @@
       "diffPixels": 868,
       "shiftTolerantDiffPixels": 36,
       "totalPixels": 120000,
-      "durationMs": 952,
+      "durationMs": 2544,
       "errorMessage": null
     },
     {
@@ -10498,7 +10498,7 @@
       "diffPixels": 83,
       "shiftTolerantDiffPixels": 50,
       "totalPixels": 120000,
-      "durationMs": 916,
+      "durationMs": 2697,
       "errorMessage": null
     },
     {
@@ -10511,7 +10511,7 @@
       "diffPixels": 181,
       "shiftTolerantDiffPixels": 109,
       "totalPixels": 120000,
-      "durationMs": 939,
+      "durationMs": 2665,
       "errorMessage": null
     },
     {
@@ -10524,7 +10524,7 @@
       "diffPixels": 1597,
       "shiftTolerantDiffPixels": 318,
       "totalPixels": 120000,
-      "durationMs": 809,
+      "durationMs": 2522,
       "errorMessage": null
     },
     {
@@ -10537,7 +10537,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 328,
+      "durationMs": 710,
       "errorMessage": null
     },
     {
@@ -10550,7 +10550,7 @@
       "diffPixels": 12,
       "shiftTolerantDiffPixels": 6,
       "totalPixels": 120000,
-      "durationMs": 866,
+      "durationMs": 2442,
       "errorMessage": null
     },
     {
@@ -10563,7 +10563,7 @@
       "diffPixels": 522,
       "shiftTolerantDiffPixels": 67,
       "totalPixels": 120000,
-      "durationMs": 721,
+      "durationMs": 2503,
       "errorMessage": null
     },
     {
@@ -10576,7 +10576,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 323,
+      "durationMs": 643,
       "errorMessage": null
     },
     {
@@ -10589,7 +10589,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 234,
+      "durationMs": 707,
       "errorMessage": null
     },
     {
@@ -10602,7 +10602,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 129,
+      "durationMs": 624,
       "errorMessage": null
     },
     {
@@ -10615,7 +10615,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 173,
+      "durationMs": 600,
       "errorMessage": null
     },
     {
@@ -10628,7 +10628,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 234,
+      "durationMs": 611,
       "errorMessage": null
     },
     {
@@ -10641,7 +10641,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 243,
+      "durationMs": 755,
       "errorMessage": null
     },
     {
@@ -10654,7 +10654,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 170,
+      "durationMs": 581,
       "errorMessage": null
     },
     {
@@ -10667,7 +10667,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 215,
+      "durationMs": 567,
       "errorMessage": null
     },
     {
@@ -10680,7 +10680,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 226,
+      "durationMs": 689,
       "errorMessage": null
     },
     {
@@ -10693,7 +10693,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 200,
+      "durationMs": 557,
       "errorMessage": null
     },
     {
@@ -10706,7 +10706,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 229,
+      "durationMs": 707,
       "errorMessage": null
     },
     {
@@ -10719,7 +10719,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 190,
+      "durationMs": 574,
       "errorMessage": null
     },
     {
@@ -10732,7 +10732,7 @@
       "diffPixels": 1,
       "shiftTolerantDiffPixels": 1,
       "totalPixels": 120000,
-      "durationMs": 796,
+      "durationMs": 2482,
       "errorMessage": null
     },
     {
@@ -10745,7 +10745,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 239,
+      "durationMs": 667,
       "errorMessage": null
     },
     {
@@ -10758,7 +10758,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 219,
+      "durationMs": 671,
       "errorMessage": null
     },
     {
@@ -10771,7 +10771,7 @@
       "diffPixels": 650,
       "shiftTolerantDiffPixels": 234,
       "totalPixels": 120000,
-      "durationMs": 743,
+      "durationMs": 2528,
       "errorMessage": null
     },
     {
@@ -10784,7 +10784,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 251,
+      "durationMs": 659,
       "errorMessage": null
     },
     {
@@ -10797,7 +10797,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 220,
+      "durationMs": 712,
       "errorMessage": null
     },
     {
@@ -10810,7 +10810,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 178,
+      "durationMs": 667,
       "errorMessage": null
     },
     {
@@ -10823,7 +10823,7 @@
       "diffPixels": 31,
       "shiftTolerantDiffPixels": 7,
       "totalPixels": 120000,
-      "durationMs": 758,
+      "durationMs": 2370,
       "errorMessage": null
     },
     {
@@ -10836,7 +10836,7 @@
       "diffPixels": 72,
       "shiftTolerantDiffPixels": 22,
       "totalPixels": 120000,
-      "durationMs": 606,
+      "durationMs": 2370,
       "errorMessage": null
     },
     {
@@ -10849,20 +10849,20 @@
       "diffPixels": 34,
       "shiftTolerantDiffPixels": 19,
       "totalPixels": 120000,
-      "durationMs": 850,
+      "durationMs": 2433,
       "errorMessage": null
     },
     {
       "testId": "table-nested",
       "testName": "Nested Table",
       "category": "Tables",
-      "outcome": "Fail",
-      "diffPercentage": 0.8333,
-      "shiftTolerantDiffPercentage": 0.2475,
-      "diffPixels": 1000,
-      "shiftTolerantDiffPixels": 297,
+      "outcome": "Pass",
+      "diffPercentage": 0,
+      "shiftTolerantDiffPercentage": 0,
+      "diffPixels": 0,
+      "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 712,
+      "durationMs": 669,
       "errorMessage": null
     },
     {
@@ -10875,7 +10875,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 296,
+      "durationMs": 700,
       "errorMessage": null
     },
     {
@@ -10888,7 +10888,7 @@
       "diffPixels": 380,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 626,
+      "durationMs": 2451,
       "errorMessage": null
     },
     {
@@ -10901,7 +10901,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 190,
+      "durationMs": 708,
       "errorMessage": null
     },
     {
@@ -10909,12 +10909,12 @@
       "testName": "Text Transform",
       "category": "Typography",
       "outcome": "Pass",
-      "diffPercentage": 0,
-      "shiftTolerantDiffPercentage": 0,
-      "diffPixels": 0,
-      "shiftTolerantDiffPixels": 0,
+      "diffPercentage": 0.0033,
+      "shiftTolerantDiffPercentage": 0.0017,
+      "diffPixels": 4,
+      "shiftTolerantDiffPixels": 2,
       "totalPixels": 120000,
-      "durationMs": 295,
+      "durationMs": 2673,
       "errorMessage": null
     },
     {
@@ -10927,7 +10927,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 270,
+      "durationMs": 644,
       "errorMessage": null
     },
     {
@@ -10940,7 +10940,7 @@
       "diffPixels": 1005,
       "shiftTolerantDiffPixels": 285,
       "totalPixels": 120000,
-      "durationMs": 610,
+      "durationMs": 2222,
       "errorMessage": null
     },
     {
@@ -10953,7 +10953,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 290,
+      "durationMs": 714,
       "errorMessage": null
     },
     {
@@ -10966,7 +10966,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 233,
+      "durationMs": 654,
       "errorMessage": null
     },
     {
@@ -10979,7 +10979,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 271,
+      "durationMs": 674,
       "errorMessage": null
     },
     {
@@ -10992,7 +10992,7 @@
       "diffPixels": 1691,
       "shiftTolerantDiffPixels": 955,
       "totalPixels": 120000,
-      "durationMs": 787,
+      "durationMs": 2446,
       "errorMessage": null
     },
     {
@@ -11005,7 +11005,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 147,
+      "durationMs": 659,
       "errorMessage": null
     },
     {
@@ -11018,7 +11018,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 244,
+      "durationMs": 656,
       "errorMessage": null
     },
     {
@@ -11031,7 +11031,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 246,
+      "durationMs": 712,
       "errorMessage": null
     },
     {
@@ -11039,12 +11039,12 @@
       "testName": "Font Sizes",
       "category": "Typography",
       "outcome": "Pass",
-      "diffPercentage": 0.0033,
-      "shiftTolerantDiffPercentage": 0.0017,
-      "diffPixels": 4,
-      "shiftTolerantDiffPixels": 2,
+      "diffPercentage": 0,
+      "shiftTolerantDiffPercentage": 0,
+      "diffPixels": 0,
+      "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 827,
+      "durationMs": 724,
       "errorMessage": null
     },
     {
@@ -11057,7 +11057,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 307,
+      "durationMs": 720,
       "errorMessage": null
     },
     {
@@ -11070,7 +11070,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 243,
+      "durationMs": 688,
       "errorMessage": null
     },
     {
@@ -11083,7 +11083,7 @@
       "diffPixels": 30,
       "shiftTolerantDiffPixels": 20,
       "totalPixels": 120000,
-      "durationMs": 852,
+      "durationMs": 2441,
       "errorMessage": null
     },
     {
@@ -11091,12 +11091,12 @@
       "testName": "Text Decoration",
       "category": "Typography",
       "outcome": "Fail",
-      "diffPercentage": 0.1783,
-      "shiftTolerantDiffPercentage": 0.0025,
-      "diffPixels": 214,
-      "shiftTolerantDiffPixels": 3,
+      "diffPercentage": 0.165,
+      "shiftTolerantDiffPercentage": 0,
+      "diffPixels": 198,
+      "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 726,
+      "durationMs": 2474,
       "errorMessage": null
     },
     {
@@ -11109,7 +11109,7 @@
       "diffPixels": 102,
       "shiftTolerantDiffPixels": 68,
       "totalPixels": 120000,
-      "durationMs": 742,
+      "durationMs": 2519,
       "errorMessage": null
     },
     {
@@ -11122,7 +11122,7 @@
       "diffPixels": 270,
       "shiftTolerantDiffPixels": 210,
       "totalPixels": 120000,
-      "durationMs": 838,
+      "durationMs": 2464,
       "errorMessage": null
     },
     {
@@ -11135,7 +11135,7 @@
       "diffPixels": 64,
       "shiftTolerantDiffPixels": 16,
       "totalPixels": 120000,
-      "durationMs": 878,
+      "durationMs": 2477,
       "errorMessage": null
     },
     {
@@ -11148,7 +11148,7 @@
       "diffPixels": 178,
       "shiftTolerantDiffPixels": 120,
       "totalPixels": 120000,
-      "durationMs": 835,
+      "durationMs": 2425,
       "errorMessage": null
     },
     {
@@ -11161,7 +11161,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 205,
+      "durationMs": 726,
       "errorMessage": null
     },
     {
@@ -11174,7 +11174,7 @@
       "diffPixels": 70,
       "shiftTolerantDiffPixels": 11,
       "totalPixels": 120000,
-      "durationMs": 776,
+      "durationMs": 2516,
       "errorMessage": null
     },
     {
@@ -11187,7 +11187,7 @@
       "diffPixels": 82,
       "shiftTolerantDiffPixels": 40,
       "totalPixels": 120000,
-      "durationMs": 828,
+      "durationMs": 2424,
       "errorMessage": null
     },
     {
@@ -11200,7 +11200,7 @@
       "diffPixels": 78,
       "shiftTolerantDiffPixels": 66,
       "totalPixels": 120000,
-      "durationMs": 793,
+      "durationMs": 2651,
       "errorMessage": null
     },
     {
@@ -11213,7 +11213,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 129,
+      "durationMs": 728,
       "errorMessage": null
     },
     {
@@ -11226,7 +11226,7 @@
       "diffPixels": 46,
       "shiftTolerantDiffPixels": 12,
       "totalPixels": 120000,
-      "durationMs": 544,
+      "durationMs": 2412,
       "errorMessage": null
     },
     {
@@ -11234,12 +11234,12 @@
       "testName": "Vertical Align in Inline Context",
       "category": "Typography",
       "outcome": "Fail",
-      "diffPercentage": 1.0858,
-      "shiftTolerantDiffPercentage": 0.2592,
-      "diffPixels": 1303,
-      "shiftTolerantDiffPixels": 311,
+      "diffPercentage": 0.1592,
+      "shiftTolerantDiffPercentage": 0.0933,
+      "diffPixels": 191,
+      "shiftTolerantDiffPixels": 112,
       "totalPixels": 120000,
-      "durationMs": 745,
+      "durationMs": 2604,
       "errorMessage": null
     },
     {
@@ -11252,7 +11252,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 192,
+      "durationMs": 697,
       "errorMessage": null
     },
     {
@@ -11265,7 +11265,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 220,
+      "durationMs": 615,
       "errorMessage": null
     },
     {
@@ -11278,7 +11278,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 217,
+      "durationMs": 719,
       "errorMessage": null
     },
     {
@@ -11291,7 +11291,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 212,
+      "durationMs": 425,
       "errorMessage": null
     },
     {
@@ -11304,7 +11304,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 255,
+      "durationMs": 676,
       "errorMessage": null
     },
     {
@@ -11317,7 +11317,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 169,
+      "durationMs": 312,
       "errorMessage": null
     },
     {
@@ -11330,7 +11330,7 @@
       "diffPixels": 0,
       "shiftTolerantDiffPixels": 0,
       "totalPixels": 120000,
-      "durationMs": 138,
+      "durationMs": 566,
       "errorMessage": null
     }
   ]

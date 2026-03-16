@@ -120,7 +120,7 @@ input {
     display: inline-block;
     font-size: 13.333px;
     border: 2px solid transparent;
-    padding: 1px;
+    padding: 1px 2px;
 }
 textarea {
     display: inline-block;

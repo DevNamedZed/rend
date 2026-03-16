@@ -630,11 +630,23 @@ namespace Rend.Rendering
             {
                 case Css.CssBorderStyle.Dashed:
                 {
-                    float dashLen = System.Math.Max(rule.Width * 3f, 1f);
+                    float dashLen, gapLen;
+                    if (rule.Width >= 3f)
+                    {
+                        dashLen = rule.Width * 2f;
+                        gapLen = rule.Width;
+                    }
+                    else
+                    {
+                        dashLen = rule.Width * 3f;
+                        gapLen = rule.Width * 2f;
+                    }
+                    dashLen = System.Math.Max(dashLen, 1f);
+                    gapLen = System.Math.Max(gapLen, 1f);
                     var path = new PathData();
                     path.MoveTo(rule.X, rule.Y);
                     path.LineTo(rule.X, rule.Y + rule.Height);
-                    target.StrokePath(path, new PenInfo(rule.Color, rule.Width, new[] { dashLen, dashLen }));
+                    target.StrokePath(path, new PenInfo(rule.Color, rule.Width, new[] { dashLen, gapLen }));
                     break;
                 }
                 case Css.CssBorderStyle.Dotted:

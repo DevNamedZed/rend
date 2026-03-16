@@ -333,6 +333,34 @@ namespace Rend.Rendering.Internal
         }
 
         /// <summary>
+        /// Computes the midline for dotted/dashed border strokes. Chrome strokes along
+        /// the full outer edge length, only shifting the perpendicular axis to the midline.
+        /// For horizontal borders, outer X values are preserved (full edge length);
+        /// for vertical borders, outer Y values are preserved.
+        /// </summary>
+        private static void ComputeStrokeMidline(
+            float outerX1, float outerY1, float outerX2, float outerY2,
+            float innerX1, float innerY1, float innerX2, float innerY2,
+            out float midX1, out float midY1, out float midX2, out float midY2)
+        {
+            bool isHorizontal = Math.Abs(outerX1 - outerX2) >= Math.Abs(outerY1 - outerY2);
+            if (isHorizontal)
+            {
+                midX1 = outerX1;
+                midY1 = (outerY1 + innerY1) * 0.5f;
+                midX2 = outerX2;
+                midY2 = (outerY2 + innerY2) * 0.5f;
+            }
+            else
+            {
+                midX1 = (outerX1 + innerX1) * 0.5f;
+                midY1 = outerY1;
+                midX2 = (outerX2 + innerX2) * 0.5f;
+                midY2 = outerY2;
+            }
+        }
+
+        /// <summary>
         /// Chrome's SelectBestDashGap: adjusts gap to distribute dashes evenly along the path.
         /// </summary>
         private static float SelectBestDashGap(float strokeLength, float dashLength, float gapLength)
@@ -355,10 +383,13 @@ namespace Rend.Rendering.Internal
             float outerX1, float outerY1, float outerX2, float outerY2,
             float innerX1, float innerY1, float innerX2, float innerY2)
         {
-            float midX1 = (outerX1 + innerX1) * 0.5f;
-            float midY1 = (outerY1 + innerY1) * 0.5f;
-            float midX2 = (outerX2 + innerX2) * 0.5f;
-            float midY2 = (outerY2 + innerY2) * 0.5f;
+            // Chrome strokes dotted/dashed borders along the full outer edge length,
+            // only shifting perpendicular to the midline. Use outer coordinates for
+            // the along-border axis to match Chrome's dash distribution.
+            float midX1, midY1, midX2, midY2;
+            ComputeStrokeMidline(outerX1, outerY1, outerX2, outerY2,
+                                 innerX1, innerY1, innerX2, innerY2,
+                                 out midX1, out midY1, out midX2, out midY2);
 
             // Chrome's StyledStrokeData: thickness >= 3 → dash=2*w, gap=1*w; < 3 → dash=3*w, gap=2*w
             float dashLen, gapLen;
@@ -395,10 +426,10 @@ namespace Rend.Rendering.Internal
             float outerX1, float outerY1, float outerX2, float outerY2,
             float innerX1, float innerY1, float innerX2, float innerY2)
         {
-            float midX1 = (outerX1 + innerX1) * 0.5f;
-            float midY1 = (outerY1 + innerY1) * 0.5f;
-            float midX2 = (outerX2 + innerX2) * 0.5f;
-            float midY2 = (outerY2 + innerY2) * 0.5f;
+            float midX1, midY1, midX2, midY2;
+            ComputeStrokeMidline(outerX1, outerY1, outerX2, outerY2,
+                                 innerX1, innerY1, innerX2, innerY2,
+                                 out midX1, out midY1, out midX2, out midY2);
 
             // Chrome: dash=width, gap adjusted via SelectBestDashGap
             float dotLen = Math.Max(width, 1f);

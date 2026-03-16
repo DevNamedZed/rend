@@ -401,8 +401,20 @@ namespace Rend.Rendering.Internal
             {
                 case CssTextDecorationStyle.Dashed:
                 {
-                    float dashLen = Math.Max(strokeWidth * 3f, 3f);
-                    return new PenInfo(color, strokeWidth, new[] { dashLen, dashLen });
+                    float dashLen, gapLen;
+                    if (strokeWidth >= 3f)
+                    {
+                        dashLen = strokeWidth * 2f;
+                        gapLen = strokeWidth;
+                    }
+                    else
+                    {
+                        dashLen = strokeWidth * 3f;
+                        gapLen = strokeWidth * 2f;
+                    }
+                    dashLen = Math.Max(dashLen, 1f);
+                    gapLen = Math.Max(gapLen, 1f);
+                    return new PenInfo(color, strokeWidth, new[] { dashLen, gapLen });
                 }
 
                 case CssTextDecorationStyle.Dotted:

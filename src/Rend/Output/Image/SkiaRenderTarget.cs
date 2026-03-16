@@ -761,6 +761,49 @@ namespace Rend.Output.Image
         }
 
         /// <inheritdoc />
+        public void DrawTiledImage(ImageData image, RectF fillArea,
+            float tileWidth, float tileHeight, float originX, float originY)
+        {
+            EnsureCanvas();
+
+            using (var skData = SKData.CreateCopy(image.Data))
+            using (var skImage = SKImage.FromEncodedData(skData))
+            {
+                if (skImage == null)
+                {
+                    return;
+                }
+
+                float scaleX = tileWidth / skImage.Width;
+                float scaleY = tileHeight / skImage.Height;
+
+                var tileMode = SKShaderTileMode.Repeat;
+                var localMatrix = SKMatrix.CreateScale(scaleX, scaleY);
+                localMatrix = localMatrix.PostConcat(SKMatrix.CreateTranslation(originX, originY));
+
+                var sampling = _pixelatedRendering
+                    ? new SKSamplingOptions(SKFilterMode.Nearest)
+                    : new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
+
+                using (var shader = skImage.ToShader(tileMode, tileMode, sampling, localMatrix))
+                {
+                    var paint = _paintPool.Rent();
+                    try
+                    {
+                        paint.IsAntialias = !_pixelatedRendering;
+                        paint.Color = new SKColor(255, 255, 255, (byte)Math.Round(_currentOpacity * 255, MidpointRounding.AwayFromZero));
+                        paint.Shader = shader;
+                        _currentCanvas!.DrawRect(ToSKRect(fillArea), paint);
+                        paint.Shader = null;
+                    }
+                    finally
+                    {
+                        _paintPool.Return(paint);
+                    }
+                }
+            }
+        }
+
         /// <inheritdoc />
         public float MeasureText(string text, TextStyle style)
         {

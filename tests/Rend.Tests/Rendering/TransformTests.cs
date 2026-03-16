@@ -330,6 +330,7 @@ namespace Rend.Tests.Rendering
             public void FillPath(PathData path, BrushInfo brush) { }
             public void StrokePath(PathData path, PenInfo pen) { }
             public void DrawImage(ImageData image, RectF destRect) { }
+            public void DrawTiledImage(ImageData image, RectF fillArea, float tileWidth, float tileHeight, float originX, float originY) { }
             public void DrawText(string text, float x, float y, TextStyle style) { }
             public void DrawGlyphs(ShapedTextRun run, float x, float y, CssColor color, FontDescriptor font) { }
             public void Finish(Stream output) { }

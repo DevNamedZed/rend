@@ -350,6 +350,32 @@ namespace Rend.Output.Pdf
         }
 
         /// <inheritdoc />
+        public void DrawTiledImage(ImageData image, RectF fillArea,
+            float tileWidth, float tileHeight, float originX, float originY)
+        {
+            float startX = originX;
+            while (startX > fillArea.X)
+            {
+                startX -= tileWidth;
+            }
+            float startY = originY;
+            while (startY > fillArea.Y)
+            {
+                startY -= tileHeight;
+            }
+            float endX = fillArea.X + fillArea.Width;
+            float endY = fillArea.Y + fillArea.Height;
+
+            for (float ty = startY; ty < endY; ty += tileHeight)
+            {
+                for (float tx = startX; tx < endX; tx += tileWidth)
+                {
+                    DrawImage(image, new RectF(tx, ty, tileWidth, tileHeight));
+                }
+            }
+        }
+
+        /// <inheritdoc />
         public float MeasureText(string text, TextStyle style) => -1f;
 
         /// <inheritdoc />

@@ -100,7 +100,6 @@ namespace Rend.Layout.Internal
                 {
                     // Chrome's ::marker content for bullets: "• " (bullet + space).
                     // The reserve width must match Chrome's ::marker inline box width.
-                    float bulletDiameter = styledElement.Style.FontSize * 0.3f;
                     if (lstType == CssListStyleType.Disc ||
                         lstType == CssListStyleType.Circle ||
                         lstType == CssListStyleType.Square)
@@ -995,10 +994,13 @@ namespace Rend.Layout.Internal
                     // one string.  This avoids accumulated rounding error from summing individual
                     // word widths (HarfBuzz can produce different advances for isolated words vs.
                     // words shaped in context, and float accumulation magnifies the error).
+                    bool isBreakOpportunity = j < breaks.Length && breaks[j] == LineBreakOpportunity.Allowed;
+                    bool candidateEndsAtSoftHyphen = isBreakOpportunity && hasSoftHyphens && text[j] == '\u00AD';
                     float candidateWidth;
                     {
                         string lineCandidate = text.Substring(lineTextStart, end - lineTextStart);
                         if (hasSoftHyphens) lineCandidate = lineCandidate.Replace("\u00AD", string.Empty);
+                        if (candidateEndsAtSoftHyphen) lineCandidate += "-";
                         if (lineCandidate.Length > 0)
                         {
                             // CSS Text Level 3 §8.2: Trailing whitespace at the end of a line
@@ -1079,6 +1081,7 @@ namespace Rend.Layout.Internal
                             {
                                 string newLineCandidate = text.Substring(lineTextStart, end - lineTextStart);
                                 if (hasSoftHyphens) newLineCandidate = newLineCandidate.Replace("\u00AD", string.Empty);
+                                if (candidateEndsAtSoftHyphen) newLineCandidate += "-";
                                 if (newLineCandidate.Length > 0)
                                 {
                                     string nlMeasure = newLineCandidate;
@@ -1437,7 +1440,7 @@ namespace Rend.Layout.Internal
                 if (element.TagName == "math" && intrinsicW <= 0)
                 {
                     var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(
-                        element.Element, 16f);
+                        element.Element, 16f, context.TextMeasurer);
                     if (mathSize.Width > 0) intrinsicW = mathSize.Width + 4f;
                     if (mathSize.Height > 0) intrinsicH = mathSize.Height;
                 }
@@ -1522,12 +1525,9 @@ namespace Rend.Layout.Internal
 
             if (cursorX + totalWidth > startX + containingWidth && currentLine.Fragments.Count > 0)
             {
-                // Try to backtrack into the last text fragment: if it has a word break
-                // opportunity, split it so the trailing word moves to the next line along
-                // with the inline-block.  This matches Chrome's continuous inline layout
-                // where text + inline-block are considered as one flow.
-                LineFragment? overflowFrag = BacktrackLastTextFragment(ref cursorX, currentLine, context);
-
+                // Atomic inline (inline-block) doesn't fit on the current line.
+                // Chrome wraps only the atomic inline to the next line — preceding
+                // text stays committed to the current line (no backtracking).
                 var parentStyle = parent.StyledNode as StyledElement;
                 var align = parentStyle?.Style.TextAlign ?? CssTextAlign.Left;
                 var dir = parentStyle?.Style.Direction ?? CssDirection.Ltr;
@@ -1538,16 +1538,6 @@ namespace Rend.Layout.Internal
                 currentLine = new LineBox { X = startX, Y = cursorY, Width = containingWidth };
                 cursorX = startX;
                 ComputeStrut(parent, context.TextMeasurer, out maxLineHeight, out lineBaseline);
-
-                // Place the backtracked trailing word on the new line
-                if (overflowFrag != null)
-                {
-                    overflowFrag.X = 0;
-                    currentLine.AddFragment(overflowFrag);
-                    cursorX = startX + overflowFrag.Width;
-                    UpdateLineMetrics(ref maxLineHeight, ref lineBaseline,
-                                      overflowFrag.Height, overflowFrag.Baseline);
-                }
             }
 
             if (ReplacedElementLayout.IsReplaced(element))
@@ -1633,7 +1623,23 @@ namespace Rend.Layout.Internal
             parent.AddChild(box);
 
             cursorX += fragment.Width;
-            UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, fragment.Height, fragment.Baseline);
+
+            // CSS 2.1 §10.8.1: Only baseline-aligned inline-blocks determine the line's
+            // baseline. Top/bottom contribute to line box height but not baseline.
+            // Middle/sub/super are positioned relative to the baseline in FinalizeLineBox
+            // and their extent is handled by the post-alignment recalculation.
+            CssVerticalAlign inlineBlockAlign = element.Style.VerticalAlign;
+            if (inlineBlockAlign == CssVerticalAlign.Baseline)
+            {
+                UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, fragment.Height, fragment.Baseline);
+            }
+            else if (inlineBlockAlign == CssVerticalAlign.Top || inlineBlockAlign == CssVerticalAlign.Bottom)
+            {
+                if (fragment.Height > maxLineHeight)
+                {
+                    maxLineHeight = fragment.Height;
+                }
+            }
         }
 
         /// <summary>
@@ -1662,7 +1668,9 @@ namespace Rend.Layout.Internal
                     // Direct text children are base text
                     var text = ((StyledText)child).Text;
                     if (!string.IsNullOrWhiteSpace(text))
+                    {
                         baseText += text.Trim();
+                    }
                 }
                 else if (child is StyledElement childEl)
                 {
@@ -1679,7 +1687,6 @@ namespace Rend.Layout.Internal
                         // Collect base text from <rb> children
                         baseText += ExtractTextContent(childEl);
                     }
-                    // RubyTextContainer is handled via its rt children
                     else if (childEl.Style.Display == CssDisplay.RubyTextContainer)
                     {
                         for (int j = 0; j < childEl.Children.Count; j++)
@@ -1692,13 +1699,11 @@ namespace Rend.Layout.Internal
                             }
                         }
                     }
-                    // rp elements have display:none in UA stylesheet, but handle fallback
                 }
             }
 
             if (string.IsNullOrEmpty(baseText))
             {
-                // No base text found — nothing to lay out
                 return;
             }
 
@@ -1715,7 +1720,7 @@ namespace Rend.Layout.Internal
             {
                 // The annotation height adds space above the line — account for it in line metrics
                 float annotationFontSize = annotationStyle != null ? annotationStyle.FontSize : rubyElement.Style.FontSize * 0.5f;
-                float annotationHeight = annotationFontSize * 1.2f; // approximate line height
+                float annotationHeight = annotationFontSize * 1.2f;
 
                 // Attach to all fragments created for this ruby container
                 int newCount = currentLine.Fragments.Count;
@@ -1747,7 +1752,9 @@ namespace Rend.Layout.Internal
                 // Increase line height to accommodate the annotation
                 float totalHeight = maxLineHeight + annotationHeight;
                 if (totalHeight > maxLineHeight)
+                {
                     maxLineHeight = totalHeight;
+                }
             }
         }
 
@@ -2101,6 +2108,60 @@ namespace Rend.Layout.Internal
                     case CssVerticalAlign.Super:
                         frag.Y = baseline - frag.Baseline - frag.Height * 0.3f;
                         break;
+                }
+            }
+
+            // CSS 2.1 §10.8.1: After vertical-align displaces fragments
+            // (super/sub/middle/text-top/text-bottom), some inline boxes may extend
+            // beyond the initial line box bounds. Recalculate to encompass displaced
+            // fragments only — baseline-aligned fragments are already accounted for
+            // by UpdateLineMetrics.
+            float minTop = 0;
+            float maxBottom = line.Height;
+            for (int i = 0; i < line.Fragments.Count; i++)
+            {
+                var frag = line.Fragments[i];
+                var va = GetFragmentVerticalAlign(frag);
+                if (va == CssVerticalAlign.Baseline || va == CssVerticalAlign.Top || va == CssVerticalAlign.Bottom)
+                {
+                    continue;
+                }
+                if (frag.Y < minTop)
+                {
+                    minTop = frag.Y;
+                }
+                if (frag.Y + frag.Height > maxBottom)
+                {
+                    maxBottom = frag.Y + frag.Height;
+                }
+            }
+
+            float recalculatedHeight = maxBottom - minTop;
+            if (recalculatedHeight > line.Height + 0.001f)
+            {
+                if (minTop < 0)
+                {
+                    float shift = -minTop;
+                    for (int i = 0; i < line.Fragments.Count; i++)
+                    {
+                        line.Fragments[i].Y += shift;
+                    }
+                    line.Baseline += shift;
+                }
+                line.Height = (float)((int)(recalculatedHeight * 64f)) / 64f;
+
+                for (int i = 0; i < line.Fragments.Count; i++)
+                {
+                    var frag = line.Fragments[i];
+                    var va = GetFragmentVerticalAlign(frag);
+                    if (va == CssVerticalAlign.Top)
+                    {
+                        frag.Y = 0;
+                    }
+                    else if (va == CssVerticalAlign.Bottom)
+                    {
+                        frag.Y = line.Height - frag.Height;
+                    }
                 }
             }
 
@@ -2524,9 +2585,13 @@ namespace Rend.Layout.Internal
         private static CssVerticalAlign GetFragmentVerticalAlign(LineFragment frag)
         {
             if (frag.InlineElement != null)
+            {
                 return frag.InlineElement.Style.VerticalAlign;
+            }
             if (frag.Box?.StyledNode is StyledElement el)
+            {
                 return el.Style.VerticalAlign;
+            }
             return CssVerticalAlign.Baseline;
         }
 
@@ -2564,6 +2629,11 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < box.Children.Count; i++)
             {
                 var child = box.Children[i];
+                if (child.StyledNode is Style.StyledElement se &&
+                    (se.Style.Position == Css.CssPosition.Absolute || se.Style.Position == Css.CssPosition.Fixed))
+                {
+                    continue;
+                }
                 float childBottom = child.ContentRect.Y + child.ContentRect.Height
                                   + child.PaddingBottom + child.BorderBottomWidth + child.MarginBottom;
                 float childHeight = childBottom - box.ContentRect.Y;
@@ -2591,6 +2661,11 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < box.Children.Count; i++)
             {
                 var child = box.Children[i];
+                if (child.StyledNode is Style.StyledElement se &&
+                    (se.Style.Position == Css.CssPosition.Absolute || se.Style.Position == Css.CssPosition.Fixed))
+                {
+                    continue;
+                }
                 float childRight = child.ContentRect.X + child.ContentRect.Width
                                   + child.PaddingRight + child.BorderRightWidth + child.MarginRight - left;
                 if (childRight > right) right = childRight;

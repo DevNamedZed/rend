@@ -114,6 +114,19 @@ namespace Rend.Rendering
         /// <param name="destRect">The destination rectangle.</param>
         void DrawImage(ImageData image, RectF destRect);
 
+        /// <summary>
+        /// Draws a tiled (repeating) image within the specified fill area.
+        /// Uses shader-based tiling for seamless tile boundaries.
+        /// </summary>
+        /// <param name="image">The image data to tile.</param>
+        /// <param name="fillArea">The area to fill with tiled images.</param>
+        /// <param name="tileWidth">The width of each tile.</param>
+        /// <param name="tileHeight">The height of each tile.</param>
+        /// <param name="originX">The X origin of the first tile.</param>
+        /// <param name="originY">The Y origin of the first tile.</param>
+        void DrawTiledImage(ImageData image, RectF fillArea,
+            float tileWidth, float tileHeight, float originX, float originY);
+
         /// <summary>Measures the advance width of a text string without drawing it.</summary>
         /// <param name="text">The text to measure.</param>
         /// <param name="style">The text style to apply.</param>

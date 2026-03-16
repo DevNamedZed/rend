@@ -1,7 +1,9 @@
 using System;
 using System.Globalization;
 using Rend.Core.Values;
+using Rend.Fonts;
 using Rend.Html;
+using Rend.Text;
 
 namespace Rend.Rendering.Internal
 {
@@ -35,7 +37,7 @@ namespace Rend.Rendering.Internal
                 fontSize = ParseLength(mathsize, BaseFontSize);
 
             // Measure the math content to center it in the content rect
-            var size = Measure(mathElement, fontSize);
+            var size = Measure(mathElement, fontSize, target, null);
             float x = contentRect.X + 2f; // small left padding
             float y = contentRect.Y + (contentRect.Height - size.Height) / 2f + size.Ascent;
 
@@ -49,9 +51,9 @@ namespace Rend.Rendering.Internal
         /// <summary>
         /// Measure the intrinsic size of a math element tree.
         /// </summary>
-        public static MathSize MeasureElement(Element element, float fontSize)
+        public static MathSize MeasureElement(Element element, float fontSize, TextMeasurer? textMeasurer = null)
         {
-            return Measure(element, fontSize);
+            return Measure(element, fontSize, null, textMeasurer);
         }
 
         private static void RenderElement(Element element, IRenderTarget target,
@@ -124,8 +126,7 @@ namespace Rend.Rendering.Internal
                     break;
 
                 case "mphantom":
-                    // Invisible — just advance x by the measured width
-                    var phantomSize = Measure(element, fontSize);
+                    var phantomSize = Measure(element, fontSize, target, null);
                     x += phantomSize.Width;
                     break;
 
@@ -152,7 +153,7 @@ namespace Rend.Rendering.Internal
                     if (text.Length > 0)
                     {
                         DrawMathText(target, text, x, baseline, fontSize, false);
-                        x += EstimateTextWidth(text, fontSize);
+                        x += GetTextWidth(text, fontSize, false, target, null);
                     }
                 }
                 child = child.NextSibling;
@@ -167,18 +168,22 @@ namespace Rend.Rendering.Internal
 
             // Check mathvariant attribute
             string? variant = element.GetAttribute("mathvariant");
-            if (variant == "normal") italic = false;
-            else if (variant == "italic") italic = true;
-            else if (variant == "bold-italic") italic = true;
+            if (variant == "normal") { italic = false; }
+            else if (variant == "italic") { italic = true; }
+            else if (variant == "bold-italic") { italic = true; }
 
             // For <mi> with single character, render italic by default
             if (element.TagName == "mi" && text.Length == 1 && variant == null)
+            {
                 italic = true;
+            }
             else if (element.TagName == "mi" && text.Length > 1 && variant == null)
-                italic = false; // Multi-character identifiers: normal (like "sin", "cos")
+            {
+                italic = false;
+            }
 
             DrawMathText(target, text, x, baseline, fontSize, italic);
-            x += EstimateTextWidth(text, fontSize);
+            x += GetTextWidth(text, fontSize, italic, target, null);
         }
 
         private static void RenderOperator(Element element, IRenderTarget target,
@@ -187,25 +192,23 @@ namespace Rend.Rendering.Internal
             string text = GetTextContent(element).Trim();
             if (text.Length == 0) return;
 
-            // Add padding around operators
             x += OperatorPadding;
             DrawMathText(target, text, x, baseline, fontSize, false);
-            x += EstimateTextWidth(text, fontSize);
+            x += GetTextWidth(text, fontSize, false, target, null);
             x += OperatorPadding;
         }
 
         private static void RenderFraction(Element element, IRenderTarget target,
             ref float x, float baseline, float fontSize)
         {
-            // First child = numerator, second child = denominator
             Element? numerator = GetChildElement(element, 0);
             Element? denominator = GetChildElement(element, 1);
             if (numerator == null) return;
 
             float scriptSize = fontSize * ScriptScale;
 
-            var numSize = Measure(numerator, scriptSize);
-            var denSize = denominator != null ? Measure(denominator, scriptSize) : new MathSize(0, 0, 0);
+            var numSize = Measure(numerator, scriptSize, target, null);
+            var denSize = denominator != null ? Measure(denominator, scriptSize, target, null) : new MathSize(0, 0, 0);
 
             float fracWidth = Math.Max(numSize.Width, denSize.Width) + 4f;
             float barY = baseline - fontSize * 0.3f; // Position bar at math axis
@@ -233,8 +236,7 @@ namespace Rend.Rendering.Internal
         private static void RenderSquareRoot(Element element, IRenderTarget target,
             ref float x, float baseline, float fontSize)
         {
-            // Measure content
-            var contentSize = MeasureChildren(element, fontSize);
+            var contentSize = MeasureChildren(element, fontSize, target, null);
             float radicalWidth = fontSize * 0.6f;
             float totalHeight = contentSize.Height + RadicalGap;
 
@@ -276,14 +278,13 @@ namespace Rend.Rendering.Internal
             // Draw index (small, upper-left of radical)
             if (indexEl != null)
             {
-                var idxSize = Measure(indexEl, indexSize);
+                var idxSize = Measure(indexEl, indexSize, target, null);
                 float idxX = x;
                 float idxBaseline = baseline - fontSize * 0.6f;
                 RenderElement(indexEl, target, ref idxX, idxBaseline, indexSize);
             }
 
-            // Draw radical and content (same as sqrt)
-            var contentSize = Measure(baseEl, fontSize);
+            var contentSize = Measure(baseEl, fontSize, target, null);
             float top = baseline - contentSize.Ascent - RadicalGap;
 
             var radPath = new PathData();
@@ -384,12 +385,11 @@ namespace Rend.Rendering.Internal
             if (baseEl == null) return;
 
             float scriptFontSize = fontSize * ScriptScale;
-            var baseSize = Measure(baseEl, fontSize);
-            var overSize = overEl != null ? Measure(overEl, scriptFontSize) : new MathSize(0, 0, 0);
+            var baseSize = Measure(baseEl, fontSize, target, null);
+            var overSize = overEl != null ? Measure(overEl, scriptFontSize, target, null) : new MathSize(0, 0, 0);
 
             float totalWidth = Math.Max(baseSize.Width, overSize.Width);
 
-            // Render overscript centered above base
             if (overEl != null)
             {
                 float overX = x + (totalWidth - overSize.Width) / 2f;
@@ -397,7 +397,6 @@ namespace Rend.Rendering.Internal
                 RenderElement(overEl, target, ref overX, overBaseline, scriptFontSize);
             }
 
-            // Render base centered
             float baseX = x + (totalWidth - baseSize.Width) / 2f;
             RenderElement(baseEl, target, ref baseX, baseline, fontSize);
 
@@ -412,16 +411,14 @@ namespace Rend.Rendering.Internal
             if (baseEl == null) return;
 
             float scriptFontSize = fontSize * ScriptScale;
-            var baseSize = Measure(baseEl, fontSize);
-            var underSize = underEl != null ? Measure(underEl, scriptFontSize) : new MathSize(0, 0, 0);
+            var baseSize = Measure(baseEl, fontSize, target, null);
+            var underSize = underEl != null ? Measure(underEl, scriptFontSize, target, null) : new MathSize(0, 0, 0);
 
             float totalWidth = Math.Max(baseSize.Width, underSize.Width);
 
-            // Render base centered
             float baseX = x + (totalWidth - baseSize.Width) / 2f;
             RenderElement(baseEl, target, ref baseX, baseline, fontSize);
 
-            // Render underscript centered below base
             if (underEl != null)
             {
                 float underX = x + (totalWidth - underSize.Width) / 2f;
@@ -441,13 +438,12 @@ namespace Rend.Rendering.Internal
             if (baseEl == null) return;
 
             float scriptFontSize = fontSize * ScriptScale;
-            var baseSize = Measure(baseEl, fontSize);
-            var underSize = underEl != null ? Measure(underEl, scriptFontSize) : new MathSize(0, 0, 0);
-            var overSize = overEl != null ? Measure(overEl, scriptFontSize) : new MathSize(0, 0, 0);
+            var baseSize = Measure(baseEl, fontSize, target, null);
+            var underSize = underEl != null ? Measure(underEl, scriptFontSize, target, null) : new MathSize(0, 0, 0);
+            var overSize = overEl != null ? Measure(overEl, scriptFontSize, target, null) : new MathSize(0, 0, 0);
 
             float totalWidth = Math.Max(baseSize.Width, Math.Max(underSize.Width, overSize.Width));
 
-            // Render overscript
             if (overEl != null)
             {
                 float overX = x + (totalWidth - overSize.Width) / 2f;
@@ -455,11 +451,9 @@ namespace Rend.Rendering.Internal
                 RenderElement(overEl, target, ref overX, overBaseline, scriptFontSize);
             }
 
-            // Render base
             float baseX = x + (totalWidth - baseSize.Width) / 2f;
             RenderElement(baseEl, target, ref baseX, baseline, fontSize);
 
-            // Render underscript
             if (underEl != null)
             {
                 float underX = x + (totalWidth - underSize.Width) / 2f;
@@ -472,7 +466,8 @@ namespace Rend.Rendering.Internal
 
         // ----- Measurement -----
 
-        private static MathSize Measure(Element element, float fontSize)
+        private static MathSize Measure(Element element, float fontSize,
+            IRenderTarget? target = null, TextMeasurer? textMeasurer = null)
         {
             string tag = element.TagName;
 
@@ -484,42 +479,42 @@ namespace Rend.Rendering.Internal
                 case "merror":
                 case "mpadded":
                 case "mphantom":
-                    return MeasureChildren(element, fontSize);
+                    return MeasureChildren(element, fontSize, target, textMeasurer);
 
                 case "mi":
                 case "mn":
                 case "mtext":
-                    return MeasureToken(element, fontSize);
+                    return MeasureToken(element, fontSize, target, textMeasurer);
 
                 case "mo":
-                    return MeasureOperator(element, fontSize);
+                    return MeasureOperator(element, fontSize, target, textMeasurer);
 
                 case "mfrac":
-                    return MeasureFraction(element, fontSize);
+                    return MeasureFraction(element, fontSize, target, textMeasurer);
 
                 case "msqrt":
-                    return MeasureSquareRoot(element, fontSize);
+                    return MeasureSquareRoot(element, fontSize, target, textMeasurer);
 
                 case "mroot":
-                    return MeasureRoot(element, fontSize);
+                    return MeasureRoot(element, fontSize, target, textMeasurer);
 
                 case "msub":
-                    return MeasureSubscript(element, fontSize);
+                    return MeasureSubscript(element, fontSize, target, textMeasurer);
 
                 case "msup":
-                    return MeasureSuperscript(element, fontSize);
+                    return MeasureSuperscript(element, fontSize, target, textMeasurer);
 
                 case "msubsup":
-                    return MeasureSubSup(element, fontSize);
+                    return MeasureSubSup(element, fontSize, target, textMeasurer);
 
                 case "mover":
-                    return MeasureOverscript(element, fontSize);
+                    return MeasureOverscript(element, fontSize, target, textMeasurer);
 
                 case "munder":
-                    return MeasureUnderscript(element, fontSize);
+                    return MeasureUnderscript(element, fontSize, target, textMeasurer);
 
                 case "munderover":
-                    return MeasureUnderOverscript(element, fontSize);
+                    return MeasureUnderOverscript(element, fontSize, target, textMeasurer);
 
                 case "mspace":
                     float w = ParseLength(element.GetAttribute("width"), 0f);
@@ -527,11 +522,12 @@ namespace Rend.Rendering.Internal
                     return new MathSize(w, h * 0.7f, h * 0.3f);
 
                 default:
-                    return MeasureChildren(element, fontSize);
+                    return MeasureChildren(element, fontSize, target, textMeasurer);
             }
         }
 
-        private static MathSize MeasureChildren(Element element, float fontSize)
+        private static MathSize MeasureChildren(Element element, float fontSize,
+            IRenderTarget? target = null, TextMeasurer? textMeasurer = null)
         {
             float width = 0;
             float ascent = 0;
@@ -542,7 +538,7 @@ namespace Rend.Rendering.Internal
             {
                 if (child is Element childEl)
                 {
-                    var size = Measure(childEl, fontSize);
+                    var size = Measure(childEl, fontSize, target, textMeasurer);
                     width += size.Width;
                     ascent = Math.Max(ascent, size.Ascent);
                     descent = Math.Max(descent, size.Descent);
@@ -552,7 +548,7 @@ namespace Rend.Rendering.Internal
                     string text = textNode.Data?.Trim() ?? "";
                     if (text.Length > 0)
                     {
-                        width += EstimateTextWidth(text, fontSize);
+                        width += GetTextWidth(text, fontSize, false, target, textMeasurer);
                         ascent = Math.Max(ascent, fontSize * 0.75f);
                         descent = Math.Max(descent, fontSize * 0.25f);
                     }
@@ -566,28 +562,32 @@ namespace Rend.Rendering.Internal
             return new MathSize(width, ascent, descent);
         }
 
-        private static MathSize MeasureToken(Element element, float fontSize)
+        private static MathSize MeasureToken(Element element, float fontSize,
+            IRenderTarget? target = null, TextMeasurer? textMeasurer = null)
         {
             string text = GetTextContent(element).Trim();
-            float w = EstimateTextWidth(text, fontSize);
+            bool italic = IsItalicToken(element, text);
+            float w = GetTextWidth(text, fontSize, italic, target, textMeasurer);
             return new MathSize(w, fontSize * 0.75f, fontSize * 0.25f);
         }
 
-        private static MathSize MeasureOperator(Element element, float fontSize)
+        private static MathSize MeasureOperator(Element element, float fontSize,
+            IRenderTarget? target = null, TextMeasurer? textMeasurer = null)
         {
             string text = GetTextContent(element).Trim();
-            float w = EstimateTextWidth(text, fontSize) + OperatorPadding * 2;
+            float w = GetTextWidth(text, fontSize, false, target, textMeasurer) + OperatorPadding * 2;
             return new MathSize(w, fontSize * 0.75f, fontSize * 0.25f);
         }
 
-        private static MathSize MeasureFraction(Element element, float fontSize)
+        private static MathSize MeasureFraction(Element element, float fontSize,
+            IRenderTarget? target = null, TextMeasurer? textMeasurer = null)
         {
             Element? numerator = GetChildElement(element, 0);
             Element? denominator = GetChildElement(element, 1);
 
             float scriptSize = fontSize * ScriptScale;
-            var numSize = numerator != null ? Measure(numerator, scriptSize) : new MathSize(0, 0, 0);
-            var denSize = denominator != null ? Measure(denominator, scriptSize) : new MathSize(0, 0, 0);
+            var numSize = numerator != null ? Measure(numerator, scriptSize, target, textMeasurer) : new MathSize(0, 0, 0);
+            var denSize = denominator != null ? Measure(denominator, scriptSize, target, textMeasurer) : new MathSize(0, 0, 0);
 
             float width = Math.Max(numSize.Width, denSize.Width) + 4f;
             float ascent = numSize.Height + FractionGap + FractionBarThickness / 2f + fontSize * 0.3f;
@@ -596,32 +596,35 @@ namespace Rend.Rendering.Internal
             return new MathSize(width, ascent, descent);
         }
 
-        private static MathSize MeasureSquareRoot(Element element, float fontSize)
+        private static MathSize MeasureSquareRoot(Element element, float fontSize,
+            IRenderTarget? target = null, TextMeasurer? textMeasurer = null)
         {
-            var contentSize = MeasureChildren(element, fontSize);
+            var contentSize = MeasureChildren(element, fontSize, target, textMeasurer);
             float radicalWidth = fontSize * 0.6f;
             float width = radicalWidth + contentSize.Width + 3f;
             float ascent = contentSize.Ascent + RadicalGap;
             return new MathSize(width, ascent, contentSize.Descent);
         }
 
-        private static MathSize MeasureRoot(Element element, float fontSize)
+        private static MathSize MeasureRoot(Element element, float fontSize,
+            IRenderTarget? target = null, TextMeasurer? textMeasurer = null)
         {
             Element? baseEl = GetChildElement(element, 0);
-            var contentSize = baseEl != null ? Measure(baseEl, fontSize) : new MathSize(0, 0, 0);
+            var contentSize = baseEl != null ? Measure(baseEl, fontSize, target, textMeasurer) : new MathSize(0, 0, 0);
             float radicalWidth = fontSize * 0.6f;
             float width = radicalWidth + contentSize.Width + 3f;
             float ascent = contentSize.Ascent + RadicalGap;
             return new MathSize(width, ascent, contentSize.Descent);
         }
 
-        private static MathSize MeasureSubscript(Element element, float fontSize)
+        private static MathSize MeasureSubscript(Element element, float fontSize,
+            IRenderTarget? target = null, TextMeasurer? textMeasurer = null)
         {
             Element? baseEl = GetChildElement(element, 0);
             Element? subEl = GetChildElement(element, 1);
 
-            var baseSize = baseEl != null ? Measure(baseEl, fontSize) : new MathSize(0, 0, 0);
-            var subSize = subEl != null ? Measure(subEl, fontSize * ScriptScale) : new MathSize(0, 0, 0);
+            var baseSize = baseEl != null ? Measure(baseEl, fontSize, target, textMeasurer) : new MathSize(0, 0, 0);
+            var subSize = subEl != null ? Measure(subEl, fontSize * ScriptScale, target, textMeasurer) : new MathSize(0, 0, 0);
 
             float width = baseSize.Width + subSize.Width;
             float descent = Math.Max(baseSize.Descent, ScriptShift + subSize.Height - subSize.Ascent);
@@ -629,13 +632,14 @@ namespace Rend.Rendering.Internal
             return new MathSize(width, baseSize.Ascent, descent);
         }
 
-        private static MathSize MeasureSuperscript(Element element, float fontSize)
+        private static MathSize MeasureSuperscript(Element element, float fontSize,
+            IRenderTarget? target = null, TextMeasurer? textMeasurer = null)
         {
             Element? baseEl = GetChildElement(element, 0);
             Element? supEl = GetChildElement(element, 1);
 
-            var baseSize = baseEl != null ? Measure(baseEl, fontSize) : new MathSize(0, 0, 0);
-            var supSize = supEl != null ? Measure(supEl, fontSize * ScriptScale) : new MathSize(0, 0, 0);
+            var baseSize = baseEl != null ? Measure(baseEl, fontSize, target, textMeasurer) : new MathSize(0, 0, 0);
+            var supSize = supEl != null ? Measure(supEl, fontSize * ScriptScale, target, textMeasurer) : new MathSize(0, 0, 0);
 
             float width = baseSize.Width + supSize.Width;
             float ascent = Math.Max(baseSize.Ascent, fontSize * 0.4f + supSize.Height);
@@ -643,16 +647,17 @@ namespace Rend.Rendering.Internal
             return new MathSize(width, ascent, baseSize.Descent);
         }
 
-        private static MathSize MeasureSubSup(Element element, float fontSize)
+        private static MathSize MeasureSubSup(Element element, float fontSize,
+            IRenderTarget? target = null, TextMeasurer? textMeasurer = null)
         {
             Element? baseEl = GetChildElement(element, 0);
             Element? subEl = GetChildElement(element, 1);
             Element? supEl = GetChildElement(element, 2);
 
-            var baseSize = baseEl != null ? Measure(baseEl, fontSize) : new MathSize(0, 0, 0);
+            var baseSize = baseEl != null ? Measure(baseEl, fontSize, target, textMeasurer) : new MathSize(0, 0, 0);
             float scriptFontSize = fontSize * ScriptScale;
-            var subSize = subEl != null ? Measure(subEl, scriptFontSize) : new MathSize(0, 0, 0);
-            var supSize = supEl != null ? Measure(supEl, scriptFontSize) : new MathSize(0, 0, 0);
+            var subSize = subEl != null ? Measure(subEl, scriptFontSize, target, textMeasurer) : new MathSize(0, 0, 0);
+            var supSize = supEl != null ? Measure(supEl, scriptFontSize, target, textMeasurer) : new MathSize(0, 0, 0);
 
             float scriptWidth = Math.Max(subSize.Width, supSize.Width);
             float width = baseSize.Width + scriptWidth;
@@ -662,14 +667,15 @@ namespace Rend.Rendering.Internal
             return new MathSize(width, ascent, descent);
         }
 
-        private static MathSize MeasureOverscript(Element element, float fontSize)
+        private static MathSize MeasureOverscript(Element element, float fontSize,
+            IRenderTarget? target = null, TextMeasurer? textMeasurer = null)
         {
             Element? baseEl = GetChildElement(element, 0);
             Element? overEl = GetChildElement(element, 1);
 
-            var baseSize = baseEl != null ? Measure(baseEl, fontSize) : new MathSize(0, 0, 0);
+            var baseSize = baseEl != null ? Measure(baseEl, fontSize, target, textMeasurer) : new MathSize(0, 0, 0);
             float scriptFontSize = fontSize * ScriptScale;
-            var overSize = overEl != null ? Measure(overEl, scriptFontSize) : new MathSize(0, 0, 0);
+            var overSize = overEl != null ? Measure(overEl, scriptFontSize, target, textMeasurer) : new MathSize(0, 0, 0);
 
             float width = Math.Max(baseSize.Width, overSize.Width);
             float ascent = baseSize.Ascent + 2f + overSize.Height;
@@ -677,14 +683,15 @@ namespace Rend.Rendering.Internal
             return new MathSize(width, ascent, baseSize.Descent);
         }
 
-        private static MathSize MeasureUnderscript(Element element, float fontSize)
+        private static MathSize MeasureUnderscript(Element element, float fontSize,
+            IRenderTarget? target = null, TextMeasurer? textMeasurer = null)
         {
             Element? baseEl = GetChildElement(element, 0);
             Element? underEl = GetChildElement(element, 1);
 
-            var baseSize = baseEl != null ? Measure(baseEl, fontSize) : new MathSize(0, 0, 0);
+            var baseSize = baseEl != null ? Measure(baseEl, fontSize, target, textMeasurer) : new MathSize(0, 0, 0);
             float scriptFontSize = fontSize * ScriptScale;
-            var underSize = underEl != null ? Measure(underEl, scriptFontSize) : new MathSize(0, 0, 0);
+            var underSize = underEl != null ? Measure(underEl, scriptFontSize, target, textMeasurer) : new MathSize(0, 0, 0);
 
             float width = Math.Max(baseSize.Width, underSize.Width);
             float descent = baseSize.Descent + 2f + underSize.Height;
@@ -692,16 +699,17 @@ namespace Rend.Rendering.Internal
             return new MathSize(width, baseSize.Ascent, descent);
         }
 
-        private static MathSize MeasureUnderOverscript(Element element, float fontSize)
+        private static MathSize MeasureUnderOverscript(Element element, float fontSize,
+            IRenderTarget? target = null, TextMeasurer? textMeasurer = null)
         {
             Element? baseEl = GetChildElement(element, 0);
             Element? underEl = GetChildElement(element, 1);
             Element? overEl = GetChildElement(element, 2);
 
-            var baseSize = baseEl != null ? Measure(baseEl, fontSize) : new MathSize(0, 0, 0);
+            var baseSize = baseEl != null ? Measure(baseEl, fontSize, target, textMeasurer) : new MathSize(0, 0, 0);
             float scriptFontSize = fontSize * ScriptScale;
-            var underSize = underEl != null ? Measure(underEl, scriptFontSize) : new MathSize(0, 0, 0);
-            var overSize = overEl != null ? Measure(overEl, scriptFontSize) : new MathSize(0, 0, 0);
+            var underSize = underEl != null ? Measure(underEl, scriptFontSize, target, textMeasurer) : new MathSize(0, 0, 0);
+            var overSize = overEl != null ? Measure(overEl, scriptFontSize, target, textMeasurer) : new MathSize(0, 0, 0);
 
             float width = Math.Max(baseSize.Width, Math.Max(underSize.Width, overSize.Width));
             float ascent = baseSize.Ascent + 2f + overSize.Height;
@@ -728,7 +736,7 @@ namespace Rend.Rendering.Internal
                     if (text.Length > 0)
                     {
                         DrawMathText(target, text, x, baseline, fontSize, false);
-                        x += EstimateTextWidth(text, fontSize);
+                        x += GetTextWidth(text, fontSize, false, target, null);
                     }
                 }
                 child = child.NextSibling;
@@ -739,20 +747,63 @@ namespace Rend.Rendering.Internal
             float x, float baseline, float fontSize, bool italic)
         {
             string family = italic ? "serif" : "sans-serif";
-            float weight = 400f;
+            var fontStyle = italic ? Css.CssFontStyle.Italic : Css.CssFontStyle.Normal;
 
             target.DrawText(text, x, baseline - fontSize * 0.75f, new TextStyle
             {
-                Font = new Fonts.FontDescriptor(family, weight),
+                Font = new FontDescriptor(family, 400f, fontStyle),
                 FontSize = fontSize,
                 Color = TextColor
             });
         }
 
-        private static float EstimateTextWidth(string text, float fontSize)
+        private static float GetTextWidth(string text, float fontSize, bool italic,
+            IRenderTarget? target, TextMeasurer? textMeasurer)
         {
-            // Approximate width: ~0.55em per character for proportional fonts
+            if (text.Length == 0)
+            {
+                return 0f;
+            }
+
+            string family = italic ? "serif" : "sans-serif";
+            var fontStyle = italic ? Css.CssFontStyle.Italic : Css.CssFontStyle.Normal;
+            var fontDescriptor = new FontDescriptor(family, 400f, fontStyle);
+
+            if (target != null)
+            {
+                float measured = target.MeasureText(text, new TextStyle
+                {
+                    Font = fontDescriptor,
+                    FontSize = fontSize,
+                    Color = TextColor
+                });
+                if (measured >= 0f)
+                {
+                    return measured;
+                }
+            }
+
+            if (textMeasurer != null)
+            {
+                return textMeasurer.MeasureWidth(text, fontDescriptor, fontSize);
+            }
+
             return text.Length * fontSize * 0.55f;
+        }
+
+        private static bool IsItalicToken(Element element, string text)
+        {
+            string? variant = element.GetAttribute("mathvariant");
+            if (variant == "normal") { return false; }
+            if (variant == "italic" || variant == "bold-italic") { return true; }
+
+            if (element.TagName == "mi")
+            {
+                if (text.Length == 1 && variant == null) { return true; }
+                if (text.Length > 1 && variant == null) { return false; }
+            }
+
+            return false;
         }
 
         private static string GetTextContent(Element element)

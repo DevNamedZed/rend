@@ -211,9 +211,10 @@ class Program
         File.Copy(jsonPath, latestJsonPath, overwrite: true);
         CopyDirectory(resourcesDir, Path.Combine(resultsDir, "resources"));
 
-        // Archive lightweight copy to history (report + results.json only, no resources).
+        // Archive copy to history (report + results.json + resources).
         File.Copy(reportPath, Path.Combine(historyDir, "report.html"), overwrite: true);
         File.Copy(jsonPath, Path.Combine(historyDir, "results.json"), overwrite: true);
+        CopyDirectory(resourcesDir, Path.Combine(historyDir, "resources"));
 
         Console.WriteLine($"Output:  {outputDir}");
         Console.WriteLine($"Results: {resultsDir}");

@@ -26,8 +26,9 @@ namespace Rend.Rendering.Internal
 
         private const float FormFontSize = 13.333f;  // Chrome default form font = 10pt = 13.333px
         private const float FormTextPadding = 1f;  // Chrome default input padding: 1px
-        // Approximate ascent ratio for sans-serif fonts (baseline sits ~80% below top of em square)
-        private const float FormFontAscent = FormFontSize * 0.8f;
+        private const float FormFontAscent = 12f;  // Arial WinAscent: round(1854/2048 * 13.333) = 12
+        private const float FormFontDescent = 3f;  // Arial WinDescent: round(434/2048 * 13.333) = 3
+        private const float FormLineHeight = FormFontAscent + FormFontDescent;  // 15px
 
         /// <summary>
         /// If the layout box represents a replaced element (e.g. &lt;img&gt; or form control),
@@ -252,8 +253,7 @@ namespace Rend.Rendering.Internal
                 target.PushClipRect(rect);
 
                 CssColor textColor = isPlaceholder ? PlaceholderColor : CssColor.Black;
-                // DrawText uses Y as baseline; center by placing baseline at vertical midpoint + half cap height
-                float textY = rect.Y + rect.Height / 2f + FormFontAscent * 0.4f;
+                float textY = rect.Y + (rect.Height - FormLineHeight) / 2f + FormFontAscent;
                 target.DrawText(displayText!, rect.X, textY,
                     new TextStyle
                     {
@@ -271,6 +271,9 @@ namespace Rend.Rendering.Internal
         /// </summary>
         private static void PaintCheckbox(StyledElement element, RectF rect, IRenderTarget target)
         {
+            // Chrome's native theme paints on pixel-aligned rects (PixelSnappedIntRect).
+            rect = PixelSnapControlRect(rect);
+
             bool isChecked = element.GetAttribute("checked") != null;
             var accent = GetAccentColor(element);
             bool hasAccent = accent.A > 0 && isChecked;
@@ -336,6 +339,9 @@ namespace Rend.Rendering.Internal
         /// </summary>
         private static void PaintRadio(StyledElement element, RectF rect, IRenderTarget target)
         {
+            // Chrome's native theme paints on pixel-aligned rects (PixelSnappedIntRect).
+            rect = PixelSnapControlRect(rect);
+
             float cx = rect.X + rect.Width / 2f;
             float cy = rect.Y + rect.Height / 2f;
             float w = rect.Width;
@@ -425,7 +431,7 @@ namespace Rend.Rendering.Internal
             float measuredWidth = target.MeasureText(label!, textStyle);
             float textWidth = measuredWidth > 0 ? measuredWidth : label!.Length * FormFontSize * 0.55f;
             float textX = rect.X + (rect.Width - textWidth) / 2f;
-            float textY = rect.Y + rect.Height / 2f + FormFontAscent * 0.4f;
+            float textY = rect.Y + (rect.Height - FormLineHeight) / 2f + FormFontAscent;
 
             target.DrawText(label!, textX, textY, textStyle);
         }
@@ -549,52 +555,108 @@ namespace Rend.Rendering.Internal
             {
                 target.PushClipRect(rect);
 
-                // Chrome textarea: line-height = FontMetrics::Height() = 15px for Courier New 13.333px
-                float lineHeight = 15f;
-                float textX = rect.X;
-                // Chrome positions text at baseline = top + ascent (from font metrics)
-                // For Courier New at 13.333px: ascent ≈ 11px (from WinAscent)
-                float textY = rect.Y + 11f;
+                // Read font properties from the element's computed style
+                float fontSize = FormFontSize;
+                string[] fontFamilies = new[] { "monospace" };
+                float fontWeight = 400f;
+                CssFontStyle fontStyle = CssFontStyle.Normal;
+                CssColor textColor = CssColor.Black;
 
-                // Word-wrap and draw text lines
-                // Textarea uses monospace font; Chrome wraps at character boundary
-                // that fits within the content area width.
-                float charWidth = 8.001f; // HarfBuzz Courier New 13.333px advance
-                int charsPerLine = (int)(rect.Width / charWidth);
-                if (charsPerLine < 1) { charsPerLine = 1; }
+                if (element.Style != null)
+                {
+                    if (element.Style.FontSize > 0)
+                    {
+                        fontSize = element.Style.FontSize;
+                    }
+                    if (element.Style.FontFamilies != null && element.Style.FontFamilies.Length > 0)
+                    {
+                        fontFamilies = element.Style.FontFamilies;
+                    }
+                    if (element.Style.FontWeight > 0)
+                    {
+                        fontWeight = element.Style.FontWeight;
+                    }
+                    fontStyle = element.Style.FontStyle;
+                    textColor = element.Style.Color;
+                }
 
-                string[] hardLines = content.Split('\n');
+                var fontDesc = new FontDescriptor(fontFamilies, fontWeight, fontStyle);
                 var textStyle = new TextStyle
                 {
-                    Font = new FontDescriptor("monospace", 400f),
-                    FontSize = FormFontSize,
-                    Color = CssColor.Black
+                    Font = fontDesc,
+                    FontSize = fontSize,
+                    Color = textColor
                 };
+
+                // Compute line height and ascent.
+                // For Arial/sans-serif at 13.333px: ascent=12, lineHeight=15 (same as FormFont constants).
+                // For other sizes, scale proportionally using Arial's WinAscent/WinDescent ratios.
+                float ascent = (float)Math.Round(fontSize * 1854.0 / 2048.0, MidpointRounding.AwayFromZero);
+                float descent = (float)Math.Round(fontSize * 434.0 / 2048.0, MidpointRounding.AwayFromZero);
+                float lineHeight = ascent + descent;
+
+                float textX = rect.X;
+                float textY = rect.Y + ascent;
+                float contentWidth = rect.Width;
+
+                string[] hardLines = content.Split('\n');
 
                 for (int i = 0; i < hardLines.Length; i++)
                 {
                     string remaining = hardLines[i].TrimEnd('\r');
-                    // Wrap long lines at word boundaries (or character if no space)
+                    // Wrap long lines at word boundaries using actual text measurement
                     while (remaining.Length > 0)
                     {
-                        if (textY + FormFontSize > rect.Y + rect.Height)
+                        if (textY + fontSize > rect.Y + rect.Height)
                         {
                             break;
                         }
 
                         string segment;
-                        if (remaining.Length <= charsPerLine)
+                        float measuredWidth = target.MeasureText(remaining, textStyle);
+
+                        if (measuredWidth >= 0 && measuredWidth <= contentWidth)
                         {
                             segment = remaining;
                             remaining = "";
                         }
                         else
                         {
-                            // Find last space within charsPerLine
-                            int breakAt = remaining.LastIndexOf(' ', charsPerLine - 1);
+                            // Find last word boundary that fits within content width
+                            int breakAt = -1;
+                            int searchFrom = 0;
+                            while (true)
+                            {
+                                int spaceIdx = remaining.IndexOf(' ', searchFrom);
+                                if (spaceIdx < 0)
+                                {
+                                    break;
+                                }
+                                float candidateWidth = target.MeasureText(remaining.Substring(0, spaceIdx), textStyle);
+                                if (candidateWidth >= 0 && candidateWidth <= contentWidth)
+                                {
+                                    breakAt = spaceIdx;
+                                    searchFrom = spaceIdx + 1;
+                                }
+                                else
+                                {
+                                    break;
+                                }
+                            }
+
                             if (breakAt <= 0)
                             {
-                                breakAt = charsPerLine;
+                                // No word boundary fits — break at character level
+                                breakAt = 1;
+                                for (int c = 2; c <= remaining.Length; c++)
+                                {
+                                    float charMeasure = target.MeasureText(remaining.Substring(0, c), textStyle);
+                                    if (charMeasure >= 0 && charMeasure > contentWidth)
+                                    {
+                                        break;
+                                    }
+                                    breakAt = c;
+                                }
                             }
                             segment = remaining.Substring(0, breakAt);
                             remaining = remaining.Substring(breakAt).TrimStart(' ');
@@ -787,6 +849,20 @@ namespace Rend.Rendering.Internal
                 default: // Fill
                     return contentRect;
             }
+        }
+
+        /// <summary>
+        /// Snap a form control rect to integer pixel boundaries, matching Chrome's
+        /// PixelSnappedIntRect for native theme painting. Each edge rounds independently
+        /// using AwayFromZero (matching Chrome's roundf).
+        /// </summary>
+        private static RectF PixelSnapControlRect(RectF rect)
+        {
+            float left = (float)Math.Round(rect.X, MidpointRounding.AwayFromZero);
+            float top = (float)Math.Round(rect.Y, MidpointRounding.AwayFromZero);
+            float right = (float)Math.Round(rect.X + rect.Width, MidpointRounding.AwayFromZero);
+            float bottom = (float)Math.Round(rect.Y + rect.Height, MidpointRounding.AwayFromZero);
+            return new RectF(left, top, right - left, bottom - top);
         }
 
         // Chrome 116 default accent color for checkboxes/radios
