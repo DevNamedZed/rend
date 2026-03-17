@@ -1155,11 +1155,19 @@ namespace Rend.Rendering.Internal
         {
             RectF rect = box.ContentRect;
 
-            // White background
-            target.FillRect(rect, BrushInfo.Solid(CssColor.White));
+            // Only draw default white background if no CSS background is set.
+            // BackgroundPainter already painted any CSS background before this.
+            if (element.Style.BackgroundColor.A <= 0)
+            {
+                target.FillRect(rect, BrushInfo.Solid(CssColor.White));
+            }
 
-            // 1px border
-            target.StrokeRect(rect, new PenInfo(BorderColor, 1f));
+            // Only draw default 1px border if CSS border is zero (border:0 overrides).
+            if (box.BorderTopWidth <= 0 && box.BorderRightWidth <= 0
+                && box.BorderBottomWidth <= 0 && box.BorderLeftWidth <= 0)
+            {
+                target.StrokeRect(rect, new PenInfo(BorderColor, 1f));
+            }
 
             // Show srcdoc content if available — just render as text
             string? srcdoc = element.GetAttribute("srcdoc");

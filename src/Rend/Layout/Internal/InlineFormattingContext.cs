@@ -1503,22 +1503,38 @@ namespace Rend.Layout.Internal
             // use their true shrink-to-fit width for line break decisions.
             if (needsShrinkToFit)
             {
-                // Clone the element with text-align:left to prevent centering/right-align
-                // from inflating the measured content width. text-align shifts fragment X
-                // positions, but for shrink-to-fit we need the raw content extent.
-                var measureStyle = CloneStyleTextAlignLeft(element.Style);
-                var measureChildren = new List<StyledNode>(element.Children);
-                var measureElement = new StyledElement(element.Element, measureStyle, measureChildren);
-                var measureBox = new LayoutBox(measureElement, BoxType.InlineBlock);
-                BoxModelCalculator.ApplyBoxModel(measureBox, element.Style, containingWidth);
-                measureBox.ContentRect = new RectF(0, 0, contentWidth, 0);
-                var prevFloatM = context.FloatContext;
-                context.FloatContext = null;
-                BlockFormattingContext.LayoutChildren(measureBox, context);
-                context.FloatContext = prevFloatM;
-                float measuredWidth = MeasureContentWidth(measureBox);
-                if (measuredWidth > 0 && measuredWidth < contentWidth)
-                    contentWidth = measuredWidth;
+                // CSS Flexbox §9.9.1: Flex containers use dedicated intrinsic sizing
+                // that computes width from item contributions, not from flex-grow expansion.
+                if (element.Style.Display == CssDisplay.InlineFlex)
+                {
+                    float fitWidth = BlockFormattingContext.MeasureIntrinsicWidth(
+                        element, SizingKeyword.FitContent, containingWidth, context);
+                    if (fitWidth > 0 && fitWidth < contentWidth)
+                    {
+                        contentWidth = fitWidth;
+                    }
+                }
+                else
+                {
+                    // Clone the element with text-align:left to prevent centering/right-align
+                    // from inflating the measured content width. text-align shifts fragment X
+                    // positions, but for shrink-to-fit we need the raw content extent.
+                    var measureStyle = CloneStyleTextAlignLeft(element.Style);
+                    var measureChildren = new List<StyledNode>(element.Children);
+                    var measureElement = new StyledElement(element.Element, measureStyle, measureChildren);
+                    var measureBox = new LayoutBox(measureElement, BoxType.InlineBlock);
+                    BoxModelCalculator.ApplyBoxModel(measureBox, element.Style, containingWidth);
+                    measureBox.ContentRect = new RectF(0, 0, contentWidth, 0);
+                    var prevFloatM = context.FloatContext;
+                    context.FloatContext = null;
+                    BlockFormattingContext.LayoutChildren(measureBox, context);
+                    context.FloatContext = prevFloatM;
+                    float measuredWidth = MeasureContentWidth(measureBox);
+                    if (measuredWidth > 0 && measuredWidth < contentWidth)
+                    {
+                        contentWidth = measuredWidth;
+                    }
+                }
             }
 
             float totalWidth = contentWidth + box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth;

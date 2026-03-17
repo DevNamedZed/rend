@@ -24,6 +24,7 @@ grid_debug.txt
 ## Visual regression — generated during build, not checked in
 conformance/Rend.VisualRegression/output/
 conformance/Rend.VisualRegression/results/
+conformance/Rend.VisualRegression/wpt/
 
 ## Playground publish output and test artifacts
 playground/release/

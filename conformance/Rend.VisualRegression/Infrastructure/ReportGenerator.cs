@@ -157,7 +157,8 @@ namespace Rend.VisualRegression.Infrastructure
                 bool hasHtml = result.Html != null;
                 bool hasChromeLayout = result.ChromeLayout != null;
                 bool hasRendLayout = result.RendLayout != null;
-                sb.AppendLine($"<tr class=\"result-row {statusClass}\" data-status=\"{statusClass}\" data-sort-index=\"{rowIndex}\" data-sort-status=\"{statusOrder}\" data-sort-name=\"{Escape(result.TestName.ToLower())}\" data-sort-category=\"{Escape(result.Category.ToLower())}\" data-sort-diff=\"{result.DiffPercentage:F4}\" data-sort-duration=\"{result.Duration.TotalMilliseconds:F0}\" data-test-id=\"{Escape(testId)}\" data-has-html=\"{(hasHtml ? "1" : "")}\" data-has-chrome-layout=\"{(hasChromeLayout ? "1" : "")}\" data-has-rend-layout=\"{(hasRendLayout ? "1" : "")}\">");
+                string htmlBase64 = hasHtml ? Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(result.Html!)) : "";
+                sb.AppendLine($"<tr class=\"result-row {statusClass}\" data-status=\"{statusClass}\" data-sort-index=\"{rowIndex}\" data-sort-status=\"{statusOrder}\" data-sort-name=\"{Escape(result.TestName.ToLower())}\" data-sort-category=\"{Escape(result.Category.ToLower())}\" data-sort-diff=\"{result.DiffPercentage:F4}\" data-sort-duration=\"{result.Duration.TotalMilliseconds:F0}\" data-test-id=\"{Escape(testId)}\" data-has-html=\"{(hasHtml ? "1" : "")}\" data-html=\"{htmlBase64}\" data-has-chrome-layout=\"{(hasChromeLayout ? "1" : "")}\" data-has-rend-layout=\"{(hasRendLayout ? "1" : "")}\">");
                 sb.AppendLine($"  <td class=\"index-cell\">{rowIndex}</td>");
                 sb.AppendLine($"  <td><span class=\"status-badge status-{statusClass}\">{statusLabel}</span></td>");
                 sb.AppendLine($"  <td class=\"test-name\">{Escape(result.TestName)}</td>");
@@ -1084,13 +1085,15 @@ function openLightbox(img, event) {
     var firstImg = images[0];
     var basePath = firstImg ? firstImg.getAttribute('src').replace(/[^/]*$/, '') : '';
 
-    // Load HTML
-    document.getElementById('lb-html-code').textContent = 'Loading...';
-    if (hasHtml && testId) {
-        fetch(basePath + testId + '.html')
-            .then(function(r) { return r.ok ? r.text() : ''; })
-            .then(function(t) { currentLbHtml = t; document.getElementById('lb-html-code').textContent = t; })
-            .catch(function() { currentLbHtml = ''; document.getElementById('lb-html-code').textContent = '(failed to load)'; });
+    // Load HTML from base64 data attribute (works with file:// URLs)
+    var htmlB64 = row.getAttribute('data-html') || '';
+    if (htmlB64) {
+        try {
+            currentLbHtml = decodeURIComponent(escape(atob(htmlB64)));
+        } catch(e) {
+            currentLbHtml = atob(htmlB64);
+        }
+        document.getElementById('lb-html-code').textContent = currentLbHtml;
     } else {
         currentLbHtml = '';
         document.getElementById('lb-html-code').textContent = '';

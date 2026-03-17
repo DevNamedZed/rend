@@ -2,25 +2,25 @@
 
 ## Benchmarks
 
-Rend is benchmarked against [iText pdfHTML](https://itextpdf.com/products/itext-pdfhtml), the most widely used .NET HTML-to-PDF library. Measured with BenchmarkDotNet on .NET 8, warm font provider.
+Measured with BenchmarkDotNet on .NET 8, warm font provider.
 
 ### HTML to PDF (default settings)
 
-| Test | Rend | iText pdfHTML | Speed | Memory |
-|------|------|---------------|-------|--------|
-| Simple HTML | 1.17 ms / 498 KB | 10.98 ms / 29 MB | **9.4x faster** | **58x less** |
-| Styled HTML | 1.27 ms / 748 KB | 14.46 ms / 30 MB | **11.4x faster** | **41x less** |
-| Images | 1.42 ms / 912 KB | 22.08 ms / 35 MB | **15.5x faster** | **40x less** |
-| 50 Lines | 1.56 ms / 1.3 MB | 16.59 ms / 33 MB | **10.6x faster** | **26x less** |
-| Table (50 rows) | 7.86 ms / 4.7 MB | 70.08 ms / 66 MB | **8.9x faster** | **14x less** |
+| Test | Time | Memory |
+|------|------|--------|
+| Simple HTML | 1.17 ms | 498 KB |
+| Styled HTML | 1.27 ms | 748 KB |
+| Images | 1.42 ms | 912 KB |
+| 50 Lines | 1.56 ms | 1.3 MB |
+| Table (50 rows) | 7.86 ms | 4.7 MB |
 
 ### Raw PDF Generation (no HTML/CSS parsing)
 
-| Test | Rend | QuestPDF | PDFsharp | iText7 |
-|------|------|----------|----------|--------|
-| Simple | 10.6 µs / 74 KB | 981 µs / 56 KB | 1,218 µs / 629 KB | 257 µs / 380 KB |
-| 50 Lines | 680 µs / 354 KB | 3,724 µs / 202 KB | 1,546 µs / 893 KB | 2,820 µs / 1,380 KB |
-| Table | 558 µs / 331 KB | 6,992 µs / 1,027 KB | — | 29,164 µs / 7,018 KB |
+| Test | Time | Memory |
+|------|------|--------|
+| Simple | 10.6 µs | 74 KB |
+| 50 Lines | 680 µs | 354 KB |
+| Table | 558 µs | 331 KB |
 
 ### Pipeline Stage Breakdown (Simple HTML)
 

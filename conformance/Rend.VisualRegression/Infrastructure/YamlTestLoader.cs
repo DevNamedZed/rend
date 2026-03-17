@@ -80,11 +80,41 @@ namespace Rend.VisualRegression.Infrastructure
                             continue;
                         }
 
+                        var tags = new List<string>();
+                        // Auto-tag by suite based on YAML filename
+                        var fileName = Path.GetFileNameWithoutExtension(yamlFile);
+                        if (fileName.Equals("playground", StringComparison.OrdinalIgnoreCase))
+                        {
+                            tags.Add("Playground");
+                        }
+                        else
+                        {
+                            tags.Add("Regression");
+                        }
+                        // Add category as a tag (if not already present)
+                        if (!string.IsNullOrWhiteSpace(category)
+                            && !tags.Contains(category, StringComparer.OrdinalIgnoreCase))
+                        {
+                            tags.Add(category);
+                        }
+                        // Add explicit tags from YAML
+                        if (test.Tags != null)
+                        {
+                            foreach (var tag in test.Tags)
+                            {
+                                if (!tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+                                {
+                                    tags.Add(tag);
+                                }
+                            }
+                        }
+
                         allCases.Add(new VisualTestCase
                         {
                             Id = test.Id.Trim(),
                             Name = test.Name?.Trim() ?? test.Id.Trim(),
                             Category = category,
+                            Tags = tags,
                             Html = html.TrimEnd(),
                             ViewportWidth = test.ViewportWidth > 0 ? test.ViewportWidth : 400,
                             ViewportHeight = test.ViewportHeight > 0 ? test.ViewportHeight : 300,
@@ -174,6 +204,7 @@ namespace Rend.VisualRegression.Infrastructure
         public string Html { get; set; } = "";
         /// <summary>Path to an HTML file, relative to the repository root.</summary>
         public string? File { get; set; }
+        public List<string>? Tags { get; set; }
         public int ViewportWidth { get; set; }
         public int ViewportHeight { get; set; }
         public double Tolerance { get; set; }

@@ -128,13 +128,23 @@ class Program
             return 0;
         }
 
-        // Determine parallelism level.
+        // Parse CLI flags.
         int workerCount = Math.Clamp(Environment.ProcessorCount / 2, 1, 8);
+        string? filterPattern = null;
+        string? tagFilter = null;
         for (int ai = 0; ai < args.Length; ai++)
         {
             if (args[ai] == "--parallel" && ai + 1 < args.Length && int.TryParse(args[ai + 1], out int p))
             {
                 workerCount = Math.Clamp(p, 1, 32);
+            }
+            else if (args[ai] == "--filter" && ai + 1 < args.Length)
+            {
+                filterPattern = args[ai + 1];
+            }
+            else if (args[ai] == "--tag" && ai + 1 < args.Length)
+            {
+                tagFilter = args[ai + 1];
             }
         }
         Console.WriteLine($"Workers: {workerCount}");
@@ -142,7 +152,7 @@ class Program
         // Shared font provider (read-only after init).
         var fontProvider = CreateSharedFontProvider();
 
-        // Browser pool — reuses Chrome instances across workers.
+        // Browser pool — one Chrome process per worker slot, reused across tests.
         await using var browserPool = new BrowserPool(chromeExePath, workerCount);
 
         // Per-worker render resources (SkiaTextShaper is not thread-safe).
@@ -156,7 +166,24 @@ class Program
             trackAllValues: true);
 
 
-        var testCases = VisualTestCatalog.AllCases;
+        IReadOnlyList<VisualTestCase> testCases = VisualTestCatalog.AllCases;
+
+        // Apply --filter (matches test ID substring)
+        if (!string.IsNullOrEmpty(filterPattern))
+        {
+            testCases = testCases.Where(t =>
+                t.Id.Contains(filterPattern, StringComparison.OrdinalIgnoreCase)).ToList();
+            Console.WriteLine($"Filter: '{filterPattern}' → {testCases.Count} tests");
+        }
+
+        // Apply --tag (matches any tag, case-insensitive)
+        if (!string.IsNullOrEmpty(tagFilter))
+        {
+            testCases = testCases.Where(t =>
+                t.Tags.Any(tag => tag.Equals(tagFilter, StringComparison.OrdinalIgnoreCase))).ToList();
+            Console.WriteLine($"Tag: '{tagFilter}' → {testCases.Count} tests");
+        }
+
         var results = new ConcurrentBag<ComparisonResult>();
         var totalSw = Stopwatch.StartNew();
 
@@ -204,17 +231,19 @@ class Program
         Console.WriteLine($"Results: {sortedResults.Count} tests, {passCount} passed, {failCount} failed, {errorCount} errors, avg diff {avgDiff:F4}%");
         Console.WriteLine($"Duration: {totalSw.Elapsed.TotalSeconds:F1}s");
 
-        // Copy self-contained output to results/ (latest — for CI publishing / GH Pages).
+        // Copy to results/ (latest) and history/.
         var latestReportPath = Path.Combine(resultsDir, "report.html");
         var latestJsonPath = Path.Combine(resultsDir, "results.json");
         File.Copy(reportPath, latestReportPath, overwrite: true);
         File.Copy(jsonPath, latestJsonPath, overwrite: true);
-        CopyDirectory(resourcesDir, Path.Combine(resultsDir, "resources"));
-
-        // Archive copy to history (report + results.json + resources).
+        Console.Write($"Copying resources...");
+        var copySw = Stopwatch.StartNew();
+        CopyDirectoryParallel(resourcesDir, Path.Combine(resultsDir, "resources"));
+        Console.Write($" results({copySw.Elapsed.TotalSeconds:F1}s)...");
         File.Copy(reportPath, Path.Combine(historyDir, "report.html"), overwrite: true);
         File.Copy(jsonPath, Path.Combine(historyDir, "results.json"), overwrite: true);
-        CopyDirectory(resourcesDir, Path.Combine(historyDir, "resources"));
+        CopyDirectoryParallel(resourcesDir, Path.Combine(historyDir, "resources"));
+        Console.WriteLine($" history({copySw.Elapsed.TotalSeconds:F1}s). Done.");
 
         Console.WriteLine($"Output:  {outputDir}");
         Console.WriteLine($"Results: {resultsDir}");
@@ -239,6 +268,7 @@ class Program
             TestId = testCase.Id,
             TestName = testCase.Name,
             Category = testCase.Category,
+            Tags = testCase.Tags,
             Html = testCase.Html,
         };
 
@@ -246,73 +276,20 @@ class Program
         {
             var html = testCase.Html;
             if (!html.TrimStart().StartsWith("<!DOCTYPE", StringComparison.OrdinalIgnoreCase))
-                html = "<!DOCTYPE html>" + html;
-
-            // --- Chrome render ---
-            byte[] chromePng;
-            await using (var lease = await browserPool.AcquireAsync())
             {
-                await using var page = await lease.Browser.NewPageAsync();
-                await page.SetViewportAsync(new ViewPortOptions
-                {
-                    Width = testCase.ViewportWidth,
-                    Height = testCase.ViewportHeight,
-                });
-                await page.EmulateMediaFeaturesAsync(new MediaFeatureValue[]
-                {
-                    new MediaFeatureValue { MediaFeature = MediaFeature.PrefersColorScheme, Value = "light" },
-                });
-
-                await page.SetContentAsync(html, new NavigationOptions
-                {
-                    WaitUntil = new[] { WaitUntilNavigation.Load },
-                });
-
-                // Capture Chrome's layout tree via CDP
-                try
-                {
-                    result.ChromeLayout = await LayoutTreeDumper.DumpAsync(page);
-                    if (result.ChromeLayout != null)
-                    {
-                        var layoutJson = JsonSerializer.Serialize(result.ChromeLayout, new JsonSerializerOptions
-                        {
-                            WriteIndented = true,
-                            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                        });
-                        var layoutPath = Path.Combine(resourcesDir, $"{testCase.Id}-chrome-layout.json");
-                        File.WriteAllText(layoutPath, layoutJson);
-                        result.ChromeLayoutPath = layoutPath;
-                    }
-                }
-                catch
-                {
-                    // Layout dump is best-effort — don't fail the test
-                }
-
-                chromePng = await page.ScreenshotDataAsync(new ScreenshotOptions
-                {
-                    Clip = new PuppeteerSharp.Media.Clip
-                    {
-                        X = 0, Y = 0,
-                        Width = testCase.ViewportWidth,
-                        Height = testCase.ViewportHeight,
-                    }
-                });
+                html = "<!DOCTYPE html>" + html;
             }
 
-            var chromePath = Path.Combine(resourcesDir, $"{testCase.Id}-chrome.png");
-            File.WriteAllBytes(chromePath, chromePng);
-            result.ChromeImagePath = chromePath;
+            // --- Start Chrome render (I/O-bound: awaits Puppeteer process) ---
+            var chromeTask = RenderWithChromeAsync(testCase, html, browserPool, resourcesDir, result);
 
-            // Write test HTML for report lightbox
-            var htmlPath = Path.Combine(resourcesDir, $"{testCase.Id}.html");
-            File.WriteAllText(htmlPath, html);
-
-            // --- Rend render ---
-            byte[] rendPng;
+            // --- Rend render on current thread (CPU-bound: Skia) while Chrome does I/O ---
+            byte[]? rendPng = null;
+            RenderResult? rendRenderResult = null;
+            Exception? rendError = null;
             try
             {
-                var rendResult = Render.ToImageResult(html, new RenderOptions
+                rendRenderResult = Render.ToImageResult(html, new RenderOptions
                 {
                     PageSize = new SizeF(testCase.ViewportWidth, testCase.ViewportHeight),
                     MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
@@ -323,45 +300,58 @@ class Program
                     FontMapper = fontMapper,
                     CaptureLayoutTree = true,
                 });
-                rendPng = rendResult.Data;
-
-                // Save Rend layout tree
-                if (rendResult.LayoutTree != null)
-                {
-                    result.RendLayout = rendResult.LayoutTree;
-                    try
-                    {
-                        var rendLayoutJson = JsonSerializer.Serialize(rendResult.LayoutTree, new JsonSerializerOptions
-                        {
-                            WriteIndented = true,
-                            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                        });
-                        var rendLayoutPath = Path.Combine(resourcesDir, $"{testCase.Id}-rend-layout.json");
-                        File.WriteAllText(rendLayoutPath, rendLayoutJson);
-                        result.RendLayoutPath = rendLayoutPath;
-                    }
-                    catch
-                    {
-                        // Best-effort
-                    }
-                }
+                rendPng = rendRenderResult.Data;
             }
             catch (Exception ex) when (IsNativeLibraryFailure(ex))
             {
+                rendError = ex;
+            }
+
+            // --- Wait for Chrome to finish ---
+            byte[] chromePng = await chromeTask;
+
+            // Handle Rend native library failure
+            if (rendError != null)
+            {
                 sw.Stop();
                 result.Outcome = ComparisonOutcome.Error;
-                result.ErrorMessage = $"Native library not available: {ex.Message}";
+                result.ErrorMessage = $"Native library not available: {rendError.Message}";
                 result.Duration = sw.Elapsed;
-                Console.WriteLine($"  ERROR  {testCase.Id} -- {testCase} ({ex.GetType().Name})");
+                Console.WriteLine($"  ERROR  {testCase.Id} -- {testCase} ({rendError.GetType().Name})");
                 return result;
             }
 
+            // Save Rend output
             var rendPath = Path.Combine(resourcesDir, $"{testCase.Id}-rend.png");
-            File.WriteAllBytes(rendPath, rendPng);
+            File.WriteAllBytes(rendPath, rendPng!);
             result.RendImagePath = rendPath;
 
+            if (rendRenderResult?.LayoutTree != null)
+            {
+                result.RendLayout = rendRenderResult.LayoutTree;
+                try
+                {
+                    var rendLayoutJson = JsonSerializer.Serialize(rendRenderResult.LayoutTree, new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    });
+                    var rendLayoutPath = Path.Combine(resourcesDir, $"{testCase.Id}-rend-layout.json");
+                    File.WriteAllText(rendLayoutPath, rendLayoutJson);
+                    result.RendLayoutPath = rendLayoutPath;
+                }
+                catch
+                {
+                    // Best-effort
+                }
+            }
+
+            // Write test HTML for report lightbox
+            var htmlPath = Path.Combine(resourcesDir, $"{testCase.Id}.html");
+            File.WriteAllText(htmlPath, html);
+
             // --- Compare ---
-            var cmpResult = ImageDiffer.CompareAndDiff(chromePng, rendPng, perChannelThreshold: 2);
+            var cmpResult = ImageDiffer.CompareAndDiff(chromePng, rendPng!, perChannelThreshold: 2);
             double diffPercent = cmpResult.StrictDiffFraction * 100.0;
 
             result.DiffPercentage = diffPercent;
@@ -423,6 +413,7 @@ class Program
                 testId = r.TestId,
                 testName = r.TestName,
                 category = r.Category,
+                tags = r.Tags,
                 outcome = r.Outcome.ToString(),
                 diffPercentage = Math.Round(r.DiffPercentage, 4),
                 shiftTolerantDiffPercentage = Math.Round(r.ShiftTolerantDiffPercentage, 4),
@@ -479,6 +470,22 @@ class Program
         return collection;
     }
 
+    private static void CopyDirectoryParallel(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+
+        var files = Directory.GetFiles(sourceDir);
+        Parallel.ForEach(files, new ParallelOptions { MaxDegreeOfParallelism = 32 }, file =>
+        {
+            File.Copy(file, Path.Combine(destDir, Path.GetFileName(file)), overwrite: true);
+        });
+
+        foreach (var subDir in Directory.GetDirectories(sourceDir))
+        {
+            CopyDirectoryParallel(subDir, Path.Combine(destDir, Path.GetFileName(subDir)));
+        }
+    }
+
     private static void CopyDirectory(string sourceDir, string destDir)
     {
         Directory.CreateDirectory(destDir);
@@ -492,6 +499,72 @@ class Program
         {
             CopyDirectory(subDir, Path.Combine(destDir, Path.GetFileName(subDir)));
         }
+    }
+
+    /// <summary>
+    /// Renders test HTML in Chrome via Puppeteer and returns the screenshot PNG.
+    /// Extracted so it can run concurrently with Rend rendering.
+    /// </summary>
+    private static async Task<byte[]> RenderWithChromeAsync(
+        VisualTestCase testCase, string html,
+        BrowserPool browserPool, string resourcesDir,
+        ComparisonResult result)
+    {
+        byte[] chromePng;
+        await using (var lease = await browserPool.AcquirePageAsync())
+        {
+            var page = lease.Page;
+            await page.SetViewportAsync(new ViewPortOptions
+            {
+                Width = testCase.ViewportWidth,
+                Height = testCase.ViewportHeight,
+            });
+            await page.EmulateMediaFeaturesAsync(new MediaFeatureValue[]
+            {
+                new MediaFeatureValue { MediaFeature = MediaFeature.PrefersColorScheme, Value = "light" },
+            });
+
+            await page.SetContentAsync(html, new NavigationOptions
+            {
+                WaitUntil = new[] { WaitUntilNavigation.Load },
+            });
+
+            // Capture Chrome's layout tree via CDP (best-effort)
+            try
+            {
+                result.ChromeLayout = await LayoutTreeDumper.DumpAsync(page);
+                if (result.ChromeLayout != null)
+                {
+                    var layoutJson = JsonSerializer.Serialize(result.ChromeLayout, new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    });
+                    var layoutPath = Path.Combine(resourcesDir, $"{testCase.Id}-chrome-layout.json");
+                    File.WriteAllText(layoutPath, layoutJson);
+                    result.ChromeLayoutPath = layoutPath;
+                }
+            }
+            catch
+            {
+            }
+
+            chromePng = await page.ScreenshotDataAsync(new ScreenshotOptions
+            {
+                Clip = new PuppeteerSharp.Media.Clip
+                {
+                    X = 0, Y = 0,
+                    Width = testCase.ViewportWidth,
+                    Height = testCase.ViewportHeight,
+                }
+            });
+        }
+
+        var chromePath = Path.Combine(resourcesDir, $"{testCase.Id}-chrome.png");
+        File.WriteAllBytes(chromePath, chromePng);
+        result.ChromeImagePath = chromePath;
+
+        return chromePng;
     }
 
     private static bool IsNativeLibraryFailure(Exception ex)

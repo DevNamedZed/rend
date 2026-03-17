@@ -54,6 +54,17 @@ namespace Rend.VisualRegression.Infrastructure
             {
                 Console.Error.WriteLine("WARNING: No YAML tests loaded. Check TestData/ directory.");
             }
+
+            // Load WPT CSS tests (if downloaded via wpt-setup.sh)
+            var wptCases = WptTestLoader.LoadAll();
+            if (wptCases.Count > 0)
+            {
+                lock (_lock)
+                {
+                    _cases.AddRange(wptCases);
+                }
+                Console.WriteLine($"Loaded {wptCases.Count} WPT CSS tests");
+            }
         }
     }
 }

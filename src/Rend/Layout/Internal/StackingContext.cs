@@ -37,7 +37,7 @@ namespace Rend.Layout.Internal
                 var child = box.Children[i];
                 var style = child.StyledNode?.Style;
 
-                if (style != null && EstablishesStackingContext(style))
+                if (style != null && EstablishesStackingContext(style, box))
                 {
                     float z = float.IsNaN(style.ZIndex) ? 0 : style.ZIndex;
                     var childCtx = new StackingContext(child, z);
@@ -56,33 +56,64 @@ namespace Rend.Layout.Internal
             parentCtx.Children.Sort((a, b) => a.ZIndex.CompareTo(b.ZIndex));
         }
 
-        private static bool EstablishesStackingContext(ComputedStyle style)
+        private static bool EstablishesStackingContext(ComputedStyle style, LayoutBox? parentBox)
         {
             // Positioned elements with z-index != auto
             if (style.Position != CssPosition.Static && !float.IsNaN(style.ZIndex))
+            {
                 return true;
+            }
+
+            // CSS Flexbox §4: Flex items create stacking contexts when z-index
+            // is not auto, even if position is static. Same for grid items per
+            // CSS Grid §5.4.
+            if (!float.IsNaN(style.ZIndex) && parentBox != null)
+            {
+                var parentStyle = parentBox.StyledNode?.Style;
+                if (parentStyle != null)
+                {
+                    var parentDisplay = parentStyle.Display;
+                    if (parentDisplay == CssDisplay.Flex ||
+                        parentDisplay == CssDisplay.InlineFlex ||
+                        parentDisplay == CssDisplay.Grid ||
+                        parentDisplay == CssDisplay.InlineGrid)
+                    {
+                        return true;
+                    }
+                }
+            }
 
             // Elements with opacity < 1
             if (style.Opacity < 1f)
+            {
                 return true;
+            }
 
             // Elements with isolation: isolate
             if (style.Isolation == CssIsolation.Isolate)
+            {
                 return true;
+            }
 
             // Elements with mix-blend-mode other than normal
             if (style.MixBlendMode != CssMixBlendMode.Normal)
+            {
                 return true;
+            }
 
             // Elements with CSS transforms
             if (style.GetRefValue(Css.Properties.Internal.PropertyId.Transform) != null)
+            {
                 return true;
+            }
 
             // Elements with CSS containment (layout, paint, content, or strict)
             var contain = style.Contain;
             if (contain == CssContain.Layout || contain == CssContain.Paint ||
                 contain == CssContain.Content || contain == CssContain.Strict)
+            {
                 return true;
+            }
 
             return false;
         }

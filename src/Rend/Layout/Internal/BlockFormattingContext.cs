@@ -232,25 +232,44 @@ namespace Rend.Layout.Internal
                         // When left/right is set, constrain available width accordingly.
                         if (float.IsNaN(childStyle.Width) && !DeferredPercent.IsEncoded(childStyle.Width))
                         {
-                            float shrinkAvail = containingWidth;
                             float leftVal = childStyle.Left;
                             float rightVal = childStyle.Right;
-                            if (!float.IsNaN(leftVal))
+
+                            // CSS 2.1 §10.3.7: when both left and right are set with
+                            // auto width, width = containing - left - right - margins/border/padding.
+                            if (!float.IsNaN(leftVal) && !float.IsNaN(rightVal))
                             {
                                 float resolvedLeft = DeferredPercent.IsEncoded(leftVal)
                                     ? DeferredPercent.Resolve(leftVal, containingWidth) : leftVal;
-                                if (float.IsNaN(rightVal))
-                                {
-                                    shrinkAvail = containingWidth - resolvedLeft;
-                                }
-                            }
-                            else if (!float.IsNaN(rightVal))
-                            {
                                 float resolvedRight = DeferredPercent.IsEncoded(rightVal)
                                     ? DeferredPercent.Resolve(rightVal, containingWidth) : rightVal;
-                                shrinkAvail = containingWidth - resolvedRight;
+                                posWidth = containingWidth - resolvedLeft - resolvedRight
+                                         - posBox.MarginLeft - posBox.MarginRight
+                                         - posBox.BorderLeftWidth - posBox.BorderRightWidth
+                                         - posBox.PaddingLeft - posBox.PaddingRight;
+                                if (posWidth < 0)
+                                {
+                                    posWidth = 0;
+                                }
                             }
-                            posWidth = MeasureIntrinsicWidth(childElement, SizingKeyword.FitContent, shrinkAvail, context);
+                            else
+                            {
+                                // Only one of left/right set (or neither): shrink-to-fit
+                                float shrinkAvail = containingWidth;
+                                if (!float.IsNaN(leftVal))
+                                {
+                                    float resolvedLeft = DeferredPercent.IsEncoded(leftVal)
+                                        ? DeferredPercent.Resolve(leftVal, containingWidth) : leftVal;
+                                    shrinkAvail = containingWidth - resolvedLeft;
+                                }
+                                else if (!float.IsNaN(rightVal))
+                                {
+                                    float resolvedRight = DeferredPercent.IsEncoded(rightVal)
+                                        ? DeferredPercent.Resolve(rightVal, containingWidth) : rightVal;
+                                    shrinkAvail = containingWidth - resolvedRight;
+                                }
+                                posWidth = MeasureIntrinsicWidth(childElement, SizingKeyword.FitContent, shrinkAvail, context);
+                            }
                         }
                     }
                     // Static position Y: where the element's content edge would be in normal flow.
@@ -258,10 +277,34 @@ namespace Rend.Layout.Internal
                     // the element's own border and padding (since this is the content rect Y).
                     float staticY = cursorY + MarginCollapsing.Collapse(prevMarginBottom, posBox.MarginTop)
                                   + posBox.BorderTopWidth + posBox.PaddingTop;
-                    // Pre-resolve explicit height so flex/grid children can use it for
-                    // cross-axis alignment (align-items: center needs container height).
+                    // Pre-resolve height for abspos elements. If height is auto but
+                    // both top and bottom are set, compute height from the containing
+                    // block (CSS 2.1 §10.6.4) so flex/grid children get a definite size.
                     float preHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, posBox);
-                    if (float.IsNaN(preHeight)) preHeight = 0;
+                    if (float.IsNaN(preHeight) && parentContentHeight > 0)
+                    {
+                        float topVal = childStyle.Top;
+                        float bottomVal = childStyle.Bottom;
+                        if (!float.IsNaN(topVal) && !float.IsNaN(bottomVal))
+                        {
+                            float resolvedTop = DeferredPercent.IsEncoded(topVal)
+                                ? DeferredPercent.Resolve(topVal, parentContentHeight) : topVal;
+                            float resolvedBottom = DeferredPercent.IsEncoded(bottomVal)
+                                ? DeferredPercent.Resolve(bottomVal, parentContentHeight) : bottomVal;
+                            preHeight = parentContentHeight - resolvedTop - resolvedBottom
+                                      - posBox.MarginTop - posBox.MarginBottom
+                                      - posBox.BorderTopWidth - posBox.BorderBottomWidth
+                                      - posBox.PaddingTop - posBox.PaddingBottom;
+                            if (preHeight < 0)
+                            {
+                                preHeight = 0;
+                            }
+                        }
+                    }
+                    if (float.IsNaN(preHeight))
+                    {
+                        preHeight = 0;
+                    }
                     posBox.ContentRect = new RectF(parent.ContentRect.X, staticY, posWidth, preHeight);
                     LayoutChildren(posBox, context);
                     float posHeight = preHeight > 0 ? preHeight : CalculateAutoHeight(posBox);
@@ -1003,6 +1046,24 @@ namespace Rend.Layout.Internal
         internal static float MeasureIntrinsicWidth(StyledElement element, float keyword,
                                                     float containingWidth, LayoutContext context)
         {
+            // CSS Flexbox §9.9.1: Flex containers have dedicated intrinsic sizing that
+            // sums (row) or maxes (column) their items' contributions, rather than using
+            // the generic layout+measure approach which doesn't account for flex semantics.
+            var display = element.Style.Display;
+            if (display == CssDisplay.Flex || display == CssDisplay.InlineFlex)
+            {
+                if (keyword == SizingKeyword.FitContent)
+                {
+                    float minContentWidth = FlexLayout.ComputeIntrinsicWidth(element, SizingKeyword.MinContent, containingWidth, context);
+                    float maxContentWidth = FlexLayout.ComputeIntrinsicWidth(element, SizingKeyword.MaxContent, containingWidth, context);
+                    var fitBox = new LayoutBox(element, BoxType.Block);
+                    BoxModelCalculator.ApplyBoxModel(fitBox, element.Style, containingWidth);
+                    float available = containingWidth - BoxModelCalculator.GetHorizontalSpacing(fitBox);
+                    return Math.Max(minContentWidth, Math.Min(maxContentWidth, available));
+                }
+                return FlexLayout.ComputeIntrinsicWidth(element, keyword, containingWidth, context);
+            }
+
             // min-content: lay out with very narrow width to find the minimum
             // max-content: lay out with very wide width to find the maximum
             float measureWidth;

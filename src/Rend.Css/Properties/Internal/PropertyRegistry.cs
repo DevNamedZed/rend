@@ -41,6 +41,14 @@ namespace Rend.Css.Properties.Internal
             Register(byName, "max-width", PropertyId.MaxWidth, false, PropertyValueType.Length);
             Register(byName, "max-height", PropertyId.MaxHeight, false, PropertyValueType.Length);
 
+            // CSS Logical Properties (horizontal writing mode aliases)
+            Register(byName, "inline-size", PropertyId.Width, false, PropertyValueType.Length);
+            Register(byName, "block-size", PropertyId.Height, false, PropertyValueType.Length);
+            Register(byName, "min-inline-size", PropertyId.MinWidth, false, PropertyValueType.Length);
+            Register(byName, "min-block-size", PropertyId.MinHeight, false, PropertyValueType.Length);
+            Register(byName, "max-inline-size", PropertyId.MaxWidth, false, PropertyValueType.Length);
+            Register(byName, "max-block-size", PropertyId.MaxHeight, false, PropertyValueType.Length);
+
             // Margin
             Register(byName, "margin-top", PropertyId.MarginTop, false, PropertyValueType.Length);
             Register(byName, "margin-right", PropertyId.MarginRight, false, PropertyValueType.Length);

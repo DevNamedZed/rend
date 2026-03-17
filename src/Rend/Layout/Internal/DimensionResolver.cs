@@ -228,6 +228,14 @@ namespace Rend.Layout.Internal
         /// Parses the aspect-ratio CSS value. Returns the ratio (width/height) or 0 if auto/unset.
         /// Supports formats: "auto", "16/9", "1.5", etc.
         /// </summary>
+        /// <summary>
+        /// Returns the aspect ratio (width/height) for public callers. 0 if auto/unset.
+        /// </summary>
+        public static float GetAspectRatio(ComputedStyle style)
+        {
+            return ParseAspectRatio(style);
+        }
+
         private static float ParseAspectRatio(ComputedStyle style)
         {
             object? ratioRef = style.GetRefValue(PropertyId.AspectRatio);

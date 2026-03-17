@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Rend.VisualRegression.Infrastructure
 {
@@ -19,6 +20,7 @@ namespace Rend.VisualRegression.Infrastructure
         public string TestId { get; set; } = "";
         public string TestName { get; set; } = "";
         public string Category { get; set; } = "";
+        public List<string> Tags { get; set; } = new List<string>();
         public ComparisonOutcome Outcome { get; set; }
         /// <summary>Strict diff (no shift tolerance).</summary>
         public double DiffPercentage { get; set; }

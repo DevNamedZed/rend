@@ -305,19 +305,19 @@ doc.Save(stream);
 
 ## Performance
 
-Rend is benchmarked against [iText pdfHTML](https://itextpdf.com/products/itext-pdfhtml), the most widely used .NET HTML-to-PDF library.
+Measured with BenchmarkDotNet on .NET 8, warm font provider.
 
-| Test | Rend | iText pdfHTML | Speed | Memory |
-|------|------|---------------|-------|--------|
-| Simple HTML | 1.17 ms / 498 KB | 10.98 ms / 29 MB | **9.4x faster** | **58x less** |
-| Styled HTML | 1.27 ms / 748 KB | 14.46 ms / 30 MB | **11.4x faster** | **41x less** |
-| Images | 1.42 ms / 912 KB | 22.08 ms / 35 MB | **15.5x faster** | **40x less** |
-| 50 Lines | 1.56 ms / 1.3 MB | 16.59 ms / 33 MB | **10.6x faster** | **26x less** |
-| Table (50 rows) | 7.86 ms / 4.7 MB | 70.08 ms / 66 MB | **8.9x faster** | **14x less** |
+| Test | Time | Memory |
+|------|------|--------|
+| Simple HTML | 1.17 ms | 498 KB |
+| Styled HTML | 1.27 ms | 748 KB |
+| Images | 1.42 ms | 912 KB |
+| 50 Lines | 1.56 ms | 1.3 MB |
+| Table (50 rows) | 7.86 ms | 4.7 MB |
 
-With `FontEmbedMode.None` (Standard14 Helvetica): **126 µs** for Simple HTML — **87x faster** than iText.
+With `FontEmbedMode.None` (Standard14 Helvetica): **126 µs** for Simple HTML.
 
-Measured with BenchmarkDotNet on .NET 8, warm font provider. See [docs/performance.md](docs/performance.md) for details.
+See [docs/performance.md](docs/performance.md) for details.
 
 ## Dependency Injection
 

@@ -35,9 +35,13 @@ conformance:
 visual:
     {{dotnet}} run --project conformance/Rend.VisualRegression
 
-# Run visual regression with a filter (e.g., just visual-filter playground)
+# Run visual regression with an ID filter (e.g., just visual-filter newsletter)
 visual-filter FILTER:
-    {{dotnet}} run --project conformance/Rend.VisualRegression -- --filter "{{FILTER}}"
+    {{dotnet}} run --project conformance/Rend.VisualRegression -- --filter {{FILTER}}
+
+# Run visual regression for a tag (e.g., just visual-tag Playground, just visual-tag WPT)
+visual-tag TAG:
+    {{dotnet}} run --project conformance/Rend.VisualRegression -- --tag {{TAG}}
 
 # Run visual regression and update checked-in results
 visual-update:

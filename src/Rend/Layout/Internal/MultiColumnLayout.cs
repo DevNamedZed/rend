@@ -259,7 +259,8 @@ namespace Rend.Layout.Internal
                                 ShapedRun = frag.ShapedRun,
                                 Box = frag.Box,
                                 InlineElement = frag.InlineElement,
-                                StyleOverride = frag.StyleOverride
+                                StyleOverride = frag.StyleOverride,
+                                JustifyWordSpacing = frag.JustifyWordSpacing
                             });
                         }
                         colLines.Add(newLine);
@@ -939,7 +940,8 @@ namespace Rend.Layout.Internal
                             ShapedRun = frag.ShapedRun,
                             Box = frag.Box,
                             InlineElement = frag.InlineElement,
-                            StyleOverride = frag.StyleOverride
+                            StyleOverride = frag.StyleOverride,
+                            JustifyWordSpacing = frag.JustifyWordSpacing
                         });
                     }
                     lines.Add(newLine);

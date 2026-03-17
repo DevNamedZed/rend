@@ -277,7 +277,7 @@ namespace Rend.Layout.Internal
                             float maxMain = isColumn ? item.Style.MaxHeight : item.Style.MaxWidth;
                             if (minMain > 0 && item.ResolvedMainSize < minMain)
                                 item.ResolvedMainSize = minMain;
-                            if (!float.IsNaN(maxMain) && maxMain > 0 && item.ResolvedMainSize > maxMain)
+                            if (!float.IsNaN(maxMain) && maxMain >= 0 && item.ResolvedMainSize > maxMain)
                                 item.ResolvedMainSize = maxMain;
                         }
                     }
@@ -373,7 +373,7 @@ namespace Rend.Layout.Internal
                                 frozen[i] = true;
                                 anyNewlyFrozen = true;
                             }
-                            if (!float.IsNaN(maxMain) && maxMain > 0 && resolved > maxMain)
+                            if (!float.IsNaN(maxMain) && maxMain >= 0 && resolved > maxMain)
                             {
                                 resolved = maxMain;
                                 frozen[i] = true;
@@ -464,11 +464,75 @@ namespace Rend.Layout.Internal
                     var box = item.Box;
 
                     float contentMain = item.ResolvedMainSize;
+                    // Apply min/max main size — for auto-height containers, the flex
+                    // resolution may give 0 but min-height should still constrain.
+                    float itemMinMain = GetFlexItemMinMain(item, isColumn);
+                    if (contentMain < itemMinMain)
+                    {
+                        contentMain = itemMinMain;
+                    }
+                    float itemMaxMain = isColumn ? item.Style.MaxHeight : item.Style.MaxWidth;
+                    if (!float.IsNaN(itemMaxMain) && itemMaxMain >= 0 && contentMain > itemMaxMain)
+                    {
+                        contentMain = itemMaxMain;
+                    }
                     float contentCross;
 
                     if (isColumn)
                     {
-                        contentCross = DimensionResolver.ResolveWidth(item.Style, containerWidth, box);
+                        // Check alignment: non-stretch items use fit-content width
+                        var itemAlign = item.Style.AlignSelf;
+                        if ((int)itemAlign == 255)
+                        {
+                            itemAlign = style.AlignItems;
+                        }
+                        bool shouldStretch = (itemAlign == CssAlignItems.Stretch || (int)itemAlign == 0)
+                                           && float.IsNaN(item.Style.Width);
+
+                        if (shouldStretch)
+                        {
+                            contentCross = DimensionResolver.ResolveWidth(item.Style, containerWidth, box);
+                        }
+                        else if (!float.IsNaN(item.Style.Width))
+                        {
+                            contentCross = DimensionResolver.ResolveWidth(item.Style, containerWidth, box);
+                        }
+                        else
+                        {
+                            // align-self: start/end/center/baseline with auto width
+                            // → fit-content (shrink-to-fit) width
+                            var measureBox = new LayoutBox(box.StyledNode, BoxType.Block);
+                            BoxModelCalculator.ApplyBoxModel(measureBox, item.Style, containerWidth);
+                            float availW = containerWidth - BoxModelCalculator.GetHorizontalSpacing(measureBox);
+                            measureBox.ContentRect = new RectF(0, 0, availW, contentMain);
+                            BlockFormattingContext.LayoutChildren(measureBox, context);
+                            contentCross = BlockFormattingContext.GetContentExtent(measureBox);
+                            if (contentCross > availW)
+                            {
+                                contentCross = availW;
+                            }
+                        }
+
+                        // CSS Sizing 4: if width is auto and aspect-ratio is set,
+                        // derive width from the resolved main size (height).
+                        if (float.IsNaN(item.Style.Width) && contentMain > 0)
+                        {
+                            float aspectRatio = DimensionResolver.GetAspectRatio(item.Style);
+                            if (aspectRatio > 0)
+                            {
+                                float arWidth = contentMain * aspectRatio;
+                                if (item.Style.BoxSizing == CssBoxSizing.BorderBox)
+                                {
+                                    arWidth -= (box.PaddingLeft + box.PaddingRight
+                                              + box.BorderLeftWidth + box.BorderRightWidth);
+                                }
+                                if (arWidth > 0)
+                                {
+                                    contentCross = arWidth;
+                                }
+                            }
+                        }
+
                         box.ContentRect = new RectF(
                             crossCursor + box.MarginLeft + box.BorderLeftWidth + box.PaddingLeft,
                             mainCursor + box.MarginTop + box.BorderTopWidth + box.PaddingTop,
@@ -868,6 +932,243 @@ namespace Rend.Layout.Internal
             }
         }
 
+        /// <summary>
+        /// CSS Flexbox §9.9.1: Compute the intrinsic width of a flex container.
+        /// For max-content: row flex sums all items' max-content contributions + gaps;
+        ///                   column flex takes the max of all items' max-content widths.
+        /// For min-content: row flex takes the largest item's min-content contribution;
+        ///                  column flex takes the max of all items' min-content widths.
+        /// </summary>
+        internal static float ComputeIntrinsicWidth(StyledElement styledElement, float keyword,
+                                                     float containingWidth, LayoutContext context)
+        {
+            var style = styledElement.Style;
+            bool isColumn = style.FlexDirection == CssFlexDirection.Column ||
+                            style.FlexDirection == CssFlexDirection.ColumnReverse;
+            bool isMinContent = keyword == SizingKeyword.MinContent;
+
+            float mainAxisGap = isColumn ? style.RowGap : style.ColumnGap;
+            if (float.IsNaN(mainAxisGap))
+            {
+                mainAxisGap = 0;
+            }
+
+            var children = BlockFormattingContext.FlattenContents(styledElement);
+            float totalItemWidth = 0;
+            float maxItemWidth = 0;
+            int itemCount = 0;
+
+            for (int childIndex = 0; childIndex < children.Count; childIndex++)
+            {
+                var child = children[childIndex];
+
+                if (child.IsText)
+                {
+                    var textNode = (StyledText)child;
+                    if (string.IsNullOrWhiteSpace(textNode.Text))
+                    {
+                        continue;
+                    }
+
+                    float textWidth = MeasureTextItemWidth(styledElement, textNode, isMinContent, containingWidth, context);
+                    totalItemWidth += textWidth;
+                    if (textWidth > maxItemWidth)
+                    {
+                        maxItemWidth = textWidth;
+                    }
+                    itemCount++;
+                    continue;
+                }
+
+                if (child is StyledPseudoElement pseudo)
+                {
+                    float pseudoWidth = MeasurePseudoItemWidth(pseudo, context);
+                    totalItemWidth += pseudoWidth;
+                    if (pseudoWidth > maxItemWidth)
+                    {
+                        maxItemWidth = pseudoWidth;
+                    }
+                    itemCount++;
+                    continue;
+                }
+
+                var childElement = (StyledElement)child;
+                if (childElement.Style.Display == CssDisplay.None)
+                {
+                    continue;
+                }
+
+                if (childElement.Style.Position == CssPosition.Absolute ||
+                    childElement.Style.Position == CssPosition.Fixed)
+                {
+                    continue;
+                }
+
+                float itemWidth = MeasureFlexItemIntrinsicWidth(childElement, isColumn, isMinContent, containingWidth, context);
+                totalItemWidth += itemWidth;
+                if (itemWidth > maxItemWidth)
+                {
+                    maxItemWidth = itemWidth;
+                }
+                itemCount++;
+            }
+
+            if (itemCount == 0)
+            {
+                return 0;
+            }
+
+            float totalGaps = (itemCount - 1) * mainAxisGap;
+
+            if (isColumn)
+            {
+                return maxItemWidth;
+            }
+            else
+            {
+                if (isMinContent)
+                {
+                    return maxItemWidth;
+                }
+                return totalItemWidth + totalGaps;
+            }
+        }
+
+        /// <summary>
+        /// Measures the intrinsic width contribution of an anonymous text flex item.
+        /// </summary>
+        private static float MeasureTextItemWidth(StyledElement parentElement, StyledText textNode,
+                                                   bool isMinContent, float containingWidth, LayoutContext context)
+        {
+            var blockStyle = CloneStyleAsBlock(parentElement.Style);
+            var doc = parentElement.Element.OwnerDocument;
+            var anonElement = doc!.CreateElement("div");
+            var anonChildren = new List<StyledNode> { new StyledText(textNode.Text, blockStyle) };
+            var anonStyled = new StyledElement(anonElement, blockStyle, anonChildren);
+
+            float measureWidth = isMinContent ? 1f : 10000f;
+            var textBox = new LayoutBox(anonStyled, BoxType.Block);
+            textBox.ContentRect = new RectF(0, 0, measureWidth, 0);
+            var savedFloatCtx = context.FloatContext;
+            context.FloatContext = null;
+            InlineFormattingContext.Layout(textBox, context);
+            context.FloatContext = savedFloatCtx;
+
+            float textWidth = 0;
+            if (textBox.LineBoxes != null)
+            {
+                for (int lineIndex = 0; lineIndex < textBox.LineBoxes.Count; lineIndex++)
+                {
+                    float lineWidth = textBox.LineBoxes[lineIndex].NaturalContentWidth;
+                    if (lineWidth > textWidth)
+                    {
+                        textWidth = lineWidth;
+                    }
+                }
+            }
+            return textWidth;
+        }
+
+        /// <summary>
+        /// Measures the intrinsic width contribution of a pseudo-element flex item.
+        /// </summary>
+        private static float MeasurePseudoItemWidth(StyledPseudoElement pseudo, LayoutContext context)
+        {
+            float fontSize = pseudo.Style.FontSize;
+            if (context.TextMeasurer != null)
+            {
+                var fontDescriptor = new Fonts.FontDescriptor(pseudo.Style.FontFamilies,
+                    pseudo.Style.FontWeight, pseudo.Style.FontStyle);
+                var shaped = context.TextMeasurer.Shape(pseudo.Content, fontDescriptor, fontSize);
+                return shaped.TotalWidth;
+            }
+            return pseudo.Content.Length * fontSize * 0.6f;
+        }
+
+        /// <summary>
+        /// Measures the intrinsic width contribution of a regular flex item (non-text, non-pseudo).
+        /// For row flex: returns the item's outer width (content + padding + border + margin).
+        /// For column flex: returns the item's max-content or min-content width.
+        /// </summary>
+        private static float MeasureFlexItemIntrinsicWidth(StyledElement childElement, bool isColumn,
+                                                            bool isMinContent, float containingWidth,
+                                                            LayoutContext context)
+        {
+            var childStyle = childElement.Style;
+            var measureBox = new LayoutBox(childElement, BoxType.Block);
+            BoxModelCalculator.ApplyBoxModel(measureBox, childStyle, containingWidth);
+            float horizontalExtra = measureBox.PaddingLeft + measureBox.PaddingRight
+                                  + measureBox.BorderLeftWidth + measureBox.BorderRightWidth
+                                  + measureBox.MarginLeft + measureBox.MarginRight;
+
+            if (isColumn)
+            {
+                float itemContentWidth = MeasureChildIntrinsicContentWidth(childElement, childStyle,
+                    measureBox, isMinContent, containingWidth, context);
+                return itemContentWidth + horizontalExtra;
+            }
+
+            float flexBasis = childStyle.FlexBasis;
+            bool hasBasis = !float.IsNaN(flexBasis) && flexBasis >= 0;
+
+            if (hasBasis)
+            {
+                if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
+                {
+                    flexBasis -= (measureBox.PaddingLeft + measureBox.PaddingRight
+                                + measureBox.BorderLeftWidth + measureBox.BorderRightWidth);
+                    if (flexBasis < 0)
+                    {
+                        flexBasis = 0;
+                    }
+                }
+                return flexBasis + horizontalExtra;
+            }
+
+            float specifiedWidth = childStyle.Width;
+            if (!float.IsNaN(specifiedWidth) && specifiedWidth >= 0
+                && !SizingKeyword.IsSizingKeyword(specifiedWidth)
+                && !DeferredPercent.IsEncoded(specifiedWidth))
+            {
+                float itemWidth = specifiedWidth;
+                if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
+                {
+                    itemWidth -= (measureBox.PaddingLeft + measureBox.PaddingRight
+                                + measureBox.BorderLeftWidth + measureBox.BorderRightWidth);
+                    if (itemWidth < 0)
+                    {
+                        itemWidth = 0;
+                    }
+                }
+                return itemWidth + horizontalExtra;
+            }
+
+            float contentWidth = MeasureChildIntrinsicContentWidth(childElement, childStyle,
+                measureBox, isMinContent, containingWidth, context);
+            return contentWidth + horizontalExtra;
+        }
+
+        /// <summary>
+        /// Measures a flex item child's intrinsic content width via trial layout.
+        /// </summary>
+        private static float MeasureChildIntrinsicContentWidth(StyledElement childElement,
+                                                                ComputedStyle childStyle,
+                                                                LayoutBox measureBox,
+                                                                bool isMinContent,
+                                                                float containingWidth,
+                                                                LayoutContext context)
+        {
+            float measureWidth = isMinContent ? 1f : 10000f;
+            float availWidth = measureWidth;
+            measureBox.ContentRect = new RectF(0, 0, availWidth, 0);
+            var savedFloatCtx = context.FloatContext;
+            context.FloatContext = null;
+            BlockFormattingContext.LayoutChildren(measureBox, context);
+            context.FloatContext = savedFloatCtx;
+            float contentWidth = BlockFormattingContext.GetContentExtent(measureBox);
+            return Math.Min(contentWidth, availWidth);
+        }
+
         private static float ResolveFlexBasis(ComputedStyle style, bool isColumn, float containerWidth,
             float containerHeight, LayoutBox box, StyledElement element, LayoutContext context)
         {
@@ -1046,7 +1347,7 @@ namespace Rend.Layout.Internal
 
         /// <summary>
         /// CSS Flexbox §4.5: Compute content-based minimum height for a column flex item.
-        /// Used when min-height is auto and the container has indefinite main size.
+        /// Used when min-height is auto to prevent items from shrinking below content.
         /// </summary>
         private static float ComputeContentMinHeight(FlexItem item, float containerWidth, LayoutContext context)
         {
@@ -1064,6 +1365,25 @@ namespace Rend.Layout.Internal
             measureBox.ContentRect = new RectF(0, 0, w, 0);
             BlockFormattingContext.LayoutChildren(measureBox, context);
             return CalculateAutoHeight(measureBox);
+        }
+
+        /// <summary>
+        /// CSS Flexbox §4.5: Compute content-based minimum width for a row flex item.
+        /// Used when min-width is auto to prevent items from shrinking below content.
+        /// </summary>
+        private static float ComputeContentMinWidth(FlexItem item, float containerWidth, LayoutContext context)
+        {
+            if (item.Box.StyledNode is not StyledElement element)
+            {
+                return 0;
+            }
+            var measureBox = new LayoutBox(element, BoxType.Block);
+            BoxModelCalculator.ApplyBoxModel(measureBox, item.Style, containerWidth);
+            float availWidth = containerWidth - BoxModelCalculator.GetHorizontalSpacing(measureBox);
+            measureBox.ContentRect = new RectF(0, 0, availWidth, 0);
+            BlockFormattingContext.LayoutChildren(measureBox, context);
+            float contentWidth = BlockFormattingContext.GetContentExtent(measureBox);
+            return Math.Min(contentWidth, availWidth);
         }
 
         /// <summary>
