@@ -42,30 +42,55 @@ namespace Rend.Css.Properties.Internal
             Register(byName, "max-height", PropertyId.MaxHeight, false, PropertyValueType.Length);
 
             // CSS Logical Properties (horizontal writing mode aliases)
-            Register(byName, "inline-size", PropertyId.Width, false, PropertyValueType.Length);
-            Register(byName, "block-size", PropertyId.Height, false, PropertyValueType.Length);
-            Register(byName, "min-inline-size", PropertyId.MinWidth, false, PropertyValueType.Length);
-            Register(byName, "min-block-size", PropertyId.MinHeight, false, PropertyValueType.Length);
-            Register(byName, "max-inline-size", PropertyId.MaxWidth, false, PropertyValueType.Length);
-            Register(byName, "max-block-size", PropertyId.MaxHeight, false, PropertyValueType.Length);
+            RegisterAlias(byName, "inline-size", PropertyId.Width, false, PropertyValueType.Length);
+            RegisterAlias(byName, "block-size", PropertyId.Height, false, PropertyValueType.Length);
+            RegisterAlias(byName, "min-inline-size", PropertyId.MinWidth, false, PropertyValueType.Length);
+            RegisterAlias(byName, "min-block-size", PropertyId.MinHeight, false, PropertyValueType.Length);
+            RegisterAlias(byName, "max-inline-size", PropertyId.MaxWidth, false, PropertyValueType.Length);
+            RegisterAlias(byName, "max-block-size", PropertyId.MaxHeight, false, PropertyValueType.Length);
 
             // Margin
             Register(byName, "margin-top", PropertyId.MarginTop, false, PropertyValueType.Length);
             Register(byName, "margin-right", PropertyId.MarginRight, false, PropertyValueType.Length);
             Register(byName, "margin-bottom", PropertyId.MarginBottom, false, PropertyValueType.Length);
             Register(byName, "margin-left", PropertyId.MarginLeft, false, PropertyValueType.Length);
+            // Logical margin aliases (horizontal writing mode: inline=left/right, block=top/bottom)
+            RegisterAlias(byName, "margin-inline-start", PropertyId.MarginLeft, false, PropertyValueType.Length);
+            RegisterAlias(byName, "margin-inline-end", PropertyId.MarginRight, false, PropertyValueType.Length);
+            RegisterAlias(byName, "margin-block-start", PropertyId.MarginTop, false, PropertyValueType.Length);
+            RegisterAlias(byName, "margin-block-end", PropertyId.MarginBottom, false, PropertyValueType.Length);
 
             // Padding
             Register(byName, "padding-top", PropertyId.PaddingTop, false, PropertyValueType.Length);
             Register(byName, "padding-right", PropertyId.PaddingRight, false, PropertyValueType.Length);
             Register(byName, "padding-bottom", PropertyId.PaddingBottom, false, PropertyValueType.Length);
             Register(byName, "padding-left", PropertyId.PaddingLeft, false, PropertyValueType.Length);
+            // Logical padding aliases
+            RegisterAlias(byName, "padding-inline-start", PropertyId.PaddingLeft, false, PropertyValueType.Length);
+            RegisterAlias(byName, "padding-inline-end", PropertyId.PaddingRight, false, PropertyValueType.Length);
+            RegisterAlias(byName, "padding-block-start", PropertyId.PaddingTop, false, PropertyValueType.Length);
+            RegisterAlias(byName, "padding-block-end", PropertyId.PaddingBottom, false, PropertyValueType.Length);
 
             // Border Width
             Register(byName, "border-top-width", PropertyId.BorderTopWidth, false, PropertyValueType.Length);
             Register(byName, "border-right-width", PropertyId.BorderRightWidth, false, PropertyValueType.Length);
             Register(byName, "border-bottom-width", PropertyId.BorderBottomWidth, false, PropertyValueType.Length);
             Register(byName, "border-left-width", PropertyId.BorderLeftWidth, false, PropertyValueType.Length);
+            // Logical border-width aliases
+            RegisterAlias(byName, "border-inline-start-width", PropertyId.BorderLeftWidth, false, PropertyValueType.Length);
+            RegisterAlias(byName, "border-inline-end-width", PropertyId.BorderRightWidth, false, PropertyValueType.Length);
+            RegisterAlias(byName, "border-block-start-width", PropertyId.BorderTopWidth, false, PropertyValueType.Length);
+            RegisterAlias(byName, "border-block-end-width", PropertyId.BorderBottomWidth, false, PropertyValueType.Length);
+            // Logical border-style aliases
+            RegisterAlias(byName, "border-inline-start-style", PropertyId.BorderLeftStyle, false, PropertyValueType.Keyword);
+            RegisterAlias(byName, "border-inline-end-style", PropertyId.BorderRightStyle, false, PropertyValueType.Keyword);
+            RegisterAlias(byName, "border-block-start-style", PropertyId.BorderTopStyle, false, PropertyValueType.Keyword);
+            RegisterAlias(byName, "border-block-end-style", PropertyId.BorderBottomStyle, false, PropertyValueType.Keyword);
+            // Logical border-color aliases
+            RegisterAlias(byName, "border-inline-start-color", PropertyId.BorderLeftColor, false, PropertyValueType.Color);
+            RegisterAlias(byName, "border-inline-end-color", PropertyId.BorderRightColor, false, PropertyValueType.Color);
+            RegisterAlias(byName, "border-block-start-color", PropertyId.BorderTopColor, false, PropertyValueType.Color);
+            RegisterAlias(byName, "border-block-end-color", PropertyId.BorderBottomColor, false, PropertyValueType.Color);
 
             // Border Style
             Register(byName, "border-top-style", PropertyId.BorderTopStyle, false, PropertyValueType.Keyword);
@@ -108,10 +133,18 @@ namespace Rend.Css.Properties.Internal
             Register(byName, "text-decoration-line", PropertyId.TextDecoration_Line, false, PropertyValueType.Keyword);
             Register(byName, "text-decoration-style", PropertyId.TextDecoration_Style, false, PropertyValueType.Keyword);
             Register(byName, "text-decoration-color", PropertyId.TextDecoration_Color, false, PropertyValueType.Color);
+            Register(byName, "text-decoration-skip-ink", PropertyId.TextDecorationSkipInk, false, PropertyValueType.Keyword);
+            Register(byName, "text-underline-position", PropertyId.TextUnderlinePosition, true, PropertyValueType.Keyword);
+            Register(byName, "text-emphasis-style", PropertyId.TextEmphasisStyle, true, PropertyValueType.Raw);
+            Register(byName, "text-emphasis-color", PropertyId.TextEmphasisColor, true, PropertyValueType.Color);
+            Register(byName, "text-emphasis-position", PropertyId.TextEmphasisPosition, true, PropertyValueType.Raw);
+            Register(byName, "-webkit-line-clamp", PropertyId.WebkitLineClamp, false, PropertyValueType.Raw);
+            Register(byName, "line-clamp", PropertyId.WebkitLineClamp, false, PropertyValueType.Raw);
             Register(byName, "text-transform", PropertyId.TextTransform, true, PropertyValueType.Keyword);
             Register(byName, "text-indent", PropertyId.TextIndent, true, PropertyValueType.Length);
             Register(byName, "white-space", PropertyId.WhiteSpace, true, PropertyValueType.Keyword);
             Register(byName, "word-break", PropertyId.WordBreak, true, PropertyValueType.Keyword);
+            Register(byName, "line-break", PropertyId.LineBreak, true, PropertyValueType.Keyword);
             Register(byName, "vertical-align", PropertyId.VerticalAlign, false, PropertyValueType.Keyword);
             Register(byName, "direction", PropertyId.Direction, true, PropertyValueType.Keyword);
             Register(byName, "unicode-bidi", PropertyId.UnicodeBidi, false, PropertyValueType.Keyword);
@@ -150,6 +183,11 @@ namespace Rend.Css.Properties.Internal
             Register(byName, "right", PropertyId.Right, false, PropertyValueType.Length);
             Register(byName, "bottom", PropertyId.Bottom, false, PropertyValueType.Length);
             Register(byName, "left", PropertyId.Left, false, PropertyValueType.Length);
+            // Logical inset aliases
+            RegisterAlias(byName, "inset-inline-start", PropertyId.Left, false, PropertyValueType.Length);
+            RegisterAlias(byName, "inset-inline-end", PropertyId.Right, false, PropertyValueType.Length);
+            RegisterAlias(byName, "inset-block-start", PropertyId.Top, false, PropertyValueType.Length);
+            RegisterAlias(byName, "inset-block-end", PropertyId.Bottom, false, PropertyValueType.Length);
             Register(byName, "z-index", PropertyId.ZIndex, false, PropertyValueType.Number);
 
             // Outline
@@ -351,6 +389,17 @@ namespace Rend.Css.Properties.Internal
             var desc = new PropertyDescriptor(name, id, inherited, valueType);
             _byId[id] = desc;
             dict[name] = desc;
+        }
+
+        /// <summary>
+        /// Registers a CSS property name as an alias for an existing physical property ID.
+        /// Only adds to the name lookup — does NOT overwrite _byId for the target property.
+        /// Used for CSS Logical Properties (e.g., margin-inline-start → margin-left).
+        /// </summary>
+        private static void RegisterAlias(Dictionary<string, PropertyDescriptor> dict, string aliasName, int targetId, bool inherited, PropertyValueType valueType)
+        {
+            var desc = new PropertyDescriptor(aliasName, targetId, inherited, valueType);
+            dict[aliasName] = desc;
         }
 
         /// <summary>Look up a property by name. Returns null if unknown.</summary>

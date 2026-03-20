@@ -43,7 +43,7 @@ if [ -d "$WPT_DIR/.git" ]; then
     cd "$WPT_DIR"
 
     # Update sparse-checkout patterns
-    PATTERNS="fonts"$'\n'
+    PATTERNS="fonts"$'\n'"css/support"$'\n'
     for mod in "${MODULES[@]}"; do
         PATTERNS+="css/$mod"$'\n'
     done
@@ -56,7 +56,7 @@ else
     cd "$WPT_DIR"
     git sparse-checkout init --cone
 
-    PATTERNS="fonts"$'\n'
+    PATTERNS="fonts"$'\n'"css/support"$'\n'
     for mod in "${MODULES[@]}"; do
         PATTERNS+="css/$mod"$'\n'
     done

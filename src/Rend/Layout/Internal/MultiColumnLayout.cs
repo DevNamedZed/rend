@@ -794,9 +794,9 @@ namespace Rend.Layout.Internal
                 if (child.IsText || child is StyledPseudoElement) continue;
                 var childElement = (StyledElement)child;
                 var display = childElement.Style.Display;
-                if (display == CssDisplay.Block || display == CssDisplay.Flex ||
-                    display == CssDisplay.Grid || display == CssDisplay.Table ||
-                    display == CssDisplay.ListItem)
+                if (display == CssDisplay.Block || display == CssDisplay.FlowRoot ||
+                    display == CssDisplay.Flex || display == CssDisplay.Grid ||
+                    display == CssDisplay.Table || display == CssDisplay.ListItem)
                     return true;
             }
             return false;

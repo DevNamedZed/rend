@@ -75,6 +75,9 @@ public sealed class BrowserPool : IAsyncDisposable
             Args = new[] {
                 "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
                 "--disable-lcd-text",
+                "--disable-extensions",
+                "--disable-background-networking",
+                "--no-first-run",
             },
         });
     }

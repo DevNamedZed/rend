@@ -142,8 +142,9 @@ namespace Rend.Rendering
             if (rootBox?.StyledNode == null) return;
 
             var rootStyle = rootBox.StyledNode.Style;
-            // If root has its own background, paint it on the full canvas.
-            if (rootStyle.BackgroundColor.A > 0)
+            // [CSS2 §14.2] If root has its own background, paint it on the full canvas.
+            // But not if root is display:none (background doesn't propagate).
+            if (rootStyle.BackgroundColor.A > 0 && rootStyle.Display != CssDisplay.None)
             {
                 target.FillRect(new RectF(0, 0, page.Width, page.Height),
                     BrushInfo.Solid(rootStyle.BackgroundColor));

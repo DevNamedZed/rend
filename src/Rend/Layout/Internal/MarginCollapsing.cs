@@ -94,8 +94,9 @@ namespace Rend.Layout.Internal
             if (style.Position == CssPosition.Absolute || style.Position == CssPosition.Fixed)
                 return true;
 
-            // display: inline-block, flex, grid establish a BFC
+            // display: inline-block, flow-root, flex, grid establish a BFC
             if (style.Display == CssDisplay.InlineBlock ||
+                style.Display == CssDisplay.FlowRoot ||
                 style.Display == CssDisplay.Flex ||
                 style.Display == CssDisplay.Grid)
             {

@@ -36,6 +36,9 @@ playground/**/examples/*.pdf
 !playground/**/*.png
 !conformance/**/*.png
 
+## Test PDFs (downloaded corpora)
+test-pdfs/
+
 ## OS
 .DS_Store
 Thumbs.db

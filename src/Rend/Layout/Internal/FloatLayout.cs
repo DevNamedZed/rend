@@ -27,11 +27,10 @@ namespace Rend.Layout.Internal
                 contentWidth = BlockFormattingContext.MeasureIntrinsicWidth(floatEl, style.Width, containingWidth, context);
             }
             else if (float.IsNaN(style.Width) && !DeferredPercent.IsEncoded(style.Width)
-                     && floatBox.StyledNode is StyledElement floatStyledElement
-                     && (style.Display == CssDisplay.Flex || style.Display == CssDisplay.InlineFlex))
+                     && floatBox.StyledNode is StyledElement floatStyledElement)
             {
-                // CSS 2.1 §10.3.5: Floated elements use shrink-to-fit (fit-content) width.
-                // For flex containers, delegate to flex-specific intrinsic sizing.
+                // CSS 2.1 §10.3.5: Floated, non-replaced elements with auto width
+                // use shrink-to-fit (fit-content) width.
                 contentWidth = BlockFormattingContext.MeasureIntrinsicWidth(
                     floatStyledElement, SizingKeyword.FitContent, containingWidth, context);
             }

@@ -21,6 +21,7 @@ namespace Rend.Css
         TableFooterGroup,
         TableRowGroup,
         ListItem,
+        FlowRoot,
         Contents,
         Ruby,
         RubyText,

@@ -23,8 +23,6 @@ namespace Rend
     {
         private static readonly System.Lazy<IFontProvider> DefaultFontProvider =
             new System.Lazy<IFontProvider>(CreateDefaultFontProvider);
-        private static readonly System.Lazy<HarfBuzzTextShaper> DefaultTextShaper =
-            new System.Lazy<HarfBuzzTextShaper>(() => new HarfBuzzTextShaper());
 
         private readonly RenderOptions _options;
 
@@ -96,79 +94,97 @@ namespace Rend
             styledTree.PageStyle.MarginLeft = _options.MarginLeft;
 
             // 7. Create or reuse text shaper
-            var textShaper = _options.TextShaper ?? DefaultTextShaper.Value;
-
-            // Wire font provider into text shaper for character-level fallback
-            // (needed in WASM where SKFontManager has no system fonts)
-            if (textShaper is Text.HarfBuzzTextShaper harfBuzzShaper)
+            bool ownsTextShaper = false;
+            var textShaper = _options.TextShaper;
+            if (textShaper == null)
             {
-                harfBuzzShaper.FallbackFontProvider = fontProvider;
+                textShaper = new HarfBuzzTextShaper();
+                ownsTextShaper = true;
             }
 
-            // 8. Layout
-            progress?.Report(new RenderProgress(50, RenderStage.Layout, "Computing layout"));
-            var layoutEngine = new LayoutEngine(fontProvider, textShaper);
-            var layoutOptions = new LayoutOptions
+            try
             {
-                PageSize = _options.PageSize,
-                MarginTop = _options.MarginTop,
-                MarginRight = _options.MarginRight,
-                MarginBottom = _options.MarginBottom,
-                MarginLeft = _options.MarginLeft,
-                DefaultFontSize = _options.DefaultFontSize,
-                Paginate = !(target is Output.Image.SkiaRenderTarget)
-            };
-            var layoutDoc = layoutEngine.Layout(styledTree, layoutOptions);
+                // Wire font provider into text shaper for character-level fallback
+                // (needed in WASM where SKFontManager has no system fonts)
+                if (textShaper is Text.HarfBuzzTextShaper harfBuzzShaper)
+                {
+                    harfBuzzShaper.FallbackFontProvider = fontProvider;
+                }
 
-            // 9. Resolve images + paint
-            progress?.Report(new RenderProgress(70, RenderStage.Rendering, "Resolving images"));
+                // 8. Layout
+                progress?.Report(new RenderProgress(50, RenderStage.Layout, "Computing layout"));
+                var layoutEngine = new LayoutEngine(fontProvider, textShaper);
+                var layoutOptions = new LayoutOptions
+                {
+                    PageSize = _options.PageSize,
+                    MarginTop = _options.MarginTop,
+                    MarginRight = _options.MarginRight,
+                    MarginBottom = _options.MarginBottom,
+                    MarginLeft = _options.MarginLeft,
+                    DefaultFontSize = _options.DefaultFontSize,
+                    Paginate = !(target is Output.Image.SkiaRenderTarget)
+                };
+                var layoutDoc = layoutEngine.Layout(styledTree, layoutOptions);
 
-            System.Func<string, byte[]?>? byteLoader = _options.ResourceLoader != null
-                ? url => resourceCtx.LoadResourceBytes(url)
-                : null;
+                // 9. Resolve images + paint
+                progress?.Report(new RenderProgress(70, RenderStage.Rendering, "Resolving images"));
 
-            var mediaContext = new MediaContext(
-                resolverOptions.ViewportWidth, resolverOptions.ViewportHeight, resolverOptions.MediaType);
-            var imageResolver = new InlineImageResolver(_options.BaseUrl, _options.ImageResolver, byteLoader, mediaContext);
-            var resolvedImages = imageResolver.Resolve(document);
+                System.Func<string, byte[]?>? byteLoader = _options.ResourceLoader != null
+                    ? url => resourceCtx.LoadResourceBytes(url)
+                    : null;
 
-            // 10. Paint
-            progress?.Report(new RenderProgress(80, RenderStage.Rendering, "Painting output"));
-            System.Func<string, ImageData?> resolveImage = src =>
-            {
-                if (resolvedImages.TryGetValue(src, out var img))
-                    return img;
-                return imageResolver.LoadOnDemand(src);
-            };
-            var painter = new Painter(resolveImage, _options.GenerateLinks, _options.GenerateBookmarks);
+                var mediaContext = new MediaContext(
+                    resolverOptions.ViewportWidth, resolverOptions.ViewportHeight, resolverOptions.MediaType);
+                var imageResolver = new InlineImageResolver(_options.BaseUrl, _options.ImageResolver, byteLoader, mediaContext);
+                var resolvedImages = imageResolver.Resolve(document);
 
-            // Set up header/footer renderer if configured
-            HeaderFooterRenderer? hfRenderer = null;
-            if (!string.IsNullOrEmpty(_options.HeaderHtml) || !string.IsNullOrEmpty(_options.FooterHtml))
-            {
-                hfRenderer = new HeaderFooterRenderer(
-                    _options.HeaderHtml, _options.FooterHtml,
-                    _options.MarginTop, _options.MarginBottom,
-                    _options.MarginLeft, _options.MarginRight,
-                    fontProvider, textShaper, _options.DefaultFontSize);
+                // 10. Paint
+                progress?.Report(new RenderProgress(80, RenderStage.Rendering, "Painting output"));
+                System.Func<string, ImageData?> resolveImage = src =>
+                {
+                    if (resolvedImages.TryGetValue(src, out var img))
+                    {
+                        return img;
+                    }
+                    return imageResolver.LoadOnDemand(src);
+                };
+                var painter = new Painter(resolveImage, _options.GenerateLinks, _options.GenerateBookmarks);
+
+                // Set up header/footer renderer if configured
+                HeaderFooterRenderer? hfRenderer = null;
+                if (!string.IsNullOrEmpty(_options.HeaderHtml) || !string.IsNullOrEmpty(_options.FooterHtml))
+                {
+                    hfRenderer = new HeaderFooterRenderer(
+                        _options.HeaderHtml, _options.FooterHtml,
+                        _options.MarginTop, _options.MarginBottom,
+                        _options.MarginLeft, _options.MarginRight,
+                        fontProvider, textShaper, _options.DefaultFontSize);
+                }
+
+                painter.Paint(layoutDoc, target, hfRenderer);
+
+                // 10b. Capture layout tree snapshot if requested
+                LayoutSnapshot? layoutSnapshot = null;
+                if (_options.CaptureLayoutTree)
+                {
+                    layoutSnapshot = LayoutSnapshotBuilder.Build(layoutDoc.RootBox);
+                }
+
+                // 11. Finish and collect output
+                progress?.Report(new RenderProgress(90, RenderStage.Finishing, "Generating output"));
+                using (var ms = new MemoryStream())
+                {
+                    target.Finish(ms);
+                    progress?.Report(new RenderProgress(100, RenderStage.Finishing, "Complete"));
+                    return new RenderResult(ms.ToArray(), layoutDoc.Pages.Count, GetFormat(target), layoutSnapshot);
+                }
             }
-
-            painter.Paint(layoutDoc, target, hfRenderer);
-
-            // 10b. Capture layout tree snapshot if requested
-            LayoutSnapshot? layoutSnapshot = null;
-            if (_options.CaptureLayoutTree)
+            finally
             {
-                layoutSnapshot = LayoutSnapshotBuilder.Build(layoutDoc.RootBox);
-            }
-
-            // 11. Finish and collect output
-            progress?.Report(new RenderProgress(90, RenderStage.Finishing, "Generating output"));
-            using (var ms = new MemoryStream())
-            {
-                target.Finish(ms);
-                progress?.Report(new RenderProgress(100, RenderStage.Finishing, "Complete"));
-                return new RenderResult(ms.ToArray(), layoutDoc.Pages.Count, GetFormat(target), layoutSnapshot);
+                if (ownsTextShaper && textShaper is System.IDisposable disposableShaper)
+                {
+                    disposableShaper.Dispose();
+                }
             }
         }
 
@@ -238,80 +254,98 @@ namespace Rend
             styledTree.PageStyle.MarginLeft = _options.MarginLeft;
 
             // 7. Create or reuse text shaper
-            var textShaper = _options.TextShaper ?? DefaultTextShaper.Value;
-
-            // Wire font provider into text shaper for character-level fallback
-            if (textShaper is Text.HarfBuzzTextShaper harfBuzzShaper2)
+            bool ownsTextShaperAsync = false;
+            var textShaper = _options.TextShaper;
+            if (textShaper == null)
             {
-                harfBuzzShaper2.FallbackFontProvider = fontProvider;
+                textShaper = new HarfBuzzTextShaper();
+                ownsTextShaperAsync = true;
             }
 
-            // 8. Layout
-            progress?.Report(new RenderProgress(50, RenderStage.Layout, "Computing layout"));
-            cancellationToken.ThrowIfCancellationRequested();
-            var layoutEngine = new LayoutEngine(fontProvider, textShaper);
-            var layoutOptions = new LayoutOptions
+            try
             {
-                PageSize = _options.PageSize,
-                MarginTop = _options.MarginTop,
-                MarginRight = _options.MarginRight,
-                MarginBottom = _options.MarginBottom,
-                MarginLeft = _options.MarginLeft,
-                DefaultFontSize = _options.DefaultFontSize,
-                Paginate = !(target is Output.Image.SkiaRenderTarget)
-            };
-            var layoutDoc = layoutEngine.Layout(styledTree, layoutOptions);
+                // Wire font provider into text shaper for character-level fallback
+                if (textShaper is Text.HarfBuzzTextShaper harfBuzzShaper2)
+                {
+                    harfBuzzShaper2.FallbackFontProvider = fontProvider;
+                }
 
-            // 9. Resolve images + paint (async)
-            progress?.Report(new RenderProgress(70, RenderStage.Rendering, "Resolving images"));
+                // 8. Layout
+                progress?.Report(new RenderProgress(50, RenderStage.Layout, "Computing layout"));
+                cancellationToken.ThrowIfCancellationRequested();
+                var layoutEngine = new LayoutEngine(fontProvider, textShaper);
+                var layoutOptions = new LayoutOptions
+                {
+                    PageSize = _options.PageSize,
+                    MarginTop = _options.MarginTop,
+                    MarginRight = _options.MarginRight,
+                    MarginBottom = _options.MarginBottom,
+                    MarginLeft = _options.MarginLeft,
+                    DefaultFontSize = _options.DefaultFontSize,
+                    Paginate = !(target is Output.Image.SkiaRenderTarget)
+                };
+                var layoutDoc = layoutEngine.Layout(styledTree, layoutOptions);
 
-            System.Func<string, byte[]?>? byteLoader = _options.ResourceLoader != null
-                ? url => resourceCtx.LoadResourceBytes(url)
-                : null;
+                // 9. Resolve images + paint (async)
+                progress?.Report(new RenderProgress(70, RenderStage.Rendering, "Resolving images"));
 
-            var mediaContextAsync = new MediaContext(
-                resolverOptions.ViewportWidth, resolverOptions.ViewportHeight, resolverOptions.MediaType);
-            var imageResolver = new InlineImageResolver(_options.BaseUrl, _options.ImageResolver, byteLoader, mediaContextAsync);
-            var resolvedImages = await imageResolver.ResolveAsync(document, cancellationToken).ConfigureAwait(false);
+                System.Func<string, byte[]?>? byteLoader = _options.ResourceLoader != null
+                    ? url => resourceCtx.LoadResourceBytes(url)
+                    : null;
 
-            // 10. Paint
-            progress?.Report(new RenderProgress(80, RenderStage.Rendering, "Painting output"));
-            cancellationToken.ThrowIfCancellationRequested();
-            System.Func<string, ImageData?> resolveImage = src =>
-            {
-                if (resolvedImages.TryGetValue(src, out var img))
-                    return img;
-                return imageResolver.LoadOnDemand(src);
-            };
-            var painter = new Painter(resolveImage, _options.GenerateLinks, _options.GenerateBookmarks);
+                var mediaContextAsync = new MediaContext(
+                    resolverOptions.ViewportWidth, resolverOptions.ViewportHeight, resolverOptions.MediaType);
+                var imageResolver = new InlineImageResolver(_options.BaseUrl, _options.ImageResolver, byteLoader, mediaContextAsync);
+                var resolvedImages = await imageResolver.ResolveAsync(document, cancellationToken).ConfigureAwait(false);
 
-            // Set up header/footer renderer if configured
-            HeaderFooterRenderer? hfRenderer = null;
-            if (!string.IsNullOrEmpty(_options.HeaderHtml) || !string.IsNullOrEmpty(_options.FooterHtml))
-            {
-                hfRenderer = new HeaderFooterRenderer(
-                    _options.HeaderHtml, _options.FooterHtml,
-                    _options.MarginTop, _options.MarginBottom,
-                    _options.MarginLeft, _options.MarginRight,
-                    fontProvider, textShaper, _options.DefaultFontSize);
+                // 10. Paint
+                progress?.Report(new RenderProgress(80, RenderStage.Rendering, "Painting output"));
+                cancellationToken.ThrowIfCancellationRequested();
+                System.Func<string, ImageData?> resolveImage = src =>
+                {
+                    if (resolvedImages.TryGetValue(src, out var img))
+                    {
+                        return img;
+                    }
+                    return imageResolver.LoadOnDemand(src);
+                };
+                var painter = new Painter(resolveImage, _options.GenerateLinks, _options.GenerateBookmarks);
+
+                // Set up header/footer renderer if configured
+                HeaderFooterRenderer? hfRenderer = null;
+                if (!string.IsNullOrEmpty(_options.HeaderHtml) || !string.IsNullOrEmpty(_options.FooterHtml))
+                {
+                    hfRenderer = new HeaderFooterRenderer(
+                        _options.HeaderHtml, _options.FooterHtml,
+                        _options.MarginTop, _options.MarginBottom,
+                        _options.MarginLeft, _options.MarginRight,
+                        fontProvider, textShaper, _options.DefaultFontSize);
+                }
+
+                painter.Paint(layoutDoc, target, hfRenderer);
+
+                // 10b. Capture layout tree snapshot if requested
+                LayoutSnapshot? layoutSnapshotAsync = null;
+                if (_options.CaptureLayoutTree)
+                {
+                    layoutSnapshotAsync = LayoutSnapshotBuilder.Build(layoutDoc.RootBox);
+                }
+
+                // 11. Finish and collect output
+                progress?.Report(new RenderProgress(90, RenderStage.Finishing, "Generating output"));
+                using (var ms = new MemoryStream())
+                {
+                    target.Finish(ms);
+                    progress?.Report(new RenderProgress(100, RenderStage.Finishing, "Complete"));
+                    return new RenderResult(ms.ToArray(), layoutDoc.Pages.Count, GetFormat(target), layoutSnapshotAsync);
+                }
             }
-
-            painter.Paint(layoutDoc, target, hfRenderer);
-
-            // 10b. Capture layout tree snapshot if requested
-            LayoutSnapshot? layoutSnapshotAsync = null;
-            if (_options.CaptureLayoutTree)
+            finally
             {
-                layoutSnapshotAsync = LayoutSnapshotBuilder.Build(layoutDoc.RootBox);
-            }
-
-            // 11. Finish and collect output
-            progress?.Report(new RenderProgress(90, RenderStage.Finishing, "Generating output"));
-            using (var ms = new MemoryStream())
-            {
-                target.Finish(ms);
-                progress?.Report(new RenderProgress(100, RenderStage.Finishing, "Complete"));
-                return new RenderResult(ms.ToArray(), layoutDoc.Pages.Count, GetFormat(target), layoutSnapshotAsync);
+                if (ownsTextShaperAsync && textShaper is System.IDisposable disposableShaperAsync)
+                {
+                    disposableShaperAsync.Dispose();
+                }
             }
         }
 

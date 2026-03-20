@@ -120,6 +120,25 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
+            // [HTML §4.8.6, §4.8.7] <embed> and <object> with image src/data
+            // render the image the same way as <img>.
+            if (tagName == "embed" || tagName == "object")
+            {
+                string? embedSrc = tagName == "embed"
+                    ? element.GetAttribute("src")
+                    : element.GetAttribute("data");
+                if (embedSrc != null && imageResolver != null)
+                {
+                    var embedImage = imageResolver(embedSrc);
+                    if (embedImage != null)
+                    {
+                        PaintImageContent(element, box, target, embedImage);
+                        return;
+                    }
+                }
+                return;
+            }
+
             if (tagName != "img")
             {
                 return;
@@ -176,6 +195,43 @@ namespace Rend.Rendering.Internal
         /// <summary>
         /// Paints an &lt;input&gt; element based on its type attribute.
         /// </summary>
+        /// <summary>
+        /// Paints image content for any replaced element (img, embed, object) with
+        /// object-fit and object-position support.
+        /// </summary>
+        private static void PaintImageContent(StyledElement element, LayoutBox box,
+            IRenderTarget target, ImageData imageData)
+        {
+            RectF rect = box.ContentRect;
+            CssObjectFit fit = element.Style.ObjectFit;
+            var (px, py) = ParseObjectPosition(element.Style);
+            RectF dest = ComputeObjectFitRect(rect, imageData.Width, imageData.Height, fit, px, py);
+
+            bool clip = fit == CssObjectFit.Cover || fit == CssObjectFit.None || fit == CssObjectFit.ScaleDown;
+            if (clip)
+            {
+                target.PushClipRect(rect);
+            }
+
+            var rendering = element.Style.ImageRendering;
+            if (rendering != CssImageRendering.Auto)
+            {
+                target.SetImageRendering(rendering);
+            }
+
+            target.DrawImage(imageData, dest.PixelSnap());
+
+            if (rendering != CssImageRendering.Auto)
+            {
+                target.SetImageRendering(CssImageRendering.Auto);
+            }
+
+            if (clip)
+            {
+                target.PopClip();
+            }
+        }
+
         private static void PaintInput(StyledElement element, LayoutBox box, IRenderTarget target)
         {
             string inputType = element.GetAttribute("type")?.ToLowerInvariant() ?? "text";

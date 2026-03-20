@@ -59,6 +59,21 @@
             link.download = filename;
             link.click();
         }
+
+        function openPrintPreview(html) {
+            var printWindow = window.open('', '_blank');
+            if (!printWindow) return;
+            var pageStyle = '<style>@page { size: A4; margin: 36pt; } @media print { body { margin: 0; } }</style>';
+            var fullHtml = html;
+            if (fullHtml.indexOf('</head>') !== -1) {
+                fullHtml = fullHtml.replace('</head>', pageStyle + '</head>');
+            } else {
+                fullHtml = pageStyle + fullHtml;
+            }
+            printWindow.document.open();
+            printWindow.document.write(fullHtml);
+            printWindow.document.close();
+        }
     </script>
     <script src="_framework/blazor.webassembly.js" autostart="true"></script>
 </body>

@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using Rend.Core.Values;
-using Rend.Pdf.Reading;
+using Rend.Pdf.Parsing;
 using SkiaSharp;
 using Xunit;
 using Xunit.Abstractions;
@@ -93,9 +93,9 @@ namespace Rend.Tests.EndToEnd
         public void GetPageSize_MatchesRenderOptions()
         {
             var pdf = RenderPdf("<html><body><p>Hello</p></body></html>", 500, 700);
-            var (width, height) = PdfToImage.GetPageSize(pdf);
-            Assert.InRange(width, 499f, 501f);
-            Assert.InRange(height, 699f, 701f);
+            var pageInfo = PdfToImage.GetPageInfo(pdf);
+            Assert.InRange(pageInfo.Width, 499f, 501f);
+            Assert.InRange(pageInfo.Height, 699f, 701f);
         }
 
         [Fact]
@@ -540,11 +540,11 @@ namespace Rend.Tests.EndToEnd
             var png = PdfToImage.RenderPage(pdf, 0, 150f);
             Assert.True(png.Length > 0);
 
-            var (w, h) = PdfToImage.GetPageSize(pdf);
-            Assert.InRange(w, 399f, 401f);
-            Assert.InRange(h, 399f, 401f);
+            var pageInfo = PdfToImage.GetPageInfo(pdf);
+            Assert.InRange(pageInfo.Width, 399f, 401f);
+            Assert.InRange(pageInfo.Height, 399f, 401f);
 
-            _output.WriteLine($"PDF: {pdf.Length} bytes, PNG: {png.Length} bytes, Page: {w}x{h}pt");
+            _output.WriteLine($"PDF: {pdf.Length} bytes, PNG: {png.Length} bytes, Page: {pageInfo.Width}x{pageInfo.Height}pt");
         }
 
         #endregion

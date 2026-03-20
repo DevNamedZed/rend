@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using HarfBuzzSharp;
@@ -15,7 +16,7 @@ namespace Rend.Output.Image
     /// Chrome's pipeline (from Chromium source):
     ///   1. Font scale = SkiaScalarToHarfBuzzPosition(fontSize) = (int)(fontSize * 65536)
     ///      Source: harfbuzz_face.cc, GetScaledFont()
-    ///   2. Advance callback: SkFont::getWidth(glyph) → SkiaScalarToHarfBuzzPosition(width)
+    ///   2. Advance callback: SkFont::getWidth(glyph) -> SkiaScalarToHarfBuzzPosition(width)
     ///      = ClampTo(width * 65536)  [16.16 fixed-point, truncation not rounding]
     ///      Source: skia_text_metrics.cc, SkFontGetGlyphWidthForHarfBuzz()
     ///   3. When subpixel=true (our case), raw float advance is used directly (no rounding)
@@ -28,6 +29,11 @@ namespace Rend.Output.Image
         private bool _disposed;
         private readonly object _cacheLock = new object();
         private readonly Dictionary<int, CachedShapingFont> _fontCache = new();
+        private readonly SkiaFontMapper _mapper;
+
+        // Instance-level cache for fallback font data extracted from system typefaces.
+        private readonly Dictionary<string, byte[]> _fontDataCache = new();
+        private readonly object _fontDataLock = new();
 
         // Per-shape-call state used by the HarfBuzz callback (set before Shape, read during callback).
         // Safe because Shape holds _cacheLock during the entire shape call.
@@ -42,7 +48,12 @@ namespace Rend.Output.Image
 
         public SkiaTextShaper(SkiaFontMapper fontMapper)
         {
-            if (fontMapper == null) throw new ArgumentNullException(nameof(fontMapper));
+            if (fontMapper == null)
+            {
+                throw new ArgumentNullException(nameof(fontMapper));
+            }
+
+            _mapper = fontMapper;
 
             // Create shared font functions with our custom advance callback.
             _fontFunctions = new FontFunctions();
@@ -53,14 +64,16 @@ namespace Rend.Output.Image
         /// <summary>
         /// HarfBuzz callback: returns glyph horizontal advance from Skia/DirectWrite,
         /// converted to 16.16 fixed-point hb_position_t.
-        /// Matches Chrome's SkFontGetGlyphWidthForHarfBuzz() → SkiaScalarToHarfBuzzPosition().
+        /// Matches Chrome's SkFontGetGlyphWidthForHarfBuzz() -> SkiaScalarToHarfBuzzPosition().
         /// Source: third_party/blink/renderer/platform/fonts/skia/skia_text_metrics.cc
         /// </summary>
         private int GetHorizontalGlyphAdvance(Font font, object? fontData, uint glyph)
         {
             var skFont = _activeSkFont;
             if (skFont == null)
+            {
                 return 0;
+            }
 
             // Reuse thread-static arrays to avoid allocation per callback.
             var glyphId = _singleGlyphId ??= new ushort[1];
@@ -79,12 +92,23 @@ namespace Rend.Output.Image
         public ShapedTextRun Shape(string text, byte[] fontData, float fontSize,
                                      string? language = null, string? script = null)
         {
-            if (text == null) throw new ArgumentNullException(nameof(text));
-            if (fontData == null) throw new ArgumentNullException(nameof(fontData));
-            if (_disposed) throw new ObjectDisposedException(nameof(SkiaTextShaper));
+            if (text == null)
+            {
+                throw new ArgumentNullException(nameof(text));
+            }
+            if (fontData == null)
+            {
+                throw new ArgumentNullException(nameof(fontData));
+            }
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(SkiaTextShaper));
+            }
 
             if (text.Length == 0)
+            {
                 return new ShapedTextRun(Array.Empty<ShapedGlyph>(), text, fontSize, fontData);
+            }
 
             lock (_cacheLock)
             {
@@ -99,7 +123,9 @@ namespace Rend.Output.Image
                     buffer.AddUtf16(text);
 
                     if (language != null)
+                    {
                         buffer.Language = new Language(language);
+                    }
 
                     buffer.GuessSegmentProperties();
 
@@ -141,7 +167,9 @@ namespace Rend.Output.Image
                     }
 
                     if (!hasNotdef)
+                    {
                         return new ShapedTextRun(glyphs, text, fontSize, fontData);
+                    }
 
                     // Font fallback: find alternative fonts for .notdef glyphs.
                     var fontOverrides = new byte[]?[count];
@@ -186,7 +214,9 @@ namespace Rend.Output.Image
                         int rangeStart = i2;
                         int rangeEnd = i2;
                         while (rangeEnd < count && glyphs[rangeEnd].GlyphId == 0)
+                        {
                             rangeEnd++;
+                        }
 
                         // Extract the text substring for this range.
                         int textStart = (int)glyphs[rangeStart].Cluster;
@@ -211,7 +241,7 @@ namespace Rend.Output.Image
                         // The fallback may produce a different number of glyphs.
                         if (fbInfos.Length == rangeEnd - rangeStart)
                         {
-                            // Same glyph count — simple replacement.
+                            // Same glyph count -- simple replacement.
                             for (int j = 0; j < fbInfos.Length; j++)
                             {
                                 int idx = rangeStart + j;
@@ -228,7 +258,7 @@ namespace Rend.Output.Image
                         }
                         else
                         {
-                            // Different glyph count — rebuild arrays.
+                            // Different glyph count -- rebuild arrays.
                             int newCount = count - (rangeEnd - rangeStart) + fbInfos.Length;
                             var newGlyphs = new ShapedGlyph[newCount];
                             var newOverrides = new byte[]?[newCount];
@@ -291,39 +321,47 @@ namespace Rend.Output.Image
             }
         }
 
-        // Static cache so all threads share the same byte[] instances for fallback fonts.
-        // Same byte[] identity → same RuntimeHelpers.GetHashCode → same shared SKTypeface.
-        private static readonly Dictionary<string, byte[]> s_typefaceFontDataCache = new();
-        private static readonly object s_fontDataLock = new();
-
         private byte[]? GetFontDataFromTypeface(SKTypeface typeface)
         {
             string key = typeface.FamilyName + "|" + (int)typeface.FontStyle.Weight + "|" + (int)typeface.FontStyle.Slant;
-            lock (s_fontDataLock)
+            lock (_fontDataLock)
             {
-                if (s_typefaceFontDataCache.TryGetValue(key, out var cached))
+                if (_fontDataCache.TryGetValue(key, out var cached))
+                {
                     return cached;
+                }
             }
 
             using var stream = typeface.OpenStream(out _);
-            if (stream == null) return null;
+            if (stream == null)
+            {
+                return null;
+            }
 
             var data = new byte[stream.Length];
             int totalRead = 0;
             while (totalRead < data.Length)
             {
                 int bytesRead = stream.Read(data, data.Length - totalRead);
-                if (bytesRead <= 0) break;
+                if (bytesRead <= 0)
+                {
+                    break;
+                }
                 totalRead += bytesRead;
             }
-            if (totalRead < data.Length) return null;
+            if (totalRead < data.Length)
+            {
+                return null;
+            }
 
-            lock (s_fontDataLock)
+            lock (_fontDataLock)
             {
                 // Double-check: another thread may have added it.
-                if (s_typefaceFontDataCache.TryGetValue(key, out var existing))
+                if (_fontDataCache.TryGetValue(key, out var existing))
+                {
                     return existing;
-                s_typefaceFontDataCache[key] = data;
+                }
+                _fontDataCache[key] = data;
             }
             return data;
         }
@@ -380,10 +418,8 @@ namespace Rend.Output.Image
                 hbFont.SetScale(fontScale, fontScale);
                 hbFont.SetFontFunctions(_fontFunctions, null);
 
-                // Use shared global typeface to ensure deterministic rendering.
-                // SKTypeface.FromData() creates different native objects with subtly
-                // different SubpixelAntialias behavior per instance.
-                typeface = SkiaFontMapper.GetOrCreateSharedTypeface(fontData);
+                // Use the mapper's instance-level typeface cache to ensure deterministic rendering.
+                typeface = _mapper.GetOrCreateTypeface(fontData);
 
                 skFont = new SKFont(typeface, fontSize);
                 skFont.Subpixel = true;
@@ -392,31 +428,51 @@ namespace Rend.Output.Image
                 // LinearMetrics prevents Skia from rounding advances at the font level.
 
                 var entry = new CachedShapingFont(handle, blob, face, parentFont, hbFont, typeface, skFont, fontScale);
+
+                // Cap cache size to prevent unbounded native memory growth.
+                // Each entry holds HarfBuzz blob+face+font + SKFont (~5-20MB native).
+                if (_fontCache.Count >= 10)
+                {
+                    // Evict ALL entries and start fresh. Simple and prevents any leak.
+                    foreach (var kvp in _fontCache)
+                    {
+                        kvp.Value.Dispose();
+                    }
+                    _fontCache.Clear();
+                }
+
                 _fontCache[key] = entry;
                 return entry;
             }
             catch
             {
                 skFont?.Dispose();
-                typeface?.Dispose();
                 hbFont?.Dispose();
                 parentFont?.Dispose();
                 face?.Dispose();
                 blob?.Dispose();
-                if (handle.IsAllocated) handle.Free();
+                if (handle.IsAllocated)
+                {
+                    handle.Free();
+                }
                 throw;
             }
         }
 
         public void Dispose()
         {
-            if (_disposed) return;
+            if (_disposed)
+            {
+                return;
+            }
             _disposed = true;
 
             lock (_cacheLock)
             {
                 foreach (var kvp in _fontCache)
+                {
                     kvp.Value.Dispose();
+                }
                 _fontCache.Clear();
             }
 
@@ -451,12 +507,15 @@ namespace Rend.Output.Image
             public void Dispose()
             {
                 SkFont.Dispose();
-                // Do NOT dispose Typeface — it's shared via the global typeface cache.
+                // Do NOT dispose Typeface -- it's owned by the SkiaFontMapper's typeface cache.
                 HbFont.Dispose();
                 _parentFont.Dispose();
                 _face.Dispose();
                 _blob.Dispose();
-                if (_handle.IsAllocated) _handle.Free();
+                if (_handle.IsAllocated)
+                {
+                    _handle.Free();
+                }
             }
         }
     }

@@ -129,7 +129,7 @@ class Program
         }
 
         // Parse CLI flags.
-        int workerCount = Math.Clamp(Environment.ProcessorCount / 2, 1, 8);
+        int workerCount = Math.Clamp(Environment.ProcessorCount / 4, 1, 2);
         string? filterPattern = null;
         string? tagFilter = null;
         for (int ai = 0; ai < args.Length; ai++)
@@ -155,14 +155,9 @@ class Program
         // Browser pool — one Chrome process per worker slot, reused across tests.
         await using var browserPool = new BrowserPool(chromeExePath, workerCount);
 
-        // Per-worker render resources (SkiaTextShaper is not thread-safe).
-        var renderResources = new ThreadLocal<(Rend.Output.Image.SkiaFontMapper mapper, Rend.Output.Image.SkiaTextShaper shaper)>(
-            () =>
-            {
-                var mapper = new Rend.Output.Image.SkiaFontMapper();
-                var shaper = new Rend.Output.Image.SkiaTextShaper(mapper);
-                return (mapper, shaper);
-            },
+        // Per-worker render resources (HtmlRenderer owns SkiaFontMapper and SkiaTextShaper, not thread-safe).
+        var renderResources = new ThreadLocal<HtmlRenderer>(
+            () => new HtmlRenderer(),
             trackAllValues: true);
 
 
@@ -184,26 +179,35 @@ class Program
             Console.WriteLine($"Tag: '{tagFilter}' → {testCases.Count} tests");
         }
 
+        // Skip layout tree capture for large suites to save memory.
+        // Layout trees are only useful for debugging individual tests.
+        bool captureLayoutTree = testCases.Count <= 100;
+
         var results = new ConcurrentBag<ComparisonResult>();
         var totalSw = Stopwatch.StartNew();
+        int completedCount = 0;
 
         await Parallel.ForEachAsync(
             testCases,
             new ParallelOptions { MaxDegreeOfParallelism = workerCount },
             async (testCase, ct) =>
             {
-                var res = renderResources.Value;
-                var result = await RunTest(testCase, browserPool, fontProvider, res.shaper, res.mapper, resourcesDir);
-                results.Add(result);
+                var renderer = renderResources.Value!;
+                var result = await RunTest(testCase, browserPool, fontProvider, renderer, resourcesDir, captureLayoutTree: captureLayoutTree);
+                if (result != null)
+                {
+                    results.Add(result);
+                }
+
+                Interlocked.Increment(ref completedCount);
             });
 
         totalSw.Stop();
 
         // Dispose render resources.
-        foreach (var res in renderResources.Values)
+        foreach (var renderer in renderResources.Values)
         {
-            res.shaper.Dispose();
-            res.mapper.Dispose();
+            renderer.Dispose();
         }
         renderResources.Dispose();
 
@@ -258,9 +262,9 @@ class Program
         VisualTestCase testCase,
         BrowserPool browserPool,
         Rend.Fonts.IFontProvider fontProvider,
-        Rend.Output.Image.SkiaTextShaper textShaper,
-        Rend.Output.Image.SkiaFontMapper fontMapper,
-        string resourcesDir)
+        HtmlRenderer renderer,
+        string resourcesDir,
+        bool captureLayoutTree = true)
     {
         var sw = Stopwatch.StartNew();
         var result = new ComparisonResult
@@ -275,13 +279,44 @@ class Program
         try
         {
             var html = testCase.Html;
+            // Skip tests that returned empty HTML (script/reftest-wait filtered at load time)
+            if (string.IsNullOrWhiteSpace(html))
+            {
+                sw.Stop();
+                // Don't count as pass or fail — just skip silently
+                return null!;
+            }
+
             if (!html.TrimStart().StartsWith("<!DOCTYPE", StringComparison.OrdinalIgnoreCase))
             {
                 html = "<!DOCTYPE html>" + html;
             }
 
-            // --- Start Chrome render (I/O-bound: awaits Puppeteer process) ---
-            var chromeTask = RenderWithChromeAsync(testCase, html, browserPool, resourcesDir, result);
+            // --- Chrome render with caching ---
+            // Hash the HTML + viewport to check for cached Chrome screenshot.
+            // On cache hit, skip Chrome entirely (~70% speedup per test).
+            string cacheDir = Path.Combine(FindProjectRoot(), "cache", "chrome");
+            Directory.CreateDirectory(cacheDir);
+            string cacheKey;
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                var hashInput = System.Text.Encoding.UTF8.GetBytes(
+                    html + "|" + testCase.ViewportWidth + "x" + testCase.ViewportHeight);
+                cacheKey = BitConverter.ToString(sha.ComputeHash(hashInput)).Replace("-", "").Substring(0, 16);
+            }
+            string cachePath = Path.Combine(cacheDir, cacheKey + ".png");
+
+            Task<byte[]> chromeTask;
+            if (File.Exists(cachePath))
+            {
+                // Cache hit — load from disk instead of rendering with Chrome
+                chromeTask = Task.FromResult(File.ReadAllBytes(cachePath));
+            }
+            else
+            {
+                // Cache miss — render with Chrome and save
+                chromeTask = RenderWithChromeAndCacheAsync(testCase, html, browserPool, resourcesDir, result, captureLayoutTree, cachePath);
+            }
 
             // --- Rend render on current thread (CPU-bound: Skia) while Chrome does I/O ---
             byte[]? rendPng = null;
@@ -289,16 +324,14 @@ class Program
             Exception? rendError = null;
             try
             {
-                rendRenderResult = Render.ToImageResult(html, new RenderOptions
+                rendRenderResult = renderer.ToImageResult(html, new RenderOptions
                 {
                     PageSize = new SizeF(testCase.ViewportWidth, testCase.ViewportHeight),
                     MarginTop = 0, MarginRight = 0, MarginBottom = 0, MarginLeft = 0,
                     Dpi = 96,
                     ImageFormat = Rend.ImageOutputFormat.Png,
                     FontProvider = fontProvider,
-                    TextShaper = textShaper,
-                    FontMapper = fontMapper,
-                    CaptureLayoutTree = true,
+                    CaptureLayoutTree = captureLayoutTree,
                 });
                 rendPng = rendRenderResult.Data;
             }
@@ -309,6 +342,11 @@ class Program
 
             // --- Wait for Chrome to finish ---
             byte[] chromePng = await chromeTask;
+
+            // Write Chrome PNG to resources (needed for report, even on cache hit)
+            var chromePath = Path.Combine(resourcesDir, $"{testCase.Id}-chrome.png");
+            File.WriteAllBytes(chromePath, chromePng);
+            result.ChromeImagePath = chromePath;
 
             // Handle Rend native library failure
             if (rendError != null)
@@ -346,6 +384,9 @@ class Program
                 }
             }
 
+            // Free render result — layout tree and data are already extracted/written
+            rendRenderResult = null;
+
             // Write test HTML for report lightbox
             var htmlPath = Path.Combine(resourcesDir, $"{testCase.Id}.html");
             File.WriteAllText(htmlPath, html);
@@ -370,6 +411,12 @@ class Program
             result.Outcome = diffPercent < testCase.Tolerance
                 ? ComparisonOutcome.Pass
                 : ComparisonOutcome.Fail;
+
+            // Free large objects — already written to disk files.
+            // Keeps memory bounded for large test suites (8000+ tests).
+            result.ChromeLayout = null;
+            result.RendLayout = null;
+            result.Html = null;
 
             sw.Stop();
             result.Duration = sw.Elapsed;
@@ -453,19 +500,47 @@ class Program
     {
         var collection = new Rend.Fonts.FontCollection();
 
-        string winFontsPath = "/mnt/c/Windows/Fonts";
-        if (Directory.Exists(winFontsPath))
-        {
-            try { collection.RegisterFontDirectory(winFontsPath); }
-            catch { }
-        }
-
+        // On WSL2, SystemFontResolver finds Linux fonts (/usr/share/fonts).
+        // Also need Windows fonts from /mnt/c/Windows/Fonts for proper rendering.
         try
         {
             var resolver = new Rend.Fonts.SystemFontResolver();
             collection.RegisterFromResolver(resolver);
         }
         catch { }
+
+        // Load only essential Windows fonts instead of all 178 (saves ~500MB RAM).
+        // Skia's system font manager handles fallback for characters not in these fonts.
+        string winFontsPath = "/mnt/c/Windows/Fonts";
+        if (Directory.Exists(winFontsPath))
+        {
+            string[] essentialFonts = {
+                "arial.ttf", "ariali.ttf", "arialbd.ttf", "arialbi.ttf",
+                "times.ttf", "timesi.ttf", "timesbd.ttf", "timesbi.ttf",
+                "cour.ttf", "couri.ttf", "courbd.ttf", "courbi.ttf",
+                "georgia.ttf", "georgiai.ttf", "georgiab.ttf", "georgiaz.ttf",
+                "verdana.ttf", "verdanai.ttf", "verdanab.ttf", "verdanaz.ttf",
+                "tahoma.ttf", "tahomabd.ttf",
+                "trebuc.ttf", "trebucit.ttf", "trebucbd.ttf", "trebucbi.ttf",
+                "impact.ttf", "comic.ttf", "comicbd.ttf",
+                "consolai.ttf", "consola.ttf", "consolab.ttf", "consolaz.ttf",
+                "segoeui.ttf", "segoeuii.ttf", "segoeuib.ttf", "segoeuiz.ttf",
+                "calibri.ttf", "calibrii.ttf", "calibrib.ttf", "calibriz.ttf",
+                "cambria.ttc", "symbol.ttf",
+            };
+            foreach (string fontFile in essentialFonts)
+            {
+                string fontPath = Path.Combine(winFontsPath, fontFile);
+                if (File.Exists(fontPath))
+                {
+                    try
+                    {
+                        collection.RegisterFont(File.ReadAllBytes(fontPath));
+                    }
+                    catch { }
+                }
+            }
+        }
 
         return collection;
     }
@@ -505,10 +580,28 @@ class Program
     /// Renders test HTML in Chrome via Puppeteer and returns the screenshot PNG.
     /// Extracted so it can run concurrently with Rend rendering.
     /// </summary>
+    private static async Task<byte[]> RenderWithChromeAndCacheAsync(
+        VisualTestCase testCase, string html,
+        BrowserPool browserPool, string resourcesDir,
+        ComparisonResult result, bool captureLayoutTree, string cachePath)
+    {
+        var chromePng = await RenderWithChromeAsync(testCase, html, browserPool, resourcesDir, result, captureLayoutTree);
+        // Save to cache for future runs
+        try
+        {
+            File.WriteAllBytes(cachePath, chromePng);
+        }
+        catch
+        {
+            // Cache write failure is non-fatal
+        }
+        return chromePng;
+    }
+
     private static async Task<byte[]> RenderWithChromeAsync(
         VisualTestCase testCase, string html,
         BrowserPool browserPool, string resourcesDir,
-        ComparisonResult result)
+        ComparisonResult result, bool captureLayoutTree = true)
     {
         byte[] chromePng;
         await using (var lease = await browserPool.AcquirePageAsync())
@@ -529,24 +622,27 @@ class Program
                 WaitUntil = new[] { WaitUntilNavigation.Load },
             });
 
-            // Capture Chrome's layout tree via CDP (best-effort)
-            try
+            // Capture Chrome's layout tree via CDP (best-effort, skip for large suites)
+            if (captureLayoutTree)
             {
-                result.ChromeLayout = await LayoutTreeDumper.DumpAsync(page);
-                if (result.ChromeLayout != null)
+                try
                 {
-                    var layoutJson = JsonSerializer.Serialize(result.ChromeLayout, new JsonSerializerOptions
+                    result.ChromeLayout = await LayoutTreeDumper.DumpAsync(page);
+                    if (result.ChromeLayout != null)
                     {
-                        WriteIndented = true,
-                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                    });
-                    var layoutPath = Path.Combine(resourcesDir, $"{testCase.Id}-chrome-layout.json");
-                    File.WriteAllText(layoutPath, layoutJson);
-                    result.ChromeLayoutPath = layoutPath;
+                        var layoutJson = JsonSerializer.Serialize(result.ChromeLayout, new JsonSerializerOptions
+                        {
+                            WriteIndented = true,
+                            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                        });
+                        var layoutPath = Path.Combine(resourcesDir, $"{testCase.Id}-chrome-layout.json");
+                        File.WriteAllText(layoutPath, layoutJson);
+                        result.ChromeLayoutPath = layoutPath;
+                    }
                 }
-            }
-            catch
-            {
+                catch
+                {
+                }
             }
 
             chromePng = await page.ScreenshotDataAsync(new ScreenshotOptions

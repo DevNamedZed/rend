@@ -1,5 +1,8 @@
 set windows-shell := ["cmd.exe", "/c"]
 
+# Disable persistent build server daemons (they leak 7-10GB RAM)
+export DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER := "1"
+
 dotnet := "dotnet"
 
 # List available recipes
@@ -31,17 +34,23 @@ conformance:
     {{dotnet}} test conformance/Rend.Html.Conformance
     {{dotnet}} test conformance/Rend.Css.Conformance
 
+# Build visual regression project
+visual-build:
+    {{dotnet}} build conformance/Rend.VisualRegression/Rend.VisualRegression.csproj -c Release
+
+vr-exe := "conformance/Rend.VisualRegression/bin/Release/net8.0/Rend.VisualRegression.exe"
+
 # Run visual regression suite (Chrome vs Rend)
-visual:
-    {{dotnet}} run --project conformance/Rend.VisualRegression
+visual: visual-build
+    {{vr-exe}}
 
 # Run visual regression with an ID filter (e.g., just visual-filter newsletter)
-visual-filter FILTER:
-    {{dotnet}} run --project conformance/Rend.VisualRegression -- --filter {{FILTER}}
+visual-filter FILTER: visual-build
+    {{vr-exe}} --filter {{FILTER}}
 
 # Run visual regression for a tag (e.g., just visual-tag Playground, just visual-tag WPT)
-visual-tag TAG:
-    {{dotnet}} run --project conformance/Rend.VisualRegression -- --tag {{TAG}}
+visual-tag TAG: visual-build
+    {{vr-exe}} --tag {{TAG}}
 
 # Run visual regression and update checked-in results
 visual-update:

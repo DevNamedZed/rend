@@ -99,6 +99,21 @@ namespace Rend.Rendering.Internal
                              floats.Count + inlines.Count +
                              positionedZeroAuto.Count + positiveZIndex.Count;
 
+            // CSS Flexbox §5.4: flex items paint in order-modified document order
+            // instead of raw document order. Sort by CSS 'order' property.
+            bool isFlexParent = root.BoxType == BoxType.Flex;
+            if (isFlexParent)
+            {
+                if (blockNonPositioned.Count > 1)
+                {
+                    blockNonPositioned.Sort(CompareByOrder);
+                }
+                if (positionedZeroAuto.Count > 1)
+                {
+                    positionedZeroAuto.Sort(CompareByOrder);
+                }
+            }
+
             var result = new List<LayoutBox>(totalCount);
             result.AddRange(negativeZIndex);
             result.AddRange(blockNonPositioned);
@@ -166,6 +181,13 @@ namespace Rend.Rendering.Internal
         private static int CompareByZIndex(LayoutBox a, LayoutBox b)
         {
             return a.ZIndex.CompareTo(b.ZIndex);
+        }
+
+        private static int CompareByOrder(LayoutBox a, LayoutBox b)
+        {
+            float orderA = a.StyledNode?.Style?.Order ?? 0;
+            float orderB = b.StyledNode?.Style?.Order ?? 0;
+            return orderA.CompareTo(orderB);
         }
     }
 }

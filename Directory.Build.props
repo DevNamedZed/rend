@@ -10,6 +10,13 @@
     <NoWarn>CS1591</NoWarn>
   </PropertyGroup>
 
+  <!-- Prevent MSBuild server nodes from persisting between builds.
+       Without this, dotnet.exe spawns worker processes that stay alive
+       and grow to 8GB+ over multiple builds. -->
+  <PropertyGroup>
+    <UseSharedCompilation>false</UseSharedCompilation>
+  </PropertyGroup>
+
   <!-- Deterministic and reproducible builds -->
   <PropertyGroup>
     <Deterministic>true</Deterministic>

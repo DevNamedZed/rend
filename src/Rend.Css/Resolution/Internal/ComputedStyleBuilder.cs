@@ -409,22 +409,46 @@ namespace Rend.Css.Resolution.Internal
         /// Resolves currentColor sentinels in color properties to the element's
         /// computed 'color' value.
         /// </summary>
+        /// <summary>
+        /// [CSS-COLOR-4 §4.1] Resolves the currentColor keyword to the element's
+        /// computed 'color' value for all properties that accept it.
+        /// </summary>
         private static void ResolveCurrentColor(PropertyValue[] values)
         {
             var elementColor = values[PropertyId.Color];
 
+            if (values[PropertyId.BackgroundColor].IsCurrentColor())
+            {
+                values[PropertyId.BackgroundColor] = elementColor;
+            }
             if (values[PropertyId.BorderTopColor].IsCurrentColor())
+            {
                 values[PropertyId.BorderTopColor] = elementColor;
+            }
             if (values[PropertyId.BorderRightColor].IsCurrentColor())
+            {
                 values[PropertyId.BorderRightColor] = elementColor;
+            }
             if (values[PropertyId.BorderBottomColor].IsCurrentColor())
+            {
                 values[PropertyId.BorderBottomColor] = elementColor;
+            }
             if (values[PropertyId.BorderLeftColor].IsCurrentColor())
+            {
                 values[PropertyId.BorderLeftColor] = elementColor;
+            }
             if (values[PropertyId.OutlineColor].IsCurrentColor())
+            {
                 values[PropertyId.OutlineColor] = elementColor;
+            }
             if (values[PropertyId.TextDecoration_Color].IsCurrentColor())
+            {
                 values[PropertyId.TextDecoration_Color] = elementColor;
+            }
+            if (values[PropertyId.ColumnRuleColor].IsCurrentColor())
+            {
+                values[PropertyId.ColumnRuleColor] = elementColor;
+            }
         }
 
         /// <summary>

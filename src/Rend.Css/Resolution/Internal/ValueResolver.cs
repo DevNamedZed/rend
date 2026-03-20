@@ -29,6 +29,16 @@ namespace Rend.Css.Resolution.Internal
                     {
                         return TryResolveBorderRadiusPair(brPair, prop.Id, ctx, out result, out refResult);
                     }
+                    // CSS Fonts §3.5: font-size percentage resolves against
+                    // parent element's computed font-size, not the containing
+                    // block width. ctx.FontSize is the parent's font-size
+                    // when resolving font-size declarations.
+                    if (prop.Id == PropertyId.FontSize && value is CssPercentageValue fsPct)
+                    {
+                        float px = fsPct.Value * ctx.FontSize / 100f;
+                        result = PropertyValue.FromLength(px);
+                        return true;
+                    }
                     // For percentage properties that resolve against the containing block
                     // (not the viewport), defer resolution to layout time by encoding with
                     // a sentinel offset (via DeferredPercent.Encode). The layout engine
@@ -112,7 +122,15 @@ namespace Rend.Css.Resolution.Internal
             // (horizontal radius % → width, vertical radius % → height)
             if (id == PropertyId.BorderTopLeftRadius || id == PropertyId.BorderTopRightRadius
                 || id == PropertyId.BorderBottomRightRadius || id == PropertyId.BorderBottomLeftRadius)
+            {
                 return true;
+            }
+            // flex-basis: percentages resolve against the flex container's main size,
+            // not the containing block width at style computation time.
+            if (id == PropertyId.FlexBasis)
+            {
+                return true;
+            }
             return false;
         }
 
@@ -924,6 +942,7 @@ namespace Rend.Css.Resolution.Internal
                 case "table-footer-group": result = PropertyValue.FromKeyword((int)CssDisplay.TableFooterGroup); return true;
                 case "table-row-group": result = PropertyValue.FromKeyword((int)CssDisplay.TableRowGroup); return true;
                 case "list-item": result = PropertyValue.FromKeyword((int)CssDisplay.ListItem); return true;
+                case "flow-root": result = PropertyValue.FromKeyword((int)CssDisplay.FlowRoot); return true;
                 case "contents": result = PropertyValue.FromKeyword((int)CssDisplay.Contents); return true;
                 case "ruby": result = PropertyValue.FromKeyword((int)CssDisplay.Ruby); return true;
                 case "ruby-text": result = PropertyValue.FromKeyword((int)CssDisplay.RubyText); return true;

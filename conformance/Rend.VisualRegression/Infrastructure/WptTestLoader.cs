@@ -54,26 +54,18 @@ namespace Rend.VisualRegression.Infrastructure
                     .OrderBy(f => f)
                     .ToList();
 
-                int loaded = 0;
-                int skipped = 0;
-
                 foreach (var testFile in testFiles)
                 {
                     var testCase = TryLoadTest(testFile, moduleName, moduleDir);
                     if (testCase != null)
                     {
                         allCases.Add(testCase);
-                        loaded++;
-                    }
-                    else
-                    {
-                        skipped++;
                     }
                 }
 
-                if (loaded > 0 || skipped > 0)
+                if (testFiles.Count > 0)
                 {
-                    Console.WriteLine($"  WPT {moduleName}: {loaded} loaded, {skipped} skipped");
+                    Console.WriteLine($"  WPT {moduleName}: {testFiles.Count} registered");
                 }
             }
 
@@ -82,57 +74,44 @@ namespace Rend.VisualRegression.Infrastructure
 
         private static VisualTestCase? TryLoadTest(string filePath, string moduleName, string moduleDir)
         {
-            string html;
-            try
-            {
-                html = File.ReadAllText(filePath);
-            }
-            catch
-            {
-                return null;
-            }
-
-            // Skip tests that require JavaScript execution
-            if (ScriptPattern.IsMatch(html))
-            {
-                return null;
-            }
-
-            // Skip tests that need async rendering (reftest-wait)
-            if (ReftestWaitPattern.IsMatch(html))
-            {
-                return null;
-            }
-
-            // Inline external stylesheet references
-            html = InlineStylesheets(html, Path.GetDirectoryName(filePath)!);
-
-            // Build test ID from relative path
+            // Build test ID from relative path — no file I/O needed.
             var relativePath = Path.GetRelativePath(moduleDir, filePath);
             var testId = "wpt-" + moduleName + "-" +
                 Path.GetFileNameWithoutExtension(relativePath)
                     .Replace(Path.DirectorySeparatorChar, '-')
                     .Replace(Path.AltDirectorySeparatorChar, '-');
 
-            // Extract test name from <title> if present
-            var titleMatch = Regex.Match(html, @"<title>([^<]+)</title>", RegexOptions.IgnoreCase);
-            var testName = titleMatch.Success
-                ? titleMatch.Groups[1].Value.Trim()
-                : Path.GetFileNameWithoutExtension(filePath);
-
+            var testName = Path.GetFileNameWithoutExtension(filePath);
             var category = "WPT/" + moduleName;
 
-            return new VisualTestCase
+            var testCase = new VisualTestCase
             {
                 Id = testId,
                 Name = testName,
                 Category = category,
                 Tags = new List<string> { "WPT", moduleName },
-                Html = html,
                 ViewportWidth = 800,
                 ViewportHeight = 600,
                 Tolerance = 0.01,
             };
+
+            // Fully deferred: HTML is loaded, script-checked, and stylesheet-inlined
+            // only when the test actually runs. This avoids reading 17K files at startup.
+            testCase.SetDeferredHtml(filePath, path =>
+            {
+                var html = File.ReadAllText(path);
+
+                // Skip tests that require JavaScript or async rendering
+                if (ScriptPattern.IsMatch(html) || ReftestWaitPattern.IsMatch(html))
+                {
+                    return "";
+                }
+
+                html = InlineStylesheets(html, Path.GetDirectoryName(path)!);
+                return html;
+            });
+
+            return testCase;
         }
 
         /// <summary>
@@ -180,6 +159,8 @@ namespace Rend.VisualRegression.Infrastructure
                 try
                 {
                     var cssContent = File.ReadAllText(cssPath);
+                    var cssDir = Path.GetDirectoryName(cssPath)!;
+                    cssContent = InlineFontUrls(cssContent, cssDir);
                     return $"<style>/* inlined: {href} */\n{cssContent}\n</style>";
                 }
                 catch
@@ -192,6 +173,71 @@ namespace Rend.VisualRegression.Infrastructure
         /// <summary>
         /// Returns true if the file is a reference/comparison file (not a test itself).
         /// </summary>
+        private static readonly Regex FontUrlPattern = new Regex(
+            @"url\(([^)]+)\)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Converts font url() references in CSS to data: URIs so they work
+        /// with SetContentAsync (no filesystem access for relative paths).
+        /// </summary>
+        private static string InlineFontUrls(string cssContent, string cssDir)
+        {
+            return FontUrlPattern.Replace(cssContent, match =>
+            {
+                var urlValue = match.Groups[1].Value.Trim().Trim('"', '\'');
+                if (urlValue.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
+                    urlValue.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                {
+                    return match.Value;
+                }
+
+                // Resolve font path. Absolute URLs (starting with /) resolve
+                // against the WPT repo root, not the CSS file directory.
+                string fontPath;
+                if (urlValue.StartsWith("/"))
+                {
+                    var wptRoot = FindWptRoot();
+                    if (wptRoot != null)
+                    {
+                        fontPath = Path.GetFullPath(Path.Combine(wptRoot, urlValue.TrimStart('/')));
+                    }
+                    else
+                    {
+                        return match.Value;
+                    }
+                }
+                else
+                {
+                    fontPath = Path.GetFullPath(Path.Combine(cssDir, urlValue));
+                }
+                if (!File.Exists(fontPath))
+                {
+                    return match.Value;
+                }
+
+                try
+                {
+                    var fontBytes = File.ReadAllBytes(fontPath);
+                    var base64 = Convert.ToBase64String(fontBytes);
+                    var extension = Path.GetExtension(fontPath).ToLower();
+                    var mimeType = extension switch
+                    {
+                        ".ttf" => "font/ttf",
+                        ".otf" => "font/otf",
+                        ".woff" => "font/woff",
+                        ".woff2" => "font/woff2",
+                        _ => "application/octet-stream"
+                    };
+                    return $"url(data:{mimeType};base64,{base64})";
+                }
+                catch
+                {
+                    return match.Value;
+                }
+            });
+        }
+
         private static bool IsReferenceFile(string filePath)
         {
             var normalized = filePath.Replace('\\', '/');

@@ -5,7 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Text;
 
-namespace Rend.Pdf.Reading
+namespace Rend.Pdf.Parsing
 {
     public sealed class PdfDocumentReader : IDisposable
     {
@@ -23,11 +23,28 @@ namespace Rend.Pdf.Reading
         public PdfObj Trailer => _trailer;
         public PdfObj Catalog => _catalog;
         public int PageCount => _pages.Count;
+        public string HeaderVersion { get; private set; } = "";
+        private readonly List<string> _parseWarnings = new List<string>();
+        public IReadOnlyList<string> ParseWarnings => _parseWarnings;
 
         private PdfDocumentReader(byte[] data)
         {
             _data = data;
+            ParseHeaderVersion();
             Parse();
+        }
+
+        private void ParseHeaderVersion()
+        {
+            if (_data.Length >= 8 && _data[0] == '%' && _data[1] == 'P' && _data[2] == 'D' && _data[3] == 'F' && _data[4] == '-')
+            {
+                int end = 5;
+                while (end < _data.Length && end < 12 && _data[end] != '\r' && _data[end] != '\n')
+                {
+                    end++;
+                }
+                HeaderVersion = System.Text.Encoding.ASCII.GetString(_data, 5, end - 5);
+            }
         }
 
         public static PdfDocumentReader Open(byte[] data)
@@ -65,11 +82,22 @@ namespace Rend.Pdf.Reading
                     try
                     {
                         var parsed = ParseObjectAt(entry.offset);
-                        _objectCache[r.ObjNum] = parsed;
-                        return parsed;
+                        if (!parsed.IsNull)
+                        {
+                            _objectCache[r.ObjNum] = parsed;
+                            return parsed;
+                        }
+                        // For compressed objects, ParseCompressedObject caches all objects
+                        // in the stream. Check cache again.
+                        if (_objectCache.TryGetValue(r.ObjNum, out var cachedAfterParse))
+                        {
+                            return cachedAfterParse;
+                        }
+                        return PdfObj.Null;
                     }
-                    catch
+                    catch (Exception resolveException)
                     {
+                        _parseWarnings.Add($"Failed to resolve object {r.ObjNum}: {resolveException.Message}");
                         return PdfObj.Null;
                     }
                 }
@@ -158,7 +186,16 @@ namespace Rend.Pdf.Reading
 
         public void Dispose()
         {
-            _disposed = true;
+            if (!_disposed)
+            {
+                _disposed = true;
+                _data = Array.Empty<byte>();
+                _objectCache.Clear();
+                _xrefTable.Clear();
+                _pages.Clear();
+                _trailer = PdfObj.Null;
+                _catalog = PdfObj.Null;
+            }
         }
 
         // ─── Parsing ─────────────────────────────────────────────────────
@@ -172,13 +209,29 @@ namespace Rend.Pdf.Reading
 
         private void LoadCatalogAndPages()
         {
-            var root = Resolve(_trailer["Root"]);
-            if (root.IsNull) return;
+            var rootRef = _trailer["Root"];
+            var root = Resolve(rootRef);
+            if (root.IsNull)
+            {
+                _parseWarnings.Add($"Catalog not found: trailer Root={rootRef}");
+                return;
+            }
             _catalog = root;
 
             var pagesRef = root["Pages"];
             var pagesObj = Resolve(pagesRef);
-            if (pagesObj.IsNull) return;
+            if (pagesObj.IsNull)
+            {
+                if (pagesRef.IsRef)
+                {
+                    _parseWarnings.Add($"Cannot resolve page tree object {pagesRef} (may be encrypted)");
+                }
+                else
+                {
+                    _parseWarnings.Add("Catalog does not contain a Pages entry");
+                }
+                return;
+            }
 
             FlattenPageTree(pagesObj, new Dictionary<string, PdfObj>());
         }
@@ -411,32 +464,16 @@ namespace Rend.Pdf.Reading
         {
             if (offset < 0)
             {
-                // Compressed object in an object stream
                 long streamObjNum = -(offset + 1);
-                return ParseCompressedObject((int)streamObjNum, offset);
+                return ParseCompressedObject((int)streamObjNum);
             }
 
             _pos = (int)offset;
             return ParseIndirectObject();
         }
 
-        private PdfObj ParseCompressedObject(int streamObjNum, long originalOffset)
+        private PdfObj ParseCompressedObject(int streamObjNum)
         {
-            // Find which object we're looking for by scanning xref for this offset
-            int targetObjNum = -1;
-            foreach (var kvp in _xrefTable)
-            {
-                if (kvp.Value.offset == originalOffset)
-                {
-                    targetObjNum = kvp.Key;
-                    break;
-                }
-            }
-            if (targetObjNum < 0)
-            {
-                return PdfObj.Null;
-            }
-
             var streamObj = Resolve(new PdfRef(streamObjNum, 0));
             if (!(streamObj is PdfStream objStream))
             {
@@ -444,13 +481,14 @@ namespace Rend.Pdf.Reading
             }
 
             byte[] decoded = GetStreamBytes(objStream);
-            int n = (int)Resolve(objStream["N"]).AsInt();
-            int first = (int)Resolve(objStream["First"]).AsInt();
+            if (decoded.Length == 0)
+            {
+                return PdfObj.Null;
+            }
 
-            // Temporarily swap _data and _pos to parse from decoded object stream bytes.
-            // The previous approach of creating a new PdfDocumentReader(decoded) was broken
-            // because the constructor calls Parse() which requires startxref (not present
-            // in object stream data).
+            int objectCount = (int)Resolve(objStream["N"]).AsInt();
+            int firstOffset = (int)Resolve(objStream["First"]).AsInt();
+
             var savedPos = _pos;
             var savedData = _data;
             _data = decoded;
@@ -458,27 +496,30 @@ namespace Rend.Pdf.Reading
 
             try
             {
-                var objNums = new int[n];
-                var offsets = new int[n];
-                for (int i = 0; i < n; i++)
+                var objectNumbers = new int[objectCount];
+                var objectOffsets = new int[objectCount];
+                for (int i = 0; i < objectCount; i++)
                 {
                     SkipWhitespaceAndComments();
-                    objNums[i] = ReadIntDirect();
+                    objectNumbers[i] = ReadIntDirect();
                     SkipWhitespaceAndComments();
-                    offsets[i] = ReadIntDirect();
+                    objectOffsets[i] = ReadIntDirect();
                     SkipWhitespaceAndComments();
                 }
 
-                // Find our target object by object number only
-                for (int i = 0; i < n; i++)
+                // Parse ALL objects in this stream and cache them
+                for (int i = 0; i < objectCount; i++)
                 {
-                    if (objNums[i] == targetObjNum)
+                    int objectNumber = objectNumbers[i];
+                    if (_objectCache.ContainsKey(objectNumber))
                     {
-                        _pos = first + offsets[i];
-                        SkipWhitespaceAndComments();
-                        var result = ParseObject();
-                        return result;
+                        continue;
                     }
+
+                    _pos = firstOffset + objectOffsets[i];
+                    SkipWhitespaceAndComments();
+                    var parsed = ParseObject();
+                    _objectCache[objectNumber] = parsed;
                 }
 
                 return PdfObj.Null;
@@ -1112,6 +1153,8 @@ namespace Rend.Pdf.Reading
             {
                 case "FlateDecode":
                     return FlateDecode(data, parms);
+                case "LZWDecode":
+                    return LZWDecode(data, parms);
                 case "ASCIIHexDecode":
                     return ASCIIHexDecode(data);
                 case "ASCII85Decode":
@@ -1181,6 +1224,140 @@ namespace Rend.Pdf.Reading
             }
 
             return decompressed;
+        }
+
+        private byte[] LZWDecode(byte[] data, PdfObj parms)
+        {
+            var output = new List<byte>();
+            var table = new List<byte[]>();
+
+            // Initialize table with single-byte entries 0-255
+            for (int i = 0; i < 256; i++)
+            {
+                table.Add(new byte[] { (byte)i });
+            }
+            table.Add(Array.Empty<byte>()); // 256 = clear table
+            table.Add(Array.Empty<byte>()); // 257 = EOD
+
+            int earlyChange = 1;
+            var resolvedParms = Resolve(parms);
+            if (!resolvedParms.IsNull)
+            {
+                var earlyChangeObj = resolvedParms["EarlyChange"];
+                if (!earlyChangeObj.IsNull)
+                {
+                    earlyChange = (int)earlyChangeObj.AsInt();
+                }
+            }
+
+            int bitPos = 0;
+            int codeSize = 9;
+            int nextCode = 258;
+            int prevCode = -1;
+
+            while (true)
+            {
+                int code = ReadBits(data, ref bitPos, codeSize);
+                if (code < 0)
+                {
+                    break;
+                }
+
+                if (code == 256)
+                {
+                    // Clear table
+                    table.RemoveRange(258, table.Count - 258);
+                    codeSize = 9;
+                    nextCode = 258;
+                    prevCode = -1;
+                    continue;
+                }
+
+                if (code == 257)
+                {
+                    break;
+                }
+
+                byte[] entry;
+                if (code < table.Count)
+                {
+                    entry = table[code];
+                }
+                else if (code == nextCode && prevCode >= 0)
+                {
+                    var prev = table[prevCode];
+                    entry = new byte[prev.Length + 1];
+                    Array.Copy(prev, entry, prev.Length);
+                    entry[prev.Length] = prev[0];
+                }
+                else
+                {
+                    break;
+                }
+
+                for (int i = 0; i < entry.Length; i++)
+                {
+                    output.Add(entry[i]);
+                }
+
+                if (prevCode >= 0 && nextCode < 4096)
+                {
+                    var prev = table[prevCode];
+                    var newEntry = new byte[prev.Length + 1];
+                    Array.Copy(prev, newEntry, prev.Length);
+                    newEntry[prev.Length] = entry[0];
+                    table.Add(newEntry);
+                    nextCode++;
+                }
+
+                prevCode = code;
+
+                int threshold = (1 << codeSize) - earlyChange;
+                if (nextCode > threshold && codeSize < 12)
+                {
+                    codeSize++;
+                }
+            }
+
+            byte[] decompressed = output.ToArray();
+
+            // Apply predictor if specified (same as FlateDecode)
+            var resolvedParms2 = Resolve(parms);
+            if (!resolvedParms2.IsNull)
+            {
+                int predictor = (int)resolvedParms2["Predictor"].AsInt();
+                if (predictor >= 10 && predictor <= 15)
+                {
+                    int columns = (int)resolvedParms2["Columns"].AsInt();
+                    if (columns <= 0) { columns = 1; }
+                    int colors = (int)resolvedParms2["Colors"].AsInt();
+                    if (colors <= 0) { colors = 1; }
+                    int bitsPerComponent = (int)resolvedParms2["BitsPerComponent"].AsInt();
+                    if (bitsPerComponent <= 0) { bitsPerComponent = 8; }
+
+                    decompressed = ApplyPngPredictor(decompressed, columns, colors, bitsPerComponent);
+                }
+            }
+
+            return decompressed;
+        }
+
+        private static int ReadBits(byte[] data, ref int bitPos, int count)
+        {
+            int result = 0;
+            for (int i = 0; i < count; i++)
+            {
+                int byteIndex = bitPos / 8;
+                int bitIndex = 7 - (bitPos % 8); // MSB first
+                if (byteIndex >= data.Length)
+                {
+                    return -1;
+                }
+                int bit = (data[byteIndex] >> bitIndex) & 1;
+                result = (result << 1) | bit;
+                bitPos++;
+            }
+            return result;
         }
 
         private static byte[] ApplyPngPredictor(byte[] data, int columns, int colors, int bpc)

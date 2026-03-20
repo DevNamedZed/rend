@@ -889,6 +889,23 @@ namespace Rend.Css
             get => _values[PropertyId.TabSize].FloatValue;
         }
 
+        /// <summary>
+        /// [CSS-OVERFLOW-4 §6] Number of lines to show before clamping.
+        /// 0 or NaN = no clamping. Positive integer = max visible lines.
+        /// </summary>
+        public float WebkitLineClamp
+        {
+            get
+            {
+                var raw = GetRefValue(PropertyId.WebkitLineClamp);
+                if (raw is CssNumberValue num && num.Value > 0)
+                {
+                    return num.Value;
+                }
+                return 0;
+            }
+        }
+
         #endregion
 
         #region Resize / Appearance / User-Select

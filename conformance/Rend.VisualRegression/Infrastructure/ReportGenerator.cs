@@ -154,10 +154,25 @@ namespace Rend.VisualRegression.Infrastructure
 
                 rowIndex++;
                 string testId = result.TestId ?? "";
-                bool hasHtml = result.Html != null;
-                bool hasChromeLayout = result.ChromeLayout != null;
-                bool hasRendLayout = result.RendLayout != null;
-                string htmlBase64 = hasHtml ? Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(result.Html!)) : "";
+                // Read HTML from resource file (result.Html is freed after writing to save memory)
+                string htmlBase64 = "";
+                bool hasHtml = false;
+                if (result.ChromeImagePath != null)
+                {
+                    var htmlFilePath = Path.Combine(Path.GetDirectoryName(result.ChromeImagePath)!,
+                        testId + ".html");
+                    if (File.Exists(htmlFilePath))
+                    {
+                        try
+                        {
+                            htmlBase64 = Convert.ToBase64String(File.ReadAllBytes(htmlFilePath));
+                            hasHtml = true;
+                        }
+                        catch { }
+                    }
+                }
+                bool hasChromeLayout = result.ChromeLayoutPath != null;
+                bool hasRendLayout = result.RendLayoutPath != null;
                 sb.AppendLine($"<tr class=\"result-row {statusClass}\" data-status=\"{statusClass}\" data-sort-index=\"{rowIndex}\" data-sort-status=\"{statusOrder}\" data-sort-name=\"{Escape(result.TestName.ToLower())}\" data-sort-category=\"{Escape(result.Category.ToLower())}\" data-sort-diff=\"{result.DiffPercentage:F4}\" data-sort-duration=\"{result.Duration.TotalMilliseconds:F0}\" data-test-id=\"{Escape(testId)}\" data-has-html=\"{(hasHtml ? "1" : "")}\" data-html=\"{htmlBase64}\" data-has-chrome-layout=\"{(hasChromeLayout ? "1" : "")}\" data-has-rend-layout=\"{(hasRendLayout ? "1" : "")}\">");
                 sb.AppendLine($"  <td class=\"index-cell\">{rowIndex}</td>");
                 sb.AppendLine($"  <td><span class=\"status-badge status-{statusClass}\">{statusLabel}</span></td>");

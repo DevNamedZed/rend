@@ -31,6 +31,19 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
+            // [CSS-TEXT-DECOR-3 §4.1] Resolve currentColor for shadows with no explicit color.
+            CssColor elementColor = style.Color;
+            for (int si = 0; si < shadows.Count; si++)
+            {
+                if (shadows[si].UseCurrentColor)
+                {
+                    var shadow = shadows[si];
+                    shadow.Color = elementColor;
+                    shadow.UseCurrentColor = false;
+                    shadows[si] = shadow;
+                }
+            }
+
             float fontSize = style.FontSize;
             string[] fontFamilies = style.FontFamilies;
             CssFontStyle fontStyle = style.FontStyle;
@@ -152,7 +165,9 @@ namespace Rend.Rendering.Internal
                 OffsetX = lengths[0],
                 OffsetY = lengths[1],
                 Blur = lengths.Count > 2 ? lengths[2] : 0,
-                Color = color ?? new CssColor(0, 0, 0, 255)
+                // [CSS-BACKGROUNDS-3 §7.1.1] text-shadow color defaults to currentColor
+                Color = color ?? CssColor.Transparent,
+                UseCurrentColor = color == null
             };
         }
 
@@ -175,6 +190,7 @@ namespace Rend.Rendering.Internal
             public float OffsetY;
             public float Blur;
             public CssColor Color;
+            public bool UseCurrentColor;
         }
     }
 }

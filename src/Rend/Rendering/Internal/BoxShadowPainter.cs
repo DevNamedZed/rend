@@ -59,6 +59,19 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
+            // [CSS-BACKGROUNDS-3 §7.1] Resolve currentColor for shadows with no explicit color.
+            CssColor elementColor = style.Color;
+            for (int si = 0; si < shadows.Count; si++)
+            {
+                if (shadows[si].UseCurrentColor)
+                {
+                    var shadow = shadows[si];
+                    shadow.Color = elementColor;
+                    shadow.UseCurrentColor = false;
+                    shadows[si] = shadow;
+                }
+            }
+
             RectF borderRect = box.BorderRect;
 
             // Border radius for rounded shadows
@@ -337,7 +350,10 @@ namespace Rend.Rendering.Internal
                 OffsetY = lengths[1],
                 Blur = lengths.Count > 2 ? lengths[2] : 0,
                 Spread = lengths.Count > 3 ? lengths[3] : 0,
-                Color = color ?? new CssColor(0, 0, 0, 255), // default: black
+                // [CSS-BACKGROUNDS-3 §7.1] When color is omitted, it defaults to currentColor.
+                // We use a sentinel (A=0, R=0, G=0, B=1) to indicate "resolve later".
+                Color = color ?? CssColor.Transparent,
+                UseCurrentColor = color == null,
                 Inset = inset
             };
         }
@@ -364,6 +380,7 @@ namespace Rend.Rendering.Internal
             public float Spread;
             public CssColor Color;
             public bool Inset;
+            public bool UseCurrentColor;
         }
     }
 }

@@ -19,9 +19,9 @@ namespace Rend.Text
         private readonly Dictionary<int, CachedFace> _faceCache = new Dictionary<int, CachedFace>();
         private bool _disposed;
 
-        // Static cache for fallback font data extracted from system typefaces.
-        private static readonly Dictionary<string, byte[]> s_fallbackFontDataCache = new();
-        private static readonly object s_fallbackLock = new();
+        // Instance-level cache for fallback font data extracted from system typefaces.
+        private readonly Dictionary<string, byte[]> _fallbackFontDataCache = new();
+        private readonly object _fallbackFontDataLock = new();
 
         /// <summary>
         /// Optional font provider used as secondary fallback when SKFontManager cannot
@@ -267,33 +267,46 @@ namespace Rend.Text
                 hasOverrides ? fontOverrides : null);
         }
 
-        private static byte[]? GetFontDataFromTypeface(SKTypeface typeface)
+        private byte[]? GetFontDataFromTypeface(SKTypeface typeface)
         {
             string key = typeface.FamilyName + "|" + (int)typeface.FontStyle.Weight + "|" + (int)typeface.FontStyle.Slant;
-            lock (s_fallbackLock)
+            lock (_fallbackFontDataLock)
             {
-                if (s_fallbackFontDataCache.TryGetValue(key, out var cached))
+                if (_fallbackFontDataCache.TryGetValue(key, out var cached))
+                {
                     return cached;
+                }
             }
 
             using var stream = typeface.OpenStream(out _);
-            if (stream == null) return null;
+            if (stream == null)
+            {
+                return null;
+            }
 
             var data = new byte[stream.Length];
             int totalRead = 0;
             while (totalRead < data.Length)
             {
                 int bytesRead = stream.Read(data, data.Length - totalRead);
-                if (bytesRead <= 0) break;
+                if (bytesRead <= 0)
+                {
+                    break;
+                }
                 totalRead += bytesRead;
             }
-            if (totalRead < data.Length) return null;
-
-            lock (s_fallbackLock)
+            if (totalRead < data.Length)
             {
-                if (s_fallbackFontDataCache.TryGetValue(key, out var existing))
+                return null;
+            }
+
+            lock (_fallbackFontDataLock)
+            {
+                if (_fallbackFontDataCache.TryGetValue(key, out var existing))
+                {
                     return existing;
-                s_fallbackFontDataCache[key] = data;
+                }
+                _fallbackFontDataCache[key] = data;
             }
             return data;
         }

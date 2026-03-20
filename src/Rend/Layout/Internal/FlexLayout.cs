@@ -111,36 +111,32 @@ namespace Rend.Layout.Internal
 
                 if (child is StyledPseudoElement pseudo)
                 {
-                    // Pseudo-elements become flex items containing their generated text
-                    var pseudoText = new StyledText(pseudo.Content, pseudo.Style);
-                    var pseudoBox = new LayoutText(pseudoText);
-                    float fontSize = pseudo.Style.FontSize;
-                    float lineHeight = pseudo.Style.LineHeight;
-                    if (lineHeight < 0)
-                        lineHeight = -lineHeight * fontSize;
-                    else if (float.IsNaN(lineHeight) || lineHeight == 0)
-                        lineHeight = fontSize * 1.2f;
-                    float measuredWidth;
-                    if (context.TextMeasurer != null)
+                    // CSS Flexbox §4: Pseudo-elements (::before, ::after) on a flex
+                    // container are flex items. Create an anonymous StyledElement with
+                    // the pseudo's style so box model (margin, padding, border,
+                    // explicit width/height) and child layout work correctly.
+                    var pseudoStyle = pseudo.Style;
+                    var doc = styledElement.Element.OwnerDocument;
+                    var pseudoElement = doc!.CreateElement("div");
+                    var pseudoChildren = new List<StyledNode>();
+                    if (!string.IsNullOrEmpty(pseudo.Content))
                     {
-                        var fontDesc = new Fonts.FontDescriptor(pseudo.Style.FontFamilies,
-                            pseudo.Style.FontWeight, pseudo.Style.FontStyle);
-                        var shaped = context.TextMeasurer.Shape(pseudo.Content, fontDesc, fontSize);
-                        measuredWidth = shaped.TotalWidth;
+                        pseudoChildren.Add(new StyledText(pseudo.Content, pseudoStyle));
                     }
-                    else
-                    {
-                        measuredWidth = pseudo.Content.Length * fontSize * 0.6f;
-                    }
-                    pseudoBox.ContentRect = new RectF(0, 0, measuredWidth, lineHeight);
+                    var pseudoStyled = new StyledElement(pseudoElement, pseudoStyle, pseudoChildren);
+
+                    var pseudoBox = new LayoutBox(pseudoStyled, BoxType.Block);
+                    BoxModelCalculator.ApplyBoxModel(pseudoBox, pseudoStyle, containerWidth);
+
+                    float pseudoBaseSize = ResolveFlexBasis(pseudoStyle, isColumn, containerWidth, containerHeight, pseudoBox, pseudoStyled, context);
                     items.Add(new FlexItem
                     {
                         Box = pseudoBox,
-                        Style = pseudo.Style,
-                        FlexGrow = 0,
-                        FlexShrink = 1,
-                        BaseSize = isColumn ? lineHeight : measuredWidth,
-                        Order = 0
+                        Style = pseudoStyle,
+                        FlexGrow = Math.Max(0, pseudoStyle.FlexGrow),
+                        FlexShrink = Math.Max(0, pseudoStyle.FlexShrink),
+                        BaseSize = pseudoBaseSize,
+                        Order = pseudoStyle.Order
                     });
                     continue;
                 }
@@ -314,6 +310,39 @@ namespace Rend.Layout.Internal
                     float remainingSpace = isAutoMainSize
                         ? 0
                         : mainSize - frozenSpace - unfrozenBaseTotal;
+
+                    // CSS Flexbox §9.7 step 4c: If the sum of the unfrozen flex items'
+                    // flex factors is less than one, multiply the initial free space by
+                    // this sum. If the magnitude of this value is less than the magnitude
+                    // of the remaining free space, use this value instead.
+                    if (remainingSpace > 0 && activeTotalGrow > 0 && activeTotalGrow < 1)
+                    {
+                        float scaledFreeSpace = initialFreeSpace * activeTotalGrow;
+                        if (Math.Abs(scaledFreeSpace) < Math.Abs(remainingSpace))
+                        {
+                            remainingSpace = scaledFreeSpace;
+                        }
+                    }
+                    else if (remainingSpace < 0 && totalScaledShrink > 0)
+                    {
+                        float totalUnscaledShrink = 0;
+                        for (int i = 0; i < line.Items.Count; i++)
+                        {
+                            if (!frozen[i])
+                            {
+                                totalUnscaledShrink += line.Items[i].FlexShrink;
+                            }
+                        }
+                        if (totalUnscaledShrink < 1)
+                        {
+                            float scaledFreeSpace = initialFreeSpace * totalUnscaledShrink;
+                            if (Math.Abs(scaledFreeSpace) < Math.Abs(remainingSpace))
+                            {
+                                remainingSpace = scaledFreeSpace;
+                            }
+                        }
+                    }
+
                     bool anyNewlyFrozen = false;
 
                     // Chrome's sequential consumption approach (line_flexer.cc):
@@ -447,13 +476,9 @@ namespace Rend.Layout.Internal
                         effectiveJustify = CssJustifyContent.FlexStart;
                 }
 
-                float finalTotalGrow = 0;
-                for (int i = 0; i < line.Items.Count; i++)
-                    finalTotalGrow += line.Items[i].FlexGrow;
-
                 var (startOffset, justifyGap) = hasAutoMargins
                     ? (0f, gap)
-                    : ApplyJustifyContent(effectiveJustify, resolvedFreeSpace, line.Items.Count, finalTotalGrow > 0, gap);
+                    : ApplyJustifyContent(effectiveJustify, resolvedFreeSpace, line.Items.Count, gap);
                 mainCursor += startOffset;
 
                 float maxCross = 0;
@@ -486,8 +511,13 @@ namespace Rend.Layout.Internal
                         {
                             itemAlign = style.AlignItems;
                         }
+                        // CSS Flexbox §8.1: auto margins on the cross axis override
+                        // align-self:stretch — the item uses fit-content width instead.
+                        bool hasCrossAutoMargin = float.IsNaN(item.Style.MarginLeft)
+                                                || float.IsNaN(item.Style.MarginRight);
                         bool shouldStretch = (itemAlign == CssAlignItems.Stretch || (int)itemAlign == 0)
-                                           && float.IsNaN(item.Style.Width);
+                                           && float.IsNaN(item.Style.Width)
+                                           && !hasCrossAutoMargin;
 
                         if (shouldStretch)
                         {
@@ -551,13 +581,32 @@ namespace Rend.Layout.Internal
                         {
                             var preAlign = item.Style.AlignSelf;
                             if ((int)preAlign == 255) preAlign = style.AlignItems;
-                            if (preAlign == CssAlignItems.Stretch || (int)preAlign == 0)
+                            // CSS Flexbox §8.1: auto margins on cross axis override stretch
+                            bool hasRowCrossAutoMargin = float.IsNaN(item.Style.MarginTop)
+                                                       || float.IsNaN(item.Style.MarginBottom);
+                            if ((preAlign == CssAlignItems.Stretch || (int)preAlign == 0)
+                                && !hasRowCrossAutoMargin)
                             {
                                 contentCross = containerHeight
                                     - box.PaddingTop - box.PaddingBottom
                                     - box.BorderTopWidth - box.BorderBottomWidth
                                     - box.MarginTop - box.MarginBottom;
                                 if (contentCross < 0) contentCross = 0;
+                            }
+                        }
+
+                        // CSS Flexbox §9.8: Flex items have definite cross sizes after
+                        // flexing. For row flex items with auto height, apply min-height
+                        // as a floor before laying out children so that percentage-height
+                        // children (e.g., height:100%) resolve against the min-height
+                        // rather than 0.
+                        if (contentCross <= 0)
+                        {
+                            float itemMinHeight = DimensionResolver.ResolvePercentHeight(
+                                item.Style.MinHeight, containerHeight);
+                            if (!float.IsNaN(itemMinHeight) && itemMinHeight > 0)
+                            {
+                                contentCross = itemMinHeight;
                             }
                         }
 
@@ -808,21 +857,17 @@ namespace Rend.Layout.Internal
                                     box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y,
                                                                 box.ContentRect.Width, newHeight);
 
-                                    // If the item is a column flex or grid container and height changed,
-                                    // re-layout to distribute the new height among tracks/items.
+                                    // If the item is a flex or grid container and height changed,
+                                    // re-layout so children can stretch to the new cross size.
+                                    // Row flex: cross axis is height, children need re-stretch.
+                                    // Column flex: main axis height changed, redistribute items.
+                                    // Grid: row tracks need redistributing.
                                     if (newHeight > oldHeight + 0.01f)
                                     {
-                                        bool needsRelayout = false;
-                                        if (item.Style.Display == CssDisplay.Flex)
-                                        {
-                                            var itemDir = item.Style.FlexDirection;
-                                            if (itemDir == CssFlexDirection.Column || itemDir == CssFlexDirection.ColumnReverse)
-                                                needsRelayout = true;
-                                        }
-                                        else if (item.Style.Display == CssDisplay.Grid)
-                                        {
-                                            needsRelayout = true;
-                                        }
+                                        bool needsRelayout = item.Style.Display == CssDisplay.Flex
+                                            || item.Style.Display == CssDisplay.InlineFlex
+                                            || item.Style.Display == CssDisplay.Grid
+                                            || item.Style.Display == CssDisplay.InlineGrid;
                                         if (needsRelayout)
                                         {
                                             box.ClearChildren();
@@ -900,9 +945,91 @@ namespace Rend.Layout.Internal
                             break;
                         case CssAlignItems.Stretch:
                         default:
-                            // Stretch distributes extra space equally among lines
-                            lineGap = freeCrossSpace / lines.Count;
+                        {
+                            // CSS Flexbox §9.4: align-content:stretch distributes extra
+                            // cross space equally among flex lines, increasing their cross
+                            // size. Items with align-items:stretch then expand to fill the
+                            // new line cross size.
+                            float stretchPerLine = freeCrossSpace / lines.Count;
+                            float stretchCumOffset = 0;
+                            for (int li = 0; li < lines.Count; li++)
+                            {
+                                var stretchLine = lines[li];
+                                float newLineCross = stretchLine.CrossSize + stretchPerLine;
+
+                                // Offset all items in this line by accumulated stretch
+                                if (stretchCumOffset > 0)
+                                {
+                                    for (int i = 0; i < stretchLine.Items.Count; i++)
+                                    {
+                                        if (isColumn)
+                                        {
+                                            OffsetBoxInPlace(stretchLine.Items[i].Box, stretchCumOffset, 0);
+                                        }
+                                        else
+                                        {
+                                            OffsetBoxInPlace(stretchLine.Items[i].Box, 0, stretchCumOffset);
+                                        }
+                                    }
+                                }
+
+                                // Stretch items to new line cross size
+                                for (int i = 0; i < stretchLine.Items.Count; i++)
+                                {
+                                    var stretchItem = stretchLine.Items[i];
+                                    var stretchBox = stretchItem.Box;
+                                    var stretchAlign = stretchItem.Style.AlignSelf;
+                                    if ((int)stretchAlign == 255)
+                                    {
+                                        stretchAlign = style.AlignItems;
+                                    }
+                                    if (stretchAlign != CssAlignItems.Stretch)
+                                    {
+                                        continue;
+                                    }
+
+                                    if (isColumn)
+                                    {
+                                        if (float.IsNaN(stretchItem.Style.Width))
+                                        {
+                                            float itemMarginCross = stretchBox.MarginLeft + stretchBox.MarginRight
+                                                + stretchBox.PaddingLeft + stretchBox.PaddingRight
+                                                + stretchBox.BorderLeftWidth + stretchBox.BorderRightWidth;
+                                            float newWidth = newLineCross - itemMarginCross;
+                                            if (newWidth > stretchBox.ContentRect.Width)
+                                            {
+                                                stretchBox.ContentRect = new RectF(
+                                                    stretchBox.ContentRect.X, stretchBox.ContentRect.Y,
+                                                    newWidth, stretchBox.ContentRect.Height);
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (float.IsNaN(stretchItem.Style.Height))
+                                        {
+                                            float itemMarginCross = stretchBox.MarginTop + stretchBox.MarginBottom
+                                                + stretchBox.PaddingTop + stretchBox.PaddingBottom
+                                                + stretchBox.BorderTopWidth + stretchBox.BorderBottomWidth;
+                                            float newHeight = newLineCross - itemMarginCross;
+                                            if (newHeight > stretchBox.ContentRect.Height)
+                                            {
+                                                stretchBox.ContentRect = new RectF(
+                                                    stretchBox.ContentRect.X, stretchBox.ContentRect.Y,
+                                                    stretchBox.ContentRect.Width, newHeight);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                stretchLine.CrossSize = newLineCross;
+                                stretchCumOffset += stretchPerLine;
+                            }
+                            // Already handled — skip the generic offset loop below
+                            lineOffset = 0;
+                            lineGap = 0;
                             break;
+                        }
                         case CssAlignItems.FlexStart:
                         case CssAlignItems.Start:
                         case CssAlignItems.Baseline:
@@ -982,7 +1109,7 @@ namespace Rend.Layout.Internal
 
                 if (child is StyledPseudoElement pseudo)
                 {
-                    float pseudoWidth = MeasurePseudoItemWidth(pseudo, context);
+                    float pseudoWidth = MeasurePseudoItemWidth(pseudo, containingWidth, context);
                     totalItemWidth += pseudoWidth;
                     if (pseudoWidth > maxItemWidth)
                     {
@@ -1071,18 +1198,48 @@ namespace Rend.Layout.Internal
 
         /// <summary>
         /// Measures the intrinsic width contribution of a pseudo-element flex item.
+        /// Accounts for explicit CSS width, margin, padding, and border on the pseudo.
         /// </summary>
-        private static float MeasurePseudoItemWidth(StyledPseudoElement pseudo, LayoutContext context)
+        private static float MeasurePseudoItemWidth(StyledPseudoElement pseudo, float containingWidth, LayoutContext context)
         {
-            float fontSize = pseudo.Style.FontSize;
-            if (context.TextMeasurer != null)
+            var pseudoStyle = pseudo.Style;
+            var measureBox = new LayoutBox(pseudo, BoxType.Block);
+            BoxModelCalculator.ApplyBoxModel(measureBox, pseudoStyle, containingWidth);
+
+            float contentWidth;
+            float specifiedWidth = pseudoStyle.Width;
+            if (!float.IsNaN(specifiedWidth) && specifiedWidth >= 0)
             {
-                var fontDescriptor = new Fonts.FontDescriptor(pseudo.Style.FontFamilies,
-                    pseudo.Style.FontWeight, pseudo.Style.FontStyle);
-                var shaped = context.TextMeasurer.Shape(pseudo.Content, fontDescriptor, fontSize);
-                return shaped.TotalWidth;
+                contentWidth = specifiedWidth;
+                if (pseudoStyle.BoxSizing == CssBoxSizing.BorderBox)
+                {
+                    contentWidth -= measureBox.PaddingLeft + measureBox.PaddingRight
+                                  + measureBox.BorderLeftWidth + measureBox.BorderRightWidth;
+                    if (contentWidth < 0)
+                    {
+                        contentWidth = 0;
+                    }
+                }
             }
-            return pseudo.Content.Length * fontSize * 0.6f;
+            else
+            {
+                float fontSize = pseudoStyle.FontSize;
+                if (context.TextMeasurer != null && !string.IsNullOrEmpty(pseudo.Content))
+                {
+                    var fontDescriptor = new Fonts.FontDescriptor(pseudoStyle.FontFamilies,
+                        pseudoStyle.FontWeight, pseudoStyle.FontStyle);
+                    var shaped = context.TextMeasurer.Shape(pseudo.Content, fontDescriptor, fontSize);
+                    contentWidth = shaped.TotalWidth;
+                }
+                else
+                {
+                    contentWidth = (pseudo.Content?.Length ?? 0) * (pseudoStyle.FontSize) * 0.6f;
+                }
+            }
+
+            return contentWidth + measureBox.PaddingLeft + measureBox.PaddingRight
+                 + measureBox.BorderLeftWidth + measureBox.BorderRightWidth
+                 + measureBox.MarginLeft + measureBox.MarginRight;
         }
 
         /// <summary>
@@ -1196,7 +1353,8 @@ namespace Rend.Layout.Internal
             }
             // Resolve deferred percentage flex-basis against the flex container's main size.
             // CSS Flexbox §9.2 step 3E: if the percentage resolves against an indefinite
-            // size, treat the flex basis as content (fall through to auto path below).
+            // size, treat the flex basis as content — skip the width/height fallback.
+            bool indefinitePercentBasis = false;
             if (DeferredPercent.IsEncoded(basis))
             {
                 float refSize = isColumn ? containerHeight : containerWidth;
@@ -1220,68 +1378,74 @@ namespace Rend.Layout.Internal
                     }
                     return resolved;
                 }
-                // Indefinite reference size — fall through to content-based measurement
+                // Indefinite reference size — skip width/height, use content measurement
+                indefinitePercentBasis = true;
             }
 
             // Use width/height as fallback (resolve deferred percentages and calc)
-            float size = isColumn ? style.Height : style.Width;
-            if (!float.IsNaN(size))
+            // CSS Flexbox §9.2: when percentage flex-basis resolves against indefinite
+            // size, treat as content — do NOT fall back to width/height property.
+            if (!indefinitePercentBasis)
             {
-                // Deferred calc() with percentage
-                if (float.IsNegativeInfinity(size))
+                float size = isColumn ? style.Height : style.Width;
+                if (!float.IsNaN(size))
                 {
-                    int propId = isColumn
-                        ? Css.Properties.Internal.PropertyId.Height
-                        : Css.Properties.Internal.PropertyId.Width;
-                    float cbDim = isColumn ? containerHeight : containerWidth;
-                    var refVal = style.GetRefValue(propId);
-                    if (refVal is CssFunctionValue calcFn)
+                    // Deferred calc() with percentage
+                    if (float.IsNegativeInfinity(size))
                     {
-                        float calcSize = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(calcFn, cbDim);
-                        // box-sizing: border-box → subtract padding+border
+                        int propId = isColumn
+                            ? Css.Properties.Internal.PropertyId.Height
+                            : Css.Properties.Internal.PropertyId.Width;
+                        float cbDim = isColumn ? containerHeight : containerWidth;
+                        var refVal = style.GetRefValue(propId);
+                        if (refVal is CssFunctionValue calcFn)
+                        {
+                            float calcSize = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(calcFn, cbDim);
+                            // box-sizing: border-box → subtract padding+border
+                            if (style.BoxSizing == CssBoxSizing.BorderBox)
+                            {
+                                if (isColumn)
+                                {
+                                    calcSize -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
+                                }
+                                else
+                                {
+                                    calcSize -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
+                                }
+                                if (calcSize < 0)
+                                {
+                                    calcSize = 0;
+                                }
+                            }
+                            return calcSize;
+                        }
+                    }
+                    // Resolve deferred percentage (sentinel offset encoding)
+                    if (DeferredPercent.IsEncoded(size))
+                    {
+                        size = DeferredPercent.Resolve(size, isColumn ? containerHeight : containerWidth);
+                    }
+                    if (size >= 0)
+                    {
+                        // When box-sizing is border-box, the CSS width/height includes
+                        // padding and border. Flex base size must be content-box.
                         if (style.BoxSizing == CssBoxSizing.BorderBox)
                         {
                             if (isColumn)
                             {
-                                calcSize -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
+                                size -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
                             }
                             else
                             {
-                                calcSize -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
+                                size -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
                             }
-                            if (calcSize < 0)
+                            if (size < 0)
                             {
-                                calcSize = 0;
+                                size = 0;
                             }
                         }
-                        return calcSize;
+                        return size;
                     }
-                }
-                // Resolve deferred percentage (sentinel offset encoding)
-                if (DeferredPercent.IsEncoded(size))
-                {
-                    size = DeferredPercent.Resolve(size, isColumn ? containerHeight : containerWidth);
-                }
-                if (size >= 0)
-                {
-                    // When box-sizing is border-box, the CSS width/height includes
-                    // padding and border. Flex base size must be content-box.
-                    if (style.BoxSizing == CssBoxSizing.BorderBox)
-                    {
-                        if (isColumn)
-                        {
-                            size -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
-                        }
-                        else
-                        {
-                            size -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
-                        }
-                        if (size < 0)
-                        {
-                            size = 0;
-                        }
-                    }
-                    return size;
                 }
             }
 
@@ -1416,9 +1580,9 @@ namespace Rend.Layout.Internal
         }
 
         private static (float startOffset, float gap) ApplyJustifyContent(
-            CssJustifyContent justify, float freeSpace, int itemCount, bool hasGrow, float defaultGap)
+            CssJustifyContent justify, float freeSpace, int itemCount, float defaultGap)
         {
-            if (hasGrow || freeSpace <= 0)
+            if (freeSpace <= 0)
                 return (0, defaultGap);
 
             switch (justify)

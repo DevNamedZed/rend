@@ -511,6 +511,47 @@ namespace Rend.Layout.Internal
                     float x = parent.ContentRect.X + childBox.MarginLeft + childBox.BorderLeftWidth + childBox.PaddingLeft;
                     float y = cursorY + collapsedMargin + childBox.BorderTopWidth + childBox.PaddingTop;
 
+                    // CSS 2.1 §9.5: The border box of an element that establishes a
+                    // new block formatting context must not overlap the margin box of
+                    // any floats in the same BFC. If it has a specified width that
+                    // doesn't fit, move below. If auto width, shrink to fit beside.
+                    if (EstablishesNewBfc(childStyle))
+                    {
+                        float borderBoxY = y - childBox.PaddingTop - childBox.BorderTopWidth;
+                        float floatLeftEdge = floatCtx.GetLeftEdge(borderBoxY, 1);
+                        float floatRightEdge = floatCtx.GetRightEdge(borderBoxY, 1);
+                        float normalBorderBoxX = parent.ContentRect.X + childBox.MarginLeft;
+                        if (floatLeftEdge > normalBorderBoxX)
+                        {
+                            float availableWidth = floatRightEdge - floatLeftEdge;
+                            float horizontalSpacing = childBox.BorderLeftWidth + childBox.PaddingLeft
+                                + childBox.PaddingRight + childBox.BorderRightWidth;
+                            bool hasSpecifiedWidth = !float.IsNaN(childStyle.Width)
+                                && !SizingKeyword.IsSizingKeyword(childStyle.Width);
+                            float marginBoxWidth = childBox.MarginLeft + horizontalSpacing
+                                + contentWidth + childBox.MarginRight;
+                            if (hasSpecifiedWidth && marginBoxWidth > availableWidth)
+                            {
+                                float clearY = floatCtx.GetClearY(Css.CssClear.Both);
+                                if (clearY > borderBoxY)
+                                {
+                                    y = clearY + childBox.BorderTopWidth + childBox.PaddingTop;
+                                    cursorY = clearY - collapsedMargin;
+                                }
+                            }
+                            else
+                            {
+                                x = floatLeftEdge + childBox.BorderLeftWidth + childBox.PaddingLeft;
+                                float shrunkContent = availableWidth - horizontalSpacing
+                                    - childBox.MarginLeft - childBox.MarginRight;
+                                if (shrunkContent < contentWidth && shrunkContent > 0)
+                                {
+                                    contentWidth = shrunkContent;
+                                }
+                            }
+                        }
+                    }
+
                     childBox.ContentRect = new RectF(x, y, contentWidth, 0);
 
                     float contentHeight;
@@ -818,7 +859,8 @@ namespace Rend.Layout.Internal
                     if (HasBlockChildren(childElement)) return true;
                     continue;
                 }
-                if (display == CssDisplay.Block || display == CssDisplay.Flex ||
+                if (display == CssDisplay.Block || display == CssDisplay.FlowRoot ||
+                    display == CssDisplay.Flex ||
                     display == CssDisplay.Grid ||
                     display == CssDisplay.Table ||
                     display == CssDisplay.ListItem)
@@ -827,6 +869,31 @@ namespace Rend.Layout.Internal
             return false;
         }
 
+        /// <summary>
+        /// CSS 2.1 §9.5: Determines whether a style establishes a new block
+        /// formatting context. Such elements must not overlap floats.
+        /// </summary>
+        private static bool EstablishesNewBfc(ComputedStyle style)
+        {
+            if (style.Display == CssDisplay.Flex || style.Display == CssDisplay.InlineFlex ||
+                style.Display == CssDisplay.Grid || style.Display == CssDisplay.InlineGrid ||
+                style.Display == CssDisplay.Table ||
+                style.Display == CssDisplay.InlineBlock)
+            {
+                return true;
+            }
+            if (style.OverflowX != CssOverflow.Visible || style.OverflowY != CssOverflow.Visible)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// [CSS2 §10.6.7] Calculates auto height from children, line boxes, and floats.
+        /// For elements establishing a BFC, the height includes any floated descendants
+        /// whose bottom margin edge extends below the last child.
+        /// </summary>
         private static float CalculateAutoHeight(LayoutBox box)
         {
             float bottom = box.ContentRect.Y;
@@ -836,7 +903,10 @@ namespace Rend.Layout.Internal
             {
                 var lastLine = box.LineBoxes[box.LineBoxes.Count - 1];
                 float lineBottom = lastLine.Y + lastLine.Height;
-                if (lineBottom > bottom) bottom = lineBottom;
+                if (lineBottom > bottom)
+                {
+                    bottom = lineBottom;
+                }
             }
 
             // Check children (from BlockFormattingContext)
@@ -846,11 +916,30 @@ namespace Rend.Layout.Internal
                 var child = box.Children[i];
                 if (child.StyledNode is Style.StyledElement se &&
                     (se.Style.Position == Css.CssPosition.Absolute || se.Style.Position == Css.CssPosition.Fixed))
+                {
                     continue;
+                }
                 float childBottom = child.ContentRect.Y + child.ContentRect.Height
                                   + child.PaddingBottom + child.BorderBottomWidth + child.MarginBottom;
                 if (childBottom > bottom)
+                {
                     bottom = childBottom;
+                }
+
+                // [CSS2 §10.6.7] Include floated children's bottom edges.
+                // Floats are placed by FloatLayout but their height should be
+                // included in the containing BFC's auto height.
+                if (child.StyledNode is Style.StyledElement childSe &&
+                    childSe.Style.Float != Css.CssFloat.None)
+                {
+                    float floatBottom = child.ContentRect.Y + child.ContentRect.Height
+                                      + child.PaddingBottom + child.BorderBottomWidth
+                                      + child.MarginBottom;
+                    if (floatBottom > bottom)
+                    {
+                        bottom = floatBottom;
+                    }
+                }
             }
 
             return bottom - box.ContentRect.Y;

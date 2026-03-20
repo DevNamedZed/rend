@@ -39,8 +39,41 @@ namespace Rend.Layout.Internal
             }
             else if (float.IsNaN(specifiedWidth))
             {
-                // auto: fill containing block minus margins/padding/border
-                width = containingBlockWidth - BoxModelCalculator.GetHorizontalSpacing(box);
+                // [CSS-SIZING-4 §5.1] If width is auto and element has aspect-ratio
+                // with a definite height, compute width from the ratio.
+                // The ratio applies to the box dimensions determined by box-sizing:
+                // - content-box (default): width = contentHeight * ratio
+                // - border-box: widthBorderBox = heightBorderBox * ratio,
+                //   then subtract horizontal padding+border for content width.
+                float ratio = ParseAspectRatio(style);
+                float specHeight = style.Height;
+                if (ratio > 0 && !float.IsNaN(specHeight) && specHeight > 0
+                    && !DeferredPercent.IsEncoded(specHeight)
+                    && !float.IsNegativeInfinity(specHeight))
+                {
+                    if (style.BoxSizing == CssBoxSizing.BorderBox)
+                    {
+                        // Ratio applies to border box: widthBB = heightBB * ratio
+                        float widthBorderBox = specHeight * ratio;
+                        width = widthBorderBox
+                              - box.PaddingLeft - box.PaddingRight
+                              - box.BorderLeftWidth - box.BorderRightWidth;
+                        if (width < 0)
+                        {
+                            width = 0;
+                        }
+                    }
+                    else
+                    {
+                        // Ratio applies to content box: width = height * ratio
+                        width = specHeight * ratio;
+                    }
+                }
+                else
+                {
+                    // auto: fill containing block minus margins/padding/border
+                    width = containingBlockWidth - BoxModelCalculator.GetHorizontalSpacing(box);
+                }
             }
             else if (SizingKeyword.IsSizingKeyword(specifiedWidth))
             {
@@ -236,24 +269,63 @@ namespace Rend.Layout.Internal
             return ParseAspectRatio(style);
         }
 
+        /// <summary>
+        /// [CSS-SIZING-4 §5.1] Parses the aspect-ratio CSS value.
+        /// Supports: "auto", "16/9", "1.5", "auto 16/9" (auto + ratio).
+        /// Returns the ratio (width/height) or 0 if auto-only/unset.
+        /// </summary>
         private static float ParseAspectRatio(ComputedStyle style)
         {
             object? ratioRef = style.GetRefValue(PropertyId.AspectRatio);
-            if (ratioRef == null) return 0;
-
-            if (ratioRef is CssKeywordValue kw && kw.Keyword == "auto") return 0;
-
-            if (ratioRef is CssNumberValue num) return num.Value;
-
-            if (ratioRef is CssListValue list && list.Separator == ' ' && list.Values.Count >= 3)
+            if (ratioRef == null)
             {
-                // "16 / 9" parsed as space-separated list: [16, /, 9]
-                float w = GetNumericValue(list.Values[0]);
-                float h = GetNumericValue(list.Values[2]);
-                if (w > 0 && h > 0) return w / h;
+                return 0;
             }
 
-            if (ratioRef is CssDimensionValue dim) return dim.Value;
+            if (ratioRef is CssKeywordValue kw && kw.Keyword == "auto")
+            {
+                return 0;
+            }
+
+            if (ratioRef is CssNumberValue num)
+            {
+                return num.Value;
+            }
+
+            if (ratioRef is CssListValue list && list.Separator == ' ')
+            {
+                // Find the ratio part — skip "auto" keyword if present.
+                // Formats: "16 / 9", "auto 16 / 9", "auto 1.5"
+                int startIdx = 0;
+                if (list.Values.Count > 0 && list.Values[0] is CssKeywordValue autoKw
+                    && autoKw.Keyword == "auto")
+                {
+                    startIdx = 1;
+                }
+
+                if (list.Values.Count >= startIdx + 3)
+                {
+                    float w = GetNumericValue(list.Values[startIdx]);
+                    float h = GetNumericValue(list.Values[startIdx + 2]);
+                    if (w > 0 && h > 0)
+                    {
+                        return w / h;
+                    }
+                }
+                else if (list.Values.Count >= startIdx + 1)
+                {
+                    float v = GetNumericValue(list.Values[startIdx]);
+                    if (v > 0)
+                    {
+                        return v;
+                    }
+                }
+            }
+
+            if (ratioRef is CssDimensionValue dim)
+            {
+                return dim.Value;
+            }
 
             return 0;
         }

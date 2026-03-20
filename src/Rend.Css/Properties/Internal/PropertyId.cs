@@ -323,7 +323,22 @@ namespace Rend.Css.Properties.Internal
         public const int RubyPosition = 186;
         public const int RubyAlign = 187;
 
+        // Text breaking
+        public const int LineBreak = 188;
+
+        // Text emphasis
+        public const int TextEmphasisStyle = 189;
+        public const int TextEmphasisColor = 190;
+        public const int TextEmphasisPosition = 191;
+
+        // Text decoration extras
+        public const int TextDecorationSkipInk = 192;
+        public const int TextUnderlinePosition = 193;
+
+        // Line clamp
+        public const int WebkitLineClamp = 194;
+
         // Total count
-        public const int Count = 188;
+        public const int Count = 195;
     }
 }

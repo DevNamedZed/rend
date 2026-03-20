@@ -64,6 +64,7 @@ namespace Rend.Css.Parser.Internal
                 case "outline": return ExpandOutline(value, important, output);
 
                 case "text-decoration": return ExpandTextDecoration(value, important, output);
+                case "text-emphasis": return ExpandTwoValue(value, important, output, "text-emphasis-style", "text-emphasis-color");
 
                 case "columns": return ExpandColumns(value, important, output);
                 case "column-rule": return ExpandColumnRule(value, important, output);

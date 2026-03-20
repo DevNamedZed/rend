@@ -12,7 +12,10 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
     padding: 8px 16px; background: #181825; border-bottom: 1px solid #313244;
 }
 .toolbar h1 { font-size: 16px; font-weight: 600; color: #cba6f7; }
+.toolbar-left { display: flex; align-items: center; gap: 10px; }
 .toolbar-actions { display: flex; align-items: center; gap: 10px; }
+.github-link { color: #6c7086; transition: color 0.15s; display: flex; align-items: center; }
+.github-link:hover { color: #cdd6f4; }
 .toolbar select {
     background: #313244; color: #cdd6f4; border: 1px solid #45475a;
     padding: 6px 10px; border-radius: 6px; font-size: 13px;

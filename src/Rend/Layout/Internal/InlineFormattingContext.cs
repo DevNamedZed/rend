@@ -377,6 +377,23 @@ namespace Rend.Layout.Internal
                 ApplyEllipsis(lineBoxes, startX, containingWidth, context, styledElement.Style);
             }
 
+            // [CSS-OVERFLOW-4 §6] -webkit-line-clamp: truncate to N lines with ellipsis
+            float lineClampValue = styledElement.Style.WebkitLineClamp;
+            if (!float.IsNaN(lineClampValue) && lineClampValue > 0 && lineBoxes.Count > (int)lineClampValue)
+            {
+                int maxLines = (int)lineClampValue;
+                // Remove lines beyond the clamp
+                while (lineBoxes.Count > maxLines)
+                {
+                    lineBoxes.RemoveAt(lineBoxes.Count - 1);
+                }
+                // Add ellipsis to the last visible line
+                if (lineBoxes.Count > 0)
+                {
+                    ApplyEllipsis(lineBoxes, startX, containingWidth, context, styledElement.Style);
+                }
+            }
+
             // Apply text-wrap: balance — equalize line widths for short blocks (≤ 6 lines)
             if (styledElement.Style.TextWrap == CssTextWrap.Balance &&
                 lineBoxes.Count >= 2 && lineBoxes.Count <= 6)
