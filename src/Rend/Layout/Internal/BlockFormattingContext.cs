@@ -878,7 +878,8 @@ namespace Rend.Layout.Internal
             if (style.Display == CssDisplay.Flex || style.Display == CssDisplay.InlineFlex ||
                 style.Display == CssDisplay.Grid || style.Display == CssDisplay.InlineGrid ||
                 style.Display == CssDisplay.Table ||
-                style.Display == CssDisplay.InlineBlock)
+                style.Display == CssDisplay.InlineBlock ||
+                style.Display == CssDisplay.FlowRoot)
             {
                 return true;
             }

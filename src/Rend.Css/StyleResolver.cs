@@ -24,6 +24,7 @@ namespace Rend.Css
         private readonly List<CascadedDeclaration> _declarations = new List<CascadedDeclaration>();
         private readonly List<Stylesheet> _filteredSheets = new List<Stylesheet>();
         private bool _sheetsFiltered;
+        private float _rootFontSize;
 
         public StyleResolver(ISelectorMatcher matcher, StyleResolverOptions? options = null)
         {
@@ -35,6 +36,7 @@ namespace Rend.Css
                 PrefersReducedMotion = _options.PrefersReducedMotion
             };
             _collector = new CascadeCollector(_matcher);
+            _rootFontSize = _options.DefaultFontSize;
         }
 
         /// <summary>
@@ -92,6 +94,9 @@ namespace Rend.Css
             // 3. Inline styles (highest specificity for author origin)
             _collector.CollectInlineStyle(element, _declarations);
 
+            // 3.5. HTML presentational hints (author origin, specificity 0)
+            CollectPresentationalHints(element, _declarations);
+
             // 4. Resolve cascade winners
             var winners = CascadeSorter.ResolveWinners(_declarations);
 
@@ -99,13 +104,22 @@ namespace Rend.Css
             float parentFontSize = parentStyle?.FontSize ?? _options.DefaultFontSize;
             var ctx = new CssResolutionContext(
                 parentFontSize,
-                _options.DefaultFontSize,
+                _rootFontSize,
                 _options.ViewportWidth,
                 _options.ViewportHeight,
                 _options.ViewportWidth); // PercentBase: viewport width for percentage resolution
 
             var builder = new ComputedStyleBuilder(ctx);
-            return builder.Build(winners, parentStyle);
+            var computed = builder.Build(winners, parentStyle);
+
+            // [CSS-VALUES §6.1] Track root element's computed font-size for rem resolution.
+            // The root element (<html>) has no parent style.
+            if (parentStyle == null)
+            {
+                _rootFontSize = computed.FontSize;
+            }
+
+            return computed;
         }
 
         /// <summary>
@@ -157,6 +171,26 @@ namespace Rend.Css
 
             var builder = new ComputedStyleBuilder(ctx);
             return builder.Build(winners, elementStyle);
+        }
+
+        /// <summary>
+        /// HTML presentational hints: map HTML attributes (dir, align, etc.) to CSS declarations.
+        /// These have author origin but specificity 0, so any CSS rule overrides them.
+        /// </summary>
+        private static void CollectPresentationalHints(IStylableElement element, List<CascadedDeclaration> declarations)
+        {
+            // HTML dir attribute → CSS direction property
+            string? dir = element.GetAttribute("dir");
+            if (dir != null)
+            {
+                string dirLower = dir.ToLowerInvariant();
+                if (dirLower == "ltr" || dirLower == "rtl")
+                {
+                    var decl = new CssDeclaration("direction", new CssKeywordValue(dirLower));
+                    var priority = new CascadePriority(CascadeOrigin.Author, false, CssSpecificity.Zero, -1);
+                    declarations.Add(new CascadedDeclaration(decl, priority));
+                }
+            }
         }
 
         private Stylesheet GetFilteredUserAgentStylesheet()

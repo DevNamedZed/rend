@@ -175,6 +175,92 @@ namespace Rend.PdfRendering
             }
         }
 
+        private bool IsOptionalContentVisible(PdfObj ocEntry)
+        {
+            // [SPEC §8.11] Optional Content:
+            // /OC can be an OCG dict or OCMD dict.
+            // For screen rendering, check if the OCG is in the catalog's default "ON" list.
+            var ocType = _reader.Resolve(ocEntry["Type"]).AsName();
+
+            if (ocType == "OCMD" || ocType == "/OCMD")
+            {
+                // Optional Content Membership Dictionary — check referenced OCGs
+                var ocgs = _reader.Resolve(ocEntry["OCGs"]);
+                if (!ocgs.IsNull)
+                {
+                    // Check if the referenced OCG is visible
+                    PdfObj ocgToCheck = ocgs.IsArray ? (ocgs.Count > 0 ? _reader.Resolve(ocgs[0]) : PdfObj.Null) : _reader.Resolve(ocgs);
+                    return IsOcgVisible(ocgToCheck);
+                }
+                return true;
+            }
+
+            if (ocType == "OCG" || ocType == "/OCG")
+            {
+                return IsOcgVisible(ocEntry);
+            }
+
+            return true;
+        }
+
+        private bool IsOcgVisible(PdfObj ocgDict)
+        {
+            if (ocgDict.IsNull)
+            {
+                return true;
+            }
+
+            // Check the catalog's OCProperties/D/ON array
+            var catalog = _reader.Catalog;
+            var ocProperties = _reader.Resolve(catalog["OCProperties"]);
+            if (ocProperties.IsNull)
+            {
+                return true;
+            }
+
+            var defaultConfig = _reader.Resolve(ocProperties["D"]);
+            if (defaultConfig.IsNull)
+            {
+                return true;
+            }
+
+            // BaseState: "ON" (default) or "OFF"
+            string baseState = _reader.Resolve(defaultConfig["BaseState"]).AsName();
+            if (baseState == "OFF" || baseState == "/OFF")
+            {
+                // Check if this OCG is in the ON array
+                var onArray = _reader.Resolve(defaultConfig["ON"]);
+                if (onArray.IsNull || !onArray.IsArray)
+                {
+                    return false;
+                }
+                // Check if ocgDict's reference matches any in the ON array
+                for (int i = 0; i < onArray.Count; i++)
+                {
+                    if (_reader.Resolve(onArray[i]) == ocgDict)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            // BaseState is "ON" — check if this OCG is in the OFF array
+            var offArray = _reader.Resolve(defaultConfig["OFF"]);
+            if (!offArray.IsNull && offArray.IsArray)
+            {
+                for (int i = 0; i < offArray.Count; i++)
+                {
+                    if (_reader.Resolve(offArray[i]) == ocgDict)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
         private string ResolveColorSpaceName(string name, PdfObj pageDict)
         {
             // Standard device color spaces
@@ -1256,6 +1342,16 @@ namespace Rend.PdfRendering
         private void DrawFormXObject(SKCanvas canvas, GraphicsState state,
             Stack<GraphicsState> stateStack, PdfObj formDict, PdfObj pageDict)
         {
+            // [SPEC §8.11.4.2] Skip forms with Optional Content (OC) that are hidden
+            var optionalContent = _reader.Resolve(formDict["OC"]);
+            if (!optionalContent.IsNull)
+            {
+                if (!IsOptionalContentVisible(optionalContent))
+                {
+                    return;
+                }
+            }
+
             byte[] formData = _reader.GetStreamBytes(formDict);
             if (formData == null || formData.Length == 0)
             {

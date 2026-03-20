@@ -445,6 +445,12 @@ namespace Rend.Css
             get => (CssTextAlign)_values[PropertyId.TextAlignLast].IntValue;
         }
 
+        public CssTextJustify TextJustify
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssTextJustify)_values[PropertyId.TextJustify].IntValue;
+        }
+
         public CssTextDecorationLine TextDecorationLine
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]

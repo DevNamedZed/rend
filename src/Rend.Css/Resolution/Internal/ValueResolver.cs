@@ -48,10 +48,12 @@ namespace Rend.Css.Resolution.Internal
                         result = PropertyValue.FromLength(DeferredPercent.Encode(pctDeferred.Value / 100f));
                         return true;
                     }
-                    // Defer calc() expressions that contain percentages for properties
-                    // that resolve against the containing block (not the viewport).
+                    // Defer calc/min/max/clamp expressions that contain percentages for
+                    // properties that resolve against the containing block (not the viewport).
                     // Store the raw CssFunctionValue in refResult and use a sentinel float.
-                    if (value is CssFunctionValue calcFn && calcFn.Name == "calc"
+                    if (value is CssFunctionValue calcFn
+                        && (calcFn.Name == "calc" || calcFn.Name == "min"
+                            || calcFn.Name == "max" || calcFn.Name == "clamp")
                         && IsDeferredPercentageProperty(prop.Id)
                         && CalcContainsPercentage(calcFn.Arguments))
                     {
@@ -66,8 +68,22 @@ namespace Rend.Css.Resolution.Internal
 
                 case PropertyValueType.Number:
                     if (prop.Id == PropertyId.LineHeight)
+                    {
                         return TryResolveLineHeight(value, ctx, out result);
-                    return TryResolveNumber(value, out result);
+                    }
+                    if (TryResolveNumber(value, out result))
+                    {
+                        // [CSS-FLEXBOX §7.2/§7.3] flex-grow and flex-shrink must be non-negative.
+                        // [CSS-COLOR §3.2] opacity must be in [0,1] but clamps, not rejects.
+                        if ((prop.Id == PropertyId.FlexGrow || prop.Id == PropertyId.FlexShrink)
+                            && result.FloatValue < 0)
+                        {
+                            result = default;
+                            return false;
+                        }
+                        return true;
+                    }
+                    return false;
 
                 case PropertyValueType.Keyword:
                     // BUG-051: For comma-separated keyword lists (multi-layer backgrounds),
@@ -446,6 +462,7 @@ namespace Rend.Css.Resolution.Internal
                 case PropertyId.FontStyle: return TryMapFontStyle(keyword, out result);
                 case PropertyId.TextAlign: return TryMapTextAlign(keyword, out result);
                 case PropertyId.TextAlignLast: return TryMapTextAlign(keyword, out result);
+                case PropertyId.TextJustify: return TryMapTextJustify(keyword, out result);
                 case PropertyId.TextTransform: return TryMapTextTransform(keyword, out result);
                 case PropertyId.WhiteSpace: return TryMapWhiteSpace(keyword, out result);
                 case PropertyId.WordBreak: return TryMapWordBreak(keyword, out result);
@@ -905,14 +922,13 @@ namespace Rend.Css.Resolution.Internal
         }
 
         /// <summary>
-        /// Evaluates a deferred calc() expression at layout time with the correct
-        /// containing block width as the percentage base.
+        /// Evaluates a deferred calc/min/max/clamp expression at layout time with
+        /// the correct containing block width as the percentage base.
         /// </summary>
         public static float EvaluateDeferredCalc(CssFunctionValue calcFn, float containingBlockWidth)
         {
-            // Create a minimal resolution context with the correct percent base
             var ctx = new CssResolutionContext(16f, 16f, containingBlockWidth, 0, containingBlockWidth);
-            return EvaluateCalc(calcFn.Arguments, ctx);
+            return EvaluateMathFunction(calcFn, ctx);
         }
 
         #endregion
@@ -1071,6 +1087,20 @@ namespace Rend.Css.Resolution.Internal
                 case "start": result = PropertyValue.FromKeyword((int)CssTextAlign.Start); return true;
                 case "end": result = PropertyValue.FromKeyword((int)CssTextAlign.End); return true;
                 case "auto": result = PropertyValue.FromKeyword((int)CssTextAlign.Auto); return true;
+                case "justify-all": result = PropertyValue.FromKeyword((int)CssTextAlign.JustifyAll); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapTextJustify(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "auto": result = PropertyValue.FromKeyword((int)CssTextJustify.Auto); return true;
+                case "none": result = PropertyValue.FromKeyword((int)CssTextJustify.None); return true;
+                case "inter-word": result = PropertyValue.FromKeyword((int)CssTextJustify.InterWord); return true;
+                case "inter-character": result = PropertyValue.FromKeyword((int)CssTextJustify.InterCharacter); return true;
                 default: return false;
             }
         }

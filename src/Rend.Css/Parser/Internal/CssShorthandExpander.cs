@@ -583,28 +583,38 @@ namespace Rend.Css.Parser.Internal
 
             var grow = new CssNumberValue(0, true) as CssValue;
             var shrink = new CssNumberValue(1, true) as CssValue;
-            var basis = new CssKeywordValue("auto") as CssValue;
+            CssValue? explicitBasis = null;
 
             int numIdx = 0;
             foreach (var p in parts)
             {
                 if (p is CssNumberValue || (p is CssKeywordValue k2 && k2.Keyword == "0"))
                 {
-                    if (numIdx == 0) grow = p;
-                    else if (numIdx == 1) shrink = p;
+                    if (numIdx == 0) { grow = p; }
+                    else if (numIdx == 1) { shrink = p; }
                     numIdx++;
                 }
                 else if (p is CssDimensionValue || p is CssPercentageValue ||
                          (p is CssKeywordValue kv && (kv.Keyword == "auto" || kv.Keyword == "content")))
                 {
-                    basis = p;
+                    explicitBasis = p;
                 }
             }
 
-            // If only a single unitless number: flex-grow with flex-basis 0
-            if (parts.Count == 1 && (parts[0] is CssNumberValue))
+            // [CSS-FLEXBOX §7.1.1] When flex shorthand provides numeric values
+            // without an explicit basis, flex-basis defaults to 0 (not auto).
+            CssValue basis;
+            if (explicitBasis != null)
+            {
+                basis = explicitBasis;
+            }
+            else if (numIdx > 0)
             {
                 basis = new CssDimensionValue(0, "px");
+            }
+            else
+            {
+                basis = new CssKeywordValue("auto");
             }
 
             output.Add(new CssDeclaration("flex-grow", grow, important));

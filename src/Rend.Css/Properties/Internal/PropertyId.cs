@@ -338,7 +338,10 @@ namespace Rend.Css.Properties.Internal
         // Line clamp
         public const int WebkitLineClamp = 194;
 
+        // Text justify
+        public const int TextJustify = 195;
+
         // Total count
-        public const int Count = 195;
+        public const int Count = 196;
     }
 }

@@ -130,6 +130,7 @@ namespace Rend.Css.Properties.Internal
             Register(byName, "word-spacing", PropertyId.WordSpacing, true, PropertyValueType.Length);
             Register(byName, "text-align", PropertyId.TextAlign, true, PropertyValueType.Keyword);
             Register(byName, "text-align-last", PropertyId.TextAlignLast, true, PropertyValueType.Keyword);
+            Register(byName, "text-justify", PropertyId.TextJustify, true, PropertyValueType.Keyword);
             Register(byName, "text-decoration-line", PropertyId.TextDecoration_Line, false, PropertyValueType.Keyword);
             Register(byName, "text-decoration-style", PropertyId.TextDecoration_Style, false, PropertyValueType.Keyword);
             Register(byName, "text-decoration-color", PropertyId.TextDecoration_Color, false, PropertyValueType.Color);

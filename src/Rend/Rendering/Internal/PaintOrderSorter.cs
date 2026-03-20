@@ -99,18 +99,16 @@ namespace Rend.Rendering.Internal
                              floats.Count + inlines.Count +
                              positionedZeroAuto.Count + positiveZIndex.Count;
 
-            // CSS Flexbox §5.4: flex items paint in order-modified document order
-            // instead of raw document order. Sort by CSS 'order' property.
+            // [CSS-FLEXBOX §5.4] Flex items paint in order-modified document order.
+            // Only non-positioned flex items use 'order' for paint ordering.
+            // Absolutely positioned children of flex containers are NOT flex items
+            // and paint in raw document order.
             bool isFlexParent = root.BoxType == BoxType.Flex;
             if (isFlexParent)
             {
                 if (blockNonPositioned.Count > 1)
                 {
                     blockNonPositioned.Sort(CompareByOrder);
-                }
-                if (positionedZeroAuto.Count > 1)
-                {
-                    positionedZeroAuto.Sort(CompareByOrder);
                 }
             }
 

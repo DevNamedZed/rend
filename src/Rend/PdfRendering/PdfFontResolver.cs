@@ -77,25 +77,19 @@ namespace Rend.PdfRendering
                 }
                 if (fontData != null && fontData.Length > 0)
                 {
-                    // Try loading directly (works for TrueType/OpenType)
-                    try
+                    using var skData = SKData.CreateCopy(fontData);
+                    var typeface = SKTypeface.FromData(skData);
+                    if (typeface != null)
                     {
-                        using var skData = SKData.CreateCopy(fontData);
-                        var typeface = SKTypeface.FromData(skData);
-                        if (typeface != null)
-                        {
-                            typefaceCache[cacheKey] = typeface;
-                            state.Typeface = typeface;
-                            return;
-                        }
-                    }
-                    catch
-                    {
+                        typefaceCache[cacheKey] = typeface;
+                        state.Typeface = typeface;
+                        return;
                     }
 
-                    // Type1→CFF converter: infrastructure done (PFA parser, eexec decrypt,
-                    // CFF builder, SFNT wrapper). Disabled until CharString operator
-                    // translation is implemented (Type1 hsbw/sbw → CFF hmoveto/vmoveto).
+                    // Type1→CFF converter: Subrs extraction added but CharString translation
+                    // still produces broken glyphs. Needs debugging of CFF Private DICT Subrs
+                    // offset and callsubr bias. Infrastructure is complete — just needs format
+                    // validation. See spec/reader_investigations/type1-converter-status.md
                 }
 
                 isSystemFallback = true;

@@ -352,7 +352,7 @@ namespace Rend.Layout.Internal
                 currentLine.IsLastLine = true;
                 FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, styledElement.Style.TextAlign,
                                 styledElement.Style.TextAlignLast, styledElement.Style.Direction,
-                                styledElement.Style.FontSize);
+                                styledElement.Style.FontSize, styledElement.Style.TextJustify);
                 lineBoxes.Add(currentLine);
             }
 
@@ -2096,7 +2096,7 @@ namespace Rend.Layout.Internal
 
         private static void FinalizeLineBox(LineBox line, float height, float baseline, CssTextAlign textAlign,
             CssTextAlign textAlignLast = CssTextAlign.Auto, CssDirection direction = CssDirection.Ltr,
-            float parentFontSize = 14f)
+            float parentFontSize = 14f, CssTextJustify textJustify = CssTextJustify.Auto)
         {
             float h = height > 0 ? height : 16f;
             // Chrome uses LayoutUnit internally (1/64th pixel precision, truncated).
@@ -2257,9 +2257,19 @@ namespace Rend.Layout.Internal
 
             // Apply text-align (for last lines, use text-align-last if set)
             CssTextAlign effectiveAlign = textAlign;
-            if (line.IsLastLine && textAlignLast != CssTextAlign.Auto)
+            if (line.IsLastLine)
             {
-                effectiveAlign = textAlignLast;
+                if (textAlignLast != CssTextAlign.Auto)
+                {
+                    effectiveAlign = textAlignLast;
+                }
+                else if (textAlign == CssTextAlign.Justify)
+                {
+                    // CSS Text Level 3 §7.4: when text-align-last is auto and text-align
+                    // is justify, last line alignment is start (not justify)
+                    effectiveAlign = CssTextAlign.Start;
+                }
+                // justify-all: last line stays as justify (no override needed)
             }
 
             float freeSpace = line.Width - contentWidth;
@@ -2268,9 +2278,13 @@ namespace Rend.Layout.Internal
             // Resolve direction-dependent Start/End to physical Left/Right
             CssTextAlign resolved = effectiveAlign;
             if (resolved == CssTextAlign.Start)
+            {
                 resolved = direction == CssDirection.Rtl ? CssTextAlign.Right : CssTextAlign.Left;
+            }
             else if (resolved == CssTextAlign.End)
+            {
                 resolved = direction == CssDirection.Rtl ? CssTextAlign.Left : CssTextAlign.Right;
+            }
 
             float offset = 0;
             switch (resolved)
@@ -2282,8 +2296,19 @@ namespace Rend.Layout.Internal
                     offset = freeSpace;
                     break;
                 case CssTextAlign.Justify:
-                    // Distribute space across word gaps (only non-last lines)
-                    if (!line.IsLastLine)
+                case CssTextAlign.JustifyAll:
+                    // CSS Text Level 3 §7.5: text-justify:none disables all justification
+                    if (textJustify == CssTextJustify.None)
+                    {
+                        return;
+                    }
+                    // CSS Text Level 3 §7.4: justify distributes space on non-last lines.
+                    // Last line is only justified when text-align-last explicitly says so,
+                    // or text-align is justify-all.
+                    bool shouldJustify = !line.IsLastLine
+                        || textAlignLast == CssTextAlign.Justify
+                        || textAlign == CssTextAlign.JustifyAll;
+                    if (shouldJustify)
                     {
                         // Count total word gaps (spaces) across all text fragments.
                         // BUG-059: Also check ShapedRun.OriginalText when frag.Text is null

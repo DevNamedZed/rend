@@ -80,6 +80,22 @@ namespace Rend.Layout.Internal
             float w = box.ContentRect.Width;
             float h = box.ContentRect.Height;
 
+            // [CSS2 §10.5] Re-resolve percentage height against the containing block's
+            // now-known height. During initial layout, the CB height may have been 0/NaN.
+            if (h <= 0 && DeferredPercent.IsEncoded(style.Height))
+            {
+                float cbHeight = cb.Height;
+                if (cbHeight > 0)
+                {
+                    h = DeferredPercent.Resolve(style.Height, cbHeight);
+                    if (style.BoxSizing == CssBoxSizing.BorderBox)
+                    {
+                        h -= box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth;
+                        if (h < 0) { h = 0; }
+                    }
+                }
+            }
+
             // Horizontal: CSS 2.1 §10.3.7
             bool hasWidth = !float.IsNaN(style.Width);
             if (!float.IsNaN(left) && !float.IsNaN(right))

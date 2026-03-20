@@ -41,10 +41,9 @@ namespace Rend.Layout.Internal
             {
                 // [CSS-SIZING-4 §5.1] If width is auto and element has aspect-ratio
                 // with a definite height, compute width from the ratio.
-                // The ratio applies to the box dimensions determined by box-sizing:
                 // - content-box (default): width = contentHeight * ratio
                 // - border-box: widthBorderBox = heightBorderBox * ratio,
-                //   then subtract horizontal padding+border for content width.
+                //   then subtract horizontal padding+border for content width
                 float ratio = ParseAspectRatio(style);
                 float specHeight = style.Height;
                 if (ratio > 0 && !float.IsNaN(specHeight) && specHeight > 0
@@ -53,7 +52,9 @@ namespace Rend.Layout.Internal
                 {
                     if (style.BoxSizing == CssBoxSizing.BorderBox)
                     {
-                        // Ratio applies to border box: widthBB = heightBB * ratio
+                        // [CSS-SIZING-4 §5.1] Ratio applies to border box dimensions.
+                        // Compute border-box width from border-box height, then subtract
+                        // horizontal padding+border for content width.
                         float widthBorderBox = specHeight * ratio;
                         width = widthBorderBox
                               - box.PaddingLeft - box.PaddingRight
@@ -65,7 +66,7 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
-                        // Ratio applies to content box: width = height * ratio
+                        // Content-box: ratio applies to content dimensions directly
                         width = specHeight * ratio;
                     }
                 }

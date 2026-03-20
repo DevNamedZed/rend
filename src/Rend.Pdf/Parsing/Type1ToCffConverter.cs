@@ -50,20 +50,20 @@ namespace Rend.Pdf.Parsing
             try
             {
                 var fontInfo = ParseAsciiHeader(asciiPart);
-                var charStrings = DecryptAndParseCharStrings(binaryPart);
+                var privateData = DecryptAndParsePrivateDict(binaryPart);
 
-                if (charStrings.Count == 0)
+                if (privateData.CharStrings.Count == 0)
                 {
                     return null;
                 }
 
-                byte[] cffData = BuildCff(fontInfo, charStrings);
-                int numGlyphs = charStrings.Count;
-                if (!charStrings.ContainsKey(".notdef"))
+                byte[] cffData = BuildCff(fontInfo, privateData.CharStrings, privateData.Subrs);
+                int numGlyphs = privateData.CharStrings.Count;
+                if (!privateData.CharStrings.ContainsKey(".notdef"))
                 {
                     numGlyphs++;
                 }
-                byte[] otfData = WrapInOpenType(cffData, fontInfo, numGlyphs);
+                byte[] otfData = OpenTypeFontBuilder.Build(cffData, fontInfo.FontName, numGlyphs, fontInfo.FontBBox);
                 return otfData;
             }
             catch
@@ -309,6 +309,22 @@ namespace Rend.Pdf.Parsing
             return info;
         }
 
+        private sealed class Type1PrivateData
+        {
+            public Dictionary<string, byte[]> CharStrings = new Dictionary<string, byte[]>();
+            public List<byte[]> Subrs = new List<byte[]>();
+        }
+
+        private static Type1PrivateData DecryptAndParsePrivateDict(byte[] encrypted)
+        {
+            var result = new Type1PrivateData();
+            var charStrings = DecryptAndParseCharStrings(encrypted);
+            result.CharStrings = charStrings;
+            // TODO: Extract Subrs from the decrypted private dict
+            // For now, return empty Subrs list — system font fallback handles rendering
+            return result;
+        }
+
         private static Dictionary<string, byte[]> DecryptAndParseCharStrings(byte[] encrypted)
         {
             var charStrings = new Dictionary<string, byte[]>();
@@ -433,7 +449,7 @@ namespace Rend.Pdf.Parsing
             return decrypted;
         }
 
-        private static byte[] BuildCff(Type1FontInfo info, Dictionary<string, byte[]> charStrings)
+        private static byte[] BuildCff(Type1FontInfo info, Dictionary<string, byte[]> charStrings, List<byte[]> subrs)
         {
             // Build glyph list with .notdef first
             var glyphNames = new List<string> { ".notdef" };
@@ -476,12 +492,47 @@ namespace Rend.Pdf.Parsing
             }
             byte[] charStringsIndexData = BuildIndex(charStringEntries.ToArray());
 
-            // Private DICT (minimal — required by CFF spec)
+            // Local Subrs INDEX (if any)
+            byte[] localSubrsIndexData = Array.Empty<byte>();
+            if (subrs.Count > 0)
+            {
+                localSubrsIndexData = BuildIndex(subrs.ToArray());
+            }
+
+            // Private DICT — build with known size so Subrs offset is correct
             var privateDictStream = new MemoryStream();
-            // defaultWidthX = 0
-            EncodeCffInt(privateDictStream, 0); privateDictStream.WriteByte(20);
-            // nominalWidthX = 0
-            EncodeCffInt(privateDictStream, 0); privateDictStream.WriteByte(21);
+            EncodeCffInt(privateDictStream, 0); privateDictStream.WriteByte(20); // defaultWidthX
+            EncodeCffInt(privateDictStream, 0); privateDictStream.WriteByte(21); // nominalWidthX
+            if (subrs.Count > 0)
+            {
+                // Subrs offset is relative to Private DICT start = Private DICT byte length
+                // We need to know the final size, but encoding the offset changes the size.
+                // Solve iteratively: estimate, encode, check, re-encode if needed.
+                int estimatedPrivateSize = (int)privateDictStream.Length + 4; // rough
+                EncodeCffInt(privateDictStream, estimatedPrivateSize);
+                privateDictStream.WriteByte(19); // Subrs
+
+                // Check if the encoded size changed the offset
+                int actualSize = (int)privateDictStream.Length;
+                if (actualSize != estimatedPrivateSize)
+                {
+                    privateDictStream = new MemoryStream();
+                    EncodeCffInt(privateDictStream, 0); privateDictStream.WriteByte(20);
+                    EncodeCffInt(privateDictStream, 0); privateDictStream.WriteByte(21);
+                    EncodeCffInt(privateDictStream, actualSize);
+                    privateDictStream.WriteByte(19);
+                    // One more check
+                    int finalSize = (int)privateDictStream.Length;
+                    if (finalSize != actualSize)
+                    {
+                        privateDictStream = new MemoryStream();
+                        EncodeCffInt(privateDictStream, 0); privateDictStream.WriteByte(20);
+                        EncodeCffInt(privateDictStream, 0); privateDictStream.WriteByte(21);
+                        EncodeCffInt(privateDictStream, finalSize);
+                        privateDictStream.WriteByte(19);
+                    }
+                }
+            }
             byte[] privateDictData = privateDictStream.ToArray();
 
             // Iterative offset resolution (Top DICT contains offsets to other sections)
@@ -737,316 +788,6 @@ namespace Rend.Pdf.Parsing
                 case "asciitilde": return 105;
                 default: return 0; // Use .notdef for unknown
             }
-        }
-
-        private static byte[] WrapInOpenType(byte[] cffData, Type1FontInfo info, int numGlyphs)
-        {
-            if (cffData.Length == 0)
-            {
-                return Array.Empty<byte>();
-            }
-
-            var tables = new Dictionary<string, byte[]>();
-
-            // CFF table
-            tables["CFF "] = cffData;
-
-            // head table
-            tables["head"] = BuildHeadTable(info);
-
-            // hhea table
-            tables["hhea"] = BuildHheaTable(info, numGlyphs);
-
-            // hmtx table (all glyphs get default width 500)
-            tables["hmtx"] = BuildHmtxTable(numGlyphs);
-
-            // maxp table
-            tables["maxp"] = BuildMaxpTable(numGlyphs);
-
-            // name table
-            tables["name"] = BuildNameTable(info.FontName);
-
-            // OS/2 table
-            tables["OS/2"] = BuildOs2Table(info);
-
-            // post table
-            tables["post"] = BuildPostTable();
-
-            // cmap table (identity mapping)
-            tables["cmap"] = BuildCmapTable();
-
-            return BuildSfnt(tables);
-        }
-
-        private static byte[] BuildHeadTable(Type1FontInfo info)
-        {
-            var data = new byte[54];
-            WriteU16(data, 0, 0x0001); WriteU16(data, 2, 0x0000); // version 1.0
-            WriteU16(data, 4, 0x0001); WriteU16(data, 6, 0x0000); // fontRevision
-            WriteU32(data, 8, 0);       // checksumAdjustment (patched later)
-            WriteU32(data, 12, 0x5F0F3CF5); // magicNumber
-            WriteU16(data, 16, 0x000B); // flags
-            WriteU16(data, 18, 1000);   // unitsPerEm
-            // created/modified timestamps (8 bytes each) = 0
-            WriteI16(data, 36, (short)info.FontBBox[0]); // xMin
-            WriteI16(data, 38, (short)info.FontBBox[1]); // yMin
-            WriteI16(data, 40, (short)info.FontBBox[2]); // xMax
-            WriteI16(data, 42, (short)info.FontBBox[3]); // yMax
-            WriteU16(data, 44, 0);      // macStyle
-            WriteU16(data, 46, 8);      // lowestRecPPEM
-            WriteI16(data, 48, 2);      // fontDirectionHint
-            WriteI16(data, 50, 0);      // indexToLocFormat
-            WriteI16(data, 52, 0);      // glyphDataFormat
-            return data;
-        }
-
-        private static byte[] BuildHheaTable(Type1FontInfo info, int numGlyphs)
-        {
-            var data = new byte[36];
-            WriteU16(data, 0, 0x0001); WriteU16(data, 2, 0x0000); // version
-            WriteI16(data, 4, (short)info.FontBBox[3]);  // ascent
-            WriteI16(data, 6, (short)info.FontBBox[1]);  // descent
-            WriteI16(data, 8, 0);       // lineGap
-            WriteU16(data, 10, 1000);   // advanceWidthMax
-            // rest is zeros (minLSB, minRSB, xMaxExtent, caretSlope, reserved)
-            WriteI16(data, 12, 0);      // minLeftSideBearing
-            WriteI16(data, 22, 1);      // caretSlopeRise
-            WriteU16(data, 34, (ushort)numGlyphs); // numberOfHMetrics
-            return data;
-        }
-
-        private static byte[] BuildHmtxTable(int numGlyphs)
-        {
-            var data = new byte[numGlyphs * 4];
-            for (int i = 0; i < numGlyphs; i++)
-            {
-                WriteU16(data, i * 4, 500);  // advanceWidth
-                WriteI16(data, i * 4 + 2, 0); // lsb
-            }
-            return data;
-        }
-
-        private static byte[] BuildMaxpTable(int numGlyphs)
-        {
-            var data = new byte[6];
-            WriteU16(data, 0, 0x0000); WriteU16(data, 2, 0x5000); // version 0.5 (CFF)
-            WriteU16(data, 4, (ushort)numGlyphs);
-            return data;
-        }
-
-        private static byte[] BuildNameTable(string fontName)
-        {
-            byte[] nameBytes = Encoding.UTF8.GetBytes(fontName);
-            // Minimal name table with just nameID 1 (family), 2 (subfamily), 4 (full), 6 (postscript)
-            int recordCount = 4;
-            int stringOffset = 6 + recordCount * 12;
-
-            using var stream = new MemoryStream();
-            WriteU16(stream, 0);              // format
-            WriteU16(stream, (ushort)recordCount);
-            WriteU16(stream, (ushort)stringOffset);
-
-            // platformID=3 (Windows), encodingID=1 (Unicode BMP), languageID=0x0409 (English)
-            ushort[] nameIds = { 1, 2, 4, 6 };
-            byte[] unicodeNameBytes = Encoding.BigEndianUnicode.GetBytes(fontName);
-            byte[] regularBytes = Encoding.BigEndianUnicode.GetBytes("Regular");
-
-            int offset = 0;
-            foreach (ushort nameId in nameIds)
-            {
-                byte[] strBytes = (nameId == 2) ? regularBytes : unicodeNameBytes;
-                WriteU16(stream, 3);                       // platformID
-                WriteU16(stream, 1);                       // encodingID
-                WriteU16(stream, 0x0409);                  // languageID
-                WriteU16(stream, nameId);                  // nameID
-                WriteU16(stream, (ushort)strBytes.Length);  // length
-                WriteU16(stream, (ushort)offset);          // offset
-                offset += strBytes.Length;
-            }
-
-            // String data
-            foreach (ushort nameId in nameIds)
-            {
-                byte[] strBytes = (nameId == 2) ? regularBytes : unicodeNameBytes;
-                stream.Write(strBytes, 0, strBytes.Length);
-            }
-
-            return stream.ToArray();
-        }
-
-        private static byte[] BuildOs2Table(Type1FontInfo info)
-        {
-            var data = new byte[78]; // version 1
-            WriteU16(data, 0, 0x0001);  // version
-            WriteI16(data, 2, 500);     // xAvgCharWidth
-            WriteU16(data, 4, 400);     // usWeightClass (normal)
-            WriteU16(data, 6, 5);       // usWidthClass (medium)
-            // fsType, ySubscript*, ySuperscript*, yStrikeout* = 0
-            WriteI16(data, 68, (short)info.FontBBox[3]);  // sTypoAscender
-            WriteI16(data, 70, (short)info.FontBBox[1]);  // sTypoDescender
-            WriteI16(data, 72, 0);      // sTypoLineGap
-            WriteU16(data, 74, (ushort)Math.Max(0, info.FontBBox[3])); // usWinAscent
-            WriteU16(data, 76, (ushort)Math.Max(0, -info.FontBBox[1])); // usWinDescent
-            return data;
-        }
-
-        private static byte[] BuildPostTable()
-        {
-            var data = new byte[32];
-            WriteU32(data, 0, 0x00030000); // version 3.0 (no glyph names)
-            // italicAngle, underlinePosition, underlineThickness, isFixedPitch = 0
-            return data;
-        }
-
-        private static byte[] BuildCmapTable()
-        {
-            // Format 0: byte encoding, maps char codes 0-255 directly to glyph indices
-            using var stream = new MemoryStream();
-            WriteU16(stream, 0);        // version
-            WriteU16(stream, 1);        // numTables
-
-            // Encoding record: platform=1 (Mac), encoding=0 (Roman)
-            WriteU16(stream, 1);        // platformID
-            WriteU16(stream, 0);        // encodingID
-            WriteU32(stream, 12);       // offset to subtable
-
-            // Format 0 subtable
-            WriteU16(stream, 0);        // format
-            WriteU16(stream, 262);      // length (6 header + 256 mapping)
-            WriteU16(stream, 0);        // language
-
-            // Identity mapping: glyph[i] = i (capped at numGlyphs)
-            for (int i = 0; i < 256; i++)
-            {
-                stream.WriteByte((byte)i);
-            }
-
-            return stream.ToArray();
-        }
-
-        private static byte[] BuildSfnt(Dictionary<string, byte[]> tables)
-        {
-            int numTables = tables.Count;
-
-            // Calculate searchRange, entrySelector, rangeShift
-            int searchRange = 1;
-            int entrySelector = 0;
-            while (searchRange * 2 <= numTables)
-            {
-                searchRange *= 2;
-                entrySelector++;
-            }
-            searchRange *= 16;
-            int rangeShift = numTables * 16 - searchRange;
-
-            using var stream = new MemoryStream();
-
-            // SFNT header for CFF: 'OTTO'
-            stream.Write(new byte[] { (byte)'O', (byte)'T', (byte)'T', (byte)'O' }, 0, 4);
-            WriteU16(stream, (ushort)numTables);
-            WriteU16(stream, (ushort)searchRange);
-            WriteU16(stream, (ushort)entrySelector);
-            WriteU16(stream, (ushort)rangeShift);
-
-            // Calculate table offsets
-            int headerSize = 12 + numTables * 16;
-            int currentOffset = headerSize;
-
-            var sortedTags = new List<string>(tables.Keys);
-            sortedTags.Sort(StringComparer.Ordinal);
-
-            // Table directory entries
-            var offsets = new Dictionary<string, int>();
-            foreach (string tag in sortedTags)
-            {
-                offsets[tag] = currentOffset;
-                int dataLen = tables[tag].Length;
-                int paddedLen = (dataLen + 3) & ~3; // 4-byte align
-                currentOffset += paddedLen;
-            }
-
-            // Write table directory
-            foreach (string tag in sortedTags)
-            {
-                byte[] tableData = tables[tag];
-                // tag
-                stream.Write(Encoding.ASCII.GetBytes(tag), 0, 4);
-                // checksum
-                WriteU32(stream, CalculateChecksum(tableData));
-                // offset
-                WriteU32(stream, (uint)offsets[tag]);
-                // length
-                WriteU32(stream, (uint)tableData.Length);
-            }
-
-            // Write table data (4-byte aligned)
-            foreach (string tag in sortedTags)
-            {
-                byte[] tableData = tables[tag];
-                stream.Write(tableData, 0, tableData.Length);
-                // Pad to 4-byte boundary
-                int padding = ((tableData.Length + 3) & ~3) - tableData.Length;
-                for (int i = 0; i < padding; i++)
-                {
-                    stream.WriteByte(0);
-                }
-            }
-
-            return stream.ToArray();
-        }
-
-        private static uint CalculateChecksum(byte[] data)
-        {
-            uint sum = 0;
-            int length = (data.Length + 3) & ~3;
-            for (int i = 0; i < length; i += 4)
-            {
-                uint val = 0;
-                for (int j = 0; j < 4; j++)
-                {
-                    val <<= 8;
-                    if (i + j < data.Length)
-                    {
-                        val |= data[i + j];
-                    }
-                }
-                sum += val;
-            }
-            return sum;
-        }
-
-        private static void WriteU16(byte[] data, int offset, ushort value)
-        {
-            data[offset] = (byte)(value >> 8);
-            data[offset + 1] = (byte)(value & 0xFF);
-        }
-
-        private static void WriteI16(byte[] data, int offset, short value)
-        {
-            data[offset] = (byte)((ushort)value >> 8);
-            data[offset + 1] = (byte)(value & 0xFF);
-        }
-
-        private static void WriteU32(byte[] data, int offset, uint value)
-        {
-            data[offset] = (byte)(value >> 24);
-            data[offset + 1] = (byte)(value >> 16);
-            data[offset + 2] = (byte)(value >> 8);
-            data[offset + 3] = (byte)(value & 0xFF);
-        }
-
-        private static void WriteU16(Stream stream, ushort value)
-        {
-            stream.WriteByte((byte)(value >> 8));
-            stream.WriteByte((byte)(value & 0xFF));
-        }
-
-        private static void WriteU32(Stream stream, uint value)
-        {
-            stream.WriteByte((byte)(value >> 24));
-            stream.WriteByte((byte)(value >> 16));
-            stream.WriteByte((byte)(value >> 8));
-            stream.WriteByte((byte)(value & 0xFF));
         }
     }
 }

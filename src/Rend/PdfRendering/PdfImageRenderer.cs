@@ -30,7 +30,7 @@ namespace Rend.PdfRendering
                     deflate.CopyTo(output);
                     pixelData = output.ToArray();
                 }
-                catch
+                catch (InvalidDataException)
                 {
                     return;
                 }

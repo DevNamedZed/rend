@@ -10,6 +10,8 @@ namespace Rend.Css
         Start,
         End,
         /// <summary>Only used for text-align-last: auto (inherit from text-align).</summary>
-        Auto
+        Auto,
+        /// <summary>CSS Text Level 3: justify all lines including the last line.</summary>
+        JustifyAll
     }
 }
