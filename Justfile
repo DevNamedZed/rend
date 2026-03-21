@@ -38,7 +38,7 @@ conformance:
 visual-build:
     {{dotnet}} build conformance/Rend.VisualRegression/Rend.VisualRegression.csproj -c Release
 
-vr-exe := "conformance/Rend.VisualRegression/bin/Release/net8.0/Rend.VisualRegression.exe"
+vr-exe := "conformance\\Rend.VisualRegression\\bin\\Release\\net8.0\\Rend.VisualRegression.exe"
 
 # Run visual regression suite (Chrome vs Rend)
 visual: visual-build

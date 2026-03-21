@@ -396,7 +396,20 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
+                        // Set content width on box before resolving height so
+                        // aspect-ratio can derive height from width.
+                        box.ContentRect = new RectF(0, 0, contentMain, 0);
                         float specHeight = DimensionResolver.ResolveHeight(item.Style, containerHeight, box);
+                        // [CSS-SIZING §5.1] If height resolves to 0 (unset = auto) and
+                        // aspect-ratio is set, derive height from the main size.
+                        if ((float.IsNaN(specHeight) || specHeight <= 0) && contentMain > 0)
+                        {
+                            float itemAspectRatio = DimensionResolver.GetAspectRatio(item.Style);
+                            if (itemAspectRatio > 0)
+                            {
+                                specHeight = contentMain / itemAspectRatio;
+                            }
+                        }
                         contentCross = float.IsNaN(specHeight) ? 0 : specHeight;
 
                         // Pre-stretch: when item has auto height and will be stretched,
@@ -950,10 +963,37 @@ namespace Rend.Layout.Internal
                 }
                 return basis;
             }
-            // Resolve deferred percentage flex-basis against the flex container's main size.
+            // Resolve deferred calc() or percentage flex-basis against the flex container's main size.
+            bool indefinitePercentBasis = false;
+            if (float.IsNegativeInfinity(basis))
+            {
+                // Deferred calc() — resolve against container main size
+                var calcRef = style.GetRefValue(Css.Properties.Internal.PropertyId.FlexBasis);
+                if (calcRef is CssFunctionValue calcFn)
+                {
+                    float refSize = isColumn ? containerHeight : containerWidth;
+                    if (!float.IsNaN(refSize) && refSize > 0)
+                    {
+                        float resolved = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(calcFn, refSize);
+                        if (style.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            if (isColumn)
+                            {
+                                resolved -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
+                            }
+                            else
+                            {
+                                resolved -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
+                            }
+                            if (resolved < 0) { resolved = 0; }
+                        }
+                        return resolved;
+                    }
+                    indefinitePercentBasis = true;
+                }
+            }
             // CSS Flexbox §9.2 step 3E: if the percentage resolves against an indefinite
             // size, treat the flex basis as content — skip the width/height fallback.
-            bool indefinitePercentBasis = false;
             if (DeferredPercent.IsEncoded(basis))
             {
                 float refSize = isColumn ? containerHeight : containerWidth;

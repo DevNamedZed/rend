@@ -1,0 +1,27 @@
+using Xunit;
+using Xunit.Abstractions;
+
+namespace Rend.Tests.Layout
+{
+    public class WptFlexboxGrowFillTests
+    {
+        private readonly ITestOutputHelper _output;
+        public WptFlexboxGrowFillTests(ITestOutputHelper output) { _output = output; }
+
+        [Fact] public void Single_200() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;width:200px'><div id='t' style='flex:1;height:30px'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Width - 200) < 2); }
+        [Fact] public void Single_300() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;width:300px'><div id='t' style='flex:1;height:30px'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Width - 300) < 2); }
+        [Fact] public void Single_400() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;width:400px'><div id='t' style='flex:1;height:30px'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Width - 400) < 2); }
+        [Fact] public void Single_500() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;width:500px'><div id='t' style='flex:1;height:30px'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Width - 500) < 2); }
+        [Fact] public void After_Fixed80() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;width:300px'><div style='width:80px;height:30px'></div><div id='t' style='flex:1;height:30px'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Width - 220) < 2); }
+        [Fact] public void After_Fixed100() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;width:400px'><div style='width:100px;height:30px'></div><div id='t' style='flex:1;height:30px'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Width - 300) < 2); }
+        [Fact] public void Between_Fixed() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;width:400px'><div style='width:80px;height:30px'></div><div id='t' style='flex:1;height:30px'></div><div style='width:80px;height:30px'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Width - 240) < 2); }
+        [Fact] public void After_Fixed_WithGap() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;gap:10px;width:300px'><div style='width:80px;height:30px'></div><div id='t' style='flex:1;height:30px'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Width - 210) < 2); }
+        [Fact] public void Column_Single_200() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;flex-direction:column;width:200px;height:200px'><div id='t' style='flex:1'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Height - 200) < 2); }
+        [Fact] public void Column_After_Fixed() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;flex-direction:column;width:200px;height:200px'><div style='height:50px'></div><div id='t' style='flex:1'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Height - 150) < 2); }
+        [Fact] public void Column_Between_Fixed() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;flex-direction:column;width:200px;height:300px'><div style='height:40px'></div><div id='t' style='flex:1'></div><div style='height:40px'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Height - 220) < 2); }
+        [Fact] public void Position_After_Fixed80() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;width:300px'><div style='width:80px;height:30px'></div><div id='t' style='flex:1;height:30px'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.X - 80) < 2); }
+        [Fact] public void Position_Between_Fixed() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;width:400px'><div id='a' style='width:80px;height:30px'></div><div id='b' style='flex:1;height:30px'></div><div id='c' style='width:80px;height:30px'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"b")!.ContentRect.X - 80) < 2); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"c")!.ContentRect.X - 320) < 2); }
+        [Fact] public void After_Two_Fixed() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;width:400px'><div style='width:60px;height:30px'></div><div style='width:80px;height:30px'></div><div id='t' style='flex:1;height:30px'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Width - 260) < 2); }
+        [Fact] public void Before_Fixed() { var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;width:300px'><div id='t' style='flex:1;height:30px'></div><div style='width:80px;height:30px'></div></div></body>"); Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Width - 220) < 2); }
+    }
+}

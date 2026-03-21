@@ -52,13 +52,16 @@ namespace Rend.Tests.Layout
         }
 
         [Fact]
-        public void Br_ZeroSize()
+        public void Br_ProducesLineBreak()
         {
             var root = LayoutTestHelper.Layout(@"
                 <body style='margin:0'>
-                <div style='width: 200px;'>text<br>more text</div></body>");
-            // br should not crash and should produce a line break
-            Assert.NotNull(root);
+                <div id='container' style='width: 200px;'>text<br>more text</div></body>");
+            var container = LayoutTestHelper.FindById(root, "container");
+            Assert.NotNull(container);
+            // br should produce a line break → container height > single line
+            Assert.True(container!.ContentRect.Height > 20,
+                $"br should create line break (container.h={container.ContentRect.Height})");
         }
     }
 }

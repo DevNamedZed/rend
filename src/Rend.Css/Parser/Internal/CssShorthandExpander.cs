@@ -595,6 +595,7 @@ namespace Rend.Css.Parser.Internal
                     numIdx++;
                 }
                 else if (p is CssDimensionValue || p is CssPercentageValue ||
+                         p is CssFunctionValue ||
                          (p is CssKeywordValue kv && (kv.Keyword == "auto" || kv.Keyword == "content")))
                 {
                     explicitBasis = p;

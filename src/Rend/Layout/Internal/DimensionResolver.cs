@@ -107,8 +107,11 @@ namespace Rend.Layout.Internal
                     maxW = Math.Max(0, maxW - hExtra);
                 }
             }
-            if (!SizingKeyword.IsSizingKeyword(style.MinWidth)) width = ApplyMinMax(width, minW, float.NaN);
-            if (!SizingKeyword.IsSizingKeyword(style.MaxWidth)) width = ApplyMinMax(width, float.NaN, maxW);
+            // [CSS2 §10.4] Apply min-width and max-width together.
+            // If min > max, min wins (CSS spec: min-width overrides max-width).
+            float effectiveMin = !SizingKeyword.IsSizingKeyword(style.MinWidth) ? minW : float.NaN;
+            float effectiveMax = !SizingKeyword.IsSizingKeyword(style.MaxWidth) ? maxW : float.NaN;
+            width = ApplyMinMax(width, effectiveMin, effectiveMax);
 
             return Math.Max(0, width);
         }
@@ -340,10 +343,15 @@ namespace Rend.Layout.Internal
 
         private static float ApplyMinMax(float value, float min, float max)
         {
-            if (!float.IsNaN(min) && min >= 0)
-                value = Math.Max(value, min);
+            // [CSS2 §10.4] Apply max first, then min. This ensures min wins if min > max.
             if (!float.IsNaN(max) && max >= 0)
+            {
                 value = Math.Min(value, max);
+            }
+            if (!float.IsNaN(min) && min >= 0)
+            {
+                value = Math.Max(value, min);
+            }
             return value;
         }
 

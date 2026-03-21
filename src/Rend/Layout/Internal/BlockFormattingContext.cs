@@ -911,35 +911,33 @@ namespace Rend.Layout.Internal
             }
 
             // Check children (from BlockFormattingContext)
-            // Absolutely/fixed positioned children do not contribute to auto height (CSS 2.1 §10.6.3)
+            // [CSS2 §10.6.3] Abspos/fixed children don't contribute to auto height.
+            // [CSS2 §10.6.7] Floated children only contribute for BFC-establishing elements.
+            bool parentEstablishesBfc = box.Parent == null
+                || (box.StyledNode is Style.StyledElement boxStyled && EstablishesNewBfc(boxStyled.Style));
             for (int i = 0; i < box.Children.Count; i++)
             {
                 var child = box.Children[i];
-                if (child.StyledNode is Style.StyledElement se &&
-                    (se.Style.Position == Css.CssPosition.Absolute || se.Style.Position == Css.CssPosition.Fixed))
+                var childStyled = child.StyledNode as Style.StyledElement;
+
+                if (childStyled != null &&
+                    (childStyled.Style.Position == Css.CssPosition.Absolute ||
+                     childStyled.Style.Position == Css.CssPosition.Fixed))
                 {
                     continue;
                 }
+
+                if (childStyled != null && childStyled.Style.Float != Css.CssFloat.None
+                    && !parentEstablishesBfc)
+                {
+                    continue;
+                }
+
                 float childBottom = child.ContentRect.Y + child.ContentRect.Height
                                   + child.PaddingBottom + child.BorderBottomWidth + child.MarginBottom;
                 if (childBottom > bottom)
                 {
                     bottom = childBottom;
-                }
-
-                // [CSS2 §10.6.7] Include floated children's bottom edges.
-                // Floats are placed by FloatLayout but their height should be
-                // included in the containing BFC's auto height.
-                if (child.StyledNode is Style.StyledElement childSe &&
-                    childSe.Style.Float != Css.CssFloat.None)
-                {
-                    float floatBottom = child.ContentRect.Y + child.ContentRect.Height
-                                      + child.PaddingBottom + child.BorderBottomWidth
-                                      + child.MarginBottom;
-                    if (floatBottom > bottom)
-                    {
-                        bottom = floatBottom;
-                    }
                 }
             }
 

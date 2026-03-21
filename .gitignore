@@ -25,6 +25,7 @@ grid_debug.txt
 conformance/Rend.VisualRegression/output/
 conformance/Rend.VisualRegression/results/
 conformance/Rend.VisualRegression/wpt/
+conformance/Rend.VisualRegression/cache/
 
 ## Playground publish output and test artifacts
 playground/release/

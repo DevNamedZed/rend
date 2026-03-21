@@ -779,15 +779,38 @@ namespace Rend.Layout.Internal
                 {
                     float totalRowH = 0;
                     for (int r = 0; r < finalRows; r++)
+                    {
                         totalRowH += rowHeights[r];
+                    }
                     totalRowH += (finalRows - 1) * rowGap;
 
                     float extraH = containerHeight - totalRowH;
                     if (extraH > 1f)
                     {
-                        float perRow = extraH / finalRows;
+                        // [CSS-GRID §10.5] Only stretch auto-sized rows, not explicit ones.
+                        int autoRowCount = 0;
                         for (int r = 0; r < finalRows; r++)
-                            rowHeights[r] += perRow;
+                        {
+                            bool isExplicitRow = explicitRowTracks != null && r < explicitRowTracks.Length
+                                && explicitRowTracks[r] > 0;
+                            if (!isExplicitRow)
+                            {
+                                autoRowCount++;
+                            }
+                        }
+                        if (autoRowCount > 0)
+                        {
+                            float perRow = extraH / autoRowCount;
+                            for (int r = 0; r < finalRows; r++)
+                            {
+                                bool isExplicitRow = explicitRowTracks != null && r < explicitRowTracks.Length
+                                    && explicitRowTracks[r] > 0;
+                                if (!isExplicitRow)
+                                {
+                                    rowHeights[r] += perRow;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -915,11 +938,68 @@ namespace Rend.Layout.Internal
                         alignInline = selfInline;
                 }
 
+                // [CSS-GRID §10.3] Auto margins absorb free space, overriding alignment.
+                if (item.StyledElement != null)
+                {
+                    var itemStyle = item.StyledElement.Style;
+                    bool autoML = float.IsNaN(itemStyle.MarginLeft);
+                    bool autoMR = float.IsNaN(itemStyle.MarginRight);
+                    if (autoML || autoMR)
+                    {
+                        float freeH = spanWidth - outerWidth;
+                        if (freeH > 0)
+                        {
+                            if (autoML && autoMR)
+                            {
+                                item.Box.MarginLeft = freeH / 2;
+                                item.Box.MarginRight = freeH / 2;
+                            }
+                            else if (autoML)
+                            {
+                                item.Box.MarginLeft = freeH;
+                            }
+                            else
+                            {
+                                item.Box.MarginRight = freeH;
+                            }
+                        }
+                    }
+
+                    bool autoMT = float.IsNaN(itemStyle.MarginTop);
+                    bool autoMB = float.IsNaN(itemStyle.MarginBottom);
+                    if (autoMT || autoMB)
+                    {
+                        float freeV = spanHeight - outerHeight;
+                        if (freeV > 0)
+                        {
+                            if (autoMT && autoMB)
+                            {
+                                item.Box.MarginTop = freeV / 2;
+                                item.Box.MarginBottom = freeV / 2;
+                            }
+                            else if (autoMT)
+                            {
+                                item.Box.MarginTop = freeV;
+                            }
+                            else
+                            {
+                                item.Box.MarginBottom = freeV;
+                            }
+                        }
+                    }
+                }
+
                 // Apply inline (horizontal) alignment offset
-                float xOffset = AlignOffset(alignInline, spanWidth, outerWidth);
+                float xOffset = AlignOffset(alignInline, spanWidth,
+                    finalWidth + item.Box.PaddingLeft + item.Box.PaddingRight
+                    + item.Box.BorderLeftWidth + item.Box.BorderRightWidth
+                    + item.Box.MarginLeft + item.Box.MarginRight);
 
                 // Apply block (vertical) alignment offset
-                float yOffset = AlignOffset(alignBlock, spanHeight, outerHeight);
+                float yOffset = AlignOffset(alignBlock, spanHeight,
+                    finalHeight + item.Box.PaddingTop + item.Box.PaddingBottom
+                    + item.Box.BorderTopWidth + item.Box.BorderBottomWidth
+                    + item.Box.MarginTop + item.Box.MarginBottom);
 
                 // Stretch: expand content to fill cell (default grid behavior)
                 // Per CSS Grid spec, stretch only applies when the item's size is 'auto' in that axis.
@@ -1553,7 +1633,7 @@ namespace Rend.Layout.Internal
             if (val is CssKeywordValue kwVal)
             {
                 if (kwVal.Keyword == "auto")
-                    return (0, true); // auto acts like 1fr
+                    return (1, true); // [CSS-GRID §7.2.1] auto acts like minmax(auto, auto) ≈ 1fr
                 if (kwVal.Keyword == "min-content")
                     return (-1, false); // sentinel: resolved by content measurement
                 if (kwVal.Keyword == "max-content")
@@ -1580,6 +1660,13 @@ namespace Rend.Layout.Internal
                     // fit-content(limit): starts at min-content, grows up to limit
                     var limit = ParseTrackValue(fn.Arguments[0], containerSize);
                     return (limit.value, false);
+                }
+                // [CSS-VALUES §8] calc/min/max/clamp math functions
+                if (fn.Name == "calc" || fn.Name == "min" || fn.Name == "max" || fn.Name == "clamp")
+                {
+                    var ctx = new Core.Values.CssResolutionContext(16f, 16f, containerSize, containerSize, containerSize);
+                    float result = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(fn, containerSize);
+                    return (result, false);
                 }
             }
             return (0, false);
