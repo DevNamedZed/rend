@@ -290,33 +290,107 @@ namespace Rend.Css.Parser.Internal
 
         /// <summary>
         /// Try to parse color() function.
-        /// color(srgb r g b / a) or color(display-p3 r g b / a)
+        /// [CSS-COLOR4 §10.1] color(colorspace c1 c2 c3 / alpha)
+        /// Supports srgb, srgb-linear, display-p3. Other spaces clamp to sRGB gamut.
         /// </summary>
         public static bool TryParseColorFunction(List<CssValue> args, out CssColor color)
         {
             color = default;
             if (args.Count < 4) return false;
 
-            // First arg is color space name
             if (!(args[0] is CssKeywordValue csKw)) return false;
-            // We treat all spaces as sRGB (clamp to gamut)
+            string colorSpace = csKw.Keyword.ToLowerInvariant();
 
-            if (!TryGetFloatValue(args[1], out float r)) return false;
-            if (!TryGetFloatValue(args[2], out float g)) return false;
-            if (!TryGetFloatValue(args[3], out float b)) return false;
+            if (!TryGetFloatValue(args[1], out float channel1)) return false;
+            if (!TryGetFloatValue(args[2], out float channel2)) return false;
+            if (!TryGetFloatValue(args[3], out float channel3)) return false;
 
-            float a = 1f;
+            float alpha = 1f;
             if (args.Count >= 5)
             {
-                if (!TryGetAlpha(args[4], out a)) return false;
+                if (!TryGetAlpha(args[4], out alpha)) return false;
             }
 
-            color = new CssColor(
-                (byte)Math.Round(Math.Max(0f, Math.Min(1f, r)) * 255f),
-                (byte)Math.Round(Math.Max(0f, Math.Min(1f, g)) * 255f),
-                (byte)Math.Round(Math.Max(0f, Math.Min(1f, b)) * 255f),
-                (byte)Math.Round(Math.Max(0f, Math.Min(1f, a)) * 255f));
-            return true;
+            byte alphaByte = (byte)Math.Round(Math.Max(0f, Math.Min(1f, alpha)) * 255f);
+
+            switch (colorSpace)
+            {
+                case "srgb-linear":
+                {
+                    // [CSS-COLOR4 §10.1] Linear-light sRGB to gamma-encoded sRGB
+                    color = new CssColor(
+                        LinearToSrgbByte(channel1),
+                        LinearToSrgbByte(channel2),
+                        LinearToSrgbByte(channel3),
+                        alphaByte);
+                    return true;
+                }
+
+                case "display-p3":
+                {
+                    // [CSS-COLOR4 §10.1] Display P3 to sRGB via linear-light conversion
+                    // 1. Undo display-p3 gamma to get linear display-p3
+                    float linearR = SrgbToLinear(channel1);
+                    float linearG = SrgbToLinear(channel2);
+                    float linearB = SrgbToLinear(channel3);
+
+                    // 2. Linear display-p3 to linear sRGB via matrix multiplication
+                    // Matrix derived from P3→XYZ(D65) then XYZ(D65)→sRGB
+                    float srgbLinearR = 1.2249401f * linearR - 0.2249402f * linearG + 0.0000000f * linearB;
+                    float srgbLinearG = -0.0420569f * linearR + 1.0420571f * linearG - 0.0000001f * linearB;
+                    float srgbLinearB = -0.0196376f * linearR - 0.0786507f * linearG + 1.0982882f * linearB;
+
+                    // 3. Linear sRGB to gamma-encoded sRGB (with gamut clamping)
+                    color = new CssColor(
+                        LinearToSrgbByte(srgbLinearR),
+                        LinearToSrgbByte(srgbLinearG),
+                        LinearToSrgbByte(srgbLinearB),
+                        alphaByte);
+                    return true;
+                }
+
+                case "srgb":
+                default:
+                {
+                    // sRGB or unknown color space: clamp to 0-1 and treat as sRGB
+                    color = new CssColor(
+                        (byte)Math.Round(Math.Max(0f, Math.Min(1f, channel1)) * 255f),
+                        (byte)Math.Round(Math.Max(0f, Math.Min(1f, channel2)) * 255f),
+                        (byte)Math.Round(Math.Max(0f, Math.Min(1f, channel3)) * 255f),
+                        alphaByte);
+                    return true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// [CSS-COLOR4 §13.1] Convert a linear-light sRGB component to gamma-encoded sRGB byte.
+        /// </summary>
+        private static byte LinearToSrgbByte(float linear)
+        {
+            float srgb;
+            if (linear <= 0.0031308f)
+            {
+                srgb = 12.92f * linear;
+            }
+            else
+            {
+                srgb = 1.055f * (float)Math.Pow(linear, 1.0 / 2.4) - 0.055f;
+            }
+            return (byte)Math.Round(Math.Max(0f, Math.Min(1f, srgb)) * 255f);
+        }
+
+        /// <summary>
+        /// [CSS-COLOR4 §13.1] Convert a gamma-encoded sRGB component to linear-light.
+        /// </summary>
+        private static float SrgbToLinear(float srgb)
+        {
+            srgb = Math.Max(0f, Math.Min(1f, srgb));
+            if (srgb <= 0.04045f)
+            {
+                return srgb / 12.92f;
+            }
+            return (float)Math.Pow((srgb + 0.055) / 1.055, 2.4);
         }
 
         /// <summary>

@@ -90,6 +90,7 @@ namespace Rend.Css.Properties.Internal
             _values[PropertyId.TextDecoration_Line] = PropertyValue.FromKeyword((int)CssTextDecorationLine.None);
             _values[PropertyId.TextDecoration_Style] = PropertyValue.FromKeyword(0); // solid
             _values[PropertyId.TextDecoration_Color] = PropertyValue.CurrentColorSentinel;
+            _values[PropertyId.TextUnderlinePosition] = PropertyValue.FromKeyword((int)CssTextUnderlinePosition.Auto);
             _values[PropertyId.TextTransform] = PropertyValue.FromKeyword((int)CssTextTransform.None);
             _values[PropertyId.TextIndent] = PropertyValue.FromLength(0);
             _values[PropertyId.WhiteSpace] = PropertyValue.FromKeyword((int)CssWhiteSpace.Normal);
@@ -107,7 +108,7 @@ namespace Rend.Css.Properties.Internal
             _values[PropertyId.FlexBasis] = PropertyValue.FromLength(float.NaN); // auto
             _values[PropertyId.AlignItems] = PropertyValue.FromKeyword((int)CssAlignItems.Stretch);
             _values[PropertyId.AlignSelf] = PropertyValue.FromKeyword(255); // auto (inherit from align-items)
-            _values[PropertyId.AlignContent] = PropertyValue.FromKeyword((int)CssAlignItems.Stretch);
+            _values[PropertyId.AlignContent] = PropertyValue.FromKeyword((int)CssAlignItems.Normal);
             _values[PropertyId.JustifyContent] = PropertyValue.FromKeyword((int)CssJustifyContent.FlexStart);
             _values[PropertyId.Order] = PropertyValue.FromNumber(0);
 
@@ -249,6 +250,53 @@ namespace Rend.Css.Properties.Internal
             // Writing Mode
             _values[PropertyId.WritingMode] = PropertyValue.FromKeyword((int)CssWritingMode.HorizontalTb);
             _values[PropertyId.TextOrientation] = PropertyValue.FromKeyword((int)CssTextOrientation.Mixed);
+
+            // Text Emphasis
+            _values[PropertyId.TextEmphasisColor] = PropertyValue.CurrentColorSentinel;
+
+            // Scrollbar Gutter
+            _values[PropertyId.ScrollbarGutter] = PropertyValue.FromKeyword(0); // auto
+
+            // Multicol Level 2
+            _values[PropertyId.ColumnHeight] = PropertyValue.FromLength(float.NaN); // auto
+            _values[PropertyId.ColumnWrap] = PropertyValue.FromKeyword(0); // wrap
+
+            // Content Visibility
+            _values[PropertyId.ContentVisibility] = PropertyValue.FromKeyword(0); // visible
+
+            // Font Size Adjust
+            _values[PropertyId.FontSizeAdjust] = PropertyValue.FromLength(float.NaN); // none
+
+            // Color Scheme
+            _values[PropertyId.ColorScheme] = PropertyValue.FromKeyword(0); // normal
+
+            // Print Color Adjust
+            _values[PropertyId.PrintColorAdjust] = PropertyValue.FromKeyword(0); // economy
+
+            // Overflow Anchor
+            _values[PropertyId.OverflowAnchor] = PropertyValue.FromKeyword(0); // auto
+
+            // Overscroll Behavior
+            _values[PropertyId.OverscrollBehaviorX] = PropertyValue.FromKeyword(0); // auto
+            _values[PropertyId.OverscrollBehaviorY] = PropertyValue.FromKeyword(0); // auto
+
+            // Scroll Behavior
+            _values[PropertyId.ScrollBehavior] = PropertyValue.FromKeyword(0); // auto
+
+            // Touch Action
+            _values[PropertyId.TouchAction] = PropertyValue.FromKeyword(0); // auto
+
+            // Text Size Adjust
+            _values[PropertyId.TextSizeAdjust] = PropertyValue.FromKeyword(0); // auto
+
+            // Font Kerning
+            _values[PropertyId.FontKerning] = PropertyValue.FromKeyword(0); // auto
+
+            // Font Synthesis Sub-properties
+            _values[PropertyId.FontSynthesisWeight] = PropertyValue.FromKeyword(0); // auto
+            _values[PropertyId.FontSynthesisStyle] = PropertyValue.FromKeyword(0); // auto
+            _values[PropertyId.FontSynthesisSmallCaps] = PropertyValue.FromKeyword(0); // auto
+            _values[PropertyId.FontSynthesisPosition] = PropertyValue.FromKeyword(0); // auto
         }
 
         /// <summary>Get the initial PropertyValue for a property.</summary>

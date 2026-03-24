@@ -481,6 +481,12 @@ namespace Rend.Css
             get => _values[PropertyId.TextUnderlineOffset].FloatValue;
         }
 
+        public CssTextUnderlinePosition TextUnderlinePosition
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssTextUnderlinePosition)_values[PropertyId.TextUnderlinePosition].IntValue;
+        }
+
         public CssTextTransform TextTransform
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]

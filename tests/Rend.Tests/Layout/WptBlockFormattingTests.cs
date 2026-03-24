@@ -75,7 +75,7 @@ namespace Rend.Tests.Layout
         // float containment: normal block doesn't contain floats
         // TODO: Known bug — CalculateAutoHeight includes float children even for non-BFC blocks.
         // Multiple code paths set height; need to ensure all paths check BFC status.
-        [Fact(Skip = "Known bug: float containment in non-BFC blocks")]
+        [Fact]
         public void NormalBlock_DoesNotContainFloat()
         {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>

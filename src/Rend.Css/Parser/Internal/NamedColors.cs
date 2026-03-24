@@ -325,8 +325,64 @@ namespace Rend.Css.Parser.Internal
                 if (cmp < 0) lo = mid + 1;
                 else hi = mid - 1;
             }
-            color = default;
-            return false;
+            // [CSS-COLOR-4 §6.2] CSS system colors — match Chrome's Windows defaults
+            return TryLookupSystemColor(name, out color);
+        }
+
+        private static bool TryLookupSystemColor(string name, out CssColor color)
+        {
+            // Chrome Windows defaults for CSS system colors
+            switch (name.ToLowerInvariant())
+            {
+                case "canvas": color = new CssColor(255, 255, 255); return true;
+                case "canvastext": color = new CssColor(0, 0, 0); return true;
+                case "linktext": color = new CssColor(0, 0, 238); return true;
+                case "visitedtext": color = new CssColor(85, 26, 139); return true;
+                case "activetext": color = new CssColor(255, 0, 0); return true;
+                case "buttonface": color = new CssColor(240, 240, 240); return true;
+                case "buttontext": color = new CssColor(0, 0, 0); return true;
+                case "buttonborder": color = new CssColor(118, 118, 118); return true;
+                case "field": color = new CssColor(255, 255, 255); return true;
+                case "fieldtext": color = new CssColor(0, 0, 0); return true;
+                case "highlight": color = new CssColor(0, 120, 215); return true;
+                case "highlighttext": color = new CssColor(255, 255, 255); return true;
+                case "selecteditem": color = new CssColor(0, 120, 215); return true;
+                case "selecteditemtext": color = new CssColor(255, 255, 255); return true;
+                case "mark": color = new CssColor(255, 255, 0); return true;
+                case "marktext": color = new CssColor(0, 0, 0); return true;
+                case "graytext": color = new CssColor(109, 109, 109); return true;
+                case "accentcolor": color = new CssColor(0, 120, 215); return true;
+                case "accentcolortext": color = new CssColor(255, 255, 255); return true;
+
+                // Deprecated system colors (CSS Color 4 §6.2) — mapped to current equivalents
+                case "activeborder": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
+                case "activecaption": color = new CssColor(255, 255, 255); return true; // = Canvas
+                case "appworkspace": color = new CssColor(255, 255, 255); return true; // = Canvas
+                case "background": color = new CssColor(255, 255, 255); return true; // = Canvas
+                case "buttonhighlight": color = new CssColor(240, 240, 240); return true; // = ButtonFace
+                case "buttonshadow": color = new CssColor(240, 240, 240); return true; // = ButtonFace
+                case "captiontext": color = new CssColor(0, 0, 0); return true; // = CanvasText
+                case "inactiveborder": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
+                case "inactivecaption": color = new CssColor(255, 255, 255); return true; // = Canvas
+                case "inactivecaptiontext": color = new CssColor(109, 109, 109); return true; // = GrayText
+                case "infobackground": color = new CssColor(255, 255, 255); return true; // = Canvas
+                case "infotext": color = new CssColor(0, 0, 0); return true; // = CanvasText
+                case "menu": color = new CssColor(255, 255, 255); return true; // = Canvas
+                case "menutext": color = new CssColor(0, 0, 0); return true; // = CanvasText
+                case "scrollbar": color = new CssColor(255, 255, 255); return true; // = Canvas
+                case "threeddarkshadow": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
+                case "threedface": color = new CssColor(240, 240, 240); return true; // = ButtonFace
+                case "threedhighlight": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
+                case "threedlightshadow": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
+                case "threedshadow": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
+                case "window": color = new CssColor(255, 255, 255); return true; // = Canvas
+                case "windowframe": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
+                case "windowtext": color = new CssColor(0, 0, 0); return true; // = CanvasText
+
+                default:
+                    color = default;
+                    return false;
+            }
         }
     }
 }

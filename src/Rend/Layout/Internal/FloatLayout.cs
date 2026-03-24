@@ -22,7 +22,26 @@ namespace Rend.Layout.Internal
             BoxModelCalculator.ApplyBoxModel(floatBox, style, containingWidth);
 
             float contentWidth;
-            if (SizingKeyword.IsSizingKeyword(style.Width) && floatBox.StyledNode is StyledElement floatEl)
+            bool isFloatReplaced = floatBox.StyledNode is StyledElement floatStyledEl
+                && ReplacedElementLayout.IsReplaced(floatStyledEl);
+            if (isFloatReplaced && (SizingKeyword.IsSizingKeyword(style.Width) || float.IsNaN(style.Width)))
+            {
+                // [CSS-SIZING-3 §5.1] Replaced elements: intrinsic sizing keywords
+                // resolve to the intrinsic size. Use auto-sizing algorithm.
+                var replacedEl = (StyledElement)floatBox.StyledNode!;
+                float intrinsicW = 0;
+                string? attrW = replacedEl.GetAttribute("width");
+                if (attrW != null && float.TryParse(attrW, out float aw))
+                {
+                    intrinsicW = aw;
+                }
+                if (intrinsicW <= 0 && ReplacedElementLayout.TryGetDataUriDimensions(replacedEl, out float duW, out _))
+                {
+                    intrinsicW = duW;
+                }
+                contentWidth = intrinsicW > 0 ? intrinsicW : 300;
+            }
+            else if (SizingKeyword.IsSizingKeyword(style.Width) && floatBox.StyledNode is StyledElement floatEl)
             {
                 contentWidth = BlockFormattingContext.MeasureIntrinsicWidth(floatEl, style.Width, containingWidth, context);
             }
@@ -38,6 +57,18 @@ namespace Rend.Layout.Internal
             {
                 contentWidth = DimensionResolver.ResolveWidth(style, containingWidth, floatBox);
             }
+            // [CSS2 §10.4] Apply min-width/max-width to float content width
+            float minW = DimensionResolver.ResolvePercentWidth(style.MinWidth, containingWidth);
+            float maxW = DimensionResolver.ResolvePercentWidth(style.MaxWidth, containingWidth);
+            if (style.BoxSizing == CssBoxSizing.BorderBox)
+            {
+                float hExtra = floatBox.PaddingLeft + floatBox.PaddingRight + floatBox.BorderLeftWidth + floatBox.BorderRightWidth;
+                if (!float.IsNaN(minW) && minW >= 0) { minW = Math.Max(0, minW - hExtra); }
+                if (!float.IsNaN(maxW) && maxW >= 0) { maxW = Math.Max(0, maxW - hExtra); }
+            }
+            if (!float.IsNaN(maxW) && maxW >= 0 && contentWidth > maxW) { contentWidth = maxW; }
+            if (!float.IsNaN(minW) && minW >= 0 && contentWidth < minW) { contentWidth = minW; }
+
             float totalWidth = contentWidth + floatBox.PaddingLeft + floatBox.PaddingRight
                              + floatBox.BorderLeftWidth + floatBox.BorderRightWidth
                              + floatBox.MarginLeft + floatBox.MarginRight;
@@ -48,7 +79,15 @@ namespace Rend.Layout.Internal
 
             float contentHeight = DimensionResolver.ResolveHeight(style, float.NaN, floatBox);
             if (float.IsNaN(contentHeight))
+            {
                 contentHeight = CalculateAutoHeight(floatBox);
+            }
+
+            // [CSS2 §10.7] Apply min-height/max-height
+            float minH = DimensionResolver.ResolvePercentHeight(style.MinHeight, float.NaN);
+            float maxH = DimensionResolver.ResolvePercentHeight(style.MaxHeight, float.NaN);
+            if (!float.IsNaN(maxH) && maxH >= 0 && contentHeight > maxH) { contentHeight = maxH; }
+            if (!float.IsNaN(minH) && minH >= 0 && contentHeight < minH) { contentHeight = minH; }
 
             float totalHeight = contentHeight + floatBox.PaddingTop + floatBox.PaddingBottom
                               + floatBox.BorderTopWidth + floatBox.BorderBottomWidth

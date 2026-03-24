@@ -95,12 +95,12 @@ namespace Rend.Tests.Layout
                     <div id='a' style='height:20px'></div>
                     <div id='b' style='height:20px'></div>
                 </div></body>");
-            // 10% resolves to 40px gap (against viewport 400px), each col = (200-40)/2 = 80px
+            // 10% resolves to 20px gap (against container 200px), each col = (200-20)/2 = 90px
             var itemA = LayoutTestHelper.FindById(r, "a")!;
             var itemB = LayoutTestHelper.FindById(r, "b")!;
             float colGap = itemB.ContentRect.X - (itemA.ContentRect.X + itemA.ContentRect.Width);
-            Assert.True(System.Math.Abs(colGap - 40) < 2);
-            Assert.True(System.Math.Abs(itemA.ContentRect.Width - 80) < 2);
+            Assert.True(System.Math.Abs(colGap - 20) < 2);
+            Assert.True(System.Math.Abs(itemA.ContentRect.Width - 90) < 2);
         }
 
         // [CSS-GRID §7.5] grid-auto-rows: 50px for implicit rows

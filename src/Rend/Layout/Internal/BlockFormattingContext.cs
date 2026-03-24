@@ -272,6 +272,44 @@ namespace Rend.Layout.Internal
                             }
                         }
                     }
+                    // [CSS-SIZING-4 §5.1] Abspos with auto width: if the element has
+                    // an explicit height and aspect-ratio, derive width from height * ratio.
+                    if (float.IsNaN(childStyle.Width) && !DeferredPercent.IsEncoded(childStyle.Width))
+                    {
+                        float absAspectRatio = DimensionResolver.GetAspectRatio(childStyle);
+                        float absSpecHeight = childStyle.Height;
+                        if (absAspectRatio > 0 && !float.IsNaN(absSpecHeight) && absSpecHeight > 0
+                            && !DeferredPercent.IsEncoded(absSpecHeight)
+                            && !float.IsNegativeInfinity(absSpecHeight))
+                        {
+                            if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
+                            {
+                                float widthBorderBox = absSpecHeight * absAspectRatio;
+                                posWidth = widthBorderBox
+                                         - posBox.PaddingLeft - posBox.PaddingRight
+                                         - posBox.BorderLeftWidth - posBox.BorderRightWidth;
+                                if (posWidth < 0)
+                                {
+                                    posWidth = 0;
+                                }
+                            }
+                            else
+                            {
+                                posWidth = absSpecHeight * absAspectRatio;
+                            }
+                        }
+                    }
+                    // [CSS2 §10.4] Apply min/max-width to abspos shrink-to-fit
+                    float absMinW = DimensionResolver.ResolvePercentWidth(childStyle.MinWidth, containingWidth);
+                    float absMaxW = DimensionResolver.ResolvePercentWidth(childStyle.MaxWidth, containingWidth);
+                    if (!float.IsNaN(absMaxW) && absMaxW >= 0 && posWidth > absMaxW)
+                    {
+                        posWidth = absMaxW;
+                    }
+                    if (!float.IsNaN(absMinW) && absMinW >= 0 && posWidth < absMinW)
+                    {
+                        posWidth = absMinW;
+                    }
                     // Static position Y: where the element's content edge would be in normal flow.
                     // Include the collapsed margin gap from the previous sibling, plus
                     // the element's own border and padding (since this is the content rect Y).
@@ -280,7 +318,22 @@ namespace Rend.Layout.Internal
                     // Pre-resolve height for abspos elements. If height is auto but
                     // both top and bottom are set, compute height from the containing
                     // block (CSS 2.1 §10.6.4) so flex/grid children get a definite size.
-                    float preHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, posBox);
+                    // Set width first so aspect-ratio can derive height from width.
+                    posBox.ContentRect = new RectF(0, 0, posWidth, 0);
+                    // [CSS2 §10.1] For abspos elements, percentage heights resolve against the
+                    // containing block. When parentContentHeight is 0 (no positioned ancestor with
+                    // known height), try viewport height for deferred calc expressions.
+                    float absContainingHeight = parentContentHeight;
+                    if ((absContainingHeight <= 0 || float.IsNaN(absContainingHeight))
+                        && float.IsNegativeInfinity(childStyle.Height))
+                    {
+                        float vpH = Css.Resolution.Internal.ValueResolver.ViewportHeightHint;
+                        if (vpH > 0)
+                        {
+                            absContainingHeight = vpH;
+                        }
+                    }
+                    float preHeight = DimensionResolver.ResolveHeight(childStyle, absContainingHeight, posBox);
                     if (float.IsNaN(preHeight) && parentContentHeight > 0)
                     {
                         float topVal = childStyle.Top;
@@ -332,9 +385,11 @@ namespace Rend.Layout.Internal
                 float contentWidth;
                 bool isReplaced = ReplacedElementLayout.IsReplaced(childElement);
 
-                if (isReplaced && float.IsNaN(childStyle.Width))
+                if (isReplaced && (float.IsNaN(childStyle.Width) || SizingKeyword.IsSizingKeyword(childStyle.Width)))
                 {
-                    // Replaced element with auto width: use HTML attribute, form control defaults, or fallback
+                    // [CSS-SIZING-3 §5.1] Replaced element with auto or intrinsic sizing keyword width:
+                    // use HTML attribute, form control defaults, or fallback.
+                    // min-content/max-content/fit-content resolve to the intrinsic size for replaced elements.
                     float intrinsicW = 0;
                     string? attrW = childElement.GetAttribute("width");
                     if (attrW != null && float.TryParse(attrW, out float aw)) intrinsicW = aw;
@@ -357,10 +412,35 @@ namespace Rend.Layout.Internal
                 {
                     // Intrinsic sizing keyword: measure content
                     contentWidth = MeasureIntrinsicWidth(childElement, childStyle.Width, containingWidth, context);
+
+                    // [CSS-SIZING-4 §5.2] Transfer max-height → max-width through aspect-ratio
+                    // for sizing keywords (max-content, min-content, fit-content).
+                    float arRatio = DimensionResolver.GetAspectRatio(childStyle);
+                    if (arRatio > 0 && float.IsNaN(childStyle.Height))
+                    {
+                        float maxH = DimensionResolver.ResolvePercentHeight(childStyle.MaxHeight, parentContentHeight);
+                        if (!float.IsNaN(maxH) && maxH >= 0)
+                        {
+                            float transferredMaxW = maxH * arRatio;
+                            if (contentWidth > transferredMaxW)
+                            {
+                                contentWidth = transferredMaxW;
+                            }
+                        }
+                        float minH = DimensionResolver.ResolvePercentHeight(childStyle.MinHeight, parentContentHeight);
+                        if (!float.IsNaN(minH) && minH >= 0)
+                        {
+                            float transferredMinW = minH * arRatio;
+                            if (contentWidth < transferredMinW)
+                            {
+                                contentWidth = transferredMinW;
+                            }
+                        }
+                    }
                 }
                 else
                 {
-                    contentWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, childBox);
+                    contentWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, childBox, parentContentHeight);
                 }
 
                 // Resolve auto margins
@@ -470,9 +550,14 @@ namespace Rend.Layout.Internal
                         {
                             var contain = childStyle.Contain;
                             if (contain == CssContain.Size || contain == CssContain.Strict)
-                                contentHeight = 0;
+                            {
+                                float ciHeight = childStyle.GetValues()[PropertyId.ContainIntrinsicHeight].FloatValue;
+                                contentHeight = (!float.IsNaN(ciHeight) && ciHeight > 0) ? ciHeight : 0;
+                            }
                             else
+                            {
                                 contentHeight = CalculateAutoHeight(childBox);
+                            }
 
                             // Apply min-height / max-height to auto height
                             float minH = DimensionResolver.ResolvePercentHeight(childStyle.MinHeight, parentContentHeight);
@@ -627,12 +712,42 @@ namespace Rend.Layout.Internal
 
                         // Resolve content height
                         contentHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox);
+
+                        // [CSS-SIZING-4 §5.1] When aspect-ratio gives a definite height but
+                        // the element has auto height, use max(ratio-height, content-height)
+                        // so that content can push the element taller than the ratio suggests.
+                        // Then apply max-height/min-height constraints.
+                        if (!float.IsNaN(contentHeight) && float.IsNaN(childStyle.Height)
+                            && DimensionResolver.GetAspectRatio(childStyle) > 0
+                            && childStyle.OverflowY == CssOverflow.Visible)
+                        {
+                            float autoH = CalculateAutoHeight(childBox);
+                            if (autoH > contentHeight)
+                            {
+                                contentHeight = autoH;
+                            }
+                            // Apply max-height/min-height to the resolved height
+                            float arMaxH = DimensionResolver.ResolvePercentHeight(childStyle.MaxHeight, parentContentHeight);
+                            float arMinH = DimensionResolver.ResolvePercentHeight(childStyle.MinHeight, parentContentHeight);
+                            if (!float.IsNaN(arMaxH) && arMaxH >= 0 && contentHeight > arMaxH)
+                            {
+                                contentHeight = arMaxH;
+                            }
+                            if (!float.IsNaN(arMinH) && arMinH >= 0 && contentHeight < arMinH)
+                            {
+                                contentHeight = arMinH;
+                            }
+                        }
+
                         if (float.IsNaN(contentHeight))
                         {
-                            // contain: size or contain: strict → treat auto height as 0
+                            // contain: size or contain: strict → use contain-intrinsic-height or 0
                             var contain = childStyle.Contain;
                             if (contain == CssContain.Size || contain == CssContain.Strict)
-                                contentHeight = 0;
+                            {
+                                float ciHeight = childStyle.GetValues()[PropertyId.ContainIntrinsicHeight].FloatValue;
+                                contentHeight = (!float.IsNaN(ciHeight) && ciHeight > 0) ? ciHeight : 0;
+                            }
                             else if (childStyle.Display == CssDisplay.Table && childBox.ContentRect.Height > 0)
                                 contentHeight = childBox.ContentRect.Height;
                             else
@@ -665,11 +780,18 @@ namespace Rend.Layout.Internal
 
                     // For auto-width tables, LayoutChildren (TableLayout) may shrink-wrap
                     // the content rect. Preserve that width instead of overwriting.
+                    // [CSS-TABLES §17.5.2] Empty tables use 0 content width (just padding/border).
                     float finalWidth = contentWidth;
-                    if (childStyle.Display == CssDisplay.Table && float.IsNaN(childStyle.Width)
-                        && childBox.ContentRect.Width < contentWidth)
+                    if (childStyle.Display == CssDisplay.Table && float.IsNaN(childStyle.Width))
                     {
-                        finalWidth = childBox.ContentRect.Width;
+                        if (childBox.ContentRect.Width < contentWidth)
+                        {
+                            finalWidth = childBox.ContentRect.Width;
+                        }
+                        else if (childBox.Children.Count == 0)
+                        {
+                            finalWidth = 0;
+                        }
                     }
                     childBox.ContentRect = new RectF(x, y, finalWidth, contentHeight);
 
@@ -895,7 +1017,7 @@ namespace Rend.Layout.Internal
         /// For elements establishing a BFC, the height includes any floated descendants
         /// whose bottom margin edge extends below the last child.
         /// </summary>
-        private static float CalculateAutoHeight(LayoutBox box)
+        internal static float CalculateAutoHeight(LayoutBox box)
         {
             float bottom = box.ContentRect.Y;
 
@@ -913,8 +1035,19 @@ namespace Rend.Layout.Internal
             // Check children (from BlockFormattingContext)
             // [CSS2 §10.6.3] Abspos/fixed children don't contribute to auto height.
             // [CSS2 §10.6.7] Floated children only contribute for BFC-establishing elements.
-            bool parentEstablishesBfc = box.Parent == null
-                || (box.StyledNode is Style.StyledElement boxStyled && EstablishesNewBfc(boxStyled.Style));
+            // [CSS2 §10.6.7] Floated children only contribute to auto height for BFC roots.
+            // Check the box itself — if it establishes a new BFC, it contains floats.
+            // Root boxes (html/body) implicitly establish BFC.
+            bool boxEstablishesBfc = false;
+            if (box.StyledNode is Style.StyledElement boxStyled)
+            {
+                boxEstablishesBfc = EstablishesNewBfc(boxStyled.Style)
+                    || boxStyled.TagName == "html" || boxStyled.TagName == "body";
+            }
+            else
+            {
+                boxEstablishesBfc = true; // anonymous boxes → BFC
+            }
             for (int i = 0; i < box.Children.Count; i++)
             {
                 var child = box.Children[i];
@@ -928,7 +1061,7 @@ namespace Rend.Layout.Internal
                 }
 
                 if (childStyled != null && childStyled.Style.Float != Css.CssFloat.None
-                    && !parentEstablishesBfc)
+                    && !boxEstablishesBfc)
                 {
                     continue;
                 }
@@ -1152,6 +1285,15 @@ namespace Rend.Layout.Internal
                 return FlexLayout.ComputeIntrinsicWidth(element, keyword, containingWidth, context);
             }
 
+            // [CSS-SIZING-4 §3] Size containment: use contain-intrinsic-width
+            // instead of measuring content for intrinsic sizing.
+            var containVal = element.Style.Contain;
+            if (containVal == CssContain.Size || containVal == CssContain.Strict)
+            {
+                float ciWidth = element.Style.GetValues()[PropertyId.ContainIntrinsicWidth].FloatValue;
+                return (!float.IsNaN(ciWidth) && ciWidth > 0) ? ciWidth : 0;
+            }
+
             // min-content: lay out with very narrow width to find the minimum
             // max-content: lay out with very wide width to find the maximum
             float measureWidth;
@@ -1181,11 +1323,53 @@ namespace Rend.Layout.Internal
 
             if (keyword == SizingKeyword.FitContent)
             {
-                // fit-content = clamp(min-content, available, max-content)
+                // fit-content = clamp(min-content, stretch, max-content)
+                // fit-content(X) = clamp(min-content, X, max-content)
                 float minW = MeasureIntrinsicWidth(element, SizingKeyword.MinContent, containingWidth, context);
                 float maxW = MeasureIntrinsicWidth(element, SizingKeyword.MaxContent, containingWidth, context);
                 float available = containingWidth - BoxModelCalculator.GetHorizontalSpacing(box);
+
+                // [CSS-SIZING-3 §5.1] Check for fit-content(<length-percentage>) function argument
+                var fitRef = element.Style.GetRefValue(PropertyId.Width);
+                if (fitRef is CssFunctionValue fitFn && fitFn.Name == "fit-content" && fitFn.Arguments.Count >= 1)
+                {
+                    var arg = fitFn.Arguments[0];
+                    if (arg is CssPercentageValue pct)
+                    {
+                        available = containingWidth * pct.Value / 100f;
+                    }
+                    else if (arg is CssDimensionValue dim)
+                    {
+                        available = dim.Value;
+                    }
+                }
+
                 return Math.Max(minW, Math.Min(maxW, available));
+            }
+
+            // [CSS-SIZING-4 §5.1] If the element itself has aspect-ratio + definite height,
+            // its intrinsic width is at least height * ratio (even with no children).
+            float arRatio = DimensionResolver.GetAspectRatio(element.Style);
+            if (arRatio > 0 && !float.IsNaN(element.Style.Height) && element.Style.Height > 0
+                && !DeferredPercent.IsEncoded(element.Style.Height))
+            {
+                // [CSS2 §10.7] Clamp height by min/max before deriving width
+                float arHeight = element.Style.Height;
+                float arMaxH = DimensionResolver.ResolvePercentHeight(element.Style.MaxHeight, 0);
+                float arMinH = DimensionResolver.ResolvePercentHeight(element.Style.MinHeight, 0);
+                if (!float.IsNaN(arMaxH) && arMaxH >= 0 && arHeight > arMaxH) { arHeight = arMaxH; }
+                if (!float.IsNaN(arMinH) && arMinH >= 0 && arHeight < arMinH) { arHeight = arMinH; }
+                float arWidth = arHeight * arRatio;
+                if (element.Style.BoxSizing == CssBoxSizing.BorderBox)
+                {
+                    arWidth -= box.PaddingLeft + box.PaddingRight
+                             + box.BorderLeftWidth + box.BorderRightWidth;
+                    if (arWidth < 0) { arWidth = 0; }
+                }
+                if (arWidth > measured)
+                {
+                    measured = arWidth;
+                }
             }
 
             return measured;
@@ -1198,6 +1382,17 @@ namespace Rend.Layout.Internal
         /// instead of using the filled available width.
         /// Returns extent relative to box.ContentRect.X.
         /// </summary>
+        private static bool IsGridOrFlexContainer(LayoutBox box)
+        {
+            if (box.StyledNode is StyledElement se)
+            {
+                var d = se.Style.Display;
+                return d == CssDisplay.Grid || d == CssDisplay.InlineGrid
+                    || d == CssDisplay.Flex || d == CssDisplay.InlineFlex;
+            }
+            return false;
+        }
+
         internal static float GetContentExtent(LayoutBox box)
         {
             float maxExtent = 0;
@@ -1222,10 +1417,20 @@ namespace Rend.Layout.Internal
             {
                 var child = box.Children[i];
                 var childStyle = child.StyledNode?.Style;
+                // [CSS-SIZING-4 §5.1] Auto-width blocks with aspect-ratio + definite height
+                // derive their width from the ratio — treat as fixed-width, not recursive.
+                // Only for block-level children, not grid/flex items (those use grid/flex sizing).
+                bool hasAspectRatioWidth = childStyle != null
+                    && float.IsNaN(childStyle.Width)
+                    && DimensionResolver.GetAspectRatio(childStyle) > 0
+                    && !float.IsNaN(childStyle.Height) && childStyle.Height > 0
+                    && !DeferredPercent.IsEncoded(childStyle.Height)
+                    && !IsGridOrFlexContainer(box);
                 bool isAutoWidthBlock = childStyle != null
                     && float.IsNaN(childStyle.Width)
                     && !SizingKeyword.IsSizingKeyword(childStyle.Width)
-                    && !DeferredPercent.IsEncoded(childStyle.Width);
+                    && !DeferredPercent.IsEncoded(childStyle.Width)
+                    && !hasAspectRatioWidth;
 
                 float extent;
                 if (isAutoWidthBlock)

@@ -397,7 +397,6 @@ namespace Rend.Layout.Internal
             // Layout any remaining segment
             if (currentSegment.Count > 0)
             {
-                // Collapse the previous element's trailing margin with the segment start
                 cursorY += prevMarginBottom;
                 float trailingMargin;
                 cursorY = LayoutSegmentAsColumns(box, currentSegment, context,

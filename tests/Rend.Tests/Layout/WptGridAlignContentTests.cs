@@ -465,15 +465,16 @@ namespace Rend.Tests.Layout
         public void AlignContent_SpaceEvenly_WithGap()
         {
             // 200px container, 2x30px rows + 10px gap = 70px total, 130px free
-            // space-evenly: 3 gaps of 130/3 ≈ 43.33px
+            // space-evenly distributes 130px into 3 equal slots of ~43.33px
+            // between-row gap = row-gap(10) + slot(43.33) = 53.33
             var root = LayoutTestHelper.Layout(
                 @"<body style='margin:0'><div style='display:grid;grid-template-columns:100px;grid-template-rows:30px 30px;align-content:space-evenly;row-gap:10px;height:200px;width:100px'>
                     <div id='a'></div>
                     <div id='b'></div>
                 </div></body>");
-            float gapSize = 130f / 3f;
-            float expectedFirst = gapSize;
-            float expectedSecond = gapSize + 30 + gapSize;
+            float slot = 130f / 3f;
+            float expectedFirst = slot;
+            float expectedSecond = slot + 30 + 10 + slot;
             Assert.True(System.Math.Abs(LayoutTestHelper.FindById(root, "a")!.ContentRect.Y - expectedFirst) < 2);
             Assert.True(System.Math.Abs(LayoutTestHelper.FindById(root, "b")!.ContentRect.Y - expectedSecond) < 2);
         }

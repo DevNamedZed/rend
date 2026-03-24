@@ -415,6 +415,44 @@ namespace Rend.Tests.Layout
                 $"calc(25% + 30px) of 400px = 130px (got {target.ContentRect.Height})");
         }
 
+        // [CSS-VALUES §8.1] Nested calc() on abspos height with no positioned ancestor
+        [Fact]
+        public void AbsPos_NestedCalcHeight_ViewportFallback()
+        {
+            var root = LayoutTestHelper.Layout(@"
+                <html><head><style>
+                html, body { margin: 0; padding: 0; }
+                html { overflow: hidden; }
+                #outer { position: absolute; top: 0; left: 0; width: 100%; height: calc(calc(100%)); }
+                </style></head><body><div id='outer'></div></body></html>", 800, 600);
+            var target = LayoutTestHelper.FindById(root, "outer")!;
+            _output.WriteLine($"nested calc height={target.ContentRect.Height}");
+            // Without a positioned ancestor, % height should resolve against viewport (600px)
+            Assert.True(target.ContentRect.Height >= 590,
+                $"calc(calc(100%)) of viewport 600px should be ~600px (got {target.ContentRect.Height})");
+        }
+
+        // [CSS-VALUES §6.3] calc() mixing viewport + percentage units on abspos
+        [Fact]
+        public void AbsPos_VhCalcPlusPct_ResolvesAgainstViewport()
+        {
+            var root = LayoutTestHelper.Layout(@"
+                <html><head><style>
+                html { background: red; }
+                #target { position: absolute; background: green;
+                    width: calc(100vw + 50%); height: calc(100vh + 50%);
+                    top: -50%; left: -50%; }
+                </style></head><body><div id='target'></div></body></html>", 800, 600);
+            var target = LayoutTestHelper.FindById(root, "target")!;
+            _output.WriteLine($"vh+pct: w={target.ContentRect.Width} h={target.ContentRect.Height} x={target.ContentRect.X} y={target.ContentRect.Y}");
+            // width = calc(100vw + 50%) should be 800+400=1200 (or close)
+            // height = calc(100vh + 50%) should be 600+300=900
+            Assert.True(target.ContentRect.Height >= 850,
+                $"calc(100vh + 50%) should be ~900px (got {target.ContentRect.Height})");
+            Assert.True(target.ContentRect.Width >= 1100,
+                $"calc(100vw + 50%) should be ~1200px (got {target.ContentRect.Width})");
+        }
+
         // [CSS-SIZING §4.1] border-box height includes padding and border
         [Fact]
         public void AbsPos_BorderBoxHeightIncludesPaddingAndBorder()

@@ -14,7 +14,8 @@ namespace Rend.Layout.Internal
         /// <summary>
         /// Resolve the content width for a block-level element.
         /// </summary>
-        public static float ResolveWidth(ComputedStyle style, float containingBlockWidth, LayoutBox box)
+        public static float ResolveWidth(ComputedStyle style, float containingBlockWidth, LayoutBox box,
+            float containingBlockHeight = float.NaN)
         {
             float specifiedWidth = style.Width;
             float width;
@@ -50,11 +51,21 @@ namespace Rend.Layout.Internal
                     && !DeferredPercent.IsEncoded(specHeight)
                     && !float.IsNegativeInfinity(specHeight))
                 {
+                    // [CSS2 §10.7] Apply max-height/min-height BEFORE deriving width,
+                    // so the width reflects the clamped height, not the raw specified height.
+                    float clampMaxH = ResolvePercentHeight(style.MaxHeight, containingBlockHeight);
+                    float clampMinH = ResolvePercentHeight(style.MinHeight, containingBlockHeight);
+                    if (!float.IsNaN(clampMaxH) && clampMaxH >= 0 && specHeight > clampMaxH)
+                    {
+                        specHeight = clampMaxH;
+                    }
+                    if (!float.IsNaN(clampMinH) && clampMinH >= 0 && specHeight < clampMinH)
+                    {
+                        specHeight = clampMinH;
+                    }
+
                     if (style.BoxSizing == CssBoxSizing.BorderBox)
                     {
-                        // [CSS-SIZING-4 §5.1] Ratio applies to border box dimensions.
-                        // Compute border-box width from border-box height, then subtract
-                        // horizontal padding+border for content width.
                         float widthBorderBox = specHeight * ratio;
                         width = widthBorderBox
                               - box.PaddingLeft - box.PaddingRight
@@ -66,7 +77,6 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
-                        // Content-box: ratio applies to content dimensions directly
                         width = specHeight * ratio;
                     }
                 }
@@ -95,6 +105,40 @@ namespace Rend.Layout.Internal
             // Apply min/max constraints (resolve deferred percentages)
             float minW = ResolvePercentWidth(style.MinWidth, containingBlockWidth);
             float maxW = ResolvePercentWidth(style.MaxWidth, containingBlockWidth);
+
+            // [CSS-SIZING-4 §5.2] Transfer max-height/min-height constraints through
+            // aspect-ratio to max-width/min-width. Only when width is AUTO and
+            // determined by the aspect-ratio (not explicitly set).
+            {
+                float arRatio = ParseAspectRatio(style);
+                bool isAutoWidthWithKnownCbh = float.IsNaN(style.Width) && !float.IsNaN(containingBlockHeight);
+                if (arRatio > 0 && float.IsNaN(style.Height) && isAutoWidthWithKnownCbh)
+                {
+                    float maxH = ResolvePercentHeight(style.MaxHeight, containingBlockHeight);
+                    if (!float.IsNaN(maxH) && maxH >= 0)
+                    {
+                        float transferredMaxW = maxH * arRatio;
+                        if (float.IsNaN(maxW) || maxW < 0 || transferredMaxW < maxW)
+                        {
+                            maxW = transferredMaxW;
+                        }
+                    }
+                    float minH = ResolvePercentHeight(style.MinHeight, containingBlockHeight);
+                    if (!float.IsNaN(minH) && minH >= 0)
+                    {
+                        float transferredMinW = minH * arRatio;
+                        // [CSS-SIZING-4 §5.2] Transferred min must not override explicit max
+                        if (!float.IsNaN(maxW) && maxW >= 0 && transferredMinW > maxW)
+                        {
+                            transferredMinW = maxW;
+                        }
+                        if (float.IsNaN(minW) || minW < 0 || transferredMinW > minW)
+                        {
+                            minW = transferredMinW;
+                        }
+                    }
+                }
+            }
             if (style.BoxSizing == CssBoxSizing.BorderBox)
             {
                 float hExtra = box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth;
@@ -166,10 +210,26 @@ namespace Rend.Layout.Internal
             if (float.IsNaN(specifiedHeight))
             {
                 // Check for aspect-ratio: if set and width is known, compute height from ratio.
+                // [CSS-SIZING-4 §5.1] Ratio applies to border-box when box-sizing: border-box.
                 float ratio = ParseAspectRatio(style);
                 if (ratio > 0 && box.ContentRect.Width > 0)
                 {
-                    float arHeight = box.ContentRect.Width / ratio;
+                    float arHeight;
+                    if (style.BoxSizing == CssBoxSizing.BorderBox)
+                    {
+                        float borderBoxWidth = box.ContentRect.Width
+                            + box.PaddingLeft + box.PaddingRight
+                            + box.BorderLeftWidth + box.BorderRightWidth;
+                        float borderBoxHeight = borderBoxWidth / ratio;
+                        arHeight = borderBoxHeight
+                            - box.PaddingTop - box.PaddingBottom
+                            - box.BorderTopWidth - box.BorderBottomWidth;
+                        if (arHeight < 0) { arHeight = 0; }
+                    }
+                    else
+                    {
+                        arHeight = box.ContentRect.Width / ratio;
+                    }
                     arHeight = ApplyMinMax(arHeight,
                         ResolveMinMaxH(style.MinHeight, containingBlockHeight),
                         ResolveMinMaxH(style.MaxHeight, containingBlockHeight));

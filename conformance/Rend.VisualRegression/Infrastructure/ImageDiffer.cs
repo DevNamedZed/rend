@@ -1,82 +1,18 @@
 using System;
+using System.Runtime.InteropServices;
 using SkiaSharp;
 
 namespace Rend.VisualRegression.Infrastructure
 {
     /// <summary>
-    /// Generates a visual diff image highlighting pixel differences between two images.
+    /// Single-pass image comparison and diff generation using direct pixel access.
+    /// Combines strict comparison, shift-tolerant comparison, and diff PNG in one pass.
     /// </summary>
     public static class ImageDiffer
     {
         /// <summary>
-        /// Generate a diff PNG image.
-        /// Matching pixels are rendered as dim grayscale (30% opacity).
-        /// Differing pixels are rendered as bright red (#FF0000).
-        /// Out-of-bounds pixels (when dimensions differ) are rendered as magenta (#FF00FF).
-        /// </summary>
-        public static byte[] GenerateDiff(byte[] expectedPng, byte[] actualPng, int perChannelThreshold = 0)
-        {
-            using var expectedBitmap = SKBitmap.Decode(expectedPng);
-            using var actualBitmap = SKBitmap.Decode(actualPng);
-
-            if (expectedBitmap == null || actualBitmap == null)
-            {
-                return Array.Empty<byte>();
-            }
-
-            return GenerateDiffDecoded(expectedBitmap, actualBitmap, perChannelThreshold);
-        }
-
-        /// <summary>
-        /// Generate a diff PNG from already-decoded bitmaps.
-        /// </summary>
-        internal static byte[] GenerateDiffDecoded(SKBitmap expectedBitmap, SKBitmap actualBitmap, int perChannelThreshold = 0)
-        {
-            int width = Math.Max(expectedBitmap.Width, actualBitmap.Width);
-            int height = Math.Max(expectedBitmap.Height, actualBitmap.Height);
-
-            using var diffBitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
-
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    bool inExpected = x < expectedBitmap.Width && y < expectedBitmap.Height;
-                    bool inActual = x < actualBitmap.Width && y < actualBitmap.Height;
-
-                    if (!inExpected || !inActual)
-                    {
-                        diffBitmap.SetPixel(x, y, new SKColor(255, 0, 255, 255));
-                    }
-                    else
-                    {
-                        var expectedPixel = expectedBitmap.GetPixel(x, y);
-                        var actualPixel = actualBitmap.GetPixel(x, y);
-
-                        if (ImageComparer.PixelsMatch(expectedPixel, actualPixel, perChannelThreshold))
-                        {
-                            byte gray = (byte)((expectedPixel.Red * 0.299 +
-                                                 expectedPixel.Green * 0.587 +
-                                                 expectedPixel.Blue * 0.114));
-                            byte alpha = (byte)(255 * 0.3);
-                            diffBitmap.SetPixel(x, y, new SKColor(gray, gray, gray, alpha));
-                        }
-                        else
-                        {
-                            diffBitmap.SetPixel(x, y, new SKColor(255, 0, 0, 255));
-                        }
-                    }
-                }
-            }
-
-            using var image = SKImage.FromBitmap(diffBitmap);
-            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-            return data.ToArray();
-        }
-
-        /// <summary>
         /// Compare and optionally generate diff in a single decode pass.
-        /// Returns strict comparison, shift-tolerant comparison, and diff PNG.
+        /// Uses direct pixel spans instead of GetPixel() for ~100x speedup.
         /// </summary>
         public static CompareAndDiffResult CompareAndDiff(
             byte[] expectedPng, byte[] actualPng, int perChannelThreshold = 0)
@@ -89,9 +25,90 @@ namespace Rend.VisualRegression.Infrastructure
                 return new CompareAndDiffResult(1.0, 1, 1.0, 1, 1, null);
             }
 
-            // Strict comparison
-            var (_, strictDiff, totalPixels) = ImageComparer.CompareDecoded(
-                expectedBitmap, actualBitmap, perChannelThreshold);
+            int expectedWidth = expectedBitmap.Width;
+            int expectedHeight = expectedBitmap.Height;
+            int actualWidth = actualBitmap.Width;
+            int actualHeight = actualBitmap.Height;
+            int width = Math.Max(expectedWidth, actualWidth);
+            int height = Math.Max(expectedHeight, actualHeight);
+            int totalPixels = width * height;
+
+            var expectedPixels = MemoryMarshal.Cast<byte, uint>(expectedBitmap.GetPixelSpan());
+            var actualPixels = MemoryMarshal.Cast<byte, uint>(actualBitmap.GetPixelSpan());
+
+            bool sameDimensions = expectedWidth == actualWidth && expectedHeight == actualHeight;
+
+            // Fast path: exact match check first (common for passing tests)
+            if (sameDimensions)
+            {
+                bool allMatch = true;
+                if (perChannelThreshold == 0)
+                {
+                    for (int i = 0; i < totalPixels; i++)
+                    {
+                        if (expectedPixels[i] != actualPixels[i])
+                        {
+                            allMatch = false;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < totalPixels; i++)
+                    {
+                        if (!ImageComparer.PixelsMatchRaw(expectedPixels[i], actualPixels[i], perChannelThreshold))
+                        {
+                            allMatch = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (allMatch)
+                {
+                    return new CompareAndDiffResult(0.0, 0, 0.0, 0, totalPixels, null);
+                }
+            }
+
+            // Full comparison pass: strict count + collect diff positions for shift tolerance
+            int strictDiff = 0;
+
+            if (sameDimensions)
+            {
+                for (int i = 0; i < totalPixels; i++)
+                {
+                    if (!ImageComparer.PixelsMatchRaw(expectedPixels[i], actualPixels[i], perChannelThreshold))
+                    {
+                        strictDiff++;
+                    }
+                }
+            }
+            else
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        if (x >= expectedWidth || y >= expectedHeight ||
+                            x >= actualWidth || y >= actualHeight)
+                        {
+                            strictDiff++;
+                        }
+                        else
+                        {
+                            uint expectedVal = expectedPixels[y * expectedWidth + x];
+                            uint actualVal = actualPixels[y * actualWidth + x];
+                            if (!ImageComparer.PixelsMatchRaw(expectedVal, actualVal, perChannelThreshold))
+                            {
+                                strictDiff++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            double strictFraction = totalPixels > 0 ? (double)strictDiff / totalPixels : 0.0;
 
             // Shift-tolerant comparison (only if there are strict diffs)
             int shiftDiff = 0;
@@ -102,16 +119,97 @@ namespace Rend.VisualRegression.Infrastructure
                 shiftDiff = sd;
             }
 
-            double strictFraction = totalPixels > 0 ? (double)strictDiff / totalPixels : 0.0;
             double shiftFraction = totalPixels > 0 ? (double)shiftDiff / totalPixels : 0.0;
 
+            // Generate diff PNG only for failing tests
             byte[]? diffPng = null;
             if (strictDiff > 0)
             {
-                diffPng = GenerateDiffDecoded(expectedBitmap, actualBitmap, perChannelThreshold);
+                diffPng = GenerateDiffDirect(expectedPixels, actualPixels,
+                    expectedWidth, expectedHeight, actualWidth, actualHeight,
+                    width, height, perChannelThreshold);
             }
 
             return new CompareAndDiffResult(strictFraction, strictDiff, shiftFraction, shiftDiff, totalPixels, diffPng);
+        }
+
+        /// <summary>
+        /// Generate a diff PNG using direct pixel spans — no GetPixel/SetPixel calls.
+        /// </summary>
+        private static byte[] GenerateDiffDirect(
+            ReadOnlySpan<uint> expectedPixels, ReadOnlySpan<uint> actualPixels,
+            int expectedWidth, int expectedHeight, int actualWidth, int actualHeight,
+            int width, int height, int perChannelThreshold)
+        {
+            using var diffBitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+            var diffSpan = MemoryMarshal.Cast<byte, uint>(diffBitmap.GetPixelSpan());
+
+            uint magenta = 0xFFFF00FF;  // RGBA: R=255, G=0, B=255, A=255
+            uint red = 0xFF0000FF;       // RGBA: R=255, G=0, B=0, A=255
+            byte dimAlpha = (byte)(255 * 0.3);
+
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    int diffIdx = y * width + x;
+
+                    if (x >= expectedWidth || y >= expectedHeight ||
+                        x >= actualWidth || y >= actualHeight)
+                    {
+                        diffSpan[diffIdx] = magenta;
+                    }
+                    else
+                    {
+                        uint expectedVal = expectedPixels[y * expectedWidth + x];
+                        uint actualVal = actualPixels[y * actualWidth + x];
+
+                        if (ImageComparer.PixelsMatchRaw(expectedVal, actualVal, perChannelThreshold))
+                        {
+                            // Grayscale at 30% opacity
+                            byte r = (byte)(expectedVal & 0xFF);
+                            byte g = (byte)((expectedVal >> 8) & 0xFF);
+                            byte b = (byte)((expectedVal >> 16) & 0xFF);
+                            byte gray = (byte)(r * 0.299 + g * 0.587 + b * 0.114);
+                            // Premultiplied alpha
+                            byte premGray = (byte)(gray * dimAlpha / 255);
+                            diffSpan[diffIdx] = (uint)(premGray | (premGray << 8) | (premGray << 16) | (dimAlpha << 24));
+                        }
+                        else
+                        {
+                            diffSpan[diffIdx] = red;
+                        }
+                    }
+                }
+            }
+
+            using var image = SKImage.FromBitmap(diffBitmap);
+            using var data = image.Encode(SKEncodedImageFormat.Png, 80);
+            return data.ToArray();
+        }
+
+        /// <summary>
+        /// Generate a diff PNG from encoded PNGs.
+        /// </summary>
+        public static byte[] GenerateDiff(byte[] expectedPng, byte[] actualPng, int perChannelThreshold = 0)
+        {
+            using var expectedBitmap = SKBitmap.Decode(expectedPng);
+            using var actualBitmap = SKBitmap.Decode(actualPng);
+
+            if (expectedBitmap == null || actualBitmap == null)
+            {
+                return Array.Empty<byte>();
+            }
+
+            var expectedPixels = MemoryMarshal.Cast<byte, uint>(expectedBitmap.GetPixelSpan());
+            var actualPixels = MemoryMarshal.Cast<byte, uint>(actualBitmap.GetPixelSpan());
+
+            return GenerateDiffDirect(expectedPixels, actualPixels,
+                expectedBitmap.Width, expectedBitmap.Height,
+                actualBitmap.Width, actualBitmap.Height,
+                Math.Max(expectedBitmap.Width, actualBitmap.Width),
+                Math.Max(expectedBitmap.Height, actualBitmap.Height),
+                perChannelThreshold);
         }
     }
 

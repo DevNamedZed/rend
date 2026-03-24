@@ -12,9 +12,7 @@ namespace Rend.Tests.Layout
         private readonly ITestOutputHelper _output;
         public WptPositionConformanceTests(ITestOutputHelper output) { _output = output; }
 
-        // WPT: position-absolute-center-006 — table centered with auto margins and inset:0
-        // TODO: Known bug — abspos table auto margins don't center
-        [Fact(Skip = "Known bug: abspos table auto margin centering")]
+        [Fact(Skip = "Known bug: abspos table centering")]
         public void AbsoluteCenter006_TableAutoMargins()
         {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -31,7 +29,7 @@ namespace Rend.Tests.Layout
         }
 
         // WPT: position-absolute-center-007 — table centered vertically
-        [Fact(Skip = "Known bug: abspos table auto margin centering")]
+        [Fact(Skip = "Known bug: abspos table centering")]
         public void AbsoluteCenter007_TableVerticalCenter()
         {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -63,7 +61,7 @@ namespace Rend.Tests.Layout
 
         // WPT: position-absolute-fit-content — max-height:fit-content on abspos
         // TODO: Known bug — fit-content as max-height value not resolved for abspos
-        [Fact(Skip = "Known bug: max-height:fit-content on abspos")]
+        [Fact(Skip = "Known bug: abspos max-height:fit-content")]
         public void AbsoluteFitContent_MaxHeight()
         {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>

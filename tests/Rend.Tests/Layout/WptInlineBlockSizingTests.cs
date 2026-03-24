@@ -265,7 +265,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS2 §10.4] inline-block min-width constraint
-        [Fact(Skip = "Known bug: min-width not applied to inline-block shrink-to-fit")]
+        [Fact]
         public void InlineBlock_MinWidth()
         {
             var root = LayoutTestHelper.Layout(@"
@@ -301,7 +301,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS2 §10.7] inline-block min-height constraint
-        [Fact(Skip = "Known bug: min-height not applied to inline-block auto height")]
+        [Fact]
         public void InlineBlock_MinHeight()
         {
             var root = LayoutTestHelper.Layout(@"
@@ -319,7 +319,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS2 §10.7] inline-block max-height constraint
-        [Fact(Skip = "Known bug: max-height not applied to inline-block auto height")]
+        [Fact]
         public void InlineBlock_MaxHeight()
         {
             var root = LayoutTestHelper.Layout(@"

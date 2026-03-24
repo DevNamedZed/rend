@@ -45,6 +45,10 @@ namespace Rend.Layout
             context.ContainingBlockWidth = contentWidth;
             context.ContainingBlockHeight = contentHeight;
 
+            // Set viewport hints for deferred calc() evaluation (vw/vh units)
+            Css.Resolution.Internal.ValueResolver.ViewportWidthHint = options.ViewportWidth;
+            Css.Resolution.Internal.ValueResolver.ViewportHeightHint = options.ViewportHeight;
+
             // Create root layout box
             var rootBox = new LayoutBox(styledTree.Root, BoxType.Block);
             rootBox.ContentRect = new RectF(
@@ -134,7 +138,25 @@ namespace Rend.Layout
                 }
             }
 
-            var newContaining = (style != null && style.Position != CssPosition.Static) ? box : containingBlock;
+            // [CSS-TRANSFORMS §3] Elements with transform (or position != static)
+            // establish containing blocks for absolutely positioned descendants.
+            var newContaining = containingBlock;
+            if (style != null)
+            {
+                if (style.Position != CssPosition.Static)
+                {
+                    newContaining = box;
+                }
+                else if (box.StyledNode != null)
+                {
+                    var transformRef = style.GetRefValue(Css.Properties.Internal.PropertyId.Transform);
+                    if (transformRef != null && !(transformRef is CssKeywordValue tkw && tkw.Keyword == "none")
+                        && !(transformRef is string ts && ts == "none"))
+                    {
+                        newContaining = box;
+                    }
+                }
+            }
 
             for (int i = 0; i < box.Children.Count; i++)
             {

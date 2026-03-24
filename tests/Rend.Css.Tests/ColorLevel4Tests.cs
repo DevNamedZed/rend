@@ -156,5 +156,101 @@ namespace Rend.Css.Tests
             var style = ResolveElement("div { border-top-color: lab(100 0 0); }");
             Assert.InRange(style.BorderTopColor.R, 250, 255);
         }
+
+        [Fact]
+        public void Color_SrgbLinear_White_ParsesCorrectly()
+        {
+            var style = ResolveElement("div { color: color(srgb-linear 1 1 1); }");
+            Assert.Equal(255, style.Color.R);
+            Assert.Equal(255, style.Color.G);
+            Assert.Equal(255, style.Color.B);
+        }
+
+        [Fact]
+        public void Color_SrgbLinear_Black_ParsesCorrectly()
+        {
+            var style = ResolveElement("div { color: color(srgb-linear 0 0 0); }");
+            Assert.Equal(0, style.Color.R);
+            Assert.Equal(0, style.Color.G);
+            Assert.Equal(0, style.Color.B);
+        }
+
+        [Fact]
+        public void Color_SrgbLinear_MidGray_AppliesGammaCorrection()
+        {
+            // Linear 0.5 should gamma-encode to sRGB ~188 (0.5^(1/2.4)*1.055-0.055 ≈ 0.735)
+            var style = ResolveElement("div { color: color(srgb-linear 0.5 0.5 0.5); }");
+            Assert.InRange(style.Color.R, 186, 190);
+            Assert.InRange(style.Color.G, 186, 190);
+            Assert.InRange(style.Color.B, 186, 190);
+        }
+
+        [Fact]
+        public void Color_SrgbLinear_LowValue_UsesLinearSegment()
+        {
+            // Linear 0.002 is in the linear segment: sRGB = 12.92 * 0.002 = 0.02584 → ~7
+            var style = ResolveElement("div { color: color(srgb-linear 0.002 0 0); }");
+            Assert.InRange(style.Color.R, 6, 8);
+            Assert.Equal(0, style.Color.G);
+            Assert.Equal(0, style.Color.B);
+        }
+
+        [Fact]
+        public void Color_SrgbLinear_WithAlpha_ParsesCorrectly()
+        {
+            var style = ResolveElement("div { color: color(srgb-linear 1 0 0 / 0.5); }");
+            Assert.Equal(255, style.Color.R);
+            Assert.Equal(0, style.Color.G);
+            Assert.Equal(0, style.Color.B);
+            Assert.Equal(128, style.Color.A);
+        }
+
+        [Fact]
+        public void Color_DisplayP3_White_ParsesCorrectly()
+        {
+            var style = ResolveElement("div { color: color(display-p3 1 1 1); }");
+            Assert.Equal(255, style.Color.R);
+            Assert.Equal(255, style.Color.G);
+            Assert.Equal(255, style.Color.B);
+        }
+
+        [Fact]
+        public void Color_DisplayP3_Black_ParsesCorrectly()
+        {
+            var style = ResolveElement("div { color: color(display-p3 0 0 0); }");
+            Assert.Equal(0, style.Color.R);
+            Assert.Equal(0, style.Color.G);
+            Assert.Equal(0, style.Color.B);
+        }
+
+        [Fact]
+        public void Color_DisplayP3_SrgbEquivalent_ProducesCorrectColor()
+        {
+            // display-p3(0.917, 0.2, 0.139) is approximately sRGB red (255, 0, 0)
+            // but with P3 gamut mapping it should be close to pure red
+            var style = ResolveElement("div { color: color(display-p3 0.917 0.2 0.139); }");
+            Assert.True(style.Color.R > 200);
+        }
+
+        [Fact]
+        public void Color_DisplayP3_WithAlpha_ParsesCorrectly()
+        {
+            var style = ResolveElement("div { color: color(display-p3 0 1 0 / 0.5); }");
+            Assert.Equal(128, style.Color.A);
+        }
+
+        [Fact]
+        public void Color_SrgbLinear_ClampsNegativeValues()
+        {
+            var style = ResolveElement("div { color: color(srgb-linear -0.5 0 0); }");
+            Assert.Equal(0, style.Color.R);
+        }
+
+        [Fact]
+        public void Color_SrgbLinear_ClampsAboveOneValues()
+        {
+            var style = ResolveElement("div { color: color(srgb-linear 1.5 0 0); }");
+            Assert.Equal(255, style.Color.R);
+        }
     }
 }

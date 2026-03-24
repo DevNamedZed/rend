@@ -214,6 +214,7 @@ namespace Rend.Tests.Rendering
             {
                 TextCalls.Add((text, style));
             }
+            public (float Ascent, float Descent) GetFontMetrics(FontDescriptor font, float fontSize) => (fontSize * 0.8f, fontSize * 0.2f);
 
             public void DrawGlyphs(ShapedTextRun run, float x, float y, CssColor color, FontDescriptor font)
             {

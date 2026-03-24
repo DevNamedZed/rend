@@ -810,10 +810,7 @@ namespace Rend.Rendering.Internal
                 return (pct.Value / 100f, 0.5f);
 
             if (raw is CssKeywordValue kw)
-            {
-                float v = KeywordToFraction(kw.Keyword);
-                return (v, 0.5f);
-            }
+                return (KeywordToFraction(kw.Keyword), 0.5f);
 
             return (0.5f, 0.5f);
         }
@@ -822,7 +819,7 @@ namespace Rend.Rendering.Internal
         {
             if (val is CssPercentageValue pct) return pct.Value / 100f;
             if (val is CssKeywordValue kw) return KeywordToFraction(kw.Keyword);
-            if (val is CssDimensionValue dim) return 0.5f; // px values need container size
+            if (val is CssDimensionValue) return 0.5f;
             if (val is CssNumberValue num) return num.Value == 0 ? 0f : 0.5f;
             return 0.5f;
         }

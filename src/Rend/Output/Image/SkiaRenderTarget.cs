@@ -1057,6 +1057,16 @@ namespace Rend.Output.Image
             return (ulPos, ulThick, stPos, stThick);
         }
 
+        /// <inheritdoc />
+        public (float Ascent, float Descent) GetFontMetrics(FontDescriptor font, float fontSize)
+        {
+            SKTypeface typeface = _fontMapper.GetOrCreate(font, null);
+            using var skFont = new SKFont(typeface, fontSize);
+            var m = skFont.Metrics;
+            return ((float)Math.Round(-m.Ascent, MidpointRounding.AwayFromZero),
+                    (float)Math.Round(m.Descent, MidpointRounding.AwayFromZero));
+        }
+
         public void AddLink(RectF rect, string uri)
         {
             // Links are not applicable to raster image output.

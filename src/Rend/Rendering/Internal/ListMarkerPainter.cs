@@ -200,7 +200,6 @@ namespace Rend.Rendering.Internal
             // Position at baseline using CSS half-leading model:
             // halfLeading = (lineHeight - contentArea) / 2
             // baseline Y = top + halfLeading + ascent
-            // With typical ascent ratio of 0.8:
             float y = contentRect.Y + (pixelLineHeight - fontSize) / 2f + fontSize * 0.8f;
 
             if (isInside)

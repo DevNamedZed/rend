@@ -1,10 +1,12 @@
 using System;
+using System.Runtime.InteropServices;
 using SkiaSharp;
 
 namespace Rend.VisualRegression.Infrastructure
 {
     /// <summary>
-    /// Pixel-by-pixel image comparison using SkiaSharp.
+    /// High-performance pixel-by-pixel image comparison using direct byte access.
+    /// Avoids SKBitmap.GetPixel() P/Invoke overhead by working with raw pixel spans.
     /// </summary>
     public static class ImageComparer
     {
@@ -27,35 +29,70 @@ namespace Rend.VisualRegression.Infrastructure
         }
 
         /// <summary>
-        /// Compare two already-decoded bitmaps pixel by pixel.
+        /// Compare two already-decoded bitmaps using direct pixel spans.
         /// </summary>
         internal static (double DiffFraction, int DiffPixels, int TotalPixels) CompareDecoded(
             SKBitmap expectedBitmap, SKBitmap actualBitmap, int perChannelThreshold = 0)
         {
-            int width = Math.Max(expectedBitmap.Width, actualBitmap.Width);
-            int height = Math.Max(expectedBitmap.Height, actualBitmap.Height);
+            int expectedWidth = expectedBitmap.Width;
+            int expectedHeight = expectedBitmap.Height;
+            int actualWidth = actualBitmap.Width;
+            int actualHeight = actualBitmap.Height;
+            int width = Math.Max(expectedWidth, actualWidth);
+            int height = Math.Max(expectedHeight, actualHeight);
             int total = width * height;
             int diffCount = 0;
 
-            for (int y = 0; y < height; y++)
+            var expectedPixels = expectedBitmap.GetPixelSpan();
+            var actualPixels = actualBitmap.GetPixelSpan();
+            var expectedRgba = MemoryMarshal.Cast<byte, uint>(expectedPixels);
+            var actualRgba = MemoryMarshal.Cast<byte, uint>(actualPixels);
+
+            bool sameDimensions = expectedWidth == actualWidth && expectedHeight == actualHeight;
+
+            if (sameDimensions && perChannelThreshold == 0)
             {
-                for (int x = 0; x < width; x++)
+                // Fast path: same dimensions, exact match — just compare uint values
+                for (int i = 0; i < total; i++)
                 {
-                    bool inExpected = x < expectedBitmap.Width && y < expectedBitmap.Height;
-                    bool inActual = x < actualBitmap.Width && y < actualBitmap.Height;
-
-                    if (!inExpected || !inActual)
+                    if (expectedRgba[i] != actualRgba[i])
                     {
                         diffCount++;
-                        continue;
                     }
-
-                    var expectedPixel = expectedBitmap.GetPixel(x, y);
-                    var actualPixel = actualBitmap.GetPixel(x, y);
-
-                    if (!PixelsMatch(expectedPixel, actualPixel, perChannelThreshold))
+                }
+            }
+            else if (sameDimensions)
+            {
+                // Same dimensions with threshold
+                for (int i = 0; i < total; i++)
+                {
+                    if (!PixelsMatchRaw(expectedRgba[i], actualRgba[i], perChannelThreshold))
                     {
                         diffCount++;
+                    }
+                }
+            }
+            else
+            {
+                // Different dimensions — row-by-row with bounds checks
+                for (int y = 0; y < height; y++)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        if (x >= expectedWidth || y >= expectedHeight ||
+                            x >= actualWidth || y >= actualHeight)
+                        {
+                            diffCount++;
+                            continue;
+                        }
+
+                        uint expectedVal = expectedRgba[y * expectedWidth + x];
+                        uint actualVal = actualRgba[y * actualWidth + x];
+
+                        if (!PixelsMatchRaw(expectedVal, actualVal, perChannelThreshold))
+                        {
+                            diffCount++;
+                        }
                     }
                 }
             }
@@ -65,51 +102,56 @@ namespace Rend.VisualRegression.Infrastructure
         }
 
         /// <summary>
-        /// Compare two bitmaps with 1-pixel shift tolerance.
-        /// A pixel that doesn't match at (x,y) is forgiven if it matches any
-        /// neighbor in a 3x3 area of the other image. Returns both strict and
-        /// shift-tolerant diff counts.
+        /// Compare two bitmaps with 1-pixel shift tolerance using direct pixel access.
         /// </summary>
         internal static (int StrictDiffPixels, int ShiftTolerantDiffPixels, int TotalPixels) CompareWithShiftTolerance(
             SKBitmap expectedBitmap, SKBitmap actualBitmap, int perChannelThreshold = 0)
         {
-            int width = Math.Max(expectedBitmap.Width, actualBitmap.Width);
-            int height = Math.Max(expectedBitmap.Height, actualBitmap.Height);
+            int expectedWidth = expectedBitmap.Width;
+            int expectedHeight = expectedBitmap.Height;
+            int actualWidth = actualBitmap.Width;
+            int actualHeight = actualBitmap.Height;
+            int width = Math.Max(expectedWidth, actualWidth);
+            int height = Math.Max(expectedHeight, actualHeight);
             int total = width * height;
             int strictDiff = 0;
             int shiftDiff = 0;
+
+            var expectedPixels = MemoryMarshal.Cast<byte, uint>(expectedBitmap.GetPixelSpan());
+            var actualPixels = MemoryMarshal.Cast<byte, uint>(actualBitmap.GetPixelSpan());
 
             for (int y = 0; y < height; y++)
             {
                 for (int x = 0; x < width; x++)
                 {
-                    bool inExpected = x < expectedBitmap.Width && y < expectedBitmap.Height;
-                    bool inActual = x < actualBitmap.Width && y < actualBitmap.Height;
-
-                    if (!inExpected || !inActual)
+                    if (x >= expectedWidth || y >= expectedHeight ||
+                        x >= actualWidth || y >= actualHeight)
                     {
                         strictDiff++;
                         shiftDiff++;
                         continue;
                     }
 
-                    var expectedPixel = expectedBitmap.GetPixel(x, y);
-                    var actualPixel = actualBitmap.GetPixel(x, y);
+                    uint expectedVal = expectedPixels[y * expectedWidth + x];
+                    uint actualVal = actualPixels[y * actualWidth + x];
 
-                    if (PixelsMatch(expectedPixel, actualPixel, perChannelThreshold))
+                    if (PixelsMatchRaw(expectedVal, actualVal, perChannelThreshold))
+                    {
                         continue;
+                    }
 
                     strictDiff++;
 
-                    // Check if actual pixel matches any expected neighbor (1px shift)
-                    if (MatchesNeighbor(expectedBitmap, x, y, actualPixel, perChannelThreshold))
+                    if (MatchesNeighborRaw(expectedPixels, expectedWidth, expectedHeight, x, y, actualVal, perChannelThreshold))
+                    {
                         continue;
+                    }
 
-                    // Check if expected pixel matches any actual neighbor (1px shift)
-                    if (MatchesNeighbor(actualBitmap, x, y, expectedPixel, perChannelThreshold))
+                    if (MatchesNeighborRaw(actualPixels, actualWidth, actualHeight, x, y, expectedVal, perChannelThreshold))
+                    {
                         continue;
+                    }
 
-                    // No neighbor match — this is a real diff even with shift tolerance
                     shiftDiff++;
                 }
             }
@@ -118,31 +160,58 @@ namespace Rend.VisualRegression.Infrastructure
         }
 
         /// <summary>
-        /// Check if pixel matches any pixel in a 3x3 neighborhood in the bitmap.
+        /// Check if pixel matches any pixel in a 3x3 neighborhood using raw pixel span.
         /// </summary>
-        private static bool MatchesNeighbor(SKBitmap bitmap, int cx, int cy, SKColor pixel, int threshold)
+        private static bool MatchesNeighborRaw(ReadOnlySpan<uint> pixels, int width, int height,
+            int centerX, int centerY, uint targetPixel, int threshold)
         {
-            int w = bitmap.Width;
-            int h = bitmap.Height;
+            int minY = Math.Max(0, centerY - 1);
+            int maxY = Math.Min(height - 1, centerY + 1);
+            int minX = Math.Max(0, centerX - 1);
+            int maxX = Math.Min(width - 1, centerX + 1);
 
-            for (int dy = -1; dy <= 1; dy++)
+            for (int ny = minY; ny <= maxY; ny++)
             {
-                int ny = cy + dy;
-                if (ny < 0 || ny >= h) continue;
-
-                for (int dx = -1; dx <= 1; dx++)
+                int rowOffset = ny * width;
+                for (int nx = minX; nx <= maxX; nx++)
                 {
-                    if (dx == 0 && dy == 0) continue; // skip center, already checked
+                    if (nx == centerX && ny == centerY)
+                    {
+                        continue;
+                    }
 
-                    int nx = cx + dx;
-                    if (nx < 0 || nx >= w) continue;
-
-                    if (PixelsMatch(bitmap.GetPixel(nx, ny), pixel, threshold))
+                    if (PixelsMatchRaw(pixels[rowOffset + nx], targetPixel, threshold))
+                    {
                         return true;
+                    }
                 }
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Compare two RGBA pixels packed as uint with per-channel threshold.
+        /// Layout: byte 0=R, byte 1=G, byte 2=B, byte 3=A (RGBA8888).
+        /// </summary>
+        internal static bool PixelsMatchRaw(uint a, uint b, int threshold)
+        {
+            if (a == b)
+            {
+                return true;
+            }
+            if (threshold == 0)
+            {
+                return false;
+            }
+
+            int diffR = Math.Abs((int)(a & 0xFF) - (int)(b & 0xFF));
+            int diffG = Math.Abs((int)((a >> 8) & 0xFF) - (int)((b >> 8) & 0xFF));
+            int diffB = Math.Abs((int)((a >> 16) & 0xFF) - (int)((b >> 16) & 0xFF));
+            int diffA = Math.Abs((int)((a >> 24) & 0xFF) - (int)((b >> 24) & 0xFF));
+
+            return diffR <= threshold && diffG <= threshold &&
+                   diffB <= threshold && diffA <= threshold;
         }
 
         internal static bool PixelsMatch(SKColor a, SKColor b, int threshold)

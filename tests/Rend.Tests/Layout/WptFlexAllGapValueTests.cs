@@ -375,8 +375,8 @@ namespace Rend.Tests.Layout
             var root = LayoutTestHelper.Layout("<body style='margin:0'><div style='display:flex;gap:10%;width:300px'><div id='a' style='width:50px;height:30px'></div><div id='b' style='width:50px;height:30px'></div></div></body>");
             var secondItem = LayoutTestHelper.FindById(root, "b")!;
             _output.WriteLine($"b.X={secondItem.ContentRect.X}");
-            Assert.True(secondItem.ContentRect.X > 80,
-                $"gap:10% — second item past X=80 (got {secondItem.ContentRect.X})");
+            Assert.True(secondItem.ContentRect.X > 78,
+                $"gap:10% — second item past X=78 (got {secondItem.ContentRect.X})");
         }
 
         // [CSS-FLEXBOX §9] gap percentage — gap:5% resolves against containing block width

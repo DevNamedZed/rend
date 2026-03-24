@@ -2,6 +2,8 @@ using System;
 using Rend.Core.Values;
 using Rend.Css;
 using Rend.Css.Properties.Internal;
+using Rend.Css.Resolution.Internal;
+using Rend.Style;
 
 namespace Rend.Layout.Internal
 {
@@ -22,32 +24,44 @@ namespace Rend.Layout.Internal
             switch (style.Position)
             {
                 case CssPosition.Relative:
-                    ApplyRelative(box, style);
+                    ApplyRelative(box, style, containingBlock);
                     break;
                 case CssPosition.Absolute:
-                    ApplyAbsolute(box, style, containingBlock);
+                    // [CSS2 §10.1] If no positioned ancestor exists, the containing block
+                    // is the initial containing block (viewport). When the containing block
+                    // is the root html element (position:static), use the viewport box so
+                    // percentage/calc offsets and dimensions resolve against viewport size.
+                    var absContaining = containingBlock;
+                    if (rootBox != null
+                        && containingBlock.StyledNode is StyledElement cbElem
+                        && cbElem.TagName == "html"
+                        && containingBlock.StyledNode.Style.Position == CssPosition.Static)
+                    {
+                        absContaining = rootBox;
+                    }
+                    ApplyAbsolute(box, style, absContaining);
                     break;
                 case CssPosition.Fixed:
                     ApplyFixed(box, style, rootBox ?? containingBlock);
                     break;
                 case CssPosition.Sticky:
                     // Sticky acts as relative for static rendering
-                    ApplyRelative(box, style);
+                    ApplyRelative(box, style, containingBlock);
                     break;
             }
         }
 
-        private static void ApplyRelative(LayoutBox box, ComputedStyle style)
+        private static void ApplyRelative(LayoutBox box, ComputedStyle style, LayoutBox containingBlock)
         {
             float dx = 0, dy = 0;
 
-            // For relative positioning, percentage top/bottom resolve against containing block height,
-            // left/right against containing block width. We don't have the CB here, so resolve
-            // deferred percentages against 0 (treat as auto) — percentages are rare for relative.
-            float top = ResolvePositionValue(style.Top, 0);
-            float left = ResolvePositionValue(style.Left, 0);
-            float bottom = ResolvePositionValue(style.Bottom, 0);
-            float right = ResolvePositionValue(style.Right, 0);
+            // [CSS2 §9.4.3] Percentage offsets resolve against containing block dimensions.
+            float cbWidth = containingBlock.ContentRect.Width;
+            float cbHeight = containingBlock.ContentRect.Height;
+            float top = ResolvePositionValue(style.Top, cbHeight);
+            float left = ResolvePositionValue(style.Left, cbWidth);
+            float bottom = ResolvePositionValue(style.Bottom, cbHeight);
+            float right = ResolvePositionValue(style.Right, cbWidth);
 
             if (!float.IsNaN(top)) dy = top;
             else if (!float.IsNaN(bottom)) dy = -bottom;
@@ -69,10 +83,10 @@ namespace Rend.Layout.Internal
         {
             var cb = containingBlock.PaddingRect;
 
-            float top = ResolvePositionValue(style.Top, cb.Height);
-            float left = ResolvePositionValue(style.Left, cb.Width);
-            float bottom = ResolvePositionValue(style.Bottom, cb.Height);
-            float right = ResolvePositionValue(style.Right, cb.Width);
+            float top = ResolvePositionValueWithCalc(style.Top, cb.Height, style, PropertyId.Top);
+            float left = ResolvePositionValueWithCalc(style.Left, cb.Width, style, PropertyId.Left);
+            float bottom = ResolvePositionValueWithCalc(style.Bottom, cb.Height, style, PropertyId.Bottom);
+            float right = ResolvePositionValueWithCalc(style.Right, cb.Width, style, PropertyId.Right);
 
 
             float x = box.ContentRect.X;
@@ -92,6 +106,25 @@ namespace Rend.Layout.Internal
                     {
                         h -= box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth;
                         if (h < 0) { h = 0; }
+                    }
+                }
+            }
+            // [CSS2 §10.5] Re-resolve deferred calc() height (NegativeInfinity sentinel)
+            // against the containing block's now-known height.
+            else if (h <= 0 && float.IsNegativeInfinity(style.Height))
+            {
+                float cbHeight = cb.Height;
+                if (cbHeight > 0)
+                {
+                    var refVal = style.GetRefValue(PropertyId.Height);
+                    if (refVal is CssFunctionValue calcFn)
+                    {
+                        h = ValueResolver.EvaluateDeferredCalc(calcFn, cbHeight);
+                        if (style.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            h -= box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth;
+                            if (h < 0) { h = 0; }
+                        }
                     }
                 }
             }
@@ -212,6 +245,32 @@ namespace Rend.Layout.Internal
             if (DeferredPercent.IsEncoded(value))
             {
                 return DeferredPercent.Resolve(value, containingDimension);
+            }
+            return value;
+        }
+
+        /// <summary>
+        /// Resolves a position value that may have a deferred calc() expression stored as a ref value.
+        /// </summary>
+        private static float ResolvePositionValueWithCalc(
+            float value, float containingDimension, ComputedStyle style, int propertyId)
+        {
+            if (float.IsNaN(value))
+            {
+                return float.NaN;
+            }
+            if (DeferredPercent.IsEncoded(value))
+            {
+                return DeferredPercent.Resolve(value, containingDimension);
+            }
+            if (float.IsNegativeInfinity(value))
+            {
+                var refVal = style.GetRefValue(propertyId);
+                if (refVal is CssFunctionValue calcFn)
+                {
+                    return ValueResolver.EvaluateDeferredCalc(calcFn, containingDimension);
+                }
+                return 0;
             }
             return value;
         }

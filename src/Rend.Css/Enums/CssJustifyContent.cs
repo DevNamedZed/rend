@@ -10,6 +10,7 @@ namespace Rend.Css
         SpaceAround,
         SpaceEvenly,
         Start,
-        End
+        End,
+        Stretch
     }
 }

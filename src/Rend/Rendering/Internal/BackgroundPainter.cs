@@ -13,6 +13,8 @@ namespace Rend.Rendering.Internal
     /// </summary>
     internal static class BackgroundPainter
     {
+        [ThreadStatic] private static CssColor? _currentColor;
+
         /// <summary>
         /// Paints the background for the given box onto the render target.
         /// Per CSS Backgrounds L3 §3, layers are painted back-to-front: last layer first, first layer on top.
@@ -77,6 +79,41 @@ namespace Rend.Rendering.Internal
 
                 PaintBackgroundLayer(layerImage, layerIdx, repeatRef, positionRef, sizeRef,
                     style, clipRect, originRect, radii, hasRadius, target, imageResolver);
+            }
+        }
+
+        /// <summary>
+        /// [CSS2 §14.2] Paints background-image layers from a style onto the full canvas rect.
+        /// Used when propagating the body element's background to the canvas.
+        /// </summary>
+        internal static void PaintCanvasBackgroundImage(ComputedStyle style, RectF canvasRect,
+            IRenderTarget target, ImageResolverDelegate? imageResolver, RectF? originRect = null)
+        {
+            object? bgImageRef = style.GetRefValue(PropertyId.BackgroundImage);
+            if (bgImageRef == null)
+            {
+                return;
+            }
+
+            int layerCount = 1;
+            CssListValue? imageList = null;
+            if (bgImageRef is CssListValue imgList && imgList.Separator == ',')
+            {
+                layerCount = imgList.Values.Count;
+                imageList = imgList;
+            }
+
+            object? repeatRef = style.GetRefValue(PropertyId.BackgroundRepeat);
+            object? positionRef = style.GetRefValue(PropertyId.BackgroundPosition);
+            object? sizeRef = style.GetRefValue(PropertyId.BackgroundSize);
+            var emptyRadii = new BorderRadii();
+            RectF positioningArea = originRect ?? canvasRect;
+
+            for (int layerIdx = layerCount - 1; layerIdx >= 0; layerIdx--)
+            {
+                object? layerImage = imageList != null ? imageList.Values[layerIdx] : bgImageRef;
+                PaintBackgroundLayer(layerImage, layerIdx, repeatRef, positionRef, sizeRef,
+                    style, canvasRect, positioningArea, emptyRadii, false, target, imageResolver);
             }
         }
 
@@ -159,7 +196,7 @@ namespace Rend.Rendering.Internal
             // Check for CSS gradient functions
             if (layerImage is CssFunctionValue gradientFn)
             {
-                var gradient = ParseCssGradient(gradientFn, clipRect);
+                var gradient = ParseCssGradient(gradientFn, clipRect, style.Color);
                 if (gradient != null)
                 {
                     BrushInfo gradBrush = BrushInfo.FromGradient(gradient);
@@ -503,8 +540,11 @@ namespace Rend.Rendering.Internal
         /// <summary>
         /// Parses a CSS gradient function (linear-gradient, radial-gradient) into a GradientInfo.
         /// </summary>
-        internal static GradientInfo? ParseCssGradient(CssFunctionValue fn, RectF rect)
+        internal static GradientInfo? ParseCssGradient(CssFunctionValue fn, RectF rect, CssColor? currentColor = null)
         {
+            // Store currentColor for ParseColorStops to use
+            _currentColor = currentColor;
+
             if (fn.Name == "linear-gradient" || fn.Name == "-webkit-linear-gradient")
                 return ParseLinearGradient(fn, rect);
             if (fn.Name == "repeating-linear-gradient")
@@ -572,7 +612,7 @@ namespace Rend.Rendering.Internal
                                      + Math.Abs(rect.Height * (float)Math.Cos(angleRad));
             if (gradientLineLength <= 0) gradientLineLength = 1;
 
-            var stops = ParseColorStops(fn.Arguments, colorStartIdx, gradientLineLength);
+            var stops = ParseColorStops(fn.Arguments, colorStartIdx, gradientLineLength, _currentColor);
             if (stops == null || stops.Length < 2) return null;
 
             return new GradientInfo(GradientType.Linear, stops) { Angle = angle };
@@ -640,6 +680,12 @@ namespace Rend.Rendering.Internal
                             else break;
                         }
                         donePos:
+                        // Ensure i advances past "at" + any parsed positions.
+                        // If no positions were found, skip "at" itself to avoid infinite loop.
+                        if (colorStartIdx <= i)
+                        {
+                            colorStartIdx = i + 1;
+                        }
                         i = colorStartIdx - 1;
                     }
                     else
@@ -740,7 +786,7 @@ namespace Rend.Rendering.Internal
                 gradientRadius = Math.Max(erxAbs, eryAbs);
             }
 
-            var stops = ParseColorStops(fn.Arguments, colorStartIdx, gradientRadius);
+            var stops = ParseColorStops(fn.Arguments, colorStartIdx, gradientRadius, _currentColor);
             if (stops == null || stops.Length < 2) return null;
 
             return new GradientInfo(GradientType.Radial, stops)
@@ -818,6 +864,10 @@ namespace Rend.Rendering.Internal
                             else break;
                         }
                         donePos:
+                        if (colorStartIdx <= i)
+                        {
+                            colorStartIdx = i + 1;
+                        }
                         i = colorStartIdx - 1;
                     }
                     else
@@ -834,7 +884,7 @@ namespace Rend.Rendering.Internal
                 }
             }
 
-            var stops = ParseColorStops(fn.Arguments, colorStartIdx);
+            var stops = ParseColorStops(fn.Arguments, colorStartIdx, 0, _currentColor);
             if (stops == null || stops.Length < 2) return null;
 
             return new GradientInfo(GradientType.Conic, stops)
@@ -877,7 +927,7 @@ namespace Rend.Rendering.Internal
             }
         }
 
-        private static GradientStop[]? ParseColorStops(System.Collections.Generic.IReadOnlyList<CssValue> args, int startIdx, float gradientLineLength = 0)
+        private static GradientStop[]? ParseColorStops(System.Collections.Generic.IReadOnlyList<CssValue> args, int startIdx, float gradientLineLength = 0, CssColor? currentColor = null)
         {
             var stops = new System.Collections.Generic.List<GradientStop>();
 
@@ -893,11 +943,18 @@ namespace Rend.Rendering.Internal
                 }
                 else if (val is CssKeywordValue kw)
                 {
-                    // Try parsing as a named color
-                    if (CssColorParser.TryParseNamed(kw.Keyword, out var parsed))
+                    if (kw.Keyword == "currentcolor" || kw.Keyword == "currentColor")
+                    {
+                        color = currentColor ?? new CssColor(0, 0, 0, 255);
+                    }
+                    else if (CssColorParser.TryParseNamed(kw.Keyword, out var parsed))
+                    {
                         color = parsed;
+                    }
                     else
-                        continue; // skip non-color keywords
+                    {
+                        continue;
+                    }
                 }
                 else if (val is CssFunctionValue colorFn)
                 {

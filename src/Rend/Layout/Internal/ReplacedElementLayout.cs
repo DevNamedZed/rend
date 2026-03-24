@@ -335,7 +335,10 @@ namespace Rend.Layout.Internal
         {
             float width = style.Width;
             float height = style.Height;
-            float ratio = intrinsicHeight > 0 ? intrinsicWidth / intrinsicHeight : 1f;
+            // [CSS-SIZING-4 §5.1] CSS aspect-ratio overrides intrinsic ratio.
+            float cssRatio = DimensionResolver.GetAspectRatio(style);
+            float ratio = cssRatio > 0 ? cssRatio
+                : (intrinsicHeight > 0 ? intrinsicWidth / intrinsicHeight : 1f);
 
             // Form controls (input, select, textarea, meter, progress) do NOT have an
             // intrinsic aspect ratio. When one dimension is specified and the other is
@@ -343,6 +346,18 @@ namespace Rend.Layout.Internal
             bool isFormControl = box.StyledNode is StyledElement el &&
                 (el.TagName == "input" || el.TagName == "select" || el.TagName == "textarea"
                  || el.TagName == "meter" || el.TagName == "progress");
+
+            // [CSS-SIZING-3 §5.1] For replaced elements, min-content/max-content/fit-content
+            // resolve to the intrinsic size. Treat these sizing keywords as auto so that the
+            // standard replaced-element sizing algorithm (CSS 2.1 §10.3.2 / §10.6.2) applies.
+            if (SizingKeyword.IsSizingKeyword(width))
+            {
+                width = float.NaN;
+            }
+            if (SizingKeyword.IsSizingKeyword(height))
+            {
+                height = float.NaN;
+            }
 
             // Resolve deferred percentage widths (encoded with sentinel offset)
             if (DeferredPercent.IsEncoded(width))
@@ -391,6 +406,25 @@ namespace Rend.Layout.Internal
             float minH = style.MinHeight;
             float maxH = style.MaxHeight;
 
+            // [CSS-SIZING-3 §5.1] For replaced elements, intrinsic sizing keywords in
+            // min/max constraints resolve to the intrinsic dimension.
+            if (SizingKeyword.IsSizingKeyword(minW))
+            {
+                minW = intrinsicWidth;
+            }
+            if (SizingKeyword.IsSizingKeyword(maxW))
+            {
+                maxW = intrinsicWidth;
+            }
+            if (SizingKeyword.IsSizingKeyword(minH))
+            {
+                minH = intrinsicHeight;
+            }
+            if (SizingKeyword.IsSizingKeyword(maxH))
+            {
+                maxH = intrinsicHeight;
+            }
+
             // Resolve deferred percentage min/max (encoded with sentinel offset)
             if (DeferredPercent.IsEncoded(maxW))
             {
@@ -426,28 +460,32 @@ namespace Rend.Layout.Internal
                 }
             }
 
+            // [CSS2 §10.3.2/10.6.2] Apply min/max constraints and re-derive
+            // through aspect-ratio when the other axis was auto or sizing-keyword.
+            bool heightIsAuto = float.IsNaN(style.Height) || SizingKeyword.IsSizingKeyword(style.Height);
+            bool widthIsAuto = float.IsNaN(style.Width) || SizingKeyword.IsSizingKeyword(style.Width);
             if (!float.IsNaN(maxW) && maxW > 0 && width > maxW)
             {
                 width = maxW;
-                if (float.IsNaN(style.Height) && !isFormControl)
+                if (heightIsAuto && !isFormControl)
                     height = ratio > 0 ? width / ratio : width;
             }
             if (!float.IsNaN(minW) && width < minW)
             {
                 width = minW;
-                if (float.IsNaN(style.Height) && !isFormControl)
+                if (heightIsAuto && !isFormControl)
                     height = ratio > 0 ? width / ratio : width;
             }
             if (!float.IsNaN(maxH) && maxH > 0 && height > maxH)
             {
                 height = maxH;
-                if (float.IsNaN(style.Width) && !isFormControl)
+                if (widthIsAuto && !isFormControl)
                     width = height * ratio;
             }
             if (!float.IsNaN(minH) && height < minH)
             {
                 height = minH;
-                if (float.IsNaN(style.Width) && !isFormControl)
+                if (widthIsAuto && !isFormControl)
                     width = height * ratio;
             }
 

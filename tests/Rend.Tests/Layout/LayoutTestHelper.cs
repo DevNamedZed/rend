@@ -46,6 +46,8 @@ namespace Rend.Tests.Layout
             var layoutOptions = new LayoutOptions
             {
                 PageSize = pageSize,
+                ViewportWidth = viewportWidth,
+                ViewportHeight = viewportHeight,
                 MarginTop = 0,
                 MarginRight = 0,
                 MarginBottom = 0,

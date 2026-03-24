@@ -22,6 +22,23 @@ namespace Rend.Css.Parser.Internal
         }
 
         /// <summary>
+        /// Parse a CSS value expression string (e.g., "calc(100px - 1em)") into a CssValue AST.
+        /// </summary>
+        internal static CssValue? ParseValueString(string input)
+        {
+            var tokenizer = new CssTokenizer(input);
+            var tokens = new List<CssToken>();
+            var token = new CssToken();
+            while (tokenizer.Read(ref token))
+            {
+                tokens.Add(token);
+            }
+            tokens.Add(new CssToken { Type = CssTokenType.EOF });
+            var parser = new CssValueParser(tokens.ToArray(), tokens.Count);
+            return parser.ParseSingleValue();
+        }
+
+        /// <summary>
         /// Parse the entire token sequence into a single CssValue.
         /// Multiple space-separated values become a CssListValue.
         /// </summary>

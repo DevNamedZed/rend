@@ -9,8 +9,9 @@ namespace Rend.Tests.Layout
         public WptGridCombinedTests(ITestOutputHelper output) { _output = output; }
 
         [Fact] public void DashboardLayout() {
+            // 3 cols in 330px with 10px gap: (330 - 2*10) / 3 = 103.33px per col
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:100px 100px;gap:10px;width:330px'><div id='a'></div><div id='b'></div><div id='c'></div><div id='d'></div><div id='e'></div><div id='f'></div></div></body>");
-            Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"a")!.ContentRect.Width - 100) < 3);
+            Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"a")!.ContentRect.Width - 103.33f) < 2);
             Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"d")!.ContentRect.Y - 110) < 2);
         }
 

@@ -51,7 +51,8 @@ namespace Rend.Tests.Layout
         }
 
         [Fact] public void Minmax_Row_50_Auto() {
-            var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:grid;grid-template-columns:200px;grid-template-rows:minmax(50px,auto);width:200px'><div id='t' style='height:20px'></div></div></body>");
+            // Item has auto height → stretches to minmax row height (50px)
+            var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:grid;grid-template-columns:200px;grid-template-rows:minmax(50px,auto);width:200px'><div id='t'></div></div></body>");
             Assert.True(LayoutTestHelper.FindById(r,"t")!.ContentRect.Height >= 49);
         }
 

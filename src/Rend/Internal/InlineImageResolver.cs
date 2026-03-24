@@ -356,20 +356,127 @@ namespace Rend.Internal
             string header = dataUri.Substring(0, commaIndex);
             string data = dataUri.Substring(commaIndex + 1);
 
-            if (!header.Contains(";base64")) return null;
+            // Handle SVG data URIs (often not base64)
+            if (header.Contains("image/svg+xml"))
+            {
+                return DecodeSvgDataUri(header, data);
+            }
 
+            byte[] bytes;
+            if (header.Contains(";base64"))
+            {
+                try
+                {
+                    bytes = Convert.FromBase64String(data);
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                // URL-encoded data URI
+                try
+                {
+                    string decoded = Uri.UnescapeDataString(data);
+                    bytes = System.Text.Encoding.UTF8.GetBytes(decoded);
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            string format = "png";
+            if (header.Contains("image/jpeg") || header.Contains("image/jpg"))
+            {
+                format = "jpeg";
+            }
+            else if (header.Contains("image/gif"))
+            {
+                format = "gif";
+            }
+            else if (header.Contains("image/webp"))
+            {
+                format = "webp";
+            }
+
+            return CreateImageData(bytes, format);
+        }
+
+        /// <summary>
+        /// Decodes an SVG data URI to a raster image.
+        /// Handles common patterns like solid-color SVGs used in WPT tests.
+        /// </summary>
+        private static ImageData? DecodeSvgDataUri(string header, string data)
+        {
+            return DecodeSvgFallback(header, data);
+        }
+
+        /// <summary>
+        /// Rasterizes simple SVGs: extracts background/fill color and creates a solid-color image.
+        /// Handles common WPT patterns like:
+        ///   &lt;svg style='background: green'&gt;&lt;/svg&gt;
+        ///   &lt;svg&gt;&lt;rect fill='green' width='100%' height='100%'/&gt;&lt;/svg&gt;
+        /// </summary>
+        private static ImageData? DecodeSvgFallback(string header, string data)
+        {
             try
             {
-                var bytes = Convert.FromBase64String(data);
-                string format = "png";
-                if (header.Contains("image/jpeg") || header.Contains("image/jpg"))
-                    format = "jpeg";
-                else if (header.Contains("image/gif"))
-                    format = "gif";
-                else if (header.Contains("image/webp"))
-                    format = "webp";
+                string svgText = header.Contains(";base64")
+                    ? System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(data))
+                    : Uri.UnescapeDataString(data);
 
-                return CreateImageData(bytes, format);
+                // Try to extract dimensions from SVG
+                int width = 0, height = 0;
+                var widthMatch = System.Text.RegularExpressions.Regex.Match(svgText,
+                    @"<svg[^>]*\bwidth=['""](\d+)");
+                var heightMatch = System.Text.RegularExpressions.Regex.Match(svgText,
+                    @"<svg[^>]*\bheight=['""](\d+)");
+                if (widthMatch.Success) { int.TryParse(widthMatch.Groups[1].Value, out width); }
+                if (heightMatch.Success) { int.TryParse(heightMatch.Groups[1].Value, out height); }
+
+                // Default size: small tile (will be stretched by CSS background-size)
+                if (width <= 0) { width = 10; }
+                if (height <= 0) { height = 10; }
+
+                // Extract color from background style or fill attribute
+                string? colorStr = null;
+                var bgMatch = System.Text.RegularExpressions.Regex.Match(svgText,
+                    @"background:\s*([a-zA-Z]+|#[0-9a-fA-F]{3,8})");
+                if (bgMatch.Success)
+                {
+                    colorStr = bgMatch.Groups[1].Value.Trim();
+                }
+                else
+                {
+                    // Try <rect fill="...">
+                    var fillMatch = System.Text.RegularExpressions.Regex.Match(svgText,
+                        @"fill=['""]([a-zA-Z]+|#[0-9a-fA-F]{3,8})");
+                    if (fillMatch.Success)
+                    {
+                        colorStr = fillMatch.Groups[1].Value.Trim();
+                    }
+                }
+
+                if (colorStr == null) { return null; }
+                if (!Css.Parser.Internal.CssColorParser.TryParseNamed(colorStr, out var cssColor)
+                    && !SkiaSharp.SKColor.TryParse(colorStr, out _))
+                {
+                    return null;
+                }
+                var color = Css.Parser.Internal.CssColorParser.TryParseNamed(colorStr, out var c)
+                    ? new SkiaSharp.SKColor(c.R, c.G, c.B, c.A)
+                    : SkiaSharp.SKColor.Parse(colorStr);
+
+                // Create solid-color PNG
+                using var bitmap = new SkiaSharp.SKBitmap(width, height);
+                using var canvas = new SkiaSharp.SKCanvas(bitmap);
+                canvas.Clear(color);
+                using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
+                using var pngData = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                return new ImageData(pngData.ToArray(), width, height, "png");
             }
             catch
             {

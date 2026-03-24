@@ -144,6 +144,12 @@ namespace Rend.Rendering
          float StrikeoutPosition, float StrikeoutThickness) GetDecorationMetrics(
             FontDescriptor font, float fontSize);
 
+        /// <summary>
+        /// [CSS-FONTS §4] Returns font ascent and descent in pixels for the given font and size.
+        /// Ascent is positive (above baseline), descent is positive (below baseline).
+        /// </summary>
+        (float Ascent, float Descent) GetFontMetrics(FontDescriptor font, float fontSize);
+
         /// <summary>Draws a text string at the specified position using the given style.</summary>
         /// <param name="text">The text to draw.</param>
         /// <param name="x">The X coordinate of the text origin.</param>

@@ -232,7 +232,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS2 §10.6.3] auto height with float child in non-BFC block = 0
-        [Fact(Skip = "Known bug: float containment in non-BFC blocks")]
+        [Fact]
         public void AutoHeight_WithFloat_NoBfc_IsZero()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>

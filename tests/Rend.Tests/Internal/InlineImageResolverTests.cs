@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using Rend.Internal;
 using Rend.Html.Parser;
+using Rend.Rendering;
 using Xunit;
 
 namespace Rend.Tests.Internal
@@ -100,14 +102,39 @@ namespace Rend.Tests.Internal
         }
 
         [Fact]
-        public void Resolve_InvalidDataUri_SkipsImage()
+        public void Resolve_NonBase64DataUri_ParsesAsRaw()
         {
-            // No base64 marker
+            // Non-base64 data URIs are now supported (URL-encoded text)
             var doc = HtmlParser.Parse("<img src=\"data:image/png,rawdata\" />");
             var resolver = new InlineImageResolver();
             var images = resolver.Resolve(doc);
 
-            Assert.Empty(images);
+            // Raw text produces invalid PNG bytes but still creates an entry
+            Assert.Single(images);
+        }
+
+        [Fact]
+        public void Resolve_SvgDataUri_DecodesGreenSquare()
+        {
+            var doc = HtmlParser.Parse("<img src=\"data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' style='background: green'&gt;&lt;/svg&gt;\" />");
+            var resolver = new InlineImageResolver();
+            var images = resolver.Resolve(doc);
+            Assert.Single(images);
+            foreach (var v in images.Values)
+            {
+                Assert.True(v.Width > 0, $"SVG image width={v.Width}");
+                Assert.True(v.Height > 0, $"SVG image height={v.Height}");
+                break;
+            }
+        }
+
+        [Fact]
+        public void LoadOnDemand_SvgDataUri()
+        {
+            var resolver = new InlineImageResolver();
+            var result = resolver.LoadOnDemand("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' style='background: green'></svg>");
+            Assert.NotNull(result);
+            Assert.True(result!.Width > 0, $"width={result.Width}");
         }
 
         [Fact]

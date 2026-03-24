@@ -22,35 +22,59 @@ public sealed class BrowserPool : IAsyncDisposable
         _semaphore = new SemaphoreSlim(maxConcurrent, maxConcurrent);
     }
 
-    /// <summary>
-    /// Acquires a browser and creates a fresh page on it.
-    /// The page is closed and the browser returned to the pool on dispose.
-    /// </summary>
     public async Task<PageLease> AcquirePageAsync()
     {
-        await _semaphore.WaitAsync();
+        if (!await _semaphore.WaitAsync(TimeSpan.FromSeconds(120)))
+        {
+            throw new TimeoutException("Timed out waiting for browser from pool");
+        }
         try
         {
             var browser = await GetHealthyBrowserAsync();
             var page = await browser.NewPageAsync();
-            return new PageLease(page, browser, b =>
-            {
-                if (b.IsConnected)
-                {
-                    _pool.Enqueue(b);
-                }
-                else
-                {
-                    try { b.Dispose(); } catch { }
-                }
-                _semaphore.Release();
-            });
+            return new PageLease(page, browser, this);
         }
         catch
         {
             _semaphore.Release();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Returns a healthy browser to the pool and releases the semaphore.
+    /// </summary>
+    internal void ReturnBrowser(IBrowser browser)
+    {
+        if (browser.IsConnected)
+        {
+            _pool.Enqueue(browser);
+        }
+        else
+        {
+            try { browser.Dispose(); } catch { }
+        }
+        _semaphore.Release();
+    }
+
+    /// <summary>
+    /// Kills a browser (don't reuse) and releases the semaphore.
+    /// Used when Chrome is hung and can't be trusted.
+    /// Kills the OS process directly since Dispose() also hangs on stuck Chrome.
+    /// </summary>
+    internal void KillBrowser(IBrowser browser)
+    {
+        try
+        {
+            var process = browser.Process;
+            if (process != null && !process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch { }
+        try { browser.Dispose(); } catch { }
+        _semaphore.Release();
     }
 
     private async Task<IBrowser> GetHealthyBrowserAsync()
@@ -93,29 +117,60 @@ public sealed class BrowserPool : IAsyncDisposable
 }
 
 /// <summary>
-/// RAII wrapper for a page. Closes the page and returns the browser to the pool on dispose.
+/// RAII wrapper for a page. On normal dispose, returns browser to pool.
+/// On timeout, kills the browser so it's not reused in a broken state.
 /// </summary>
 public sealed class PageLease : IAsyncDisposable
 {
     public IPage Page { get; }
     private readonly IBrowser _browser;
-    private readonly Action<IBrowser> _release;
+    private readonly BrowserPool _pool;
     private int _disposed;
+    private bool _timedOut;
 
-    public PageLease(IPage page, IBrowser browser, Action<IBrowser> release)
+    public PageLease(IPage page, IBrowser browser, BrowserPool pool)
     {
         Page = page;
         _browser = browser;
-        _release = release;
+        _pool = pool;
+    }
+
+    /// <summary>
+    /// Mark this lease as timed out — browser will be killed instead of reused.
+    /// </summary>
+    public void MarkTimedOut()
+    {
+        _timedOut = true;
     }
 
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
         {
-            try { await Page.CloseAsync(); } catch { }
-            try { Page.Dispose(); } catch { }
-            _release(_browser);
+            if (_timedOut)
+            {
+                // Chrome is hung — kill the browser process, don't try to close gracefully
+                try { Page.Dispose(); } catch { }
+                _pool.KillBrowser(_browser);
+            }
+            else
+            {
+                // Normal path — close page and return browser to pool
+                try
+                {
+                    var closeTask = Page.CloseAsync();
+                    if (await Task.WhenAny(closeTask, Task.Delay(5000)) != closeTask)
+                    {
+                        // CloseAsync hung too — kill browser
+                        try { Page.Dispose(); } catch { }
+                        _pool.KillBrowser(_browser);
+                        return;
+                    }
+                }
+                catch { }
+                try { Page.Dispose(); } catch { }
+                _pool.ReturnBrowser(_browser);
+            }
         }
     }
 }

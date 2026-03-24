@@ -14,6 +14,105 @@ namespace Rend.Css.Parser.Internal
     internal static class CssShorthandExpander
     {
         /// <summary>
+        /// Returns true if the given property name is a recognized CSS shorthand.
+        /// Used by @supports evaluation to recognize shorthand properties.
+        /// </summary>
+        public static bool IsShorthand(string property)
+        {
+            switch (property)
+            {
+                case "margin":
+                case "padding":
+                case "border":
+                case "border-top":
+                case "border-right":
+                case "border-bottom":
+                case "border-left":
+                case "border-width":
+                case "border-style":
+                case "border-color":
+                case "border-radius":
+                case "font":
+                case "flex":
+                case "flex-flow":
+                case "background":
+                case "list-style":
+                case "overflow":
+                case "overscroll-behavior":
+                case "gap":
+                case "border-spacing":
+                case "place-content":
+                case "place-items":
+                case "place-self":
+                case "outline":
+                case "text-decoration":
+                case "text-emphasis":
+                case "columns":
+                case "column-rule":
+                case "inset":
+                case "grid-row":
+                case "grid-column":
+                case "grid-area":
+                case "grid":
+                case "grid-template":
+                case "border-image":
+                case "margin-block":
+                case "margin-inline":
+                case "contain-intrinsic-size":
+                case "padding-block":
+                case "padding-inline":
+                case "inset-block":
+                case "inset-inline":
+                case "border-block-width":
+                case "border-block-style":
+                case "border-block-color":
+                case "border-inline-width":
+                case "border-inline-style":
+                case "border-inline-color":
+                case "border-block":
+                case "border-inline":
+                case "border-block-start":
+                case "border-block-end":
+                case "border-inline-start":
+                case "border-inline-end":
+                case "margin-block-start":
+                case "margin-block-end":
+                case "margin-inline-start":
+                case "margin-inline-end":
+                case "padding-block-start":
+                case "padding-block-end":
+                case "padding-inline-start":
+                case "padding-inline-end":
+                case "inset-block-start":
+                case "inset-block-end":
+                case "inset-inline-start":
+                case "inset-inline-end":
+                case "border-block-start-width":
+                case "border-block-end-width":
+                case "border-inline-start-width":
+                case "border-inline-end-width":
+                case "border-block-start-style":
+                case "border-block-end-style":
+                case "border-inline-start-style":
+                case "border-inline-end-style":
+                case "border-block-start-color":
+                case "border-block-end-color":
+                case "border-inline-start-color":
+                case "border-inline-end-color":
+                case "mask":
+                case "container":
+                case "overflow-block":
+                case "overflow-inline":
+                case "word-wrap":
+                case "font-synthesis":
+                case "all":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
         /// If the property is a shorthand, expand it into longhand declarations.
         /// Returns true if expanded (results added to output list), false if not a shorthand.
         /// </summary>
@@ -55,6 +154,7 @@ namespace Rend.Css.Parser.Internal
                 case "list-style": return ExpandListStyle(value, important, output);
 
                 case "overflow": return ExpandTwoValue(value, important, output, "overflow-x", "overflow-y");
+                case "overscroll-behavior": return ExpandTwoValue(value, important, output, "overscroll-behavior-x", "overscroll-behavior-y");
                 case "gap": return ExpandTwoValue(value, important, output, "row-gap", "column-gap");
                 case "border-spacing": return ExpandTwoValue(value, important, output, "border-spacing-h", "border-spacing-v");
                 case "place-content": return ExpandTwoValue(value, important, output, "align-content", "justify-content");
@@ -74,8 +174,25 @@ namespace Rend.Css.Parser.Internal
                 case "grid-row": return ExpandGridLine(value, important, output, "grid-row-start", "grid-row-end");
                 case "grid-column": return ExpandGridLine(value, important, output, "grid-column-start", "grid-column-end");
                 case "grid-area": return ExpandGridArea(value, important, output);
+                case "grid":
+                {
+                    // [CSS-GRID §7.8] The 'grid' shorthand resets all grid sub-properties.
+                    // Reset auto-flow, auto-rows, auto-columns to initial values.
+                    var result = ExpandGridTemplate(value, important, output);
+                    if (result)
+                    {
+                        output.Add(new CssDeclaration("grid-auto-rows", new CssKeywordValue("auto"), important));
+                        output.Add(new CssDeclaration("grid-auto-columns", new CssKeywordValue("auto"), important));
+                        output.Add(new CssDeclaration("grid-auto-flow", new CssKeywordValue("row"), important));
+                    }
+                    return result;
+                }
+                case "grid-template": return ExpandGridTemplate(value, important, output);
 
                 case "border-image": return ExpandBorderImage(value, important, output);
+
+                // Contain intrinsic size (CSS Sizing Level 4)
+                case "contain-intrinsic-size": return ExpandTwoValue(value, important, output, "contain-intrinsic-width", "contain-intrinsic-height");
 
                 // Logical properties (block = top/bottom, inline = left/right in LTR horizontal)
                 case "margin-block": return ExpandTwoValue(value, important, output, "margin-top", "margin-bottom");
@@ -129,6 +246,13 @@ namespace Rend.Css.Parser.Internal
 
                 // Container shorthand: container-name / container-type
                 case "container": return ExpandContainer(value, important, output);
+
+                // Logical overflow aliases (horizontal writing mode)
+                case "overflow-block": return Alias(value, important, output, "overflow-y");
+                case "overflow-inline": return Alias(value, important, output, "overflow-x");
+
+                // Font Synthesis shorthand
+                case "font-synthesis": return ExpandFontSynthesis(value, important, output);
 
                 // Compatibility aliases
                 case "word-wrap": return Alias(value, important, output, "overflow-wrap");
@@ -550,6 +674,52 @@ namespace Rend.Css.Parser.Internal
             return value >= 100 && value <= 900 && value % 100 == 0;
         }
 
+        /// <summary>
+        /// Expand font-synthesis shorthand into font-synthesis-weight, font-synthesis-style,
+        /// font-synthesis-small-caps, font-synthesis-position longhands.
+        /// [CSS-FONTS4 §4.6] font-synthesis: none | [ weight || style || small-caps || position ]
+        /// </summary>
+        private static bool ExpandFontSynthesis(CssValue value, bool important, List<CssDeclaration> output)
+        {
+            var auto = new CssKeywordValue("auto");
+            var none = new CssKeywordValue("none");
+
+            if (value is CssKeywordValue kw && kw.Keyword == "none")
+            {
+                output.Add(new CssDeclaration("font-synthesis-weight", none, important));
+                output.Add(new CssDeclaration("font-synthesis-style", none, important));
+                output.Add(new CssDeclaration("font-synthesis-small-caps", none, important));
+                output.Add(new CssDeclaration("font-synthesis-position", none, important));
+                return true;
+            }
+
+            var parts = GetListValues(value);
+            bool hasWeight = false;
+            bool hasStyle = false;
+            bool hasSmallCaps = false;
+            bool hasPosition = false;
+
+            foreach (var part in parts)
+            {
+                if (part is CssKeywordValue partKw)
+                {
+                    switch (partKw.Keyword)
+                    {
+                        case "weight": hasWeight = true; break;
+                        case "style": hasStyle = true; break;
+                        case "small-caps": hasSmallCaps = true; break;
+                        case "position": hasPosition = true; break;
+                    }
+                }
+            }
+
+            output.Add(new CssDeclaration("font-synthesis-weight", hasWeight ? auto : none, important));
+            output.Add(new CssDeclaration("font-synthesis-style", hasStyle ? auto : none, important));
+            output.Add(new CssDeclaration("font-synthesis-small-caps", hasSmallCaps ? auto : none, important));
+            output.Add(new CssDeclaration("font-synthesis-position", hasPosition ? auto : none, important));
+            return true;
+        }
+
         #endregion
 
         #region Flex
@@ -592,6 +762,7 @@ namespace Rend.Css.Parser.Internal
                 {
                     if (numIdx == 0) { grow = p; }
                     else if (numIdx == 1) { shrink = p; }
+                    else if (numIdx == 2) { explicitBasis = new CssDimensionValue(0, "px"); }
                     numIdx++;
                 }
                 else if (p is CssDimensionValue || p is CssPercentageValue ||
@@ -1144,6 +1315,56 @@ namespace Rend.Css.Parser.Internal
             return true;
         }
 
+        /// <summary>
+        /// [CSS-GRID §7.2] grid-template: &lt;rows&gt; / &lt;columns&gt;
+        /// Simple form only — splits on "/" into grid-template-rows and grid-template-columns.
+        /// </summary>
+        private static bool ExpandGridTemplate(CssValue value, bool important, List<CssDeclaration> output)
+        {
+            if (value is CssKeywordValue kw && kw.Keyword == "none")
+            {
+                output.Add(new CssDeclaration("grid-template-rows", new CssKeywordValue("none"), important));
+                output.Add(new CssDeclaration("grid-template-columns", new CssKeywordValue("none"), important));
+                return true;
+            }
+
+            var parts = GetListValues(value);
+            var rowParts = new List<CssValue>();
+            var colParts = new List<CssValue>();
+            bool foundSlash = false;
+
+            for (int i = 0; i < parts.Count; i++)
+            {
+                if (parts[i] is CssKeywordValue slashKw && slashKw.Keyword == "/")
+                {
+                    foundSlash = true;
+                    continue;
+                }
+                if (foundSlash)
+                {
+                    colParts.Add(parts[i]);
+                }
+                else
+                {
+                    rowParts.Add(parts[i]);
+                }
+            }
+
+            if (!foundSlash)
+            {
+                return false;
+            }
+
+            CssValue rowVal = rowParts.Count == 1 ? rowParts[0]
+                : rowParts.Count > 1 ? new CssListValue(rowParts) : (CssValue)new CssKeywordValue("none");
+            CssValue colVal = colParts.Count == 1 ? colParts[0]
+                : colParts.Count > 1 ? new CssListValue(colParts) : (CssValue)new CssKeywordValue("none");
+
+            output.Add(new CssDeclaration("grid-template-rows", rowVal, important));
+            output.Add(new CssDeclaration("grid-template-columns", colVal, important));
+            return true;
+        }
+
         #endregion
 
         #region Border Image
@@ -1290,11 +1511,13 @@ namespace Rend.Css.Parser.Internal
                 ["gap"] = new[] { "row-gap", "column-gap" },
                 ["inset"] = new[] { "top", "right", "bottom", "left" },
                 ["overflow"] = new[] { "overflow-x", "overflow-y" },
+                ["overscroll-behavior"] = new[] { "overscroll-behavior-x", "overscroll-behavior-y" },
                 ["text-decoration"] = new[] { "text-decoration-line", "text-decoration-color", "text-decoration-style" },
                 ["border-top"] = new[] { "border-top-width", "border-top-style", "border-top-color" },
                 ["border-right"] = new[] { "border-right-width", "border-right-style", "border-right-color" },
                 ["border-bottom"] = new[] { "border-bottom-width", "border-bottom-style", "border-bottom-color" },
                 ["border-left"] = new[] { "border-left-width", "border-left-style", "border-left-color" },
+                ["font-synthesis"] = new[] { "font-synthesis-weight", "font-synthesis-style", "font-synthesis-small-caps", "font-synthesis-position" },
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 #else
         private static readonly Dictionary<string, string[]> ShorthandLonghands = new(StringComparer.OrdinalIgnoreCase)
@@ -1315,11 +1538,13 @@ namespace Rend.Css.Parser.Internal
             ["gap"] = new[] { "row-gap", "column-gap" },
             ["inset"] = new[] { "top", "right", "bottom", "left" },
             ["overflow"] = new[] { "overflow-x", "overflow-y" },
+            ["overscroll-behavior"] = new[] { "overscroll-behavior-x", "overscroll-behavior-y" },
             ["text-decoration"] = new[] { "text-decoration-line", "text-decoration-color", "text-decoration-style" },
             ["border-top"] = new[] { "border-top-width", "border-top-style", "border-top-color" },
             ["border-right"] = new[] { "border-right-width", "border-right-style", "border-right-color" },
             ["border-bottom"] = new[] { "border-bottom-width", "border-bottom-style", "border-bottom-color" },
             ["border-left"] = new[] { "border-left-width", "border-left-style", "border-left-color" },
+            ["font-synthesis"] = new[] { "font-synthesis-weight", "font-synthesis-style", "font-synthesis-small-caps", "font-synthesis-position" },
         };
 #endif
 

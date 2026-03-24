@@ -175,7 +175,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS2 §10.6.3] non-BFC auto height ignores floats
-        [Fact(Skip = "Known bug: float containment in non-BFC blocks")]
+        [Fact]
         public void AutoHeight_NonBfcIgnoresFloats()
         {
             var root = LayoutTestHelper.Layout(@"

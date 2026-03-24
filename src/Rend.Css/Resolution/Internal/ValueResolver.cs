@@ -51,15 +51,32 @@ namespace Rend.Css.Resolution.Internal
                     // Defer calc/min/max/clamp expressions that contain percentages for
                     // properties that resolve against the containing block (not the viewport).
                     // Store the raw CssFunctionValue in refResult and use a sentinel float.
+                    // [CSS-SIZING-3 §5.1] fit-content(<length-percentage>) function
+                    if (value is CssFunctionValue fitFn && fitFn.Name == "fit-content"
+                        && fitFn.Arguments.Count >= 1)
+                    {
+                        // Store as FitContent sizing keyword with the limit as ref value
+                        result = PropertyValue.FromLength(SizingKeyword.FitContent);
+                        refResult = fitFn;
+                        return true;
+                    }
                     if (value is CssFunctionValue calcFn
                         && (calcFn.Name == "calc" || calcFn.Name == "min"
-                            || calcFn.Name == "max" || calcFn.Name == "clamp")
-                        && IsDeferredPercentageProperty(prop.Id)
-                        && CalcContainsPercentage(calcFn.Arguments))
+                            || calcFn.Name == "max" || calcFn.Name == "clamp"))
                     {
-                        result = PropertyValue.FromLength(float.NegativeInfinity);
-                        refResult = calcFn;
-                        return true;
+                        // [CSS-VALUES §10.9] Unitless zero is NOT valid in min/max/clamp
+                        // for length contexts. Reject the entire declaration.
+                        if (calcFn.Name != "calc" && MinMaxContainsUnitlessZero(calcFn.Arguments))
+                        {
+                            return false;
+                        }
+                        if (IsDeferredPercentageProperty(prop.Id)
+                            && CalcContainsPercentage(calcFn.Arguments))
+                        {
+                            result = PropertyValue.FromLength(float.NegativeInfinity);
+                            refResult = calcFn;
+                            return true;
+                        }
                     }
                     return TryResolveLength(value, ctx, out result);
 
@@ -144,6 +161,11 @@ namespace Rend.Css.Resolution.Internal
             // flex-basis: percentages resolve against the flex container's main size,
             // not the containing block width at style computation time.
             if (id == PropertyId.FlexBasis)
+            {
+                return true;
+            }
+            // gap: percentage gaps resolve against the container's size at layout time.
+            if (id == PropertyId.RowGap || id == PropertyId.ColumnGap)
             {
                 return true;
             }
@@ -619,6 +641,12 @@ namespace Rend.Css.Resolution.Internal
                 case PropertyId.RubyAlign:
                     return TryMapRubyAlign(keyword, out result);
 
+                case PropertyId.ScrollbarGutter:
+                    return TryMapScrollbarGutter(keyword, out result);
+
+                case PropertyId.TextUnderlinePosition:
+                    return TryMapTextUnderlinePosition(keyword, out result);
+
                 default:
                     // Generic keyword as int 0
                     result = PropertyValue.FromKeyword(0);
@@ -731,7 +759,7 @@ namespace Rend.Css.Resolution.Internal
         /// Handles +, -, *, / with standard operator precedence.
         /// Percentages are resolved against the context's percent base.
         /// </summary>
-        private static float EvaluateCalc(IReadOnlyList<CssValue> args, CssResolutionContext ctx)
+        internal static float EvaluateCalc(IReadOnlyList<CssValue> args, CssResolutionContext ctx)
         {
             if (args.Count == 0) return 0;
 
@@ -909,6 +937,29 @@ namespace Rend.Css.Resolution.Internal
         }
 
         /// <summary>
+        /// [CSS-VALUES §10.9] Returns true if min/max/clamp arguments contain a bare
+        /// unitless zero (CssNumberValue with value 0). Unitless zero is not valid in
+        /// comparison functions for length contexts — makes the declaration invalid.
+        /// </summary>
+        private static bool MinMaxContainsUnitlessZero(IReadOnlyList<CssValue> args)
+        {
+            for (int i = 0; i < args.Count; i++)
+            {
+                if (args[i] is CssNumberValue num && num.Value == 0)
+                {
+                    return true;
+                }
+                if (args[i] is CssFunctionValue fn
+                    && (fn.Name == "min" || fn.Name == "max" || fn.Name == "clamp")
+                    && MinMaxContainsUnitlessZero(fn.Arguments))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Returns true if the calc arguments contain a percentage value.
         /// </summary>
         private static bool CalcContainsPercentage(IReadOnlyList<CssValue> args)
@@ -927,7 +978,24 @@ namespace Rend.Css.Resolution.Internal
         /// </summary>
         public static float EvaluateDeferredCalc(CssFunctionValue calcFn, float containingBlockWidth)
         {
-            var ctx = new CssResolutionContext(16f, 16f, containingBlockWidth, 0, containingBlockWidth);
+            // Use containing block as fallback for viewport when viewport isn't known.
+            // Callers with LayoutContext should use the overload with explicit viewport dims.
+            return EvaluateDeferredCalc(calcFn, containingBlockWidth,
+                ViewportWidthHint > 0 ? ViewportWidthHint : containingBlockWidth,
+                ViewportHeightHint > 0 ? ViewportHeightHint : containingBlockWidth);
+        }
+
+        /// <summary>
+        /// Thread-local viewport hints set by LayoutEngine before layout begins.
+        /// Used by deferred calc() evaluation to resolve vw/vh units correctly.
+        /// </summary>
+        [ThreadStatic] internal static float ViewportWidthHint;
+        [ThreadStatic] internal static float ViewportHeightHint;
+
+        public static float EvaluateDeferredCalc(CssFunctionValue calcFn, float containingBlockWidth,
+            float viewportWidth, float viewportHeight)
+        {
+            var ctx = new CssResolutionContext(16f, 16f, viewportWidth, viewportHeight, containingBlockWidth);
             return EvaluateMathFunction(calcFn, ctx);
         }
 
@@ -1258,6 +1326,7 @@ namespace Rend.Css.Resolution.Internal
                 case "space-evenly": result = PropertyValue.FromKeyword((int)CssJustifyContent.SpaceEvenly); return true;
                 case "start": result = PropertyValue.FromKeyword((int)CssJustifyContent.Start); return true;
                 case "end": result = PropertyValue.FromKeyword((int)CssJustifyContent.End); return true;
+                case "stretch": result = PropertyValue.FromKeyword((int)CssJustifyContent.Stretch); return true;
                 default: return false;
             }
         }
@@ -1918,6 +1987,31 @@ namespace Rend.Css.Resolution.Internal
                 case "center": result = PropertyValue.FromKeyword((int)CssRubyAlign.Center); return true;
                 case "space-between": result = PropertyValue.FromKeyword((int)CssRubyAlign.SpaceBetween); return true;
                 case "start": result = PropertyValue.FromKeyword((int)CssRubyAlign.Start); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapScrollbarGutter(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "auto": result = PropertyValue.FromKeyword(0); return true;
+                case "stable": result = PropertyValue.FromKeyword(1); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapTextUnderlinePosition(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "auto": result = PropertyValue.FromKeyword((int)CssTextUnderlinePosition.Auto); return true;
+                case "under": result = PropertyValue.FromKeyword((int)CssTextUnderlinePosition.Under); return true;
+                case "from-font": result = PropertyValue.FromKeyword((int)CssTextUnderlinePosition.FromFont); return true;
+                case "left": result = PropertyValue.FromKeyword((int)CssTextUnderlinePosition.Left); return true;
+                case "right": result = PropertyValue.FromKeyword((int)CssTextUnderlinePosition.Right); return true;
                 default: return false;
             }
         }

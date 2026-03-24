@@ -1,12 +1,13 @@
 using System;
+using Rend.Css.Parser.Internal;
 using Rend.Css.Properties.Internal;
 
 namespace Rend.Css.Supports.Internal
 {
     /// <summary>
     /// Evaluates CSS @supports conditions.
-    /// Supports: (property: value), not, and, or operators.
-    /// A property is "supported" if it is registered in PropertyRegistry.
+    /// Supports: (property: value), not, and, or operators, and selector() function.
+    /// A property is "supported" if it is registered in PropertyRegistry or is a known shorthand.
     /// </summary>
     internal static class SupportsEvaluator
     {
@@ -17,7 +18,9 @@ namespace Rend.Css.Supports.Internal
         public static bool Evaluate(string conditionText)
         {
             if (string.IsNullOrWhiteSpace(conditionText))
+            {
                 return false;
+            }
 
             int pos = 0;
             return EvaluateExpression(conditionText, ref pos);
@@ -27,7 +30,10 @@ namespace Rend.Css.Supports.Internal
         {
             SkipWhitespace(text, ref pos);
 
-            if (pos >= text.Length) return false;
+            if (pos >= text.Length)
+            {
+                return false;
+            }
 
             // Check for 'not'
             if (StartsWithKeyword(text, pos, "not"))
@@ -52,7 +58,10 @@ namespace Rend.Css.Supports.Internal
             while (pos < text.Length)
             {
                 SkipWhitespace(text, ref pos);
-                if (pos >= text.Length) break;
+                if (pos >= text.Length)
+                {
+                    break;
+                }
 
                 if (StartsWithKeyword(text, pos, "and"))
                 {
@@ -80,7 +89,9 @@ namespace Rend.Css.Supports.Internal
         private static bool EvaluateGroup(string text, ref int pos)
         {
             if (pos >= text.Length || text[pos] != '(')
+            {
                 return false;
+            }
 
             pos++; // skip '('
 
@@ -89,15 +100,27 @@ namespace Rend.Css.Supports.Internal
             int depth = 1;
             while (pos < text.Length && depth > 0)
             {
-                if (text[pos] == '(') depth++;
-                else if (text[pos] == ')') depth--;
-                if (depth > 0) pos++;
+                if (text[pos] == '(')
+                {
+                    depth++;
+                }
+                else if (text[pos] == ')')
+                {
+                    depth--;
+                }
+
+                if (depth > 0)
+                {
+                    pos++;
+                }
             }
 
             string inner = text.Substring(start, pos - start).Trim();
 
             if (pos < text.Length && text[pos] == ')')
+            {
                 pos++; // skip ')'
+            }
 
             // Check if inner contains a nested expression (not, and, or, parenthesized groups)
             if (inner.StartsWith("not ", StringComparison.OrdinalIgnoreCase) ||
@@ -107,26 +130,93 @@ namespace Rend.Css.Supports.Internal
                 return EvaluateExpression(inner, ref innerPos);
             }
 
+            // Check for selector() function — CSS Conditional Rules Level 4
+            if (inner.StartsWith("selector(", StringComparison.OrdinalIgnoreCase))
+            {
+                return EvaluateSelectorFunction(inner);
+            }
+
             // Check if it's a property: value declaration test
             int colonIdx = inner.IndexOf(':');
             if (colonIdx > 0)
             {
                 string property = inner.Substring(0, colonIdx).Trim().ToLowerInvariant();
-                // A property is "supported" if it's registered in PropertyRegistry
-                return PropertyRegistry.GetByName(property) != null;
+                return IsPropertySupported(property);
             }
 
             return false;
         }
 
+        /// <summary>
+        /// A property is supported if it is a registered longhand or a known shorthand.
+        /// </summary>
+        private static bool IsPropertySupported(string property)
+        {
+            if (PropertyRegistry.GetByName(property) != null)
+            {
+                return true;
+            }
+
+            if (CssShorthandExpander.IsShorthand(property))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Evaluate a selector() function in @supports.
+        /// Returns false for unsupported pseudo-elements/selectors.
+        /// [CSS-COND4 §5] selector() tests if the UA can parse the given selector.
+        /// </summary>
+        private static bool EvaluateSelectorFunction(string inner)
+        {
+            // Extract the selector from selector(...)
+            int openParen = inner.IndexOf('(');
+            int closeParen = inner.LastIndexOf(')');
+            if (openParen < 0 || closeParen <= openParen)
+            {
+                return false;
+            }
+
+            string selector = inner.Substring(openParen + 1, closeParen - openParen - 1).Trim();
+
+            // We don't support ::column or other exotic pseudo-elements
+            // Return false for unknown selectors
+            if (selector.StartsWith("::", StringComparison.Ordinal))
+            {
+                // Only recognize well-known pseudo-elements
+                string pseudoElement = selector.ToLowerInvariant();
+                if (pseudoElement == "::before" || pseudoElement == "::after" ||
+                    pseudoElement == "::first-line" || pseudoElement == "::first-letter" ||
+                    pseudoElement == "::marker" || pseudoElement == "::placeholder" ||
+                    pseudoElement == "::selection" || pseudoElement == "::backdrop")
+                {
+                    return true;
+                }
+                return false;
+            }
+
+            // For simple selectors, assume supported
+            return true;
+        }
+
         private static bool StartsWithKeyword(string text, int pos, string keyword)
         {
-            if (pos + keyword.Length > text.Length) return false;
+            if (pos + keyword.Length > text.Length)
+            {
+                return false;
+            }
+
             for (int i = 0; i < keyword.Length; i++)
             {
                 if (char.ToLowerInvariant(text[pos + i]) != keyword[i])
+                {
                     return false;
+                }
             }
+
             // Must be followed by whitespace or '('
             int end = pos + keyword.Length;
             return end >= text.Length || text[end] == ' ' || text[end] == '(' || text[end] == '\t';
@@ -135,7 +225,9 @@ namespace Rend.Css.Supports.Internal
         private static void SkipWhitespace(string text, ref int pos)
         {
             while (pos < text.Length && (text[pos] == ' ' || text[pos] == '\t' || text[pos] == '\n' || text[pos] == '\r'))
+            {
                 pos++;
+            }
         }
     }
 }

@@ -147,9 +147,28 @@ namespace Rend.Layout.Internal
                                        - cellBox.BorderLeftWidth - cellBox.BorderRightWidth;
                     contentWidth = Math.Max(0, contentWidth);
 
-                    // Temporary Y — will be repositioned in second pass
-                    // Table cells establish their own BFC, so isolate from outer float context
-                    cellBox.ContentRect = new RectF(0, 0, contentWidth, 0);
+                    // [CSS-TABLES §3.5] Pre-set cell height so percentage-height children
+                    // can resolve against a definite containing block.
+                    float preCellHeight = 0;
+                    if (cell.StyledElement != null)
+                    {
+                        float specH = cell.StyledElement.Style.Height;
+                        if (!float.IsNaN(specH) && specH > 0 && !DeferredPercent.IsEncoded(specH))
+                        {
+                            preCellHeight = specH;
+                            if (cell.StyledElement.Style.BoxSizing == CssBoxSizing.ContentBox)
+                            {
+                                // height is content-box, use directly
+                            }
+                            else
+                            {
+                                preCellHeight -= cellBox.PaddingTop + cellBox.PaddingBottom
+                                              + cellBox.BorderTopWidth + cellBox.BorderBottomWidth;
+                                if (preCellHeight < 0) { preCellHeight = 0; }
+                            }
+                        }
+                    }
+                    cellBox.ContentRect = new RectF(0, 0, contentWidth, preCellHeight);
                     var prevFloat = context.FloatContext;
                     context.FloatContext = null;
                     BlockFormattingContext.LayoutChildren(cellBox, context);
@@ -548,6 +567,20 @@ namespace Rend.Layout.Internal
             // Set computed table height (includes trailing border-spacing and outer border halves
             // which CalculateAutoHeight would miss since they're beyond the last row box).
             float tableContentHeight = cursorY - parent.ContentRect.Y;
+
+            // [CSS-TABLES §11.4] Apply min-height/max-height constraints to table.
+            float parentCbHeight = parent.Parent?.ContentRect.Height ?? 0;
+            float tableMinH = DimensionResolver.ResolvePercentHeight(style.MinHeight, parentCbHeight);
+            float tableMaxH = DimensionResolver.ResolvePercentHeight(style.MaxHeight, parentCbHeight);
+            if (!float.IsNaN(tableMinH) && tableMinH > 0 && tableContentHeight < tableMinH)
+            {
+                tableContentHeight = tableMinH;
+            }
+            if (!float.IsNaN(tableMaxH) && tableMaxH >= 0 && tableContentHeight > tableMaxH)
+            {
+                tableContentHeight = tableMaxH;
+            }
+
             parent.ContentRect = new RectF(
                 parent.ContentRect.X, parent.ContentRect.Y,
                 parent.ContentRect.Width, tableContentHeight);
@@ -608,8 +641,51 @@ namespace Rend.Layout.Internal
                 }
             }
 
-            // Collapse adjacent horizontal borders: cell's right border vs right neighbor's left border
-            // Per CSS 2.1 §17.6.2, the collapsed border width is shared equally between cells.
+            // [CSS-TABLES §4.4] Collapse adjacent horizontal borders: cell's right border
+            // vs right neighbor's left border. For spanning cells, the border width must
+            // be the maximum collapsed width across all spanned rows/columns.
+            // Track original border widths before collapse so repeated reads are stable.
+            var originalBorderRight = new Dictionary<LayoutBox, float>();
+            var originalBorderLeft = new Dictionary<LayoutBox, float>();
+            for (int r = 0; r < numRows; r++)
+            {
+                for (int c = 0; c < numCols; c++)
+                {
+                    var cell = cellGrid[r, c];
+                    if (cell == null) continue;
+                    if (!originalBorderRight.ContainsKey(cell))
+                    {
+                        originalBorderRight[cell] = cell.BorderRightWidth;
+                    }
+                    if (!originalBorderLeft.ContainsKey(cell))
+                    {
+                        originalBorderLeft[cell] = cell.BorderLeftWidth;
+                    }
+                }
+            }
+            var originalBorderTop = new Dictionary<LayoutBox, float>();
+            var originalBorderBottom = new Dictionary<LayoutBox, float>();
+            for (int r = 0; r < numRows; r++)
+            {
+                for (int c = 0; c < numCols; c++)
+                {
+                    var cell = cellGrid[r, c];
+                    if (cell == null) continue;
+                    if (!originalBorderTop.ContainsKey(cell))
+                    {
+                        originalBorderTop[cell] = cell.BorderTopWidth;
+                    }
+                    if (!originalBorderBottom.ContainsKey(cell))
+                    {
+                        originalBorderBottom[cell] = cell.BorderBottomWidth;
+                    }
+                }
+            }
+
+            // Track maximum collapsed half-width per cell per side so spanning cells
+            // accumulate the widest border across all adjacent rows/columns.
+            var maxHalfRight = new Dictionary<LayoutBox, float>();
+            var maxHalfLeft = new Dictionary<LayoutBox, float>();
             for (int r = 0; r < numRows; r++)
             {
                 for (int c = 0; c < numCols - 1; c++)
@@ -622,15 +698,33 @@ namespace Rend.Layout.Internal
                     var leftStyle = left.StyledNode?.Style;
                     var rightStyle = right.StyledNode?.Style;
                     float collapsedWidth = GetCollapsedBorderWidth(
-                        left.BorderRightWidth, leftStyle?.BorderRightStyle ?? CssBorderStyle.None,
-                        right.BorderLeftWidth, rightStyle?.BorderLeftStyle ?? CssBorderStyle.None);
-                    // Each cell gets half the collapsed border for layout purposes
-                    left.BorderRightWidth = collapsedWidth / 2f;
-                    right.BorderLeftWidth = collapsedWidth / 2f;
+                        originalBorderRight[left], leftStyle?.BorderRightStyle ?? CssBorderStyle.None,
+                        originalBorderLeft[right], rightStyle?.BorderLeftStyle ?? CssBorderStyle.None);
+                    float half = collapsedWidth / 2f;
+
+                    if (!maxHalfRight.TryGetValue(left, out float prevRight) || half > prevRight)
+                    {
+                        maxHalfRight[left] = half;
+                    }
+                    if (!maxHalfLeft.TryGetValue(right, out float prevLeft) || half > prevLeft)
+                    {
+                        maxHalfLeft[right] = half;
+                    }
                 }
             }
+            foreach (var pair in maxHalfRight)
+            {
+                pair.Key.BorderRightWidth = pair.Value;
+            }
+            foreach (var pair in maxHalfLeft)
+            {
+                pair.Key.BorderLeftWidth = pair.Value;
+            }
 
-            // Collapse adjacent vertical borders: cell's bottom border vs bottom neighbor's top border
+            // [CSS-TABLES §4.4] Collapse adjacent vertical borders: cell's bottom border
+            // vs bottom neighbor's top border. Same spanning-cell max logic.
+            var maxHalfBottom = new Dictionary<LayoutBox, float>();
+            var maxHalfTop = new Dictionary<LayoutBox, float>();
             for (int r = 0; r < numRows - 1; r++)
             {
                 for (int c = 0; c < numCols; c++)
@@ -643,12 +737,27 @@ namespace Rend.Layout.Internal
                     var topStyle = top.StyledNode?.Style;
                     var bottomStyle = bottom.StyledNode?.Style;
                     float collapsedWidth = GetCollapsedBorderWidth(
-                        top.BorderBottomWidth, topStyle?.BorderBottomStyle ?? CssBorderStyle.None,
-                        bottom.BorderTopWidth, bottomStyle?.BorderTopStyle ?? CssBorderStyle.None);
-                    // Each cell gets half the collapsed border for layout purposes
-                    top.BorderBottomWidth = collapsedWidth / 2f;
-                    bottom.BorderTopWidth = collapsedWidth / 2f;
+                        originalBorderBottom[top], topStyle?.BorderBottomStyle ?? CssBorderStyle.None,
+                        originalBorderTop[bottom], bottomStyle?.BorderTopStyle ?? CssBorderStyle.None);
+                    float half = collapsedWidth / 2f;
+
+                    if (!maxHalfBottom.TryGetValue(top, out float prevBottom) || half > prevBottom)
+                    {
+                        maxHalfBottom[top] = half;
+                    }
+                    if (!maxHalfTop.TryGetValue(bottom, out float prevTop) || half > prevTop)
+                    {
+                        maxHalfTop[bottom] = half;
+                    }
                 }
+            }
+            foreach (var pair in maxHalfBottom)
+            {
+                pair.Key.BorderBottomWidth = pair.Value;
+            }
+            foreach (var pair in maxHalfTop)
+            {
+                pair.Key.BorderTopWidth = pair.Value;
             }
 
             // Resolve winning colors for internal shared edges (CSS 2.1 §17.6.2).

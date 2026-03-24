@@ -33,6 +33,10 @@ namespace Rend.Layout.Internal
                 }
             }
 
+            // Note: min-height on flex container does NOT establish definite cross-size
+            // for stretch. It only provides a floor for the final container height.
+            // Percentage children need the ACTUAL resolved height, not min-height.
+
             // [CSS-FLEXBOX §9.4] Apply max-height to containerHeight so cross-axis
             // stretch doesn't exceed the container's max constraint.
             float containerMaxHeight = style.MaxHeight;
@@ -66,9 +70,17 @@ namespace Rend.Layout.Internal
             }
 
             float gap = isColumn ? style.RowGap : style.ColumnGap;
-            if (float.IsNaN(gap)) gap = 0;
+            if (DeferredPercent.IsEncoded(gap))
+            {
+                gap = DeferredPercent.Resolve(gap, isColumn ? containerHeight : containerWidth);
+            }
+            if (float.IsNaN(gap) || gap < 0) { gap = 0; }
             float crossGap = isColumn ? style.ColumnGap : style.RowGap;
-            if (float.IsNaN(crossGap)) crossGap = 0;
+            if (DeferredPercent.IsEncoded(crossGap))
+            {
+                crossGap = DeferredPercent.Resolve(crossGap, isColumn ? containerWidth : containerHeight);
+            }
+            if (float.IsNaN(crossGap) || crossGap < 0) { crossGap = 0; }
 
             // Collect flex items
             var items = new List<FlexItem>();
@@ -196,7 +208,9 @@ namespace Rend.Layout.Internal
                     FlexGrow = Math.Max(0, childElement.Style.FlexGrow),
                     FlexShrink = Math.Max(0, childElement.Style.FlexShrink),
                     BaseSize = baseSize,
-                    Order = childElement.Style.Order
+                    Order = childElement.Style.Order,
+                    ContainerWidth = containerWidth,
+                    ContainerHeight = containerHeight
                 });
             }
 
@@ -233,15 +247,54 @@ namespace Rend.Layout.Internal
                 }
                 else
                 {
-                    // TODO: CSS Flexbox §4.5 auto min-width for row flex items.
-                    // Requires distinguishing auto (initial 0) from explicit min-width:0.
-                    // Needs ComputedStyle to track which properties were explicitly set.
+                    // [CSS-FLEXBOX §4.5] Auto min-width for row flex items.
+                    // When min-width is auto (NaN) and overflow is visible,
+                    // min = min(specified-width or content-width, content-based min).
+                    if (minMain <= 0 && item.Style.OverflowX == CssOverflow.Visible
+                        && float.IsNaN(item.Style.MinWidth))
+                    {
+                        float contentMin = ComputeContentMinWidth(item, containerWidth, context);
+                        // Clamp to specified width if set
+                        float specWidth = item.Style.Width;
+                        if (!float.IsNaN(specWidth) && specWidth >= 0
+                            && !DeferredPercent.IsEncoded(specWidth))
+                        {
+                            contentMin = Math.Min(contentMin, specWidth);
+                        }
+                        if (contentMin > minMain)
+                        {
+                            minMain = contentMin;
+                            item.AutoMinMain = contentMin;
+                        }
+                    }
                 }
 
                 float maxMain = isColumn ? item.Style.MaxHeight : item.Style.MaxWidth;
+                if (DeferredPercent.IsEncoded(maxMain))
+                {
+                    maxMain = DeferredPercent.Resolve(maxMain, isColumn ? containerHeight : containerWidth);
+                }
+                // [CSS-SIZING §5.2] border-box: max-width/height includes padding+border
+                if (!float.IsNaN(maxMain) && maxMain >= 0
+                    && item.Style.BoxSizing == CssBoxSizing.BorderBox)
+                {
+                    if (isColumn)
+                    {
+                        maxMain -= item.Box.PaddingTop + item.Box.PaddingBottom
+                                 + item.Box.BorderTopWidth + item.Box.BorderBottomWidth;
+                    }
+                    else
+                    {
+                        maxMain -= item.Box.PaddingLeft + item.Box.PaddingRight
+                                 + item.Box.BorderLeftWidth + item.Box.BorderRightWidth;
+                    }
+                    if (maxMain < 0) { maxMain = 0; }
+                }
                 float clampedBase = Math.Max(item.BaseSize, minMain);
                 if (!float.IsNaN(maxMain) && maxMain >= 0)
+                {
                     clampedBase = Math.Min(clampedBase, maxMain);
+                }
                 float itemMain = clampedBase + GetItemMainMargins(item, isColumn);
                 // Include the gap that would precede this item on the current line.
                 float neededMain = itemMain + (currentLine.Items.Count > 0 ? gap : 0);
@@ -323,6 +376,10 @@ namespace Rend.Layout.Internal
                         contentMain = itemMinMain;
                     }
                     float itemMaxMain = isColumn ? item.Style.MaxHeight : item.Style.MaxWidth;
+                    if (DeferredPercent.IsEncoded(itemMaxMain))
+                    {
+                        itemMaxMain = DeferredPercent.Resolve(itemMaxMain, isColumn ? containerHeight : containerWidth);
+                    }
                     if (!float.IsNaN(itemMaxMain) && itemMaxMain >= 0 && contentMain > itemMaxMain)
                     {
                         contentMain = itemMaxMain;
@@ -360,8 +417,30 @@ namespace Rend.Layout.Internal
                             var measureBox = new LayoutBox(box.StyledNode, BoxType.Block);
                             BoxModelCalculator.ApplyBoxModel(measureBox, item.Style, containerWidth);
                             float availW = containerWidth - BoxModelCalculator.GetHorizontalSpacing(measureBox);
+
+                            // Apply max-width constraint BEFORE measuring so children
+                            // lay out within the constrained width.
+                            float crossMax = item.Style.MaxWidth;
+                            if (DeferredPercent.IsEncoded(crossMax))
+                            {
+                                crossMax = DeferredPercent.Resolve(crossMax, containerWidth);
+                            }
+                            if (!float.IsNaN(crossMax) && crossMax >= 0)
+                            {
+                                if (item.Style.BoxSizing == CssBoxSizing.BorderBox)
+                                {
+                                    crossMax -= box.PaddingLeft + box.PaddingRight
+                                              + box.BorderLeftWidth + box.BorderRightWidth;
+                                    if (crossMax < 0) { crossMax = 0; }
+                                }
+                                if (availW > crossMax) { availW = crossMax; }
+                            }
+
                             measureBox.ContentRect = new RectF(0, 0, availW, contentMain);
+                            var savedCtx = context.FloatContext;
+                            context.FloatContext = null;
                             BlockFormattingContext.LayoutChildren(measureBox, context);
+                            context.FloatContext = savedCtx;
                             contentCross = BlockFormattingContext.GetContentExtent(measureBox);
                             if (contentCross > availW)
                             {
@@ -389,6 +468,24 @@ namespace Rend.Layout.Internal
                             }
                         }
 
+                        // [CSS-SIZING §5.2] Apply cross-axis min/max constraints
+                        float crossMinW = DimensionResolver.ResolvePercentWidth(item.Style.MinWidth, containerWidth);
+                        float crossMaxW = DimensionResolver.ResolvePercentWidth(item.Style.MaxWidth, containerWidth);
+                        if (item.Style.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            float hExtra = box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth;
+                            if (!float.IsNaN(crossMinW) && crossMinW >= 0) { crossMinW = Math.Max(0, crossMinW - hExtra); }
+                            if (!float.IsNaN(crossMaxW) && crossMaxW >= 0) { crossMaxW = Math.Max(0, crossMaxW - hExtra); }
+                        }
+                        if (!float.IsNaN(crossMaxW) && crossMaxW >= 0 && contentCross > crossMaxW)
+                        {
+                            contentCross = crossMaxW;
+                        }
+                        if (!float.IsNaN(crossMinW) && crossMinW >= 0 && contentCross < crossMinW)
+                        {
+                            contentCross = crossMinW;
+                        }
+
                         box.ContentRect = new RectF(
                             crossCursor + box.MarginLeft + box.BorderLeftWidth + box.PaddingLeft,
                             mainCursor + box.MarginTop + box.BorderTopWidth + box.PaddingTop,
@@ -400,14 +497,28 @@ namespace Rend.Layout.Internal
                         // aspect-ratio can derive height from width.
                         box.ContentRect = new RectF(0, 0, contentMain, 0);
                         float specHeight = DimensionResolver.ResolveHeight(item.Style, containerHeight, box);
-                        // [CSS-SIZING §5.1] If height resolves to 0 (unset = auto) and
+                        // [CSS-SIZING-4 §5.1] If height resolves to 0 (unset = auto) and
                         // aspect-ratio is set, derive height from the main size.
                         if ((float.IsNaN(specHeight) || specHeight <= 0) && contentMain > 0)
                         {
                             float itemAspectRatio = DimensionResolver.GetAspectRatio(item.Style);
                             if (itemAspectRatio > 0)
                             {
-                                specHeight = contentMain / itemAspectRatio;
+                                if (item.Style.BoxSizing == CssBoxSizing.BorderBox)
+                                {
+                                    float borderBoxWidth = contentMain
+                                        + box.PaddingLeft + box.PaddingRight
+                                        + box.BorderLeftWidth + box.BorderRightWidth;
+                                    float borderBoxHeight = borderBoxWidth / itemAspectRatio;
+                                    specHeight = borderBoxHeight
+                                        - box.PaddingTop - box.PaddingBottom
+                                        - box.BorderTopWidth - box.BorderBottomWidth;
+                                    if (specHeight < 0) { specHeight = 0; }
+                                }
+                                else
+                                {
+                                    specHeight = contentMain / itemAspectRatio;
+                                }
                             }
                         }
                         contentCross = float.IsNaN(specHeight) ? 0 : specHeight;
@@ -551,12 +662,28 @@ namespace Rend.Layout.Internal
                     }
                     else if (float.IsNaN(item.Style.Height))
                     {
-                        contentCross = CalculateAutoHeight(box);
-                        // Replaced elements (form controls, images) have intrinsic cross size
-                        if (contentCross <= 0 && box.StyledNode is StyledElement stEl
-                            && ReplacedElementLayout.IsReplaced(stEl))
+                        // [CSS-SIZING-4 §5.1] If aspect-ratio already resolved a definite
+                        // cross size, keep it — don't override with content-based height.
+                        if (DimensionResolver.GetAspectRatio(item.Style) <= 0 || contentCross <= 0)
                         {
-                            contentCross = ReplacedElementLayout.GetFormControlIntrinsicHeight(stEl);
+                            contentCross = CalculateAutoHeight(box);
+                            // Replaced elements (form controls, images) have intrinsic cross size
+                            if (contentCross <= 0 && box.StyledNode is StyledElement stEl
+                                && ReplacedElementLayout.IsReplaced(stEl))
+                            {
+                                contentCross = ReplacedElementLayout.GetFormControlIntrinsicHeight(stEl);
+                            }
+                        }
+                        // [CSS2 §10.7] Apply cross-axis min/max constraints for row flex
+                        float crossMinH = DimensionResolver.ResolvePercentHeight(item.Style.MinHeight, containerHeight);
+                        float crossMaxH = DimensionResolver.ResolvePercentHeight(item.Style.MaxHeight, containerHeight);
+                        if (!float.IsNaN(crossMaxH) && crossMaxH >= 0 && contentCross > crossMaxH)
+                        {
+                            contentCross = crossMaxH;
+                        }
+                        if (!float.IsNaN(crossMinH) && crossMinH >= 0 && contentCross < crossMinH)
+                        {
+                            contentCross = crossMinH;
                         }
                         box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y,
                                                     box.ContentRect.Width, contentCross);
@@ -1088,6 +1215,54 @@ namespace Rend.Layout.Internal
                 }
             }
 
+            // [CSS-SIZING-4 §5.1] When flex-basis is auto and main dimension is auto,
+            // but cross dimension is definite and aspect-ratio is set, derive main size
+            // from cross dimension and ratio.
+            float arRatio = DimensionResolver.GetAspectRatio(style);
+            if (arRatio > 0)
+            {
+                if (isColumn)
+                {
+                    // Column: main=height, cross=width. If width is definite, height = width / ratio.
+                    float crossWidth = DimensionResolver.ResolveWidth(style, containerWidth, box);
+                    if (!float.IsNaN(crossWidth) && crossWidth > 0)
+                    {
+                        if (style.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            float borderBoxWidth = crossWidth
+                                + box.PaddingLeft + box.PaddingRight
+                                + box.BorderLeftWidth + box.BorderRightWidth;
+                            float borderBoxHeight = borderBoxWidth / arRatio;
+                            float contentHeight = borderBoxHeight
+                                - box.PaddingTop - box.PaddingBottom
+                                - box.BorderTopWidth - box.BorderBottomWidth;
+                            return Math.Max(0, contentHeight);
+                        }
+                        return crossWidth / arRatio;
+                    }
+                }
+                else
+                {
+                    // Row: main=width, cross=height. If height is definite, width = height * ratio.
+                    float crossHeight = DimensionResolver.ResolveHeight(style, containerHeight, box);
+                    if (!float.IsNaN(crossHeight) && crossHeight > 0)
+                    {
+                        if (style.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            float borderBoxHeight = crossHeight
+                                + box.PaddingTop + box.PaddingBottom
+                                + box.BorderTopWidth + box.BorderBottomWidth;
+                            float borderBoxWidth = borderBoxHeight * arRatio;
+                            float contentWidth = borderBoxWidth
+                                - box.PaddingLeft - box.PaddingRight
+                                - box.BorderLeftWidth - box.BorderRightWidth;
+                            return Math.Max(0, contentWidth);
+                        }
+                        return crossHeight * arRatio;
+                    }
+                }
+            }
+
             // Replaced elements (img, input, select, textarea, etc.) have intrinsic dimensions.
             // Use those instead of trial layout.
             if (ReplacedElementLayout.IsReplaced(element))
@@ -1125,6 +1300,17 @@ namespace Rend.Layout.Internal
                 if (float.IsNaN(w))
                 {
                     w = containerWidth - BoxModelCalculator.GetHorizontalSpacing(measureBox);
+                }
+                // [CSS-SIZING §5.2] Apply max-width before measuring column flex cross axis
+                float colMaxW = style.MaxWidth;
+                if (!float.IsNaN(colMaxW) && colMaxW >= 0 && !DeferredPercent.IsEncoded(colMaxW) && !SizingKeyword.IsSizingKeyword(colMaxW))
+                {
+                    if (style.BoxSizing == CssBoxSizing.BorderBox)
+                    {
+                        colMaxW -= measureBox.PaddingLeft + measureBox.PaddingRight + measureBox.BorderLeftWidth + measureBox.BorderRightWidth;
+                        if (colMaxW < 0) { colMaxW = 0; }
+                    }
+                    if (w > colMaxW) { w = colMaxW; }
                 }
                 measureBox.ContentRect = new RectF(0, 0, w, 0);
                 BlockFormattingContext.LayoutChildren(measureBox, context);
@@ -1640,6 +1826,17 @@ namespace Rend.Layout.Internal
                     {
                         float minMain = GetFlexItemMinMain(item, isColumn);
                         float maxMain = isColumn ? item.Style.MaxHeight : item.Style.MaxWidth;
+                        if (DeferredPercent.IsEncoded(maxMain))
+                        {
+                            maxMain = DeferredPercent.Resolve(maxMain, isColumn ? item.ContainerHeight : item.ContainerWidth);
+                        }
+                        if (!float.IsNaN(maxMain) && maxMain >= 0 && item.Style.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            float mainExtra = isColumn
+                                ? item.Box.PaddingTop + item.Box.PaddingBottom + item.Box.BorderTopWidth + item.Box.BorderBottomWidth
+                                : item.Box.PaddingLeft + item.Box.PaddingRight + item.Box.BorderLeftWidth + item.Box.BorderRightWidth;
+                            maxMain = Math.Max(0, maxMain - mainExtra);
+                        }
                         if (minMain > 0 && item.ResolvedMainSize < minMain)
                         {
                             item.ResolvedMainSize = minMain;
@@ -1765,6 +1962,17 @@ namespace Rend.Layout.Internal
                     {
                         float minMain = GetFlexItemMinMain(item, isColumn);
                         float maxMain = isColumn ? item.Style.MaxHeight : item.Style.MaxWidth;
+                        if (DeferredPercent.IsEncoded(maxMain))
+                        {
+                            maxMain = DeferredPercent.Resolve(maxMain, isColumn ? item.ContainerHeight : item.ContainerWidth);
+                        }
+                        if (!float.IsNaN(maxMain) && maxMain >= 0 && item.Style.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            float mainExtra = isColumn
+                                ? item.Box.PaddingTop + item.Box.PaddingBottom + item.Box.BorderTopWidth + item.Box.BorderBottomWidth
+                                : item.Box.PaddingLeft + item.Box.PaddingRight + item.Box.BorderLeftWidth + item.Box.BorderRightWidth;
+                            maxMain = Math.Max(0, maxMain - mainExtra);
+                        }
                         if (minMain > 0 && resolved < minMain)
                         {
                             resolved = minMain;
@@ -1797,6 +2005,11 @@ namespace Rend.Layout.Internal
         private static float GetFlexItemMinMain(FlexItem item, bool isColumn)
         {
             float explicitMin = isColumn ? item.Style.MinHeight : item.Style.MinWidth;
+            if (DeferredPercent.IsEncoded(explicitMin))
+            {
+                explicitMin = DeferredPercent.Resolve(explicitMin,
+                    isColumn ? item.ContainerHeight : item.ContainerWidth);
+            }
             if (!float.IsNaN(explicitMin) && explicitMin > 0)
             {
                 return explicitMin;
@@ -1940,6 +2153,8 @@ namespace Rend.Layout.Internal
             public float ResolvedMainSize { get; set; }
             public int Order { get; set; }
             public float AutoMinMain { get; set; }
+            public float ContainerWidth { get; set; }
+            public float ContainerHeight { get; set; }
         }
 
         private sealed class FlexLine

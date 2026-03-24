@@ -123,7 +123,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §10.4] Percentage height 50% of 100px row = 50px
-        [Fact(Skip = "Known bug: percentage height on grid item does not resolve against row track")]
+        [Fact]
         public void PercentageHeight50_OfRow100()
         {
             var root = LayoutTestHelper.Layout(
@@ -259,7 +259,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §10.4] max-height 60px clamps stretched height in 100px row
-        [Fact(Skip = "Known bug: max-height not applied to stretched grid item")]
+        [Fact]
         public void MaxHeight60_ClampsStretchIn100Row()
         {
             var root = LayoutTestHelper.Layout(
@@ -489,7 +489,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §10.4] Percentage height 100% fills entire row
-        [Fact(Skip = "Known bug: percentage height on grid item does not resolve against row track")]
+        [Fact]
         public void PercentageHeight100_FillsEntireRow()
         {
             var root = LayoutTestHelper.Layout(

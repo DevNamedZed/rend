@@ -165,11 +165,7 @@ namespace Rend.Tests.Layout
             Assert.True(LayoutTestHelper.FindById(r, "t")!.ContentRect.Height >= 199);
         }
 
-        // flex: flex item with aspect-ratio
-        // TODO: Known bug — height:auto stored as 0 (not NaN), so aspect-ratio
-        // height derivation doesn't trigger in ResolveHeight. Needs ComputedStyle
-        // initial value fix (height:auto should be NaN, not 0).
-        [Fact(Skip = "Known bug: height initial value 0 vs NaN")]
+        [Fact]
         public void FlexItem_AspectRatio()
         {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>

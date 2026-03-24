@@ -65,7 +65,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS2 §9.5] float does not affect parent auto-height when parent is not BFC
-        [Fact(Skip = "Known bug: CalculateAutoHeight includes float children even for non-BFC blocks")]
+        [Fact]
         public void FloatDoesNotAffectParentHeight_NoBfc()
         {
             var root = LayoutTestHelper.Layout(
@@ -272,7 +272,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS2 §10.4] float with min-width prevents shrinking below minimum
-        [Fact(Skip = "Known bug: min-width not applied to float shrink-to-fit")]
+        [Fact]
         public void FloatWithMinWidth_RespectsMinimum()
         {
             var root = LayoutTestHelper.Layout(
@@ -289,7 +289,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS2 §10.4] float with max-width prevents growing beyond maximum
-        [Fact(Skip = "Known bug: max-width not applied to float shrink-to-fit")]
+        [Fact]
         public void FloatWithMaxWidth_RespectsMaximum()
         {
             var root = LayoutTestHelper.Layout(
@@ -567,7 +567,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS2 §9.5.2] clear on a float itself
-        [Fact(Skip = "Known bug: clear property not applied when set on a float element")]
+        [Fact(Skip = "Known bug: clear on float element")]
         public void ClearOnFloat_MovesFloatBelowPreviousFloat()
         {
             var root = LayoutTestHelper.Layout(

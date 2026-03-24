@@ -1,4 +1,7 @@
 using System;
+using Rend.Css.Parser.Internal;
+using Rend.Css.Resolution.Internal;
+using Rend.Core.Values;
 
 namespace Rend.Css.Media.Internal
 {
@@ -125,7 +128,7 @@ namespace Rend.Css.Media.Internal
             }
 
             // Parse numeric value with optional unit (for width/height/resolution)
-            if (!TryParseLength(valueStr, out float value))
+            if (!TryParseLength(valueStr, context, out float value))
                 return true; // can't parse — assume match (permissive)
 
             switch (name)
@@ -176,7 +179,7 @@ namespace Rend.Css.Media.Internal
             var name = lower.Substring(0, opIdx).Trim();
             var valueStr = lower.Substring(opIdx + foundOp.Length).Trim();
 
-            if (!TryParseLength(valueStr, out float value))
+            if (!TryParseLength(valueStr, context, out float value))
             {
                 return false;
             }
@@ -216,33 +219,68 @@ namespace Rend.Css.Media.Internal
             return parsedValue;
         }
 
-        private static bool TryParseLength(string value, out float px)
+        private static bool TryParseLength(string value, MediaContext context, out float px)
         {
             px = 0;
-            value = value.Trim().ToLowerInvariant();
+            value = value.Trim();
+
+            // Handle calc(), min(), max(), clamp() expressions
+            var valueLower = value.ToLowerInvariant();
+            if (valueLower.StartsWith("calc(") || valueLower.StartsWith("min(")
+                || valueLower.StartsWith("max(") || valueLower.StartsWith("clamp("))
+            {
+                try
+                {
+                    var parsed = CssValueParser.ParseValueString(value);
+                    if (parsed is CssFunctionValue calcFn)
+                    {
+                        var calcCtx = new CssResolutionContext(
+                            16f, 16f, context.Width, context.Height);
+                        px = ValueResolver.EvaluateCalc(calcFn.Arguments, calcCtx);
+                        return !float.IsNaN(px) && !float.IsInfinity(px);
+                    }
+                }
+                catch
+                {
+                    return false;
+                }
+                return false;
+            }
+
+            valueLower = value.ToLowerInvariant();
 
             // Try to extract number and unit
             int unitStart = 0;
-            for (int i = 0; i < value.Length; i++)
+            for (int i = 0; i < valueLower.Length; i++)
             {
-                char c = value[i];
+                char c = valueLower[i];
                 if ((c >= '0' && c <= '9') || c == '.' || c == '-' || c == '+')
+                {
                     unitStart = i + 1;
+                }
                 else
+                {
                     break;
+                }
             }
 
-            var numStr = value.Substring(0, unitStart);
-            var unit = value.Substring(unitStart).Trim();
+            var numStr = valueLower.Substring(0, unitStart);
+            var unit = valueLower.Substring(unitStart).Trim();
 
             if (!float.TryParse(numStr, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out float num))
+            {
                 return false;
+            }
 
             switch (unit)
             {
                 case "px": case "": px = num; return true;
-                case "em": case "rem": px = num * 16; return true; // approximate
+                case "em": case "rem": px = num * 16; return true;
+                case "vw": px = num * context.Width / 100f; return true;
+                case "vh": px = num * context.Height / 100f; return true;
+                case "vmin": px = num * Math.Min(context.Width, context.Height) / 100f; return true;
+                case "vmax": px = num * Math.Max(context.Width, context.Height) / 100f; return true;
                 case "pt": px = num * 96f / 72f; return true;
                 case "cm": px = num * 96f / 2.54f; return true;
                 case "mm": px = num * 96f / 25.4f; return true;

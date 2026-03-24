@@ -554,6 +554,17 @@ namespace Rend.Output.Pdf
         }
 
         /// <inheritdoc />
+        public (float Ascent, float Descent) GetFontMetrics(FontDescriptor font, float fontSize)
+        {
+            PdfFont pdfFont = ResolvePdfFont(font);
+            var metrics = pdfFont.Metrics;
+            float scale = metrics.UnitsPerEm > 0 ? fontSize / metrics.UnitsPerEm : 0;
+            float ascent = (float)Math.Round(metrics.Ascent * scale, MidpointRounding.AwayFromZero);
+            float descent = (float)Math.Round(-metrics.Descent * scale, MidpointRounding.AwayFromZero);
+            return (ascent, descent);
+        }
+
+        /// <inheritdoc />
         public void AddLink(RectF rect, string uri)
         {
             if (_currentPage == null || string.IsNullOrEmpty(uri))

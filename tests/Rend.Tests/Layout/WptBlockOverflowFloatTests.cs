@@ -59,7 +59,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS2 §9.4.1] overflow:visible does NOT establish BFC; does not contain floats
-        [Fact(Skip = "Known bug: auto height includes float children even for non-BFC blocks")]
+        [Fact]
         public void OverflowVisible_DoesNotContainFloats()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -306,7 +306,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS2 §10.4] float with min-width
-        [Fact(Skip = "Known bug: min-width not applied to float shrink-to-fit")]
+        [Fact]
         public void FloatMinWidth()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -322,7 +322,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS2 §10.4] float with max-width
-        [Fact(Skip = "Known bug: max-width not applied to float shrink-to-fit")]
+        [Fact]
         public void FloatMaxWidth()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -418,7 +418,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS2 §9.4.1] BFC avoids right float
-        [Fact(Skip = "Known bug: BFC does not shrink width to avoid right float")]
+        [Fact(Skip = "Known bug: BFC shrink to avoid right float")]
         public void BfcAvoidsRightFloat()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>

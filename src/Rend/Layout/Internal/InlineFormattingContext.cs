@@ -1000,7 +1000,9 @@ namespace Rend.Layout.Internal
                 if (j < breaks.Length && breaks[j] == LineBreakOpportunity.Allowed || j == text.Length - 1)
                 {
                     int end = j == text.Length - 1 ? text.Length : j + 1;
-                    string word = text.Substring(wordStart, end - wordStart);
+                    int wordLen = Math.Max(0, end - wordStart);
+                    wordLen = Math.Min(wordLen, text.Length - Math.Max(0, wordStart));
+                    string word = text.Substring(Math.Max(0, wordStart), wordLen);
 
                     // Strip soft hyphens from display text (they're invisible unless at a break point)
                     string displayWord = hasSoftHyphens ? word.Replace("\u00AD", string.Empty) : word;
@@ -1015,7 +1017,9 @@ namespace Rend.Layout.Internal
                     bool candidateEndsAtSoftHyphen = isBreakOpportunity && hasSoftHyphens && text[j] == '\u00AD';
                     float candidateWidth;
                     {
-                        string lineCandidate = text.Substring(lineTextStart, end - lineTextStart);
+                        int lcLen = Math.Max(0, end - lineTextStart);
+                        lcLen = Math.Min(lcLen, text.Length - Math.Max(0, lineTextStart));
+                        string lineCandidate = text.Substring(Math.Max(0, lineTextStart), lcLen);
                         if (hasSoftHyphens) lineCandidate = lineCandidate.Replace("\u00AD", string.Empty);
                         if (candidateEndsAtSoftHyphen) lineCandidate += "-";
                         if (lineCandidate.Length > 0)
@@ -1096,7 +1100,9 @@ namespace Rend.Layout.Internal
                             // included text from the previous line (e.g. "underlined blue"
                             // instead of just "blue") causing a desynchronized cursor.
                             {
-                                string newLineCandidate = text.Substring(lineTextStart, end - lineTextStart);
+                                int nlcLen = Math.Max(0, end - lineTextStart);
+                                nlcLen = Math.Min(nlcLen, text.Length - Math.Max(0, lineTextStart));
+                                string newLineCandidate = text.Substring(Math.Max(0, lineTextStart), nlcLen);
                                 if (hasSoftHyphens) newLineCandidate = newLineCandidate.Replace("\u00AD", string.Empty);
                                 if (candidateEndsAtSoftHyphen) newLineCandidate += "-";
                                 if (newLineCandidate.Length > 0)
@@ -1171,7 +1177,10 @@ namespace Rend.Layout.Internal
             float lineHeight, float ascent, StyledElement? inlineAncestor,
             float letterSpacing, float wordSpacing, bool appendHyphen = false)
         {
-            string segment = fullText.Substring(textStart, textEnd - textStart);
+            int segLen = Math.Max(0, textEnd - textStart);
+            if (segLen == 0 || textStart < 0 || textStart >= fullText.Length) { return; }
+            segLen = Math.Min(segLen, fullText.Length - textStart);
+            string segment = fullText.Substring(textStart, segLen);
             if (hasSoftHyphens)
             {
                 segment = segment.Replace("\u00AD", string.Empty);
@@ -1340,7 +1349,10 @@ namespace Rend.Layout.Internal
             LayoutContext context, float x, float width,
             float lineHeight, float ascent, LineBox currentLine, StyledElement? inlineAncestor)
         {
-            string batchText = text.Substring(start, end - start);
+            int batchLen = Math.Max(0, end - start);
+            if (batchLen == 0 || start < 0 || start >= text.Length) { return; }
+            batchLen = Math.Min(batchLen, text.Length - start);
+            string batchText = text.Substring(start, batchLen);
             var shaped = context.TextMeasurer!.Shape(batchText, fontDesc, fontSize);
             AddTextFragment(currentLine, batchText, shaped, x, width, lineHeight, ascent, inlineAncestor);
         }
@@ -1471,15 +1483,21 @@ namespace Rend.Layout.Internal
                 }
 
                 // Resolve CSS width (handles deferred percentage encoding)
+                // [CSS-SIZING-3 §5.1] For replaced elements, intrinsic sizing keywords
+                // (min-content, max-content, fit-content) resolve to the intrinsic size.
                 float specW = element.Style.Width;
                 if (DeferredPercent.IsEncoded(specW))
                 {
                     contentWidth = DimensionResolver.ResolveWidth(element.Style, containingWidth, box);
                 }
-                else if (float.IsNaN(specW))
+                else if (float.IsNaN(specW) || SizingKeyword.IsSizingKeyword(specW))
+                {
                     contentWidth = intrinsicW;
+                }
                 else
+                {
                     contentWidth = specW;
+                }
 
                 // Resolve CSS height
                 float specH = element.Style.Height;
@@ -1488,10 +1506,14 @@ namespace Rend.Layout.Internal
                 {
                     tempH = DimensionResolver.ResolveHeight(element.Style, float.NaN, box);
                 }
-                else if (float.IsNaN(specH))
+                else if (float.IsNaN(specH) || SizingKeyword.IsSizingKeyword(specH))
+                {
                     tempH = intrinsicH;
+                }
                 else
+                {
                     tempH = specH;
+                }
                 if (float.IsNaN(tempH)) tempH = intrinsicH;
 
                 box.ContentRect = new RectF(0, 0, contentWidth, tempH);
@@ -1554,9 +1576,30 @@ namespace Rend.Layout.Internal
                 }
             }
 
+            // [CSS2 §10.4] Apply min-width/max-width constraints
+            {
+                float ibMinW = DimensionResolver.ResolvePercentWidth(element.Style.MinWidth, containingWidth);
+                float ibMaxW = DimensionResolver.ResolvePercentWidth(element.Style.MaxWidth, containingWidth);
+                if (element.Style.BoxSizing == CssBoxSizing.BorderBox)
+                {
+                    float hExtra = box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth;
+                    if (!float.IsNaN(ibMinW) && ibMinW >= 0) { ibMinW = Math.Max(0, ibMinW - hExtra); }
+                    if (!float.IsNaN(ibMaxW) && ibMaxW >= 0) { ibMaxW = Math.Max(0, ibMaxW - hExtra); }
+                }
+                if (!float.IsNaN(ibMaxW) && ibMaxW >= 0 && contentWidth > ibMaxW) { contentWidth = ibMaxW; }
+                if (!float.IsNaN(ibMinW) && ibMinW >= 0 && contentWidth < ibMinW) { contentWidth = ibMinW; }
+            }
+
             float totalWidth = contentWidth + box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth;
 
-            if (cursorX + totalWidth > startX + containingWidth && currentLine.Fragments.Count > 0)
+            // [CSS-TEXT-3 §3] white-space: nowrap/pre suppresses soft wrapping for
+            // inline-blocks as well as text.
+            var parentWsElement = parent.StyledNode as StyledElement;
+            bool noWrapInlineBlock = parentWsElement != null
+                && (parentWsElement.Style.WhiteSpace == CssWhiteSpace.Nowrap
+                    || parentWsElement.Style.WhiteSpace == CssWhiteSpace.Pre);
+
+            if (!noWrapInlineBlock && cursorX + totalWidth > startX + containingWidth && currentLine.Fragments.Count > 0)
             {
                 // Atomic inline (inline-block) doesn't fit on the current line.
                 // Chrome wraps only the atomic inline to the next line — preceding
@@ -1588,6 +1631,12 @@ namespace Rend.Layout.Internal
                 contentHeight = DimensionResolver.ResolveHeight(element.Style, float.NaN, box);
                 if (float.IsNaN(contentHeight))
                     contentHeight = CalculateContentHeight(box);
+
+                // [CSS2 §10.7] Apply min-height/max-height
+                float ibMinH = DimensionResolver.ResolvePercentHeight(element.Style.MinHeight, float.NaN);
+                float ibMaxH = DimensionResolver.ResolvePercentHeight(element.Style.MaxHeight, float.NaN);
+                if (!float.IsNaN(ibMaxH) && ibMaxH >= 0 && contentHeight > ibMaxH) { contentHeight = ibMaxH; }
+                if (!float.IsNaN(ibMinH) && ibMinH >= 0 && contentHeight < ibMinH) { contentHeight = ibMinH; }
 
                 box.ContentRect = new RectF(box.ContentRect.X, cursorY, contentWidth, contentHeight);
             }
@@ -1635,12 +1684,16 @@ namespace Rend.Layout.Internal
             }
             else
             {
+                // [CSS2 §10.8.1] Inline-block baseline: last in-flow line box baseline,
+                // unless overflow is not 'visible', in which case use bottom margin edge.
                 var overflow = element.Style.OverflowY;
-                if (overflow == CssOverflow.Visible || overflow == CssOverflow.Auto)
+                if (overflow == CssOverflow.Visible)
                 {
                     float? lastLineBaseline = FindLastLineBaseline(box);
                     if (lastLineBaseline.HasValue)
+                    {
                         fragmentBaseline = lastLineBaseline.Value + box.PaddingTop + box.BorderTopWidth + box.MarginTop;
+                    }
                 }
             }
 

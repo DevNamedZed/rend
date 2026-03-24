@@ -118,7 +118,7 @@ namespace Rend.Tests.Layout
 
         // grid item: max-height in explicit row
         // TODO: Known bug — grid stretch ignores max-height on items
-        [Fact(Skip = "Known bug: grid item max-height with stretch")]
+        [Fact]
         public void GridItem_MaxHeight_InRow()
         {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -156,7 +156,7 @@ namespace Rend.Tests.Layout
 
         // abspos: min-width on abspos element
         // TODO: Known bug — min-width not applied to abspos shrink-to-fit
-        [Fact(Skip = "Known bug: abspos min-width")]
+        [Fact(Skip = "Known bug: abspos min/max-width with shrink-to-fit")]
         public void AbsPos_MinWidth()
         {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -168,7 +168,7 @@ namespace Rend.Tests.Layout
 
         // abspos: max-width on abspos element
         // TODO: Known bug — max-width not clamping abspos width from left+right
-        [Fact(Skip = "Known bug: abspos max-width")]
+        [Fact(Skip = "Known bug: abspos min/max-width with shrink-to-fit")]
         public void AbsPos_MaxWidth()
         {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>

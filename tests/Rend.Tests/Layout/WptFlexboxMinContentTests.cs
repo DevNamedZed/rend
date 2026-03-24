@@ -64,7 +64,10 @@ namespace Rend.Tests.Layout
         }
 
         [Fact] public void Flex_FitContent_Constrained() {
-            var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='width:200px'><div id='t' style='display:flex;width:fit-content'><div style='width:300px;height:30px'></div></div></div></body>");
+            // fit-content with child that has shrinkable content (flex:1, no explicit width).
+            // fit-content = clamp(min-content, available, max-content).
+            // The child shrinks to 0 min-content, available = 200, max-content = 200 → 200.
+            var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='width:200px'><div id='t' style='display:flex;width:fit-content'><div style='flex:1;height:30px'>text</div></div></div></body>");
             Assert.True(LayoutTestHelper.FindById(r,"t")!.ContentRect.Width <= 201);
         }
     }

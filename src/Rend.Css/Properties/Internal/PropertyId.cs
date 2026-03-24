@@ -341,7 +341,55 @@ namespace Rend.Css.Properties.Internal
         // Text justify
         public const int TextJustify = 195;
 
+        // Scrollbar Gutter
+        public const int ScrollbarGutter = 196;
+
+        // Multicol Level 2
+        public const int ColumnHeight = 197;
+        public const int ColumnWrap = 198;
+
+        // Content Visibility
+        public const int ContentVisibility = 199;
+
+        // Font Size Adjust
+        public const int FontSizeAdjust = 200;
+
+        // Color Scheme
+        public const int ColorScheme = 201;
+
+        // Print Color Adjust
+        public const int PrintColorAdjust = 202;
+
+        // Overflow Anchor
+        public const int OverflowAnchor = 203;
+
+        // Overscroll Behavior
+        public const int OverscrollBehaviorX = 204;
+        public const int OverscrollBehaviorY = 205;
+
+        // Scroll Behavior
+        public const int ScrollBehavior = 206;
+
+        // Touch Action
+        public const int TouchAction = 207;
+
+        // Text Size Adjust
+        public const int TextSizeAdjust = 208;
+
+        // Font Kerning
+        public const int FontKerning = 209;
+
+        // Font Synthesis Sub-properties
+        public const int FontSynthesisWeight = 210;
+        public const int FontSynthesisStyle = 211;
+        public const int FontSynthesisSmallCaps = 212;
+        public const int FontSynthesisPosition = 213;
+
+        // Contain Intrinsic Size
+        public const int ContainIntrinsicWidth = 214;
+        public const int ContainIntrinsicHeight = 215;
+
         // Total count
-        public const int Count = 196;
+        public const int Count = 216;
     }
 }

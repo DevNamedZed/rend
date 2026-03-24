@@ -2,33 +2,30 @@ namespace Rend.Css.Properties.Internal
 {
     /// <summary>
     /// Encodes and decodes deferred CSS percentage values that must be resolved at layout time.
-    /// Percentages are stored as sentinel float values using a large negative offset (-10000)
-    /// so they don't collide with real negative pixel values (e.g., top: -0.5px).
+    /// Percentages are stored as sentinel float values using large negative offsets so they
+    /// don't collide with real negative pixel values (e.g., top: -0.5px).
     ///
-    /// Encoding: percentage fraction (0.5 for 50%) → -(10000 + 0.5) = -10000.5
-    /// Decoding: -10000.5 → fraction = 0.5, resolved = 0.5 * containingBlockDimension
+    /// Positive fractions: -(10000 + fraction) e.g., 50% → -10000.5
+    /// Negative fractions: -(20000 + |fraction|) e.g., -50% → -20000.5
     /// </summary>
     internal static class DeferredPercent
     {
-        /// <summary>
-        /// The offset used to distinguish deferred percentages from real negative values.
-        /// Any value less than or equal to -Offset is a deferred percentage (unless it's
-        /// NegativeInfinity for calc or a SizingKeyword sentinel).
-        /// </summary>
         private const float Offset = 10000f;
-
-        /// <summary>
-        /// Threshold for detecting deferred percentages. Values at or below this
-        /// are deferred percentages (after excluding NaN, NegativeInfinity, and SizingKeywords).
-        /// </summary>
+        private const float NegativeOffset = 20000f;
         private const float Threshold = -Offset;
+        private const float NegativeThreshold = -NegativeOffset;
 
         /// <summary>
         /// Encode a percentage fraction as a deferred sentinel value.
-        /// E.g., 50% → fraction 0.5 → encoded as -10000.5
+        /// Positive fractions: -(10000 + fraction)
+        /// Negative fractions: -(20000 + |fraction|)
         /// </summary>
         public static float Encode(float fraction)
         {
+            if (fraction < 0)
+            {
+                return -(NegativeOffset + (-fraction));
+            }
             return -(Offset + fraction);
         }
 
@@ -37,24 +34,43 @@ namespace Rend.Css.Properties.Internal
         /// </summary>
         public static bool IsEncoded(float value)
         {
-            return value <= Threshold
-                && !float.IsNaN(value)
-                && !float.IsNegativeInfinity(value)
-                && !SizingKeyword.IsSizingKeyword(value);
+            if (float.IsNaN(value) || float.IsNegativeInfinity(value))
+            {
+                return false;
+            }
+            if (SizingKeyword.IsSizingKeyword(value))
+            {
+                return false;
+            }
+            // Positive fraction range: <= -10000
+            if (value <= Threshold && value > NegativeThreshold + 10)
+            {
+                return true;
+            }
+            // Negative fraction range: <= -20000
+            if (value <= NegativeThreshold)
+            {
+                return true;
+            }
+            return false;
         }
 
         /// <summary>
         /// Decode the percentage fraction from a sentinel value.
-        /// E.g., -10000.5 → 0.5
         /// </summary>
         public static float DecodeFraction(float value)
         {
+            if (value <= NegativeThreshold)
+            {
+                // Negative fraction: -(20000 + |fraction|) → -|fraction|
+                return -(-(value + NegativeOffset));
+            }
+            // Positive fraction: -(10000 + fraction) → fraction
             return -(value + Offset);
         }
 
         /// <summary>
         /// Resolve a deferred percentage against a containing block dimension.
-        /// E.g., -10000.5 resolved against 800px → 0.5 * 800 = 400px
         /// Returns the original value unchanged if it's not a deferred percentage.
         /// </summary>
         public static float Resolve(float value, float containingDimension)

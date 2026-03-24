@@ -294,6 +294,7 @@ namespace Rend.Css.Properties.Internal
             // Resize / Appearance / User-Select
             Register(byName, "resize", PropertyId.Resize, false, PropertyValueType.Keyword);
             Register(byName, "appearance", PropertyId.Appearance, false, PropertyValueType.Keyword);
+            RegisterAlias(byName, "-webkit-appearance", PropertyId.Appearance, false, PropertyValueType.Keyword);
             Register(byName, "user-select", PropertyId.UserSelect, false, PropertyValueType.Keyword);
 
             // Isolation / Blend Mode
@@ -377,6 +378,58 @@ namespace Rend.Css.Properties.Internal
             // Ruby
             Register(byName, "ruby-position", PropertyId.RubyPosition, true, PropertyValueType.Keyword);
             Register(byName, "ruby-align", PropertyId.RubyAlign, true, PropertyValueType.Keyword);
+
+            // Scrollbar Gutter
+            Register(byName, "scrollbar-gutter", PropertyId.ScrollbarGutter, false, PropertyValueType.Keyword);
+
+            // Multicol Level 2
+            Register(byName, "column-height", PropertyId.ColumnHeight, false, PropertyValueType.Length);
+            Register(byName, "column-wrap", PropertyId.ColumnWrap, false, PropertyValueType.Keyword);
+
+            // Content Visibility
+            Register(byName, "content-visibility", PropertyId.ContentVisibility, false, PropertyValueType.Keyword);
+
+            // Font Size Adjust
+            Register(byName, "font-size-adjust", PropertyId.FontSizeAdjust, false, PropertyValueType.Length);
+
+            // Color Scheme
+            Register(byName, "color-scheme", PropertyId.ColorScheme, true, PropertyValueType.Keyword);
+
+            // Print Color Adjust
+            Register(byName, "print-color-adjust", PropertyId.PrintColorAdjust, true, PropertyValueType.Keyword);
+            RegisterAlias(byName, "-webkit-print-color-adjust", PropertyId.PrintColorAdjust, true, PropertyValueType.Keyword);
+
+            // Overflow Anchor
+            Register(byName, "overflow-anchor", PropertyId.OverflowAnchor, false, PropertyValueType.Keyword);
+
+            // Overscroll Behavior
+            Register(byName, "overscroll-behavior-x", PropertyId.OverscrollBehaviorX, false, PropertyValueType.Keyword);
+            Register(byName, "overscroll-behavior-y", PropertyId.OverscrollBehaviorY, false, PropertyValueType.Keyword);
+
+            // Scroll Behavior
+            Register(byName, "scroll-behavior", PropertyId.ScrollBehavior, false, PropertyValueType.Keyword);
+
+            // Touch Action
+            Register(byName, "touch-action", PropertyId.TouchAction, false, PropertyValueType.Keyword);
+
+            // Text Size Adjust
+            Register(byName, "text-size-adjust", PropertyId.TextSizeAdjust, false, PropertyValueType.Keyword);
+            RegisterAlias(byName, "-webkit-text-size-adjust", PropertyId.TextSizeAdjust, false, PropertyValueType.Keyword);
+
+            // Font Kerning
+            Register(byName, "font-kerning", PropertyId.FontKerning, true, PropertyValueType.Keyword);
+
+            // Font Synthesis Sub-properties
+            Register(byName, "font-synthesis-weight", PropertyId.FontSynthesisWeight, true, PropertyValueType.Keyword);
+            Register(byName, "font-synthesis-style", PropertyId.FontSynthesisStyle, true, PropertyValueType.Keyword);
+            Register(byName, "font-synthesis-small-caps", PropertyId.FontSynthesisSmallCaps, true, PropertyValueType.Keyword);
+            Register(byName, "font-synthesis-position", PropertyId.FontSynthesisPosition, true, PropertyValueType.Keyword);
+
+            // Contain Intrinsic Size (CSS Sizing Level 4)
+            Register(byName, "contain-intrinsic-width", PropertyId.ContainIntrinsicWidth, false, PropertyValueType.Length);
+            Register(byName, "contain-intrinsic-height", PropertyId.ContainIntrinsicHeight, false, PropertyValueType.Length);
+            RegisterAlias(byName, "contain-intrinsic-inline-size", PropertyId.ContainIntrinsicWidth, false, PropertyValueType.Length);
+            RegisterAlias(byName, "contain-intrinsic-block-size", PropertyId.ContainIntrinsicHeight, false, PropertyValueType.Length);
 
 #if NET8_0_OR_GREATER
             _byName = byName.ToFrozenDictionary();

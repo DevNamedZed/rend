@@ -182,6 +182,7 @@ namespace Rend.Tests.Rendering
             {
                 StrokedRects.Add((rect, pen));
             }
+            public (float Ascent, float Descent) GetFontMetrics(FontDescriptor font, float fontSize) => (fontSize * 0.8f, fontSize * 0.2f);
         }
     }
 }

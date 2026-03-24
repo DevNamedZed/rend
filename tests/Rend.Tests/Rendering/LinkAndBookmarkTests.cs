@@ -275,6 +275,7 @@ namespace Rend.Tests.Rendering
             {
                 Links.Add((rect, uri));
             }
+            public (float Ascent, float Descent) GetFontMetrics(FontDescriptor font, float fontSize) => (fontSize * 0.8f, fontSize * 0.2f);
 
             public void AddBookmark(string title, int level, float yPosition)
             {

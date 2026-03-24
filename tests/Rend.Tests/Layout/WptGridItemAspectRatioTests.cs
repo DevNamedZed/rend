@@ -321,11 +321,13 @@ namespace Rend.Tests.Layout
         [Fact]
         public void AspectRatio_FixedRowTrack_StretchOverridesRatio()
         {
+            // [CSS-SIZING-4 §5.1] Stretch in block axis determines height (200px),
+            // aspect-ratio 2/1 derives width = 200*2 = 400px (overflows column track).
             var root = LayoutTestHelper.Layout(
                 @"<body style='margin:0'><div style='display:grid;grid-template-columns:200px;grid-template-rows:200px;width:200px'>
                     <div id='t' style='aspect-ratio:2/1'></div></div></body>");
             var target = LayoutTestHelper.FindById(root, "t")!;
-            Assert.True(System.Math.Abs(target.ContentRect.Width - 200) < 2);
+            Assert.True(System.Math.Abs(target.ContentRect.Width - 400) < 2);
             Assert.True(System.Math.Abs(target.ContentRect.Height - 200) < 2);
         }
 

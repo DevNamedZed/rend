@@ -88,7 +88,7 @@ namespace Rend.Tests.Layout
         }
 
         // WPT col-wrap-002: column wrap with max-height instead of height
-        [Fact(Skip = "Known bug: column wrap max-height for wrapping")]
+        [Fact(Skip = "Known bug: column wrap max-height")]
         public void ColWrap002_MaxHeight()
         {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -194,7 +194,7 @@ namespace Rend.Tests.Layout
         }
 
         // flex with all items having flex:1 in shrink-to-fit
-        [Fact(Skip = "Known bug: floated flex intrinsic sizing with flex:1 items")]
+        [Fact(Skip = "Known bug: floated flex intrinsic sizing")]
         public void FloatedFlex_AllGrow()
         {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -234,7 +234,7 @@ namespace Rend.Tests.Layout
         }
 
         // gap-020: flex with column-gap and width:max-content
-        [Fact(Skip = "Known bug: max-content with gap and min-width")]
+        [Fact(Skip = "Known bug: max-content with gap")]
         public void Gap020_MaxContentWithGap()
         {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>

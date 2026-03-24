@@ -57,9 +57,7 @@ namespace Rend.Tests.Layout
             Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r, "t")!.ContentRect.Height - 100) < 2);
         }
 
-        // WPT: align-items-008 — min-height with align-items:stretch
-        // TODO: Known bug — min-height on flex item with auto height (stored as 0) not applied
-        [Fact(Skip = "Known bug: height initial value 0 vs NaN")]
+        [Fact(Skip = "Known bug: min-height on flex container does not establish definite cross-size")]
         public void AlignItems008_MinHeight()
         {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>

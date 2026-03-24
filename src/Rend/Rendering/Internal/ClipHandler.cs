@@ -28,6 +28,15 @@ namespace Rend.Rendering.Internal
             CssOverflow overflowX = style.OverflowX;
             CssOverflow overflowY = style.OverflowY;
 
+            // [CSS2 §11.1.1] The root element's overflow propagates to the viewport,
+            // not to the element itself. Skip clipping for the root html element.
+            if (box.StyledNode is Style.StyledElement rootElem
+                && rootElem.TagName == "html"
+                && box.Parent == null)
+            {
+                return false;
+            }
+
             // contain: paint, content, or strict also establishes clipping
             CssContain contain = style.Contain;
             bool needsClip = NeedsClipping(overflowX) || NeedsClipping(overflowY)
@@ -40,10 +49,14 @@ namespace Rend.Rendering.Internal
 
 
 
-            // Use rounded clip path when border-radius is set
+            // Use rounded clip path when border-radius is set.
+            // [CSS-OVERFLOW §5.1] When one axis is clip and the other is visible,
+            // the clipping region is NOT rounded (no border-radius applied).
             var radii = BorderRadiusResolver.Resolve(style, box.BorderRect);
+            bool mixedClipVisible = (overflowX == CssOverflow.Clip && overflowY == CssOverflow.Visible)
+                || (overflowX == CssOverflow.Visible && overflowY == CssOverflow.Clip);
 
-            if (radii.HasRadius)
+            if (radii.HasRadius && !mixedClipVisible)
             {
                 var path = new PathData();
                 radii.AddToPath(path, box.PaddingRect);

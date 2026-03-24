@@ -120,5 +120,148 @@ namespace Rend.Tests.Layout
             Assert.True(d1.ContentRect.Width <= 101,
                 $"Width should be <= 100 due to max-width (got {d1.ContentRect.Width})");
         }
+
+        [Fact]
+        public void Debug_Flex_AspectRatio()
+        {
+            // Flex item with width + aspect-ratio, align-items:flex-start
+            var root = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;align-items:flex-start;width:300px'><div id='t' style='width:100px;aspect-ratio:2/1'></div></div></body>");
+            var t = LayoutTestHelper.FindById(root, "t");
+            Assert.NotNull(t);
+            _output.WriteLine($"FLEX: width={t!.ContentRect.Width} height={t.ContentRect.Height}");
+            // aspect-ratio:2/1 with width:100 should give height=50
+            Assert.True(System.Math.Abs(t.ContentRect.Height - 50) < 2,
+                $"Expected height 50 from aspect-ratio 2/1 with width 100 (got {t.ContentRect.Height})");
+        }
+
+        [Fact]
+        public void Debug_Block_AspectRatio()
+        {
+            // Block with width + aspect-ratio
+            var root = LayoutTestHelper.Layout(@"<body style='margin:0'><div id='t' style='width:100px;aspect-ratio:2/1'></div></body>");
+            var t = LayoutTestHelper.FindById(root, "t");
+            Assert.NotNull(t);
+            _output.WriteLine($"BLOCK: width={t!.ContentRect.Width} height={t.ContentRect.Height}");
+            // Block: width:100, aspect-ratio:2/1 -> height should be 50
+            // But height:auto=0, so ResolveHeight might not enter aspect-ratio path
+            Assert.True(System.Math.Abs(t.ContentRect.Height - 50) < 2,
+                $"Expected height 50 (got {t.ContentRect.Height})");
+        }
+        [Fact]
+        public void Debug_CalcCalcPercent()
+        {
+            // Abspos with positioned ancestor → containing block = positioned div (300px)
+            var root = LayoutTestHelper.Layout(@"
+                <body style='margin:0'>
+                <div id='cb' style='position:relative;width:400px;height:300px'>
+                    <div id='t' style='position:absolute;top:0;left:0;width:100%;height:calc(calc(100%))'></div>
+                </div></body>");
+            var cb = LayoutTestHelper.FindById(root, "cb");
+            var t = LayoutTestHelper.FindById(root, "t");
+            Assert.NotNull(cb);
+            Assert.NotNull(t);
+            _output.WriteLine($"CB height={cb!.ContentRect.Height}, t height={t!.ContentRect.Height}");
+            Assert.True(System.Math.Abs(t.ContentRect.Height - 300) < 2,
+                $"Expected 300 (got {t.ContentRect.Height})");
+        }
+
+        [Fact]
+        public void Debug_MaxCalcPercent()
+        {
+            var root = LayoutTestHelper.Layout(@"
+                <body style='margin:0'>
+                <div style='position:relative;width:400px;height:300px'>
+                    <div id='t' style='position:absolute;top:0;left:0;width:100%;height:max(calc(100%))'></div>
+                </div></body>");
+            var t = LayoutTestHelper.FindById(root, "t");
+            Assert.NotNull(t);
+            _output.WriteLine($"max(calc(100%)) height={t!.ContentRect.Height}");
+            Assert.True(System.Math.Abs(t.ContentRect.Height - 300) < 2,
+                $"Expected 300 (got {t.ContentRect.Height})");
+        }
+
+        [Fact]
+        public void Debug_Max20Args()
+        {
+            var root = LayoutTestHelper.Layout(@"
+                <body style='margin:0'>
+                <div style='position:relative;width:400px;height:300px'>
+                    <div id='t' style='position:absolute;top:0;left:0;width:100%;height:max(5%,10%,15%,20%,25%,30%,35%,40%,45%,50%,55%,60%,65%,70%,75%,80%,85%,90%,95%,100%)'></div>
+                </div></body>");
+            var t = LayoutTestHelper.FindById(root, "t");
+            Assert.NotNull(t);
+            _output.WriteLine($"max(20 args) height={t!.ContentRect.Height}");
+            Assert.True(System.Math.Abs(t.ContentRect.Height - 300) < 2,
+                $"Expected 300 (got {t.ContentRect.Height})");
+        }
+        [Fact]
+        public void GridItem_AspectRatio_Stretch()
+        {
+            // Grid: 100px row, 200px col. Child: aspect-ratio:1/1, align-self:stretch
+            // Stretch gives height=100px, aspect-ratio gives width=100px (not 200px)
+            var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
+                <div style='display:grid;grid-template-rows:100px;grid-template-columns:200px'>
+                    <div id='t' style='aspect-ratio:1/1;align-self:stretch'></div>
+                </div></body>");
+            var t = LayoutTestHelper.FindById(root, "t");
+            Assert.NotNull(t);
+            _output.WriteLine($"grid stretch AR: {t!.ContentRect.Width}x{t.ContentRect.Height}");
+            Assert.True(System.Math.Abs(t.ContentRect.Height - 100) < 2,
+                $"Expected height 100 (got {t.ContentRect.Height})");
+            Assert.True(System.Math.Abs(t.ContentRect.Width - 100) < 2,
+                $"Expected width 100 from AR (got {t.ContentRect.Width})");
+        }
+
+        [Fact]
+        public void FlexColumn_AspectRatio_MinWidth()
+        {
+            // Column flex, align-items:start, child: AR 1/1, min-width:100px
+            var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
+                <div style='display:flex;flex-direction:column;align-items:flex-start'>
+                    <div id='t' style='aspect-ratio:1/1;flex:0 0 auto;min-height:0;min-width:100px'></div>
+                </div></body>");
+            var t = LayoutTestHelper.FindById(root, "t");
+            Assert.NotNull(t);
+            _output.WriteLine($"flex col AR min-w: {t!.ContentRect.Width}x{t.ContentRect.Height}");
+            Assert.True(t.ContentRect.Width >= 99,
+                $"Expected width >= 100 from min-width (got {t.ContentRect.Width})");
+            Assert.True(System.Math.Abs(t.ContentRect.Height - t.ContentRect.Width) < 2,
+                $"Expected square from AR (got {t.ContentRect.Width}x{t.ContentRect.Height})");
+        }
+        [Fact]
+        public void ColumnFlex_MaxWidth_ConstrainsWidth()
+        {
+            // WPT: column-flex-child-with-max-width
+            // Column flex item with align-self:start and max-width should cap width
+            var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
+                <div style='display:flex;flex-direction:column;width:200px;height:100px'>
+                    <div id='item' style='align-self:flex-start;max-width:100px'>
+                        <div style='width:150px;height:50px'></div>
+                    </div>
+                </div></body>");
+            var item = LayoutTestHelper.FindById(root, "item");
+            Assert.NotNull(item);
+            _output.WriteLine($"item: {item!.ContentRect.Width}x{item.ContentRect.Height}");
+            Assert.True(item.ContentRect.Width <= 101,
+                $"max-width should cap at 100 (got {item.ContentRect.Width})");
+        }
+
+        [Fact]
+        public void Flex_AutoMinSize_PercentMaxWidth_Img()
+        {
+            // WPT: auto-min-size-001
+            var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
+                <div style='display:flex;width:100px'>
+                    <div style='display:flex;flex:1 1 auto'>
+                        <div id='img' style='max-width:100%;width:500px;height:500px'></div>
+                    </div>
+                </div></body>");
+            var img = LayoutTestHelper.FindById(root, "img");
+            Assert.NotNull(img);
+            _output.WriteLine($"img: {img!.ContentRect.Width}x{img.ContentRect.Height}");
+            // max-width:100% of 100px container → img should be 100px wide
+            Assert.True(img.ContentRect.Width <= 101,
+                $"max-width:100% should cap at container (got {img.ContentRect.Width})");
+        }
     }
 }

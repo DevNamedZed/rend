@@ -302,8 +302,23 @@ namespace Rend.Rendering.Internal
 
             if (decoration == CssTextDecorationLine.Underline)
             {
-                // Underline at font's underline position below baseline, plus any custom offset.
-                float underlineY = baselineY + metrics.UnderlinePosition + underlineOffset;
+                // [CSS-TEXT-DECOR-4 §3.3] text-underline-position: under places the
+                // underline below the descenders rather than at the font's underline position.
+                float underlineY;
+                if (style.TextUnderlinePosition == CssTextUnderlinePosition.Under)
+                {
+                    // Compute descent from baseline to bottom of content area.
+                    float halfLeading = fragment.ContentHeight > 0
+                        ? (fragment.Height - fragment.ContentHeight) / 2f
+                        : 0f;
+                    float fontDescent = fragment.ContentHeight - (fragment.Baseline - halfLeading);
+                    underlineY = baselineY + fontDescent + underlineOffset;
+                }
+                else
+                {
+                    underlineY = baselineY + metrics.UnderlinePosition + underlineOffset;
+                }
+
                 if (useFillRect)
                 {
                     // Chrome floors the underline Y via PixelSnappedIntRect (floor origin, ceil far edge).
@@ -313,7 +328,9 @@ namespace Rend.Rendering.Internal
                                     BrushInfo.Solid(decoColor));
                 }
                 else
+                {
                     DrawLine(target, pen, startX, underlineY, endX, underlineY);
+                }
             }
             else if (decoration == CssTextDecorationLine.Overline)
             {
@@ -350,13 +367,28 @@ namespace Rend.Rendering.Internal
                     DrawLine(target, pen, startX, strikeY, endX, strikeY);
             }
 
+            // Compute base underline Y (before wavy/double offset) for reuse.
+            float baseUnderlineY;
+            if (style.TextUnderlinePosition == CssTextUnderlinePosition.Under)
+            {
+                float hlU = fragment.ContentHeight > 0
+                    ? (fragment.Height - fragment.ContentHeight) / 2f
+                    : 0f;
+                float fontDescentU = fragment.ContentHeight - (fragment.Baseline - hlU);
+                baseUnderlineY = baselineY + fontDescentU + underlineOffset;
+            }
+            else
+            {
+                baseUnderlineY = baselineY + metrics.UnderlinePosition + underlineOffset;
+            }
+
             // For "wavy" style, draw a second offset line to approximate a wave.
             if (decoStyle == CssTextDecorationStyle.Wavy)
             {
                 float wavyOffset = strokeWidth * 2f;
                 if (decoration == CssTextDecorationLine.Underline)
                 {
-                    float underlineY = baselineY + metrics.UnderlinePosition + underlineOffset + wavyOffset;
+                    float underlineY = baseUnderlineY + wavyOffset;
                     DrawLine(target, pen, startX, underlineY, endX, underlineY);
                 }
                 else if (decoration == CssTextDecorationLine.Overline)
@@ -378,7 +410,7 @@ namespace Rend.Rendering.Internal
                 float doubleOffset = strokeWidth * 2f;
                 if (decoration == CssTextDecorationLine.Underline)
                 {
-                    float underlineY = baselineY + metrics.UnderlinePosition + underlineOffset + doubleOffset;
+                    float underlineY = baseUnderlineY + doubleOffset;
                     DrawLine(target, pen, startX, underlineY, endX, underlineY);
                 }
                 else if (decoration == CssTextDecorationLine.Overline)

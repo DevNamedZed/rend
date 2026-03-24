@@ -83,7 +83,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §12.1] height:50% resolves against row track
-        [Fact(Skip = "Known bug: percentage height on grid item does not resolve against row track")]
+        [Fact]
         public void HeightFiftyPercentOfRow()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -109,7 +109,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-SIZING §4.4] max-width constrains grid item
-        [Fact(Skip = "Known bug: max-width not applied to stretched grid item")]
+        [Fact]
         public void MaxWidthOnGridItem()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -135,7 +135,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-SIZING §4.4] max-height constrains grid item
-        [Fact(Skip = "Known bug: max-height not applied to stretched grid item")]
+        [Fact]
         public void MaxHeightOnGridItem()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -312,7 +312,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-SIZING §5.2] percentage height on grid item with explicit row
-        [Fact(Skip = "Known bug: percentage height on grid item does not resolve against row track")]
+        [Fact]
         public void PercentageHeightOnGridItem()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -527,7 +527,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §12.1] Grid item with max-width smaller than track does not stretch beyond max
-        [Fact(Skip = "Known bug: max-width not applied to stretched grid item")]
+        [Fact]
         public void MaxWidthSmallerThanTrack()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -540,7 +540,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §12.1] Grid item with max-height smaller than row does not stretch beyond max
-        [Fact(Skip = "Known bug: max-height not applied to stretched grid item")]
+        [Fact]
         public void MaxHeightSmallerThanRow()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>

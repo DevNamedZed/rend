@@ -178,8 +178,10 @@ namespace Rend.Tests.Layout
         }
 
         [Fact]
-        public void ResolveTrackList_FitContent_ReturnsLimit()
+        public void ResolveTrackList_FitContent_ReturnsSentinel()
         {
+            // [CSS-GRID §7.2.4.1] fit-content() returns sentinel -3 for intrinsic sizing.
+            // The actual limit is applied during content measurement phase in Layout().
             var list = L(
                 Fn("fit-content", new CssDimensionValue(200, "px")),
                 new CssDimensionValue(1, "fr"));
@@ -188,8 +190,7 @@ namespace Rend.Tests.Layout
 
             Assert.NotNull(result);
             Assert.Equal(2, result!.Length);
-            Assert.Equal(200f, result[0], 0.1f);
-            Assert.Equal(200f, result[1], 0.1f);
+            Assert.Equal(-3f, result[0], 0.1f); // sentinel for fit-content
         }
 
         [Fact]

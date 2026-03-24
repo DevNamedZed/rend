@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Rend.Core.Values;
 using Rend.Css;
+using Rend.Css.Properties.Internal;
 using Rend.Html;
 using Rend.Layout;
 using Rend.Rendering.Internal;
@@ -125,10 +126,11 @@ namespace Rend.Rendering
         }
 
         /// <summary>
-        /// CSS 2.1 §14.2: If the root element has a transparent/unset background,
-        /// propagate the first body child's background color to fill the entire canvas.
+        /// [CSS2 §14.2] If the root element has a transparent/unset background,
+        /// propagate the first body child's background (color and image) to
+        /// fill the entire canvas.
         /// </summary>
-        private static void PaintCanvasBackground(LayoutPage page, IRenderTarget target)
+        private void PaintCanvasBackground(LayoutPage page, IRenderTarget target)
         {
             var rootBox = page.RootBox;
 
@@ -142,16 +144,36 @@ namespace Rend.Rendering
             if (rootBox?.StyledNode == null) return;
 
             var rootStyle = rootBox.StyledNode.Style;
-            // [CSS2 §14.2] If root has its own background, paint it on the full canvas.
-            // But not if root is display:none (background doesn't propagate).
-            if (rootStyle.BackgroundColor.A > 0 && rootStyle.Display != CssDisplay.None)
+            var canvasRect = new RectF(0, 0, page.Width, page.Height);
+
+            // [CSS2 §14.2] If root is display:none, no background propagation at all.
+            if (rootStyle.Display == CssDisplay.None)
             {
-                target.FillRect(new RectF(0, 0, page.Width, page.Height),
-                    BrushInfo.Solid(rootStyle.BackgroundColor));
                 return;
             }
 
-            // Find the body element among root's children.
+            // [CSS2 §14.2] Check if root has its own background (color or image).
+            bool rootHasBgColor = rootStyle.BackgroundColor.A > 0;
+            bool rootHasBgImage = HasBackgroundImage(rootStyle);
+
+            if (rootHasBgColor || rootHasBgImage)
+            {
+                // Root has background — paint it on the full canvas.
+                if (rootHasBgColor)
+                {
+                    target.FillRect(canvasRect, BrushInfo.Solid(rootStyle.BackgroundColor));
+                }
+                if (rootHasBgImage)
+                {
+                    // [CSS-BACKGROUNDS §2.11] Root bg-image: painting area = canvas,
+                    // positioning area = root element's padding box.
+                    BackgroundPainter.PaintCanvasBackgroundImage(
+                        rootStyle, canvasRect, target, _imageResolver, rootBox.PaddingRect);
+                }
+                return;
+            }
+
+            // [CSS2 §14.2] Root has no background — propagate body's background to canvas.
             var rootElement = rootBox.StyledNode as StyledElement;
             if (rootElement == null) return;
 
@@ -160,14 +182,63 @@ namespace Rend.Rendering
                 var child = rootElement.Children[c];
                 if (child is StyledElement childElem && childElem.TagName == "body")
                 {
+                    // [CSS-BACKGROUNDS §2.11.1] Body background does NOT propagate when:
+                    // - body has display:none or display:contents
+                    if (childElem.Style.Display == CssDisplay.None
+                        || childElem.Style.Display == CssDisplay.Contents)
+                    {
+                        break;
+                    }
+
                     var bodyBg = childElem.Style.BackgroundColor;
                     if (bodyBg.A > 0)
                     {
-                        target.FillRect(new RectF(0, 0, page.Width, page.Height), BrushInfo.Solid(bodyBg));
+                        target.FillRect(canvasRect, BrushInfo.Solid(bodyBg));
                     }
+
+                    // [CSS2 §14.2] Also propagate background-image from body to canvas.
+                    BackgroundPainter.PaintCanvasBackgroundImage(
+                        childElem.Style, canvasRect, target, _imageResolver);
                     break;
                 }
             }
+        }
+
+        /// <summary>
+        /// Returns true if the style has a real background-image (not "none").
+        /// </summary>
+        private static bool HasBackgroundImage(ComputedStyle style)
+        {
+            var bgImageRef = style.GetRefValue(PropertyId.BackgroundImage);
+            if (bgImageRef == null)
+            {
+                return false;
+            }
+            // "none" keyword is not a real background image
+            if (bgImageRef is CssKeywordValue kw && kw.Keyword == "none")
+            {
+                return false;
+            }
+            // Initial value is stored as string "none"
+            if (bgImageRef is string str && str == "none")
+            {
+                return false;
+            }
+            // Comma-separated list: check if all layers are "none"
+            if (bgImageRef is CssListValue list && list.Separator == ',')
+            {
+                bool hasReal = false;
+                for (int i = 0; i < list.Values.Count; i++)
+                {
+                    if (!(list.Values[i] is CssKeywordValue kw2 && kw2.Keyword == "none"))
+                    {
+                        hasReal = true;
+                        break;
+                    }
+                }
+                return hasReal;
+            }
+            return true;
         }
 
         /// <summary>
@@ -257,10 +328,18 @@ namespace Rend.Rendering
 
                 // 5. Paint borders BEFORE overflow clipping so they remain visible.
                 // CSS spec: overflow clips the padding box content, not the border itself.
-                if (BorderImagePainter.HasBorderImage(box))
-                    BorderImagePainter.Paint(box, target, _imageResolver);
-                else
-                    BorderPainter.Paint(box, target);
+                // [CSS-TABLES §4.4] Collapsed borders defer to after children (step 9).
+                if (!box.CollapsedBorderCell)
+                {
+                    if (BorderImagePainter.HasBorderImage(box))
+                    {
+                        BorderImagePainter.Paint(box, target, _imageResolver);
+                    }
+                    else
+                    {
+                        BorderPainter.Paint(box, target);
+                    }
+                }
 
                 // 5b. Paint outline (drawn outside the border edge, does not affect layout).
                 OutlinePainter.Paint(box, target);
@@ -284,6 +363,12 @@ namespace Rend.Rendering
 
             // 9. Paint children and inline content in paint order.
             PaintChildren(box, target);
+
+            // [CSS-TABLES §4.4] Collapsed borders paint on top of cell contents.
+            if (!isHidden && box.CollapsedBorderCell)
+            {
+                BorderPainter.Paint(box, target);
+            }
 
             // 9b. Paint column rules for multi-column layout.
             if (box.ColumnRules != null)
@@ -534,25 +619,74 @@ namespace Rend.Rendering
 
         private static int ComputeListItemIndex(LayoutBox box)
         {
-            // Determine the 1-based ordinal index of this list item among its siblings.
             LayoutBox? parent = box.Parent;
             if (parent == null)
             {
                 return 1;
             }
 
-            int index = 0;
+            // [HTML §4.4.8] Check <ol start> and <ol reversed> attributes.
+            int startValue = 1;
+            bool reversed = false;
+            if (parent.StyledNode is StyledElement parentElem)
+            {
+                string? startAttr = parentElem.Element?.GetAttribute("start");
+                if (startAttr != null && int.TryParse(startAttr, out int sv))
+                {
+                    startValue = sv;
+                }
+                string? reversedAttr = parentElem.Element?.GetAttribute("reversed");
+                if (reversedAttr != null)
+                {
+                    reversed = true;
+                    // Default start for reversed: count of list items
+                    if (startAttr == null)
+                    {
+                        int count = 0;
+                        for (int c = 0; c < parent.Children.Count; c++)
+                        {
+                            if (parent.Children[c].BoxType == BoxType.ListItem)
+                            {
+                                count++;
+                            }
+                        }
+                        startValue = count;
+                    }
+                }
+            }
+
+            // Count list items, respecting <li value> attribute and reversed order.
+            int counter = startValue;
+            bool first = true;
             for (int i = 0; i < parent.Children.Count; i++)
             {
                 LayoutBox sibling = parent.Children[i];
-                if (sibling.BoxType == BoxType.ListItem)
+                if (sibling.BoxType != BoxType.ListItem)
                 {
-                    index++;
+                    continue;
                 }
+
+                // [HTML §4.4.8] Check <li value> attribute for explicit counter set.
+                bool hasExplicitValue = false;
+                if (sibling.StyledNode is StyledElement sibElem)
+                {
+                    string? valAttr = sibElem.Element?.GetAttribute("value");
+                    if (valAttr != null && int.TryParse(valAttr, out int lv))
+                    {
+                        counter = lv;
+                        hasExplicitValue = true;
+                    }
+                }
+
+                if (!hasExplicitValue && !first)
+                {
+                    counter += reversed ? -1 : 1;
+                }
+                first = false;
 
                 if (ReferenceEquals(sibling, box))
                 {
-                    return index;
+                    return counter;
                 }
             }
 

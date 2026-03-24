@@ -154,26 +154,11 @@ namespace Rend.VisualRegression.Infrastructure
 
                 rowIndex++;
                 string testId = result.TestId ?? "";
-                // Read HTML from resource file (result.Html is freed after writing to save memory)
-                string htmlBase64 = "";
-                bool hasHtml = false;
-                if (result.ChromeImagePath != null)
-                {
-                    var htmlFilePath = Path.Combine(Path.GetDirectoryName(result.ChromeImagePath)!,
-                        testId + ".html");
-                    if (File.Exists(htmlFilePath))
-                    {
-                        try
-                        {
-                            htmlBase64 = Convert.ToBase64String(File.ReadAllBytes(htmlFilePath));
-                            hasHtml = true;
-                        }
-                        catch { }
-                    }
-                }
+                // HTML is stored in resource files, loaded on-demand via fetch()
+                bool hasHtml = result.ChromeImagePath != null;
                 bool hasChromeLayout = result.ChromeLayoutPath != null;
                 bool hasRendLayout = result.RendLayoutPath != null;
-                sb.AppendLine($"<tr class=\"result-row {statusClass}\" data-status=\"{statusClass}\" data-sort-index=\"{rowIndex}\" data-sort-status=\"{statusOrder}\" data-sort-name=\"{Escape(result.TestName.ToLower())}\" data-sort-category=\"{Escape(result.Category.ToLower())}\" data-sort-diff=\"{result.DiffPercentage:F4}\" data-sort-duration=\"{result.Duration.TotalMilliseconds:F0}\" data-test-id=\"{Escape(testId)}\" data-has-html=\"{(hasHtml ? "1" : "")}\" data-html=\"{htmlBase64}\" data-has-chrome-layout=\"{(hasChromeLayout ? "1" : "")}\" data-has-rend-layout=\"{(hasRendLayout ? "1" : "")}\">");
+                sb.AppendLine($"<tr class=\"result-row {statusClass}\" data-status=\"{statusClass}\" data-sort-index=\"{rowIndex}\" data-sort-status=\"{statusOrder}\" data-sort-name=\"{Escape(result.TestName.ToLower())}\" data-sort-category=\"{Escape(result.Category.ToLower())}\" data-sort-diff=\"{result.DiffPercentage:F4}\" data-sort-duration=\"{result.Duration.TotalMilliseconds:F0}\" data-test-id=\"{Escape(testId)}\" data-has-html=\"{(hasHtml ? "1" : "")}\" data-has-chrome-layout=\"{(hasChromeLayout ? "1" : "")}\" data-has-rend-layout=\"{(hasRendLayout ? "1" : "")}\">");
                 sb.AppendLine($"  <td class=\"index-cell\">{rowIndex}</td>");
                 sb.AppendLine($"  <td><span class=\"status-badge status-{statusClass}\">{statusLabel}</span></td>");
                 sb.AppendLine($"  <td class=\"test-name\">{Escape(result.TestName)}</td>");
@@ -1100,18 +1085,22 @@ function openLightbox(img, event) {
     var firstImg = images[0];
     var basePath = firstImg ? firstImg.getAttribute('src').replace(/[^/]*$/, '') : '';
 
-    // Load HTML from base64 data attribute (works with file:// URLs)
-    var htmlB64 = row.getAttribute('data-html') || '';
-    if (htmlB64) {
-        try {
-            currentLbHtml = decodeURIComponent(escape(atob(htmlB64)));
-        } catch(e) {
-            currentLbHtml = atob(htmlB64);
-        }
-        document.getElementById('lb-html-code').textContent = currentLbHtml;
+    // Load HTML from resource file on-demand (not embedded in HTML to keep report small)
+    var hasHtmlAttr = row.getAttribute('data-has-html');
+    document.getElementById('lb-html-code').textContent = 'Loading...';
+    currentLbHtml = '';
+    if (hasHtmlAttr) {
+        fetch(basePath + testId + '.html')
+            .then(function(r) { return r.ok ? r.text() : ''; })
+            .then(function(html) {
+                currentLbHtml = html;
+                document.getElementById('lb-html-code').textContent = html || '(no HTML)';
+            })
+            .catch(function() {
+                document.getElementById('lb-html-code').textContent = '(failed to load)';
+            });
     } else {
-        currentLbHtml = '';
-        document.getElementById('lb-html-code').textContent = '';
+        document.getElementById('lb-html-code').textContent = '(no HTML available)';
     }
 
     // Load layout trees

@@ -31,7 +31,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §6.6] max-width on grid item clamps stretched width
-        [Fact(Skip = "Known bug: grid stretch ignores max-width on items")]
+        [Fact]
         public void MaxWidth_ClampsStretchedWidth()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -85,7 +85,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §6.6] max-width percentage resolves against grid track width
-        [Fact(Skip = "Known bug: grid stretch ignores max-width percentage on items")]
+        [Fact]
         public void MaxWidth_Percentage_ResolvesAgainstTrack()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -98,7 +98,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §6.6] min-height percentage resolves against grid row height
-        [Fact(Skip = "Known bug: grid item percentage min-height not resolved against row")]
+        [Fact]
         public void MinHeight_Percentage_ResolvesAgainstRow()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -111,7 +111,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §6.6] max-height percentage resolves against grid row height
-        [Fact(Skip = "Known bug: grid stretch ignores max-height percentage on items")]
+        [Fact]
         public void MaxHeight_Percentage_ResolvesAgainstRow()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -137,7 +137,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §6.6] max-width with default stretch alignment
-        [Fact(Skip = "Known bug: grid stretch ignores max-width on items")]
+        [Fact]
         public void MaxWidth_WithStretch_ClampsStretchedSize()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -163,7 +163,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §6.6] max-height with stretch in explicit row
-        [Fact(Skip = "Known bug: grid stretch ignores max-height on items")]
+        [Fact]
         public void MaxHeight_WithStretch_ClampsStretchedSize()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -267,7 +267,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §6.6] max-width with border included in content-box sizing
-        [Fact(Skip = "Known bug: grid stretch ignores max-width on items")]
+        [Fact]
         public void MaxWidth_WithBorder_ContentBoxSizing()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -298,7 +298,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-SIZING §5.1] border-box max-width includes padding and border
-        [Fact(Skip = "Known bug: grid stretch ignores max-width on items")]
+        [Fact]
         public void BorderBox_MaxWidth_IncludesPaddingAndBorder()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
@@ -326,7 +326,7 @@ namespace Rend.Tests.Layout
         }
 
         // [CSS-GRID §11.5] max-height on spanning item across multiple rows
-        [Fact(Skip = "Known bug: grid stretch ignores max-height on spanning items")]
+        [Fact]
         public void MaxHeight_SpanningItem_ClampsAcrossRows()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>

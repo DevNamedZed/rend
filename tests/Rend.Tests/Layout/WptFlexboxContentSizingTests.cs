@@ -9,7 +9,8 @@ namespace Rend.Tests.Layout
         public WptFlexboxContentSizingTests(ITestOutputHelper output) { _output = output; }
 
         [Fact] public void AutoWidth_FillsContainer() {
-            var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;width:300px'><div id='t' style='height:30px'></div></div></body>");
+            // flex:1 stretches to fill container. Without flex-grow, empty div has 0 content width.
+            var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;width:300px'><div id='t' style='flex:1;height:30px'></div></div></body>");
             Assert.True(LayoutTestHelper.FindById(r,"t")!.ContentRect.Width > 0);
         }
 

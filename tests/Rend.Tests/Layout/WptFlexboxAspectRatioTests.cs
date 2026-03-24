@@ -33,7 +33,7 @@ namespace Rend.Tests.Layout
             Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Width - 200) < 2);
         }
 
-        [Fact(Skip="Known: aspect-ratio in flex context")] public void AspectRatio_InFlex() {
+        [Fact] public void AspectRatio_InFlex() {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='display:flex;align-items:flex-start;width:300px'><div id='t' style='width:100px;aspect-ratio:1/1'></div></div></body>");
             Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Height - 100) < 2);
         }
@@ -69,7 +69,7 @@ namespace Rend.Tests.Layout
             Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Height - 100) < 2);
         }
 
-        [Fact(Skip="Known: aspect-ratio on abspos not yet supported")] public void AspectRatio_Abspos() {
+        [Fact] public void AspectRatio_Abspos() {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'><div style='position:relative;width:400px;height:400px'><div id='t' style='position:absolute;width:200px;aspect-ratio:2/1'></div></div></body>");
             Assert.True(System.Math.Abs(LayoutTestHelper.FindById(r,"t")!.ContentRect.Height - 100) < 2);
         }
