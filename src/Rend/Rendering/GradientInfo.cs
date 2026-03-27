@@ -30,6 +30,14 @@ namespace Rend.Rendering
         public bool Repeating { get; set; }
 
         /// <summary>
+        /// [CSS-BACKGROUNDS §2.11] Optional explicit positioning area for the gradient shader.
+        /// When set, the shader is sized/positioned to this rect instead of the fill rect.
+        /// Used for canvas backgrounds where the painting area (canvas) differs from
+        /// the positioning area (root/body padding box).
+        /// </summary>
+        public RectF? PositioningBounds { get; set; }
+
+        /// <summary>
         /// Creates a new <see cref="GradientInfo"/> with default values.
         /// </summary>
         public GradientInfo()

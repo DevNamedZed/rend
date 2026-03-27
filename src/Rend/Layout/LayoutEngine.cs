@@ -83,7 +83,19 @@ namespace Rend.Layout
 
             // Calculate root height BEFORE positioning so fixed/absolute elements
             // can reference the containing block's actual dimensions.
-            float rootHeight = CalculateAutoHeight(rootBox);
+            // [CSS2 §10.6] Use explicit CSS height if set, otherwise auto height from content.
+            float rootHeight;
+            var rootStyle = styledTree.Root.Style;
+            float explicitRootH = Internal.DimensionResolver.ResolveHeight(
+                rootStyle, options.ViewportHeight, rootBox);
+            if (!float.IsNaN(explicitRootH) && explicitRootH > 0)
+            {
+                rootHeight = explicitRootH;
+            }
+            else
+            {
+                rootHeight = CalculateAutoHeight(rootBox);
+            }
             rootBox.ContentRect = new RectF(
                 rootBox.ContentRect.X, rootBox.ContentRect.Y,
                 rootBox.ContentRect.Width, rootHeight);

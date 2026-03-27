@@ -374,7 +374,9 @@ namespace Rend.Output.Image
             EnsureCanvas();
             // Create an offscreen compositing layer that captures all subsequent drawing.
             // EndMask will apply the gradient mask via DstIn blend mode.
-            _currentCanvas!.SaveLayer(new SKPaint());
+            var layerPaint = _paintPool.Rent();
+            _currentCanvas!.SaveLayer(layerPaint);
+            _paintPool.Return(layerPaint);
             _opacityStack.Push(_currentOpacity);
             _currentOpacity = 1f;
         }
@@ -775,6 +777,74 @@ namespace Rend.Output.Image
                     finally
                     {
                         _paintPool.Return(paint);
+                    }
+                }
+            }
+        }
+
+        /// <inheritdoc />
+        public void FillRectWithTiledGradient(GradientInfo gradient, RectF fillArea, RectF tileRect)
+        {
+            EnsureCanvas();
+
+            int tileW = Math.Max(1, (int)Math.Ceiling(tileRect.Width));
+            int tileH = Math.Max(1, (int)Math.Ceiling(tileRect.Height));
+
+            // Render gradient to an off-screen bitmap at the tile size.
+            using (var tileBitmap = new SKBitmap(tileW, tileH, SKColorType.Rgba8888, SKAlphaType.Premul))
+            using (var tileCanvas = new SKCanvas(tileBitmap))
+            {
+                // The gradient shader is created relative to the tile rect origin.
+                // Translate so the gradient renders at (0,0) in the tile bitmap.
+                var tileBounds = new RectF(0, 0, tileRect.Width, tileRect.Height);
+                var shader = SkiaGradientBuilder.CreateShader(gradient, tileBounds);
+                if (shader == null)
+                {
+                    return;
+                }
+
+                var paint = _paintPool.Rent();
+                try
+                {
+                    paint.Shader = shader;
+                    paint.IsAntialias = true;
+                    tileCanvas.DrawRect(0, 0, tileRect.Width, tileRect.Height, paint);
+                    paint.Shader = null;
+                }
+                finally
+                {
+                    shader.Dispose();
+                    _paintPool.Return(paint);
+                }
+
+                // Create a tiled shader from the bitmap, positioned at the tile origin.
+                using (var skImage = SKImage.FromBitmap(tileBitmap))
+                {
+                    if (skImage == null)
+                    {
+                        return;
+                    }
+
+                    var localMatrix = SKMatrix.CreateTranslation(tileRect.X, tileRect.Y);
+                    var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
+
+                    using (var tiledShader = skImage.ToShader(
+                        SKShaderTileMode.Repeat, SKShaderTileMode.Repeat, sampling, localMatrix))
+                    {
+                        var fillPaint = _paintPool.Rent();
+                        try
+                        {
+                            fillPaint.IsAntialias = true;
+                            fillPaint.Color = new SKColor(255, 255, 255,
+                                (byte)Math.Round(_currentOpacity * 255, MidpointRounding.AwayFromZero));
+                            fillPaint.Shader = tiledShader;
+                            _currentCanvas!.DrawRect(ToSKRect(fillArea), fillPaint);
+                            fillPaint.Shader = null;
+                        }
+                        finally
+                        {
+                            _paintPool.Return(fillPaint);
+                        }
                     }
                 }
             }

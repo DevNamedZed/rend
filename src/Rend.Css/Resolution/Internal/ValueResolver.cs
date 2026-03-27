@@ -39,6 +39,14 @@ namespace Rend.Css.Resolution.Internal
                         result = PropertyValue.FromLength(px);
                         return true;
                     }
+                    // [CSS-TEXT-DECOR-4 §3.4] text-decoration-thickness: percentage
+                    // resolves against 1em (the element's own computed font-size).
+                    if (prop.Id == PropertyId.TextDecorationThickness && value is CssPercentageValue tdtPct)
+                    {
+                        float px = tdtPct.Value * ctx.FontSize / 100f;
+                        result = PropertyValue.FromLength(px);
+                        return true;
+                    }
                     // For percentage properties that resolve against the containing block
                     // (not the viewport), defer resolution to layout time by encoding with
                     // a sentinel offset (via DeferredPercent.Encode). The layout engine
@@ -272,6 +280,12 @@ namespace Rend.Css.Resolution.Internal
                 if (kw.Keyword == "fit-content")
                 {
                     result = PropertyValue.FromLength(SizingKeyword.FitContent);
+                    return true;
+                }
+                // [CSS-FLEXBOX §7.1.1] flex-basis: content → use item's max-content size
+                if (kw.Keyword == "content")
+                {
+                    result = PropertyValue.FromLength(SizingKeyword.MaxContent);
                     return true;
                 }
                 if (kw.Keyword == "0")
@@ -1309,6 +1323,10 @@ namespace Rend.Css.Resolution.Internal
                 case "space-around": result = PropertyValue.FromKeyword((int)CssAlignItems.SpaceAround); return true;
                 case "space-evenly": result = PropertyValue.FromKeyword((int)CssAlignItems.SpaceEvenly); return true;
                 case "normal": result = PropertyValue.FromKeyword((int)CssAlignItems.Normal); return true;
+                case "self-start": result = PropertyValue.FromKeyword((int)CssAlignItems.Start); return true;
+                case "self-end": result = PropertyValue.FromKeyword((int)CssAlignItems.End); return true;
+                case "left": result = PropertyValue.FromKeyword((int)CssAlignItems.Start); return true;
+                case "right": result = PropertyValue.FromKeyword((int)CssAlignItems.End); return true;
                 default: return false;
             }
         }
@@ -1327,6 +1345,9 @@ namespace Rend.Css.Resolution.Internal
                 case "start": result = PropertyValue.FromKeyword((int)CssJustifyContent.Start); return true;
                 case "end": result = PropertyValue.FromKeyword((int)CssJustifyContent.End); return true;
                 case "stretch": result = PropertyValue.FromKeyword((int)CssJustifyContent.Stretch); return true;
+                case "left": result = PropertyValue.FromKeyword((int)CssJustifyContent.FlexStart); return true;
+                case "right": result = PropertyValue.FromKeyword((int)CssJustifyContent.FlexEnd); return true;
+                case "normal": result = PropertyValue.FromKeyword((int)CssJustifyContent.FlexStart); return true;
                 default: return false;
             }
         }

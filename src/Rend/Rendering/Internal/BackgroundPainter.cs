@@ -112,6 +112,25 @@ namespace Rend.Rendering.Internal
             for (int layerIdx = layerCount - 1; layerIdx >= 0; layerIdx--)
             {
                 object? layerImage = imageList != null ? imageList.Values[layerIdx] : bgImageRef;
+
+                // [CSS-BACKGROUNDS §2.11] For canvas background gradients, the gradient
+                // must be sized to the positioning area and tiled to fill the canvas.
+                bool isCanvasGradient = layerImage is CssFunctionValue
+                    && positioningArea.Width > 0 && positioningArea.Height > 0
+                    && (Math.Abs(canvasRect.X - positioningArea.X) > 1f
+                        || Math.Abs(canvasRect.Y - positioningArea.Y) > 1f
+                        || Math.Abs(canvasRect.Width - positioningArea.Width) > 1f
+                        || Math.Abs(canvasRect.Height - positioningArea.Height) > 1f);
+                if (isCanvasGradient && layerImage is CssFunctionValue canvasGradientFn)
+                {
+                    var gradient = ParseCssGradient(canvasGradientFn, positioningArea, style.Color);
+                    if (gradient != null)
+                    {
+                        target.FillRectWithTiledGradient(gradient, canvasRect, positioningArea);
+                        continue;
+                    }
+                }
+
                 PaintBackgroundLayer(layerImage, layerIdx, repeatRef, positionRef, sizeRef,
                     style, canvasRect, positioningArea, emptyRadii, false, target, imageResolver);
             }
@@ -199,6 +218,7 @@ namespace Rend.Rendering.Internal
                 var gradient = ParseCssGradient(gradientFn, clipRect, style.Color);
                 if (gradient != null)
                 {
+
                     BrushInfo gradBrush = BrushInfo.FromGradient(gradient);
                     if (hasRadius)
                     {

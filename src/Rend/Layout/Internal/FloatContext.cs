@@ -67,23 +67,61 @@ namespace Rend.Layout.Internal
         /// <summary>
         /// Get the Y position below all floats matching the clear type.
         /// </summary>
-        public float GetClearY(Css.CssClear clear)
+        public float GetClearY(Css.CssClear clear, bool includeDescendants = true)
         {
             float y = 0;
 
             if (clear == Css.CssClear.Left || clear == Css.CssClear.Both)
             {
                 for (int i = 0; i < _leftFloats.Count; i++)
+                {
                     y = Math.Max(y, _leftFloats[i].Bottom);
+                }
             }
 
             if (clear == Css.CssClear.Right || clear == Css.CssClear.Both)
             {
                 for (int i = 0; i < _rightFloats.Count; i++)
+                {
                     y = Math.Max(y, _rightFloats[i].Bottom);
+                }
+            }
+
+            // [CSS2 §9.5] Include floats from non-BFC descendant blocks,
+            // but only for the CSS clear property, NOT for BFC float avoidance.
+            if (includeDescendants)
+            {
+                y = Math.Max(y, _descendantClearY);
             }
 
             return y;
         }
+
+        /// <summary>
+        /// [CSS2 §9.5] Track the lowest float bottom from non-BFC descendant blocks.
+        /// Used for clear queries: siblings with clear:both need to clear below
+        /// floats inside non-BFC children, even though those floats aren't in
+        /// this context's float lists (which would affect edge queries).
+        /// </summary>
+        private float _descendantClearY;
+
+        /// <summary>
+        /// Propagate the clear Y from a non-BFC child so that subsequent
+        /// siblings with clear:both/left/right can clear below those floats.
+        /// Only affects GetClearY, NOT GetLeftEdge/GetRightEdge.
+        /// </summary>
+        public void PropagateClearY(FloatContext child)
+        {
+            float childClearY = child.GetClearY(Css.CssClear.Both);
+            // Also include any descendant clear Y the child accumulated
+            childClearY = Math.Max(childClearY, child._descendantClearY);
+            if (childClearY > _descendantClearY)
+            {
+                _descendantClearY = childClearY;
+            }
+        }
+
+        /// <summary>Returns true if this context has any floats.</summary>
+        public bool HasFloats => _leftFloats.Count > 0 || _rightFloats.Count > 0;
     }
 }

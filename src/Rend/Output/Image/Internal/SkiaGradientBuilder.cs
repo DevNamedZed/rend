@@ -33,14 +33,18 @@ namespace Rend.Output.Image.Internal
                 positions[i] = stop.Position;
             }
 
+            // [CSS-BACKGROUNDS §2.11] When a positioning area is specified (canvas
+            // backgrounds), use it for shader geometry instead of the fill bounds.
+            RectF shaderBounds = gradient.PositioningBounds ?? bounds;
+
             switch (gradient.Type)
             {
                 case GradientType.Linear:
-                    return CreateLinearShader(gradient, bounds, colors, positions);
+                    return CreateLinearShader(gradient, shaderBounds, colors, positions);
                 case GradientType.Radial:
-                    return CreateRadialShader(gradient, bounds, colors, positions);
+                    return CreateRadialShader(gradient, shaderBounds, colors, positions);
                 case GradientType.Conic:
-                    return CreateSweepShader(gradient, bounds, colors, positions);
+                    return CreateSweepShader(gradient, shaderBounds, colors, positions);
                 default:
                     return CreateLinearShader(gradient, bounds, colors, positions);
             }

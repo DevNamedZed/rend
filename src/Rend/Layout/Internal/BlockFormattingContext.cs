@@ -255,19 +255,22 @@ namespace Rend.Layout.Internal
                             else
                             {
                                 // Only one of left/right set (or neither): shrink-to-fit
+                                // [CSS-TABLES §abspos] Available width for abspos shrink-to-fit
+                                // should never exceed the containing block width.
                                 float shrinkAvail = containingWidth;
                                 if (!float.IsNaN(leftVal))
                                 {
                                     float resolvedLeft = DeferredPercent.IsEncoded(leftVal)
                                         ? DeferredPercent.Resolve(leftVal, containingWidth) : leftVal;
-                                    shrinkAvail = containingWidth - resolvedLeft;
+                                    shrinkAvail = Math.Min(containingWidth, containingWidth - resolvedLeft);
                                 }
                                 else if (!float.IsNaN(rightVal))
                                 {
                                     float resolvedRight = DeferredPercent.IsEncoded(rightVal)
                                         ? DeferredPercent.Resolve(rightVal, containingWidth) : rightVal;
-                                    shrinkAvail = containingWidth - resolvedRight;
+                                    shrinkAvail = Math.Min(containingWidth, containingWidth - resolvedRight);
                                 }
+                                if (shrinkAvail < 0) { shrinkAvail = 0; }
                                 posWidth = MeasureIntrinsicWidth(childElement, SizingKeyword.FitContent, shrinkAvail, context);
                             }
                         }
@@ -302,6 +305,15 @@ namespace Rend.Layout.Internal
                     // [CSS2 §10.4] Apply min/max-width to abspos shrink-to-fit
                     float absMinW = DimensionResolver.ResolvePercentWidth(childStyle.MinWidth, containingWidth);
                     float absMaxW = DimensionResolver.ResolvePercentWidth(childStyle.MaxWidth, containingWidth);
+                    // [CSS-SIZING-3 §5.1] Resolve sizing keywords for min/max-width
+                    if (SizingKeyword.IsSizingKeyword(childStyle.MaxWidth))
+                    {
+                        absMaxW = MeasureIntrinsicWidth(childElement, childStyle.MaxWidth, containingWidth, context);
+                    }
+                    if (SizingKeyword.IsSizingKeyword(childStyle.MinWidth))
+                    {
+                        absMinW = MeasureIntrinsicWidth(childElement, childStyle.MinWidth, containingWidth, context);
+                    }
                     if (!float.IsNaN(absMaxW) && absMaxW >= 0 && posWidth > absMaxW)
                     {
                         posWidth = absMaxW;
@@ -592,8 +604,27 @@ namespace Rend.Layout.Internal
                 }
                 else
                 {
-                    // Position the child
-                    float x = parent.ContentRect.X + childBox.MarginLeft + childBox.BorderLeftWidth + childBox.PaddingLeft;
+                    // Position the child.
+                    // [CSS2 §10.3.3] In RTL containing blocks, over-constrained blocks
+                    // (explicit width, no auto margins) align to the right edge.
+                    // The containing block's direction determines this, not the element's.
+                    float effectiveMarginLeft = childBox.MarginLeft;
+                    var parentStyle = parent.StyledNode?.Style;
+                    if (parentStyle != null && parentStyle.Direction == CssDirection.Rtl
+                        && !float.IsNaN(childStyle.Width) && !SizingKeyword.IsSizingKeyword(childStyle.Width)
+                        && !DeferredPercent.IsEncoded(childStyle.Width)
+                        && !float.IsNaN(childStyle.MarginLeft)
+                        && !float.IsNaN(childStyle.MarginRight))
+                    {
+                        float totalUsed = childBox.MarginLeft + childBox.BorderLeftWidth + childBox.PaddingLeft
+                            + contentWidth + childBox.PaddingRight + childBox.BorderRightWidth + childBox.MarginRight;
+                        float remaining = containingWidth - totalUsed;
+                        if (remaining > 0)
+                        {
+                            effectiveMarginLeft = childBox.MarginLeft + remaining;
+                        }
+                    }
+                    float x = parent.ContentRect.X + effectiveMarginLeft + childBox.BorderLeftWidth + childBox.PaddingLeft;
                     float y = cursorY + collapsedMargin + childBox.BorderTopWidth + childBox.PaddingTop;
 
                     // CSS 2.1 §9.5: The border box of an element that establishes a
@@ -603,8 +634,18 @@ namespace Rend.Layout.Internal
                     if (EstablishesNewBfc(childStyle))
                     {
                         float borderBoxY = y - childBox.PaddingTop - childBox.BorderTopWidth;
-                        float floatLeftEdge = floatCtx.GetLeftEdge(borderBoxY, 1);
-                        float floatRightEdge = floatCtx.GetRightEdge(borderBoxY, 1);
+                        // [CSS2 §9.5] Use actual element height for float edge queries,
+                        // not hardcoded 1. This ensures tall BFC elements correctly
+                        // detect float overlaps across their full height.
+                        float queryHeight = 1;
+                        float specH = childStyle.Height;
+                        if (!float.IsNaN(specH) && specH > 0 && !DeferredPercent.IsEncoded(specH))
+                        {
+                            queryHeight = specH + childBox.PaddingTop + childBox.PaddingBottom
+                                        + childBox.BorderTopWidth + childBox.BorderBottomWidth;
+                        }
+                        float floatLeftEdge = floatCtx.GetLeftEdge(borderBoxY, queryHeight);
+                        float floatRightEdge = floatCtx.GetRightEdge(borderBoxY, queryHeight);
                         float normalBorderBoxX = parent.ContentRect.X + childBox.MarginLeft;
                         if (floatLeftEdge > normalBorderBoxX)
                         {
@@ -615,9 +656,14 @@ namespace Rend.Layout.Internal
                                 && !SizingKeyword.IsSizingKeyword(childStyle.Width);
                             float marginBoxWidth = childBox.MarginLeft + horizontalSpacing
                                 + contentWidth + childBox.MarginRight;
-                            if (hasSpecifiedWidth && marginBoxWidth > availableWidth)
+                            // [CSS2 §9.5] Push BFC element below floats when it doesn't fit.
+                            // Also push below when floats overlap (availableWidth <= 0) —
+                            // there's no gap for ANY element, even zero-width ones.
+                            if (availableWidth <= 0
+                                || (hasSpecifiedWidth && marginBoxWidth > 0 && marginBoxWidth > availableWidth))
                             {
-                                float clearY = floatCtx.GetClearY(Css.CssClear.Both);
+                                // BFC float avoidance uses only LOCAL floats (not descendant clear Y)
+                                float clearY = floatCtx.GetClearY(Css.CssClear.Both, includeDescendants: false);
                                 if (clearY > borderBoxY)
                                 {
                                     y = clearY + childBox.BorderTopWidth + childBox.PaddingTop;
@@ -870,6 +916,19 @@ namespace Rend.Layout.Internal
                     var lastChild = parent.Children[parent.Children.Count - 1];
                     lastChild.MarginBottom = 0;
                 }
+            }
+
+            // [CSS2 §9.5] Propagate clear Y from non-BFC blocks to parent.
+            // Only affects GetClearY (for clear:both), not GetLeftEdge/GetRightEdge
+            // (for BFC float avoidance). This avoids the knock-on effects of full
+            // float propagation while still allowing clear to work across siblings.
+            if (prevFloatCtx != null && floatCtx.HasFloats
+                && !EstablishesNewBfc(styledElement.Style)
+                && styledElement.Style.Float == CssFloat.None
+                && styledElement.TagName != "html"
+                && styledElement.TagName != "body")
+            {
+                prevFloatCtx.PropagateClearY(floatCtx);
             }
 
             // Restore previous float context
@@ -1287,11 +1346,29 @@ namespace Rend.Layout.Internal
 
             // [CSS-SIZING-4 §3] Size containment: use contain-intrinsic-width
             // instead of measuring content for intrinsic sizing.
+            // Must check BEFORE grid/flex intrinsic sizing — containment overrides all.
             var containVal = element.Style.Contain;
             if (containVal == CssContain.Size || containVal == CssContain.Strict)
             {
                 float ciWidth = element.Style.GetValues()[PropertyId.ContainIntrinsicWidth].FloatValue;
                 return (!float.IsNaN(ciWidth) && ciWidth > 0) ? ciWidth : 0;
+            }
+
+            // [CSS-GRID §12.1] Grid containers have dedicated intrinsic sizing that
+            // sums per-column contributions, rather than using the generic layout+measure
+            // approach which would expand auto tracks to fill available width.
+            if (display == CssDisplay.Grid || display == CssDisplay.InlineGrid)
+            {
+                if (keyword == SizingKeyword.FitContent)
+                {
+                    float minContentWidth = GridLayout.ComputeIntrinsicWidth(element, SizingKeyword.MinContent, containingWidth, context);
+                    float maxContentWidth = GridLayout.ComputeIntrinsicWidth(element, SizingKeyword.MaxContent, containingWidth, context);
+                    var fitBox = new LayoutBox(element, BoxType.Block);
+                    BoxModelCalculator.ApplyBoxModel(fitBox, element.Style, containingWidth);
+                    float available = containingWidth - BoxModelCalculator.GetHorizontalSpacing(fitBox);
+                    return Math.Max(minContentWidth, Math.Min(maxContentWidth, available));
+                }
+                return GridLayout.ComputeIntrinsicWidth(element, keyword, containingWidth, context);
             }
 
             // min-content: lay out with very narrow width to find the minimum
@@ -1426,14 +1503,25 @@ namespace Rend.Layout.Internal
                     && !float.IsNaN(childStyle.Height) && childStyle.Height > 0
                     && !DeferredPercent.IsEncoded(childStyle.Height)
                     && !IsGridOrFlexContainer(box);
+                // [CSS-SIZING-4 §3] contain:size uses contain-intrinsic-width for extent
+                bool hasSizeContainment = childStyle != null
+                    && (childStyle.Contain == CssContain.Size || childStyle.Contain == CssContain.Strict);
                 bool isAutoWidthBlock = childStyle != null
                     && float.IsNaN(childStyle.Width)
                     && !SizingKeyword.IsSizingKeyword(childStyle.Width)
                     && !DeferredPercent.IsEncoded(childStyle.Width)
-                    && !hasAspectRatioWidth;
+                    && !hasAspectRatioWidth
+                    && !hasSizeContainment;
 
                 float extent;
-                if (isAutoWidthBlock)
+                if (hasSizeContainment)
+                {
+                    float ciW = childStyle!.GetValues()[PropertyId.ContainIntrinsicWidth].FloatValue;
+                    extent = (!float.IsNaN(ciW) && ciW > 0) ? ciW : 0;
+                    extent += (child.ContentRect.X - contentLeft)
+                            + child.PaddingRight + child.BorderRightWidth + child.MarginRight;
+                }
+                else if (isAutoWidthBlock)
                 {
                     // Auto-width block fills available space but actual content is narrower.
                     // Recursively measure the content extent.

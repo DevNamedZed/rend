@@ -1148,6 +1148,13 @@ namespace Rend.Layout.Internal
                 indefinitePercentBasis = true;
             }
 
+            // [CSS-FLEXBOX §7.1.1] flex-basis: content (stored as MaxContent sentinel)
+            // → skip width/height fallback, go straight to content measurement.
+            if (SizingKeyword.IsSizingKeyword(basis))
+            {
+                indefinitePercentBasis = true;
+            }
+
             // Use width/height as fallback (resolve deferred percentages and calc)
             // CSS Flexbox §9.2: when percentage flex-basis resolves against indefinite
             // size, treat as content — do NOT fall back to width/height property.

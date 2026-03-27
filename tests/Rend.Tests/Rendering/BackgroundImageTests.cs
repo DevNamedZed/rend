@@ -476,6 +476,7 @@ namespace Rend.Tests.Rendering
             {
                 TiledImages.Add((image, fillArea, tileWidth, tileHeight));
             }
+            public void FillRectWithTiledGradient(Rend.Rendering.GradientInfo gradient, Rend.Core.Values.RectF fillArea, Rend.Core.Values.RectF tileRect) { }
         }
     }
 }

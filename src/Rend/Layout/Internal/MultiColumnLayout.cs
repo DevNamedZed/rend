@@ -174,22 +174,26 @@ namespace Rend.Layout.Internal
                 colHasContent = true;
             }
 
-            // Assign line boxes to columns (for inline content)
-            if (columnBox.LineBoxes != null)
+            // Assign line boxes to columns (for inline content).
+            // Use position-based tracking (matching block child assignment)
+            // to avoid accumulated rounding errors from summing heights.
+            if (columnBox.LineBoxes != null && columnBox.LineBoxes.Count > 0)
             {
                 int lineCol = 0;
-                float lineColHeight = 0;
+                float lineColStartY = columnBox.LineBoxes[0].Y;
+                bool lineColHasContent = false;
                 foreach (var line in columnBox.LineBoxes)
                 {
-                    float lineHeight = line.Height;
-                    if (lineColHeight > 0 && lineColHeight + lineHeight > columnHeight
+                    float lineBottomY = line.Y + line.Height;
+                    float heightInCol = lineBottomY - lineColStartY;
+                    if (lineColHasContent && heightInCol > columnHeight
                         && lineCol < columnCount - 1)
                     {
                         lineCol++;
-                        lineColHeight = 0;
+                        lineColStartY = line.Y;
                     }
                     colLineBoxes[lineCol].Add(line);
-                    lineColHeight += lineHeight;
+                    lineColHasContent = true;
                 }
             }
 

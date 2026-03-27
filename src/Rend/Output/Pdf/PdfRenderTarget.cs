@@ -379,6 +379,13 @@ namespace Rend.Output.Pdf
         public float MeasureText(string text, TextStyle style) => -1f;
 
         /// <inheritdoc />
+        public void FillRectWithTiledGradient(GradientInfo gradient, RectF fillArea, RectF tileRect)
+        {
+            // PDF: fall back to filling the entire area with the gradient (no tiling).
+            FillRect(fillArea, BrushInfo.FromGradient(gradient));
+        }
+
+        /// <inheritdoc />
         public void DrawText(string text, float x, float y, TextStyle style)
         {
             EnsurePage();

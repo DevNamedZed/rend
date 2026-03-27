@@ -127,6 +127,14 @@ namespace Rend.Rendering
         void DrawTiledImage(ImageData image, RectF fillArea,
             float tileWidth, float tileHeight, float originX, float originY);
 
+        /// <summary>
+        /// [CSS-BACKGROUNDS §2.11] Renders a gradient at the specified tile size and
+        /// position, then tiles it to fill the target area. Used for canvas backgrounds
+        /// where the gradient positioning area differs from the painting area.
+        /// </summary>
+        void FillRectWithTiledGradient(GradientInfo gradient, RectF fillArea,
+            RectF tileRect);
+
         /// <summary>Measures the advance width of a text string without drawing it.</summary>
         /// <param name="text">The text to measure.</param>
         /// <param name="style">The text style to apply.</param>

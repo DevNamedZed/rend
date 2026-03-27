@@ -161,7 +161,7 @@ class Program
             trackAllValues: true);
 
 
-        IReadOnlyList<VisualTestCase> testCases = VisualTestCatalog.AllCases;
+        IReadOnlyList<VisualTestCase> testCases = VisualTestCatalog.DiscoverTests();
 
         // Apply --filter (matches test ID substring)
         if (!string.IsNullOrEmpty(filterPattern))
@@ -198,7 +198,6 @@ class Program
                 {
                     results.Add(result);
                 }
-
                 Interlocked.Increment(ref completedCount);
             });
 
@@ -273,12 +272,14 @@ class Program
             TestName = testCase.Name,
             Category = testCase.Category,
             Tags = testCase.Tags,
-            Html = testCase.Html,
         };
 
         try
         {
-            var html = testCase.Html;
+            // Load HTML fresh each time — not cached on the test case.
+            // For file-backed WPT tests, this reads from disk + inlines stylesheets.
+            // The string is GC'd after RunTest returns.
+            var html = testCase.LoadHtml();
             // Skip tests that returned empty HTML (script/reftest-wait filtered at load time)
             if (string.IsNullOrWhiteSpace(html))
             {
@@ -679,10 +680,8 @@ class Program
             throw;
         }
 
-        var chromePath = Path.Combine(resourcesDir, $"{testCase.Id}-chrome.png");
-        File.WriteAllBytes(chromePath, chromePng);
-        result.ChromeImagePath = chromePath;
-
+        // Chrome PNG is written to disk only for failing tests (in RunTest).
+        // Skip unconditional write here to save ~800MB of disk I/O and memory pressure.
         return chromePng;
     }
 

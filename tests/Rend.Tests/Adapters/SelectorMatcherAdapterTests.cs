@@ -239,6 +239,7 @@ namespace Rend.Tests.Adapters
             {
                 get { yield break; }
             }
+            public string? TextContent => null;
         }
     }
 }

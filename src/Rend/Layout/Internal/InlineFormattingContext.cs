@@ -1026,10 +1026,11 @@ namespace Rend.Layout.Internal
                         {
                             // CSS Text Level 3 §8.2: Trailing whitespace at the end of a line
                             // hangs and does not contribute to the line width for wrapping.
-                            // This applies to all white-space modes (normal, nowrap, pre-wrap, etc).
-                            // In 'normal' mode, trailing spaces are removed after line-break;
-                            // in 'pre-wrap' mode, they hang visibly but still don't cause overflow.
-                            string measureCandidate = lineCandidate.TrimEnd(' ');
+                            // [CSS-TEXT-3 §4.1.3] break-spaces: trailing spaces DO contribute
+                            // to wrap width and CAN cause line breaks (no hanging).
+                            string measureCandidate = whiteSpace == CssWhiteSpace.BreakSpaces
+                                ? lineCandidate
+                                : lineCandidate.TrimEnd(' ');
                             if (measureCandidate.Length > 0)
                             {
                                 var candShape = context.TextMeasurer!.Shape(measureCandidate, fontDesc, fontSize);
@@ -1542,9 +1543,10 @@ namespace Rend.Layout.Internal
             // use their true shrink-to-fit width for line break decisions.
             if (needsShrinkToFit)
             {
-                // CSS Flexbox §9.9.1: Flex containers use dedicated intrinsic sizing
-                // that computes width from item contributions, not from flex-grow expansion.
-                if (element.Style.Display == CssDisplay.InlineFlex)
+                // CSS Flexbox §9.9.1 / CSS Grid §12.1: Flex and grid containers use
+                // dedicated intrinsic sizing from item content, not from filling available width.
+                if (element.Style.Display == CssDisplay.InlineFlex ||
+                    element.Style.Display == CssDisplay.InlineGrid)
                 {
                     float fitWidth = BlockFormattingContext.MeasureIntrinsicWidth(
                         element, SizingKeyword.FitContent, containingWidth, context);
@@ -2270,6 +2272,7 @@ namespace Rend.Layout.Internal
 
             // CSS Text Module Level 3 §4.1.1: trailing whitespace "hangs" off the end
             // of the line — its advance width is excluded from content width for alignment.
+            // [CSS-TEXT-3 §4.1.3] break-spaces: trailing spaces take up space (no hanging).
             float trailingWhitespaceWidth = 0;
             for (int i = line.Fragments.Count - 1; i >= 0; i--)
             {
@@ -2497,16 +2500,32 @@ namespace Rend.Layout.Internal
                 var line = lineBoxes[li];
                 if (line.Fragments.Count == 0) continue;
 
-                // Hang first: shift leading opening punctuation outside the start margin
+                // [CSS-TEXT-3 §8.3] Hang first: shift leading opening punctuation into the margin
                 if (hangFirst && li == 0)
                 {
                     var firstFrag = line.Fragments[0];
                     if (!string.IsNullOrEmpty(firstFrag.Text) && IsOpeningPunctuation(firstFrag.Text![0]))
                     {
-                        // Approximate the width of the first character
-                        float charWidth = firstFrag.Width / Math.Max(1, firstFrag.Text!.Length);
-                        for (int fi = 0; fi < line.Fragments.Count; fi++)
-                            line.Fragments[fi].X -= charWidth;
+                        // [CSS-TEXT-3 §8.3] Don't hang if preceded by non-zero-width border
+                        bool hasBorder = firstFrag.InlineElement != null
+                            && firstFrag.InlineElement.Style.BorderLeftWidth > 0;
+                        if (!hasBorder)
+                        {
+                            // Use actual first glyph advance if available
+                            float charWidth;
+                            if (firstFrag.ShapedRun != null && firstFrag.ShapedRun.Glyphs.Length > 0)
+                            {
+                                charWidth = firstFrag.ShapedRun.Glyphs[0].XAdvance;
+                            }
+                            else
+                            {
+                                charWidth = firstFrag.Width / Math.Max(1, firstFrag.Text!.Length);
+                            }
+                            for (int fi = 0; fi < line.Fragments.Count; fi++)
+                            {
+                                line.Fragments[fi].X -= charWidth;
+                            }
+                        }
                     }
                 }
 

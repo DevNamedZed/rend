@@ -203,6 +203,7 @@ namespace Rend.Tests.Rendering
             public void StrokePath(PathData path, PenInfo pen) { }
             public void DrawImage(ImageData image, RectF destRect) { }
             public void DrawTiledImage(ImageData image, RectF fillArea, float tileWidth, float tileHeight, float originX, float originY) { }
+            public void FillRectWithTiledGradient(Rend.Rendering.GradientInfo gradient, Rend.Core.Values.RectF fillArea, Rend.Core.Values.RectF tileRect) { }
             public void Finish(Stream output) { }
             public void AddLink(RectF rect, string uri) { }
             public void AddBookmark(string title, int level, float yPosition) { }

@@ -361,6 +361,10 @@ namespace Rend.Output.Image
                 {
                     return existing;
                 }
+                if (_fontDataCache.Count >= 30)
+                {
+                    _fontDataCache.Clear();
+                }
                 _fontDataCache[key] = data;
             }
             return data;

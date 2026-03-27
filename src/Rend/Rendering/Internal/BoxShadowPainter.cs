@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Rend.Core.Values;
 using Rend.Css;
@@ -53,7 +54,7 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
-            var shadows = ParseBoxShadow(rawValue as CssValue);
+            var shadows = ParseBoxShadow(rawValue as CssValue, style.FontSize);
             if (shadows == null || shadows.Count == 0)
             {
                 return;
@@ -106,44 +107,64 @@ namespace Rend.Rendering.Internal
                     continue;
                 }
 
-                if (shadow.Blur > 0)
+                // [CSS-BACKGROUNDS-3 §7.3.1] Outer box-shadow is drawn outside
+                // the border edge only — clipped inside the border-box.
+                // Clip out the border box, then draw the shadow normally.
+                var shadowRect = new RectF(x, y, w, h);
+                var brush = BrushInfo.Solid(shadow.Color);
+
+                // Create an exclusion clip: draw shadow everywhere EXCEPT inside border box.
+                var clipPath = new PathData();
+                // Outer: large area encompassing shadow + blur
+                float clipExpand = shadow.Blur * 2 + shadow.Spread + 10;
+                var clipOuter = new RectF(
+                    Math.Min(shadowRect.X, borderRect.X) - clipExpand,
+                    Math.Min(shadowRect.Y, borderRect.Y) - clipExpand,
+                    Math.Max(shadowRect.Right, borderRect.Right) - Math.Min(shadowRect.X, borderRect.X) + clipExpand * 2,
+                    Math.Max(shadowRect.Bottom, borderRect.Bottom) - Math.Min(shadowRect.Y, borderRect.Y) + clipExpand * 2);
+                clipPath.MoveTo(clipOuter.X, clipOuter.Y);
+                clipPath.LineTo(clipOuter.Right, clipOuter.Y);
+                clipPath.LineTo(clipOuter.Right, clipOuter.Bottom);
+                clipPath.LineTo(clipOuter.X, clipOuter.Bottom);
+                clipPath.Close();
+                // Inner cutout: border box
+                if (hasRadius)
                 {
-                    // Use the render target's Gaussian blur mask for proper shadow rendering.
-                    // CSS blur-radius maps to approximately sigma = blur / 2.
-                    float sigma = shadow.Blur / 2f;
-                    target.SetMaskBlur(sigma);
-
-                    var brush = BrushInfo.Solid(shadow.Color);
-                    if (hasRadius)
-                    {
-                        var path = new PathData();
-                        radii.AddToPath(path, new RectF(x, y, w, h));
-                        target.FillPath(path, brush);
-                    }
-                    else
-                    {
-                        target.FillRect(new RectF(x, y, w, h), brush);
-                    }
-
-                    target.SetMaskBlur(0);
+                    radii.AddToPath(clipPath, borderRect);
                 }
                 else
                 {
-                    // Sharp shadow (no blur)
-                    var shadowRect = new RectF(x, y, w, h);
-                    var brush = BrushInfo.Solid(shadow.Color);
-
-                    if (hasRadius)
-                    {
-                        var path = new PathData();
-                        radii.AddToPath(path, shadowRect);
-                        target.FillPath(path, brush);
-                    }
-                    else
-                    {
-                        target.FillRect(shadowRect, brush);
-                    }
+                    clipPath.MoveTo(borderRect.X, borderRect.Y);
+                    clipPath.LineTo(borderRect.Right, borderRect.Y);
+                    clipPath.LineTo(borderRect.Right, borderRect.Bottom);
+                    clipPath.LineTo(borderRect.X, borderRect.Bottom);
+                    clipPath.Close();
                 }
+                clipPath.FillType = PathFillType.EvenOdd;
+                target.PushClipPath(clipPath);
+
+                if (shadow.Blur > 0)
+                {
+                    float sigma = shadow.Blur / 2f;
+                    target.SetMaskBlur(sigma);
+                }
+
+                if (hasRadius)
+                {
+                    var path = new PathData();
+                    radii.AddToPath(path, shadowRect);
+                    target.FillPath(path, brush);
+                }
+                else
+                {
+                    target.FillRect(shadowRect, brush);
+                }
+
+                if (shadow.Blur > 0)
+                {
+                    target.SetMaskBlur(0);
+                }
+                target.PopClip();
             }
         }
 
@@ -226,7 +247,7 @@ namespace Rend.Rendering.Internal
         /// <summary>
         /// Parses a raw CssValue into a list of box-shadow layers.
         /// </summary>
-        private static List<BoxShadowLayer>? ParseBoxShadow(CssValue? value)
+        private static List<BoxShadowLayer>? ParseBoxShadow(CssValue? value, float fontSize = 16f)
         {
             if (value == null)
             {
@@ -246,7 +267,7 @@ namespace Rend.Rendering.Internal
             {
                 for (int i = 0; i < list.Values.Count; i++)
                 {
-                    var layer = ParseSingleShadow(list.Values[i]);
+                    var layer = ParseSingleShadow(list.Values[i], fontSize);
                     if (layer.HasValue)
                     {
                         result.Add(layer.Value);
@@ -256,7 +277,7 @@ namespace Rend.Rendering.Internal
             else
             {
                 // Single shadow (space-separated or a single list)
-                var layer = ParseSingleShadow(value);
+                var layer = ParseSingleShadow(value, fontSize);
                 if (layer.HasValue)
                 {
                     result.Add(layer.Value);
@@ -270,7 +291,7 @@ namespace Rend.Rendering.Internal
         /// Parses a single box-shadow layer from a CssValue.
         /// Format: [inset] offset-x offset-y [blur [spread]] [color]
         /// </summary>
-        private static BoxShadowLayer? ParseSingleShadow(CssValue value)
+        private static BoxShadowLayer? ParseSingleShadow(CssValue value, float fontSize = 16f)
         {
             // A single shadow is a space-separated list of values
             IReadOnlyList<CssValue> parts;
@@ -317,9 +338,17 @@ namespace Rend.Rendering.Internal
                 }
                 else if (part is CssFunctionValue fn)
                 {
-                    // Try to parse as color function (rgb, rgba, hsl, hsla)
                     string fname = fn.Name.ToLowerInvariant();
-                    if (fname == "rgb" || fname == "rgba")
+                    // [CSS-VALUES §8] calc/min/max/clamp functions → evaluate as length
+                    if (fname == "calc" || fname == "min" || fname == "max" || fname == "clamp")
+                    {
+                        var ctx = new Core.Values.CssResolutionContext(
+                            fontSize, fontSize, 0, 0, 0);
+                        float calcResult = Css.Resolution.Internal.ValueResolver.EvaluateCalc(
+                            fn.Arguments, ctx);
+                        lengths.Add(calcResult);
+                    }
+                    else if (fname == "rgb" || fname == "rgba")
                     {
                         var args = new List<CssValue>(fn.Arguments);
                         if (Rend.Css.Parser.Internal.CssColorParser.TryParseRgb(args, out var rgbColor))
@@ -358,17 +387,18 @@ namespace Rend.Rendering.Internal
             };
         }
 
-        private static float ResolveLength(CssDimensionValue dim)
+        private static float ResolveLength(CssDimensionValue dim, float fontSize = 16f)
         {
-            // For box-shadow, only px is common. Convert basic units.
             switch (dim.Unit)
             {
                 case "px": return dim.Value;
+                case "em": return dim.Value * fontSize;
+                case "rem": return dim.Value * 16f;
                 case "pt": return dim.Value * 96f / 72f;
                 case "in": return dim.Value * 96f;
                 case "cm": return dim.Value * 96f / 2.54f;
                 case "mm": return dim.Value * 96f / 25.4f;
-                default: return dim.Value; // assume px
+                default: return dim.Value;
             }
         }
 

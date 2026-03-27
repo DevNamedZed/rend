@@ -5,66 +5,40 @@ namespace Rend.VisualRegression.Infrastructure
 {
     public static class VisualTestCatalog
     {
-        private static readonly List<VisualTestCase> _cases = new();
-        private static readonly object _lock = new();
-        private static bool _initialized;
-
+        /// <summary>
+        /// Legacy registration method used by C# test classes.
+        /// These are superseded by YAML-based test definitions.
+        /// </summary>
         public static void Register(VisualTestCase testCase)
         {
-            lock (_lock)
-            {
-                _cases.Add(testCase);
-            }
+            // No-op: all tests come from YAML files and WPT filesystem scan.
+            // C# test classes exist for historical reasons but are not used.
         }
 
-        public static IReadOnlyList<VisualTestCase> AllCases
+        /// <summary>
+        /// Discovers all test case definitions.
+        /// YAML tests: metadata + inline HTML from TestData/*.yaml
+        /// WPT tests: metadata + deferred file-backed HTML from wpt/ directory
+        /// </summary>
+        public static List<VisualTestCase> DiscoverTests()
         {
-            get
-            {
-                EnsureInitialized();
-                lock (_lock)
-                {
-                    return _cases.AsReadOnly();
-                }
-            }
-        }
+            var cases = new List<VisualTestCase>();
 
-        private static void EnsureInitialized()
-        {
-            lock (_lock)
-            {
-                if (_initialized)
-                {
-                    return;
-                }
-                _initialized = true;
-            }
-
-            // Load all tests from YAML files in TestData/
             var yamlCases = YamlTestLoader.LoadAll();
             if (yamlCases.Count > 0)
             {
-                lock (_lock)
-                {
-                    _cases.AddRange(yamlCases);
-                }
+                cases.AddRange(yamlCases);
                 Console.WriteLine($"Loaded {yamlCases.Count} tests from YAML files");
             }
-            else
-            {
-                Console.Error.WriteLine("WARNING: No YAML tests loaded. Check TestData/ directory.");
-            }
 
-            // Load WPT CSS tests (if downloaded via wpt-setup.sh)
             var wptCases = WptTestLoader.LoadAll();
             if (wptCases.Count > 0)
             {
-                lock (_lock)
-                {
-                    _cases.AddRange(wptCases);
-                }
+                cases.AddRange(wptCases);
                 Console.WriteLine($"Loaded {wptCases.Count} WPT CSS tests");
             }
+
+            return cases;
         }
     }
 }

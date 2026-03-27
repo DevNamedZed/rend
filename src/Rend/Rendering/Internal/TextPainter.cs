@@ -280,8 +280,11 @@ namespace Rend.Rendering.Internal
             float strokeWidth = thickness > 0 ? thickness : metrics.UnderlineThickness;
 
             // Build pen based on text-decoration-style.
+            // [CSS-TEXT-DECOR-4 §3] Dash/dot phase is relative to line box start so
+            // the pattern is continuous across fragments (inline elements, bidi runs).
             CssTextDecorationStyle decoStyle = style.TextDecorationStyle;
-            PenInfo pen = BuildDecorationPen(decoColor, strokeWidth, decoStyle);
+            float dashPhase = fragment.X;
+            PenInfo pen = BuildDecorationPen(decoColor, strokeWidth, decoStyle, dashPhase);
 
             float startX = lineX + fragment.X;
             float endX = startX + fragment.Width;
@@ -427,7 +430,8 @@ namespace Rend.Rendering.Internal
             }
         }
 
-        private static PenInfo BuildDecorationPen(CssColor color, float strokeWidth, CssTextDecorationStyle decoStyle)
+        private static PenInfo BuildDecorationPen(CssColor color, float strokeWidth,
+            CssTextDecorationStyle decoStyle, float dashPhase = 0f)
         {
             switch (decoStyle)
             {
@@ -446,13 +450,13 @@ namespace Rend.Rendering.Internal
                     }
                     dashLen = Math.Max(dashLen, 1f);
                     gapLen = Math.Max(gapLen, 1f);
-                    return new PenInfo(color, strokeWidth, new[] { dashLen, gapLen });
+                    return new PenInfo(color, strokeWidth, new[] { dashLen, gapLen }, dashPhase);
                 }
 
                 case CssTextDecorationStyle.Dotted:
                 {
                     float dotLen = Math.Max(strokeWidth, 1f);
-                    return new PenInfo(color, strokeWidth, new[] { dotLen, dotLen });
+                    return new PenInfo(color, strokeWidth, new[] { dotLen, dotLen }, dashPhase);
                 }
 
                 default:

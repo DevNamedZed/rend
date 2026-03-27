@@ -40,5 +40,8 @@ namespace Rend.Css
 
         /// <summary>The child elements (for iteration).</summary>
         IEnumerable<IStylableElement> Children { get; }
+
+        /// <summary>The concatenated text content of the element and its descendants.</summary>
+        string? TextContent { get; }
     }
 }

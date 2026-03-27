@@ -114,6 +114,8 @@ namespace Rend.Adapters
             }
         }
 
+        public string? TextContent => _element.TextContent;
+
         public IEnumerable<IStylableElement> Children
         {
             get

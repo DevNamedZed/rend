@@ -193,6 +193,48 @@ namespace Rend.Css
             }
         }
 
+        /// <summary>
+        /// [HTML §3.2.6.5] Detect text directionality from the first strong
+        /// Unicode directional character in the element's text content.
+        /// Returns "ltr" or "rtl".
+        /// </summary>
+        private static string DetectDirectionFromContent(IStylableElement element)
+        {
+            string? text = element.TextContent;
+            if (text != null)
+            {
+                for (int i = 0; i < text.Length; i++)
+                {
+                    char ch = text[i];
+                    // Strong RTL: Arabic, Hebrew, Thaana, NKo, etc.
+                    if ((ch >= 0x0590 && ch <= 0x05FF) ||  // Hebrew
+                        (ch >= 0x0600 && ch <= 0x06FF) ||  // Arabic
+                        (ch >= 0x0700 && ch <= 0x074F) ||  // Syriac
+                        (ch >= 0x0780 && ch <= 0x07BF) ||  // Thaana
+                        (ch >= 0x07C0 && ch <= 0x07FF) ||  // NKo
+                        (ch >= 0xFB50 && ch <= 0xFDFF) ||  // Arabic Presentation A
+                        (ch >= 0xFE70 && ch <= 0xFEFF))    // Arabic Presentation B
+                    {
+                        return "rtl";
+                    }
+                    // Strong LTR: Latin, Greek, Cyrillic, CJK, etc.
+                    if ((ch >= 'A' && ch <= 'Z') ||
+                        (ch >= 'a' && ch <= 'z') ||
+                        (ch >= 0x00C0 && ch <= 0x024F) ||  // Latin Extended
+                        (ch >= 0x0370 && ch <= 0x03FF) ||  // Greek
+                        (ch >= 0x0400 && ch <= 0x04FF) ||  // Cyrillic
+                        (ch >= 0x1100 && ch <= 0x11FF) ||  // Hangul Jamo
+                        (ch >= 0x3040 && ch <= 0x309F) ||  // Hiragana
+                        (ch >= 0x30A0 && ch <= 0x30FF) ||  // Katakana
+                        (ch >= 0x4E00 && ch <= 0x9FFF))    // CJK
+                    {
+                        return "ltr";
+                    }
+                }
+            }
+            return "ltr"; // Default to LTR if no strong character found
+        }
+
         private Stylesheet GetFilteredUserAgentStylesheet()
         {
             if (_filteredUserAgent != null) return _filteredUserAgent;

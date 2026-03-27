@@ -22,6 +22,7 @@ namespace Rend.Rendering
         private readonly bool _generateLinks;
         private readonly bool _generateBookmarks;
 
+
         /// <summary>
         /// Creates a new <see cref="Painter"/> instance.
         /// </summary>
@@ -321,7 +322,14 @@ namespace Rend.Rendering
                 BoxShadowPainter.PaintOuter(box, target);
 
                 // 4. Paint background (CSS 2.1 step 1: backgrounds).
-                BackgroundPainter.Paint(box, target, _imageResolver);
+                // [CSS2 §14.2] Skip if html root background was painted on the canvas.
+                bool skipRootBg = box.StyledNode is StyledElement htmlElem
+                    && htmlElem.TagName == "html"
+                    && (htmlElem.Style.BackgroundColor.A > 0 || HasBackgroundImage(htmlElem.Style));
+                if (!skipRootBg)
+                {
+                    BackgroundPainter.Paint(box, target, _imageResolver);
+                }
 
                 // 4b. Paint inset box-shadow (on top of background, below borders per CSS spec).
                 BoxShadowPainter.PaintInset(box, target);

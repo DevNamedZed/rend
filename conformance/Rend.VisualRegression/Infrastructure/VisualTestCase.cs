@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -17,43 +18,66 @@ namespace Rend.VisualRegression.Infrastructure
         public double Tolerance { get; set; } = 0.01;
 
         /// <summary>
-        /// HTML content. For inline tests (YAML), set directly.
-        /// For file-backed tests (WPT), set HtmlFilePath instead — HTML is loaded lazily.
+        /// Inline HTML for YAML-defined tests. Null for file-backed tests.
         /// </summary>
-        public string Html
-        {
-            get
-            {
-                if (_html != null)
-                {
-                    return _html;
-                }
-                if (_htmlFilePath != null)
-                {
-                    _html = _htmlLoader!(_htmlFilePath);
-                    _htmlFilePath = null;
-                    _htmlLoader = null;
-                }
-                return _html ?? "";
-            }
-            set { _html = value; }
-        }
-
-        private string? _html;
-        private string? _htmlFilePath;
-        private System.Func<string, string>? _htmlLoader;
+        public string? InlineHtml { get; set; }
 
         /// <summary>
-        /// Sets a deferred file path for lazy HTML loading.
-        /// The loader function is called once when Html is first accessed.
+        /// File path for file-backed tests (WPT). HTML is loaded on demand
+        /// by calling LoadHtml() — never cached on the test case.
         /// </summary>
-        public void SetDeferredHtml(string filePath, System.Func<string, string> loader)
+        public string? HtmlFilePath { get; set; }
+
+        /// <summary>
+        /// Loader function for file-backed tests. Reads file, inlines
+        /// stylesheets/fonts, and returns processed HTML. Called each
+        /// time LoadHtml() is invoked — result is NOT cached.
+        /// </summary>
+        public Func<string, string>? HtmlLoader { get; set; }
+
+        /// <summary>
+        /// Gets the HTML for this test. For inline tests, returns InlineHtml.
+        /// For file-backed tests, loads from disk on each call (no caching).
+        /// </summary>
+        public string LoadHtml()
         {
-            _htmlFilePath = filePath;
-            _htmlLoader = loader;
-            _html = null;
+            if (InlineHtml != null)
+            {
+                return InlineHtml;
+            }
+            if (HtmlFilePath != null && HtmlLoader != null)
+            {
+                return HtmlLoader(HtmlFilePath);
+            }
+            return "";
+        }
+
+        // Backward compat: Html property delegates to LoadHtml for inline tests
+        // or loads once for the old API. New code should use LoadHtml().
+        public string Html
+        {
+            get => LoadHtml();
+            set => InlineHtml = value;
+        }
+
+        /// <summary>
+        /// Sets a deferred file path for file-backed HTML loading.
+        /// </summary>
+        public void SetDeferredHtml(string filePath, Func<string, string> loader)
+        {
+            HtmlFilePath = filePath;
+            HtmlLoader = loader;
+            InlineHtml = null;
         }
 
         public override string ToString() => $"{Category}/{Name}";
+
+        /// <summary>
+        /// Release the cached HTML string to free memory after the test has run.
+        /// </summary>
+        public void ClearHtml()
+        {
+            InlineHtml = null;
+        }
     }
 }

@@ -178,6 +178,17 @@ namespace Rend.Layout.Internal
 
             // Vertical: CSS 2.1 §10.6.4
             bool hasHeight = !float.IsNaN(style.Height);
+            // [CSS-SIZING-4 §5.1] When aspect-ratio is set and height was derived from
+            // the ratio in BFC layout (h > 0), treat as if height is explicit so the
+            // top+bottom offset path doesn't override the ratio-derived height.
+            if (!hasHeight && h > 0)
+            {
+                float arRatio = DimensionResolver.GetAspectRatio(style);
+                if (arRatio > 0)
+                {
+                    hasHeight = true;
+                }
+            }
             if (!float.IsNaN(top) && !float.IsNaN(bottom))
             {
                 if (!hasHeight)

@@ -643,6 +643,20 @@ namespace Rend.Css
             get => _values[PropertyId.ColumnGap].FloatValue;
         }
 
+        /// <summary>True if row-gap was explicitly set (not initial 'normal').</summary>
+        public bool IsRowGapExplicit
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _values[PropertyId.RowGap].IsSet;
+        }
+
+        /// <summary>True if column-gap was explicitly set (not initial 'normal').</summary>
+        public bool IsColumnGapExplicit
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _values[PropertyId.ColumnGap].IsSet;
+        }
+
         #endregion
 
         #region Grid

@@ -306,6 +306,11 @@ namespace Rend.Text
                 {
                     return existing;
                 }
+                // Cap fallback font data cache — each entry is 200KB-2MB
+                if (_fallbackFontDataCache.Count >= 30)
+                {
+                    _fallbackFontDataCache.Clear();
+                }
                 _fallbackFontDataCache[key] = data;
             }
             return data;
@@ -323,6 +328,24 @@ namespace Rend.Text
                 if (_faceCache.TryGetValue(key, out var cached))
                 {
                     return cached.Face;
+                }
+
+                // Evict oldest entries when cache exceeds limit.
+                // Each entry pins a font byte[] (200KB-2MB) preventing GC compaction.
+                const int maxCacheEntries = 20;
+                if (_faceCache.Count >= maxCacheEntries)
+                {
+                    var firstKey = default(int);
+                    foreach (var k in _faceCache.Keys)
+                    {
+                        firstKey = k;
+                        break;
+                    }
+                    if (_faceCache.TryGetValue(firstKey, out var evicted))
+                    {
+                        evicted.Dispose();
+                        _faceCache.Remove(firstKey);
+                    }
                 }
 
                 var handle = GCHandle.Alloc(fontData, GCHandleType.Pinned);
