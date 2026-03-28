@@ -43,7 +43,10 @@ namespace Rend.Core.Values
                 case CssLengthUnit.Em: return Value * ctx.FontSize;
                 case CssLengthUnit.Rem: return Value * ctx.RootFontSize;
                 case CssLengthUnit.Ex: return Value * ctx.FontSize * 0.5f; // approximate
-                case CssLengthUnit.Ch: return Value * ctx.FontSize * 0.5f; // approximate
+                case CssLengthUnit.Ch: return Value * (ctx.ChWidth > 0 ? ctx.ChWidth : ctx.FontSize * 0.5f);
+                case CssLengthUnit.Ic: return Value * ctx.FontSize; // CJK ideograph ≈ 1em
+                case CssLengthUnit.Lh: return Value * ctx.FontSize * 1.2f; // line-height ≈ 1.2em
+                case CssLengthUnit.Rlh: return Value * ctx.RootFontSize * 1.2f; // root line-height
                 case CssLengthUnit.Vw: return Value * ctx.ViewportWidth / 100f;
                 case CssLengthUnit.Vh: return Value * ctx.ViewportHeight / 100f;
                 case CssLengthUnit.Vmin: return Value * Math.Min(ctx.ViewportWidth, ctx.ViewportHeight) / 100f;
@@ -118,7 +121,7 @@ namespace Rend.Core.Values
     /// </summary>
     public enum CssLengthUnit : byte
     {
-        Px, Em, Rem, Ex, Ch,
+        Px, Em, Rem, Ex, Ch, Ic, Lh, Rlh,
         Pt, Pc, Cm, Mm, In, Q,
         Vw, Vh, Vmin, Vmax,
         Percent,
@@ -145,15 +148,22 @@ namespace Rend.Core.Values
         /// <summary>The base value for percentage resolution (e.g. containing block width).</summary>
         public float PercentBase { get; }
 
+        /// <summary>
+        /// [CSS-VALUES-4 §6.1] Advance width of the "0" (U+0030) glyph in px.
+        /// Used for the ch unit. When 0, falls back to fontSize * 0.5 approximation.
+        /// </summary>
+        public float ChWidth { get; }
+
         public CssResolutionContext(float fontSize, float rootFontSize,
                                      float viewportWidth, float viewportHeight,
-                                     float percentBase = 0)
+                                     float percentBase = 0, float chWidth = 0)
         {
             FontSize = fontSize;
             RootFontSize = rootFontSize;
             ViewportWidth = viewportWidth;
             ViewportHeight = viewportHeight;
             PercentBase = percentBase;
+            ChWidth = chWidth;
         }
 
         /// <summary>Default context: 16px font, 1920x1080 viewport.</summary>

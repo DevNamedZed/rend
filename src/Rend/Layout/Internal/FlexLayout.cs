@@ -1232,6 +1232,28 @@ namespace Rend.Layout.Internal
                 {
                     // Column: main=height, cross=width. If width is definite, height = width / ratio.
                     float crossWidth = DimensionResolver.ResolveWidth(style, containerWidth, box);
+
+                    // [CSS-FLEXBOX §9.2 step E] When cross-axis (width) is auto with
+                    // aspect-ratio, measure max-content width from content, then
+                    // apply min-width/max-width constraints.
+                    if (float.IsNaN(crossWidth) && element != null)
+                    {
+                        crossWidth = BlockFormattingContext.MeasureIntrinsicWidth(
+                            element, SizingKeyword.MaxContent, containerWidth, context);
+                        float minW = style.MinWidth;
+                        if (!float.IsNaN(minW) && minW > 0 && !DeferredPercent.IsEncoded(minW)
+                            && !SizingKeyword.IsSizingKeyword(minW))
+                        {
+                            if (crossWidth < minW) { crossWidth = minW; }
+                        }
+                        float maxW = style.MaxWidth;
+                        if (!float.IsNaN(maxW) && maxW >= 0 && !DeferredPercent.IsEncoded(maxW)
+                            && !SizingKeyword.IsSizingKeyword(maxW))
+                        {
+                            if (crossWidth > maxW) { crossWidth = maxW; }
+                        }
+                    }
+
                     if (!float.IsNaN(crossWidth) && crossWidth > 0)
                     {
                         if (style.BoxSizing == CssBoxSizing.BorderBox)
@@ -1272,7 +1294,7 @@ namespace Rend.Layout.Internal
 
             // Replaced elements (img, input, select, textarea, etc.) have intrinsic dimensions.
             // Use those instead of trial layout.
-            if (ReplacedElementLayout.IsReplaced(element))
+            if (element != null && ReplacedElementLayout.IsReplaced(element))
             {
                 float intrW = ReplacedElementLayout.GetFormControlIntrinsicWidth(element);
                 float intrH = ReplacedElementLayout.GetFormControlIntrinsicHeight(element);

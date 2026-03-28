@@ -81,7 +81,9 @@ namespace Rend.Layout.Internal
 
         private static void ApplyAbsolute(LayoutBox box, ComputedStyle style, LayoutBox containingBlock)
         {
-            var cb = containingBlock.PaddingRect;
+            // [CSS-GRID §9] Abspos grid items with grid placement use the grid area
+            // as their containing block instead of the grid container's padding box.
+            var cb = box.GridAreaContainingBlock ?? containingBlock.PaddingRect;
 
             float top = ResolvePositionValueWithCalc(style.Top, cb.Height, style, PropertyId.Top);
             float left = ResolvePositionValueWithCalc(style.Left, cb.Width, style, PropertyId.Left);

@@ -21,6 +21,7 @@ namespace Rend.Css.Tests
         public IStylableElement? FirstChild { get; set; }
         public IStylableElement? LastChild { get; set; }
         public IEnumerable<IStylableElement> Children { get; set; } = Array.Empty<IStylableElement>();
+        public string? TextContent { get; set; }
 
         private readonly Dictionary<string, string> _attributes = new Dictionary<string, string>();
 

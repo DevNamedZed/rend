@@ -575,7 +575,43 @@ namespace Rend.Css.Parser.Internal
                 return true;
             }
 
-            var parts = GetListValues(value);
+            // [CSS-FONTS §4.7] The font shorthand value may contain commas in the
+            // font-family portion: "font: 20px/1 Ahem, monospace". The CSS parser
+            // creates a comma-separated list at the top level. We need to flatten
+            // the first comma group into individual tokens, then collect remaining
+            // comma groups as additional font-family names.
+            var parts = new List<CssValue>();
+            var extraFamilyGroups = new List<CssValue>();
+
+            if (value is CssListValue topList && topList.Separator == ',')
+            {
+                // First comma group contains style/variant/weight/size/line-height + first family
+                if (topList.Values.Count > 0)
+                {
+                    var firstGroup = topList.Values[0];
+                    if (firstGroup is CssListValue spaceList && spaceList.Separator == ' ')
+                    {
+                        for (int j = 0; j < spaceList.Values.Count; j++)
+                        {
+                            parts.Add(spaceList.Values[j]);
+                        }
+                    }
+                    else
+                    {
+                        parts.Add(firstGroup);
+                    }
+                }
+                // Remaining comma groups are additional font-family names
+                for (int j = 1; j < topList.Values.Count; j++)
+                {
+                    extraFamilyGroups.Add(topList.Values[j]);
+                }
+            }
+            else
+            {
+                parts = GetListValues(value);
+            }
+
             if (parts.Count == 0) return false;
 
             CssValue fontStyle = new CssKeywordValue("normal");
@@ -643,11 +679,17 @@ namespace Rend.Css.Parser.Internal
                 }
             }
 
-            // Remaining = font-family
+            // Remaining tokens from first group = first font-family name
             while (i < parts.Count)
             {
                 familyParts.Add(parts[i]);
                 i++;
+            }
+
+            // Add extra font-family groups (from comma-separated list)
+            for (int j = 0; j < extraFamilyGroups.Count; j++)
+            {
+                familyParts.Add(extraFamilyGroups[j]);
             }
 
             output.Add(new CssDeclaration("font-style", fontStyle, important));
@@ -657,9 +699,15 @@ namespace Rend.Css.Parser.Internal
             output.Add(new CssDeclaration("line-height", lineHeight, important));
 
             if (familyParts.Count > 0)
-                output.Add(new CssDeclaration("font-family", familyParts.Count == 1 ? familyParts[0] : new CssListValue(familyParts, ','), important));
+            {
+                output.Add(new CssDeclaration("font-family",
+                    familyParts.Count == 1 ? familyParts[0] : new CssListValue(familyParts, ','),
+                    important));
+            }
             else
+            {
                 output.Add(new CssDeclaration("font-family", new CssKeywordValue("inherit"), important));
+            }
 
             return true;
         }

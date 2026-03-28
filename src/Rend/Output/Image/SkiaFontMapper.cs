@@ -64,15 +64,14 @@ namespace Rend.Output.Image
         /// <returns>An SKTypeface for the font, or the default typeface if font data is unavailable.</returns>
         public SKTypeface GetOrCreate(FontDescriptor descriptor, byte[]? fontData)
         {
-            if (_cache.TryGetValue(descriptor, out var existing))
-            {
-                return existing;
-            }
-
-            SKTypeface typeface;
+            // [CSS-FONTS §4.3] When explicit font data is provided (@font-face web fonts),
+            // always use it — don't return a previously cached system font fallback.
+            // GetDecorationMetrics/GetFontMetrics call with null fontData before DrawGlyphs
+            // calls with the real data, so the descriptor cache may hold a stale system font.
             if (fontData != null && fontData.Length > 0)
             {
                 var dataKey = new FontDataKey(fontData);
+                SKTypeface typeface;
                 lock (_lock)
                 {
                     if (!_typefaceCache.TryGetValue(dataKey, out typeface!))
@@ -91,14 +90,18 @@ namespace Rend.Output.Image
                         _typefaceCache[dataKey] = typeface;
                     }
                 }
-            }
-            else
-            {
-                typeface = ResolveByFamilyName(descriptor);
+                _cache[descriptor] = typeface;
+                return typeface;
             }
 
-            _cache[descriptor] = typeface;
-            return typeface;
+            if (_cache.TryGetValue(descriptor, out var existing))
+            {
+                return existing;
+            }
+
+            var resolved = ResolveByFamilyName(descriptor);
+            _cache[descriptor] = resolved;
+            return resolved;
         }
 
         // Generic CSS family -> concrete family names (shared with FontMatchingAlgorithm).

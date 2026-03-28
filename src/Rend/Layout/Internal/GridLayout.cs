@@ -47,8 +47,11 @@ namespace Rend.Layout.Internal
             }
             if (float.IsNaN(colGap) || colGap < 0) { colGap = 0; }
 
-            // Collect grid items with placement info
+            // Collect grid items with placement info.
+            // [CSS-GRID §9] Abspos items with grid placement are collected separately;
+            // they must NOT participate in track sizing or create implicit tracks.
             var items = new List<GridItem>();
+            var absposGridItems = new List<GridItem>();
             var children = BlockFormattingContext.FlattenContents(styledElement);
             for (int i = 0; i < children.Count; i++)
             {
@@ -117,8 +120,29 @@ namespace Rend.Layout.Internal
                 if (childEl.Style.Position == CssPosition.Absolute ||
                     childEl.Style.Position == CssPosition.Fixed)
                 {
-                    // [CSS-POSITION §3] Fixed: containing block = viewport.
-                    // Absolute: containing block = nearest positioned ancestor (grid container).
+                    // [CSS-GRID §9] Check if this abspos item has grid placement.
+                    // If so, defer until after track sizing so we can use grid area
+                    // as the containing block. Abspos items must NOT participate in
+                    // track sizing or create implicit tracks.
+                    var absposItem = new GridItem
+                    {
+                        StyledElement = childEl,
+                        Box = new LayoutBox(childEl, BoxType.Block),
+                        Order = childEl.Style.Order,
+                        OriginalIndex = items.Count
+                    };
+                    ParsePlacement(childEl.Style, absposItem);
+
+                    if (absposItem.HasGridPlacement &&
+                        childEl.Style.Position == CssPosition.Absolute)
+                    {
+                        // Deferred: will be positioned after track sizing completes.
+                        absposGridItems.Add(absposItem);
+                        continue;
+                    }
+
+                    // No grid placement (or fixed position): use grid padding box
+                    // as containing block (current behavior).
                     bool isFixed = childEl.Style.Position == CssPosition.Fixed;
                     float cbWidth = isFixed ? context.ViewportWidth : parent.ContentRect.Width;
                     float cbHeight;
@@ -139,7 +163,7 @@ namespace Rend.Layout.Internal
                         }
                     }
 
-                    var posBox = new LayoutBox(childEl, BoxType.Block);
+                    var posBox = absposItem.Box;
                     BoxModelCalculator.ApplyBoxModel(posBox, childEl.Style, cbWidth);
                     float posWidth;
                     bool widthIsAutoAbspos = float.IsNaN(childEl.Style.Width);
@@ -167,7 +191,57 @@ namespace Rend.Layout.Internal
                     {
                         posHeight = BlockFormattingContext.CalculateAutoHeight(posBox);
                     }
-                    posBox.ContentRect = new RectF(posBox.ContentRect.X, posBox.ContentRect.Y, posWidth, posHeight);
+
+                    // [CSS-ALIGN §6.5] Static position of abspos in grid respects alignment.
+                    float absStaticX = parent.ContentRect.X;
+                    float absStaticY = parent.ContentRect.Y;
+                    if (!isFixed)
+                    {
+                        float absOuterW = posWidth + posBox.PaddingLeft + posBox.PaddingRight
+                            + posBox.BorderLeftWidth + posBox.BorderRightWidth
+                            + posBox.MarginLeft + posBox.MarginRight;
+                        float absOuterH = posHeight + posBox.PaddingTop + posBox.PaddingBottom
+                            + posBox.BorderTopWidth + posBox.BorderBottomWidth
+                            + posBox.MarginTop + posBox.MarginBottom;
+
+                        CssAlignItems absAlignSelf = childEl.Style.AlignSelf;
+                        if (absAlignSelf == CssAlignItems.Normal || (int)absAlignSelf > (int)CssAlignItems.Normal)
+                        {
+                            absAlignSelf = style.AlignItems;
+                        }
+                        float absFreeV = cbHeight - absOuterH;
+                        if (absFreeV > 0)
+                        {
+                            if (absAlignSelf == CssAlignItems.Center)
+                            {
+                                absStaticY += absFreeV / 2f;
+                            }
+                            else if (absAlignSelf == CssAlignItems.End || absAlignSelf == CssAlignItems.FlexEnd)
+                            {
+                                absStaticY += absFreeV;
+                            }
+                        }
+
+                        CssAlignItems absJustifySelf = childEl.Style.JustifySelf;
+                        if (absJustifySelf == CssAlignItems.Normal || (int)absJustifySelf > (int)CssAlignItems.Normal)
+                        {
+                            absJustifySelf = style.JustifyItems;
+                        }
+                        float absFreeH = cbWidth - absOuterW;
+                        if (absFreeH > 0)
+                        {
+                            if (absJustifySelf == CssAlignItems.Center)
+                            {
+                                absStaticX += absFreeH / 2f;
+                            }
+                            else if (absJustifySelf == CssAlignItems.End || absJustifySelf == CssAlignItems.FlexEnd)
+                            {
+                                absStaticX += absFreeH;
+                            }
+                        }
+                    }
+
+                    posBox.ContentRect = new RectF(absStaticX, absStaticY, posWidth, posHeight);
                     parent.AddChild(posBox);
                     continue;
                 }
@@ -183,7 +257,10 @@ namespace Rend.Layout.Internal
                 items.Add(item);
             }
 
-            if (items.Count == 0) return;
+            if (items.Count == 0 && absposGridItems.Count == 0)
+            {
+                return;
+            }
 
             // Sort by CSS order (stable: use original index as tiebreaker)
             items.Sort((a, b) =>
@@ -267,6 +344,19 @@ namespace Rend.Layout.Internal
                         item.ColSpan = area.colSpan;
                     }
                 }
+
+                // [CSS-GRID §9] Also resolve named areas for deferred abspos items.
+                for (int i = 0; i < absposGridItems.Count; i++)
+                {
+                    var item = absposGridItems[i];
+                    if (item.AreaName != null && namedAreas.TryGetValue(item.AreaName, out var area))
+                    {
+                        item.RowStart = area.rowStart;
+                        item.ColStart = area.colStart;
+                        item.RowSpan = area.rowSpan;
+                        item.ColSpan = area.colSpan;
+                    }
+                }
             }
 
             // Determine grid dimensions by scanning explicit placements
@@ -326,6 +416,67 @@ namespace Rend.Layout.Internal
                     {
                         item.RowSpan = resolvedEnd - start;
                     }
+                }
+            }
+
+            // [CSS-GRID §9] Resolve negative line numbers for abspos items.
+            // Use explicit grid dimensions (abspos items don't create implicit tracks).
+            // If a resolved line falls outside the explicit grid (< 0 after resolution),
+            // it is treated as auto (padding edge) per CSS Grid §9.
+            for (int i = 0; i < absposGridItems.Count; i++)
+            {
+                var item = absposGridItems[i];
+                int absposGridRowCount = Math.Max(1, explicitRows);
+                int absposGridColCount = Math.Max(1, explicitCols);
+
+                if (item.RowStart < -1)
+                {
+                    int resolved = ResolveNegativeLine(item.RowStart, absposGridRowCount);
+                    item.RowStart = resolved >= 0 ? resolved : -1;
+                }
+                if (item.ColStart < -1)
+                {
+                    int resolved = ResolveNegativeLine(item.ColStart, absposGridColCount);
+                    item.ColStart = resolved >= 0 ? resolved : -1;
+                }
+
+                if (item.RawColEnd != 0)
+                {
+                    int resolvedEnd = ResolveNegativeLine(item.RawColEnd, absposGridColCount);
+                    if (resolvedEnd >= 0)
+                    {
+                        int start = item.ColStart >= 0 ? item.ColStart : 0;
+                        if (resolvedEnd > start)
+                        {
+                            item.ColSpan = resolvedEnd - start;
+                        }
+                    }
+                    // If resolvedEnd < 0, the line is out of range → end becomes auto.
+                    // RawColEnd stays set but will be ignored since resolved is invalid.
+                }
+                if (item.RawRowEnd != 0)
+                {
+                    int resolvedEnd = ResolveNegativeLine(item.RawRowEnd, absposGridRowCount);
+                    if (resolvedEnd >= 0)
+                    {
+                        int start = item.RowStart >= 0 ? item.RowStart : 0;
+                        if (resolvedEnd > start)
+                        {
+                            item.RowSpan = resolvedEnd - start;
+                        }
+                    }
+                }
+
+                // Also resolve explicit end lines stored when start is auto
+                if (item.ExplicitColEnd < -1)
+                {
+                    int resolved = ResolveNegativeLine(item.ExplicitColEnd, absposGridColCount);
+                    item.ExplicitColEnd = resolved >= 0 ? resolved : -1;
+                }
+                if (item.ExplicitRowEnd < -1)
+                {
+                    int resolved = ResolveNegativeLine(item.ExplicitRowEnd, absposGridRowCount);
+                    item.ExplicitRowEnd = resolved >= 0 ? resolved : -1;
                 }
             }
 
@@ -941,7 +1092,9 @@ namespace Rend.Layout.Internal
                 }
             }
 
-            // Apply explicit row heights (or subgrid row heights)
+            // [CSS-GRID §11.5] Apply explicit row heights (or subgrid row heights).
+            // Fixed track sizes (e.g. "25px") set the exact row height — content overflows.
+            // Intrinsic sentinels (negative values) keep the content-sized height from above.
             if (isSubgridRows && subgridRowTracks != null)
             {
                 // Subgridded rows: use the parent's row sizes directly
@@ -952,8 +1105,11 @@ namespace Rend.Layout.Internal
             {
                 for (int r = 0; r < Math.Min(explicitRowTracks.Length, finalRows); r++)
                 {
-                    if (explicitRowTracks[r] > rowHeights[r])
+                    if (explicitRowTracks[r] > 0)
+                    {
+                        // Fixed track: exact size per CSS Grid spec
                         rowHeights[r] = explicitRowTracks[r];
+                    }
                 }
             }
 
@@ -1475,11 +1631,365 @@ namespace Rend.Layout.Internal
                 parent.AddChild(item.Box);
             }
 
-            // [CSS-GRID §9] TODO: Position abspos items with grid placement within
-            // their grid areas. Currently uses full grid as containing block.
-            // Needs careful handling of partial placement (only row or only column set),
-            // negative line numbers, and auto margins within grid areas.
+            // [CSS-GRID §9] Position abspos items with grid placement within their
+            // grid areas. These were deferred until track sizing completed because
+            // they need grid area coordinates but must not participate in track sizing.
+            PositionAbsposGridItems(absposGridItems, parent, context, style,
+                colWidths, rowHeights, finalCols, finalRows,
+                effectiveColGap, effectiveRowGap,
+                justifyContentOffset, alignContentOffset,
+                containerWidth, containerHeight, explicitCols, explicitRows);
         }
+        /// <summary>
+        /// [CSS-GRID §9] Position absolutely positioned grid items with explicit grid
+        /// placement within their grid areas. The grid area serves as the containing
+        /// block for CSS positioning (top/left/right/bottom offsets).
+        /// </summary>
+        private static void PositionAbsposGridItems(
+            List<GridItem> absposGridItems, LayoutBox parent, LayoutContext context,
+            ComputedStyle containerStyle,
+            float[] colWidths, float[] rowHeights, int finalCols, int finalRows,
+            float effectiveColGap, float effectiveRowGap,
+            float justifyContentOffset, float alignContentOffset,
+            float containerWidth, float containerHeight,
+            int explicitCols, int explicitRows)
+        {
+            if (absposGridItems.Count == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < absposGridItems.Count; i++)
+            {
+                var item = absposGridItems[i];
+                if (item.StyledElement == null)
+                {
+                    continue;
+                }
+
+                // Compute the grid area rectangle for this abspos item.
+                // Per CSS Grid §9, each axis independently:
+                //   - If start line is explicit → area starts at that grid line
+                //   - If start line is auto → area starts at padding edge (line 0)
+                //   - If end line is explicit → area ends at that grid line
+                //   - If end line is auto → area ends at padding edge (last line)
+                var gridArea = ComputeAbsposGridArea(item, parent,
+                    colWidths, rowHeights, finalCols, finalRows,
+                    effectiveColGap, effectiveRowGap,
+                    justifyContentOffset, alignContentOffset,
+                    containerWidth, containerHeight, explicitCols, explicitRows);
+
+                float areaWidth = gridArea.Width;
+                float areaHeight = gridArea.Height;
+
+                // Lay out the abspos item using the grid area as containing block.
+                var posBox = item.Box;
+                BoxModelCalculator.ApplyBoxModel(posBox, item.StyledElement.Style, areaWidth);
+
+                // Isolate float context for abspos grid item layout.
+                var savedFloatCtx = context.FloatContext;
+                context.FloatContext = new FloatContext(0, areaWidth);
+
+                float posWidth;
+                bool widthIsAuto = float.IsNaN(item.StyledElement.Style.Width);
+                if (widthIsAuto)
+                {
+                    // [CSS2 §10.3.7] Auto width on abspos → shrink-to-fit
+                    posBox.ContentRect = new RectF(0, 0, areaWidth, 0);
+                    BlockFormattingContext.LayoutChildren(posBox, context);
+                    posWidth = BlockFormattingContext.GetContentExtent(posBox);
+                    if (posWidth > areaWidth)
+                    {
+                        posWidth = areaWidth;
+                    }
+                    posBox.ClearChildren();
+                }
+                else
+                {
+                    posWidth = DimensionResolver.ResolveWidth(
+                        item.StyledElement.Style, areaWidth, posBox);
+                }
+
+                // Use grid area origin as static position for layout.
+                posBox.ContentRect = new RectF(gridArea.X, gridArea.Y, posWidth, 0);
+                BlockFormattingContext.LayoutChildren(posBox, context);
+
+                float posHeight = DimensionResolver.ResolveHeight(
+                    item.StyledElement.Style, areaHeight, posBox);
+                if (float.IsNaN(posHeight))
+                {
+                    posHeight = BlockFormattingContext.CalculateAutoHeight(posBox);
+                }
+
+                // [CSS-GRID §9] Apply alignment to the abspos item's static position.
+                // The static position respects align-items/align-self and justify-items/justify-self.
+                float outerWidth = posWidth + posBox.PaddingLeft + posBox.PaddingRight
+                    + posBox.BorderLeftWidth + posBox.BorderRightWidth
+                    + posBox.MarginLeft + posBox.MarginRight;
+                float outerHeight = posHeight + posBox.PaddingTop + posBox.PaddingBottom
+                    + posBox.BorderTopWidth + posBox.BorderBottomWidth
+                    + posBox.MarginTop + posBox.MarginBottom;
+
+                float staticX = gridArea.X;
+                float staticY = gridArea.Y;
+
+                CssAlignItems justifySelf = item.StyledElement.Style.JustifySelf;
+                if (justifySelf == CssAlignItems.Normal || (int)justifySelf > (int)CssAlignItems.Normal)
+                {
+                    justifySelf = containerStyle.JustifyItems;
+                }
+                float freeH = areaWidth - outerWidth;
+                if (freeH > 0)
+                {
+                    if (justifySelf == CssAlignItems.Center)
+                    {
+                        staticX += freeH / 2f;
+                    }
+                    else if (justifySelf == CssAlignItems.End || justifySelf == CssAlignItems.FlexEnd)
+                    {
+                        staticX += freeH;
+                    }
+                }
+
+                CssAlignItems alignSelf = item.StyledElement.Style.AlignSelf;
+                if (alignSelf == CssAlignItems.Normal || (int)alignSelf > (int)CssAlignItems.Normal)
+                {
+                    alignSelf = containerStyle.AlignItems;
+                }
+                float freeV = areaHeight - outerHeight;
+                if (freeV > 0)
+                {
+                    if (alignSelf == CssAlignItems.Center)
+                    {
+                        staticY += freeV / 2f;
+                    }
+                    else if (alignSelf == CssAlignItems.End || alignSelf == CssAlignItems.FlexEnd
+                             )
+                    {
+                        staticY += freeV;
+                    }
+                }
+
+                posBox.ContentRect = new RectF(staticX, staticY, posWidth, posHeight);
+
+                // Restore float context after layout.
+                context.FloatContext = savedFloatCtx;
+
+                // Store the grid area as the containing block for PositionedLayout.
+                // ApplyAbsolute will use this instead of the grid container's padding rect.
+                posBox.GridAreaContainingBlock = gridArea;
+
+                parent.AddChild(posBox);
+            }
+        }
+
+        /// <summary>
+        /// [CSS-GRID §9] Compute the grid area rectangle for an abspos item.
+        /// Auto lines map to the grid container's padding edge (not content edge).
+        /// Explicit lines map to the grid line position within the content area.
+        /// </summary>
+        private static RectF ComputeAbsposGridArea(
+            GridItem item, LayoutBox parent,
+            float[] colWidths, float[] rowHeights, int finalCols, int finalRows,
+            float effectiveColGap, float effectiveRowGap,
+            float justifyContentOffset, float alignContentOffset,
+            float containerWidth, float containerHeight,
+            int explicitCols, int explicitRows)
+        {
+            float contentX = parent.ContentRect.X;
+            float contentY = parent.ContentRect.Y;
+
+            // [CSS-GRID §9] Auto lines resolve to the padding edge of the grid
+            // container. The padding edge is the boundary between the grid's
+            // padding and its border — i.e., the outer edge of the padding area.
+            float paddingEdgeLeft = contentX - parent.PaddingLeft;
+            float paddingEdgeTop = contentY - parent.PaddingTop;
+            float paddingEdgeRight = contentX + containerWidth + parent.PaddingRight;
+            float paddingEdgeBottom = contentY + containerHeight + parent.PaddingBottom;
+
+            // Determine column start/end lines for the containing block.
+            // -1 means "auto" → maps to padding edge of grid container.
+            // [CSS-GRID §9.2] For abspos items, a bare span or auto on the end side
+            // is treated as auto (padding edge). Only explicit line numbers count.
+            int colStartLine = item.ColStart;
+            int colEndLine;
+
+            if (colStartLine >= 0 && item.IsColEndExplicitLine)
+            {
+                // Both start and end are explicit lines
+                colEndLine = colStartLine + item.ColSpan;
+            }
+            else if (colStartLine >= 0)
+            {
+                // Explicit start, but end is span or auto → end is auto (padding edge)
+                colEndLine = -1;
+            }
+            else if (item.ExplicitColEnd >= 0)
+            {
+                // Auto start, explicit end
+                colEndLine = item.ExplicitColEnd;
+            }
+            else if (item.RawColEnd != 0)
+            {
+                // Resolve negative end line. If out of range (< 0), treat as auto.
+                int resolved = ResolveNegativeLine(item.RawColEnd, Math.Max(1, explicitCols));
+                colEndLine = resolved >= 0 ? resolved : -1;
+            }
+            else
+            {
+                // Both auto: padding edge to padding edge
+                colStartLine = -1;
+                colEndLine = -1;
+            }
+
+            // Determine row start/end lines
+            int rowStartLine = item.RowStart;
+            int rowEndLine;
+
+            if (rowStartLine >= 0 && item.IsRowEndExplicitLine)
+            {
+                rowEndLine = rowStartLine + item.RowSpan;
+            }
+            else if (rowStartLine >= 0)
+            {
+                rowEndLine = -1;
+            }
+            else if (item.ExplicitRowEnd >= 0)
+            {
+                rowEndLine = item.ExplicitRowEnd;
+            }
+            else if (item.RawRowEnd != 0)
+            {
+                int resolved = ResolveNegativeLine(item.RawRowEnd, Math.Max(1, explicitRows));
+                rowEndLine = resolved >= 0 ? resolved : -1;
+            }
+            else
+            {
+                rowStartLine = -1;
+                rowEndLine = -1;
+            }
+
+            // [CSS-GRID §9] If a grid line is beyond the implicit grid,
+            // treat it as auto (padding edge). Grid lines range from 0 to
+            // finalCols/finalRows (inclusive). Line finalCols is the right/bottom
+            // edge of the last track.
+            if (colStartLine > finalCols)
+            {
+                colStartLine = -1;
+            }
+            if (colEndLine > finalCols)
+            {
+                colEndLine = -1;
+            }
+            if (rowStartLine > finalRows)
+            {
+                rowStartLine = -1;
+            }
+            if (rowEndLine > finalRows)
+            {
+                rowEndLine = -1;
+            }
+
+            // Compute X coordinates
+            float areaX;
+            float areaWidth;
+
+            if (colStartLine < 0 && colEndLine < 0)
+            {
+                // Both auto: padding edge to padding edge
+                areaX = paddingEdgeLeft;
+                areaWidth = paddingEdgeRight - paddingEdgeLeft;
+            }
+            else
+            {
+                // Compute start X: position of the start grid line
+                if (colStartLine >= 0)
+                {
+                    areaX = contentX + justifyContentOffset;
+                    for (int c = 0; c < colStartLine && c < finalCols; c++)
+                    {
+                        areaX += colWidths[c] + effectiveColGap;
+                    }
+                }
+                else
+                {
+                    // Auto start: padding edge
+                    areaX = paddingEdgeLeft;
+                }
+
+                // Compute end X: position of the end grid line
+                float areaEndX;
+                if (colEndLine >= 0)
+                {
+                    areaEndX = contentX + justifyContentOffset;
+                    int clampedEnd = Math.Min(colEndLine, finalCols);
+                    for (int c = 0; c < clampedEnd; c++)
+                    {
+                        areaEndX += colWidths[c];
+                        if (c < clampedEnd - 1)
+                        {
+                            areaEndX += effectiveColGap;
+                        }
+                    }
+                }
+                else
+                {
+                    // Auto end: padding edge
+                    areaEndX = paddingEdgeRight;
+                }
+
+                areaWidth = Math.Max(0, areaEndX - areaX);
+            }
+
+            // Compute Y coordinates
+            float areaY;
+            float areaHeight;
+
+            if (rowStartLine < 0 && rowEndLine < 0)
+            {
+                areaY = paddingEdgeTop;
+                areaHeight = paddingEdgeBottom - paddingEdgeTop;
+            }
+            else
+            {
+                if (rowStartLine >= 0)
+                {
+                    areaY = contentY + alignContentOffset;
+                    for (int r = 0; r < rowStartLine && r < finalRows; r++)
+                    {
+                        areaY += rowHeights[r] + effectiveRowGap;
+                    }
+                }
+                else
+                {
+                    areaY = paddingEdgeTop;
+                }
+
+                float areaEndY;
+                if (rowEndLine >= 0)
+                {
+                    areaEndY = contentY + alignContentOffset;
+                    int clampedEnd = Math.Min(rowEndLine, finalRows);
+                    for (int r = 0; r < clampedEnd; r++)
+                    {
+                        areaEndY += rowHeights[r];
+                        if (r < clampedEnd - 1)
+                        {
+                            areaEndY += effectiveRowGap;
+                        }
+                    }
+                }
+                else
+                {
+                    areaEndY = paddingEdgeBottom;
+                }
+
+                areaHeight = Math.Max(0, areaEndY - areaY);
+            }
+
+            return new RectF(areaX, areaY, areaWidth, areaHeight);
+        }
+
         private static float[] BuildTrackSizes(float[]? explicitTracks, int count, float containerSize,
             float gap, object? autoTrackRaw, float defaultSize)
         {
@@ -1543,36 +2053,66 @@ namespace Rend.Layout.Internal
             item.RowSpan = rowSpan;
 
             int endRowSpan;
-            int rowEnd = ParseLineValue(style.GetRefValue(PropertyId.GridRowEnd), out endRowSpan);
+            var rowEndRaw = style.GetRefValue(PropertyId.GridRowEnd);
+            int rowEnd = ParseLineValue(rowEndRaw, out endRowSpan);
+            bool rowEndIsNegativeLine = rowEnd < 0 && IsNegativeLineNumber(rowEndRaw);
             if (rowEnd >= 0 && item.RowStart >= 0 && rowEnd > item.RowStart)
             {
                 item.RowSpan = rowEnd - item.RowStart;
+                item.IsRowEndExplicitLine = true;
             }
-            else if (rowEnd < 0 && IsNegativeLineNumber(style.GetRefValue(PropertyId.GridRowEnd)))
+            else if (rowEndIsNegativeLine)
             {
                 item.RawRowEnd = rowEnd; // Store for deferred resolution
+                item.IsRowEndExplicitLine = true;
             }
             else if (endRowSpan > 1 && item.RowStart >= 0)
             {
                 item.RowSpan = endRowSpan;
+                // Span, not an explicit line — IsRowEndExplicitLine stays false
+            }
+            else if (rowEnd >= 0)
+            {
+                // Explicit positive end line but start was auto or end <= start
+                item.IsRowEndExplicitLine = true;
+            }
+            // [CSS-GRID §9] Store explicit end line even when start is auto,
+            // needed for abspos containing block with partial placement.
+            if (rowEnd >= 0 && item.RowStart < 0)
+            {
+                item.ExplicitRowEnd = rowEnd;
             }
 
             item.ColStart = ParseLineValue(style.GetRefValue(PropertyId.GridColumnStart), out int colSpan);
             item.ColSpan = colSpan;
 
             int endColSpan;
-            int colEnd = ParseLineValue(style.GetRefValue(PropertyId.GridColumnEnd), out endColSpan);
+            var colEndRaw = style.GetRefValue(PropertyId.GridColumnEnd);
+            int colEnd = ParseLineValue(colEndRaw, out endColSpan);
+            bool colEndIsNegativeLine = colEnd < 0 && IsNegativeLineNumber(colEndRaw);
             if (colEnd >= 0 && item.ColStart >= 0 && colEnd > item.ColStart)
             {
                 item.ColSpan = colEnd - item.ColStart;
+                item.IsColEndExplicitLine = true;
             }
-            else if (colEnd < 0 && IsNegativeLineNumber(style.GetRefValue(PropertyId.GridColumnEnd)))
+            else if (colEndIsNegativeLine)
             {
                 item.RawColEnd = colEnd; // Store for deferred resolution
+                item.IsColEndExplicitLine = true;
             }
             else if (endColSpan > 1 && item.ColStart >= 0)
             {
                 item.ColSpan = endColSpan;
+                // Span, not an explicit line
+            }
+            else if (colEnd >= 0)
+            {
+                item.IsColEndExplicitLine = true;
+            }
+            // [CSS-GRID §9] Store explicit end line even when start is auto.
+            if (colEnd >= 0 && item.ColStart < 0)
+            {
+                item.ExplicitColEnd = colEnd;
             }
         }
 
@@ -3128,10 +3668,32 @@ namespace Rend.Layout.Internal
             public int RawRowEnd { get; set; }
             /// <summary>Raw negative end line (e.g., -1 for last line). 0 = not set.</summary>
             public int RawColEnd { get; set; }
+            /// <summary>Positive end line (0-based) when start is auto. -1 = not set.</summary>
+            public int ExplicitColEnd { get; set; } = -1;
+            /// <summary>Positive end line (0-based) when start is auto. -1 = not set.</summary>
+            public int ExplicitRowEnd { get; set; } = -1;
+            /// <summary>
+            /// [CSS-GRID §9] True when the column end is an explicit line number
+            /// (not auto or span). Needed for abspos items where spans are auto.
+            /// </summary>
+            public bool IsColEndExplicitLine { get; set; }
+            /// <summary>
+            /// [CSS-GRID §9] True when the row end is an explicit line number.
+            /// </summary>
+            public bool IsRowEndExplicitLine { get; set; }
             public bool Placed { get; set; }
             public int Order { get; set; }
             public int OriginalIndex { get; set; }
             public string? AreaName { get; set; }
+
+            /// <summary>
+            /// [CSS-GRID §9] Whether this item has any explicit grid placement
+            /// (grid-column or grid-row set to something other than auto).
+            /// </summary>
+            public bool HasGridPlacement =>
+                ColStart >= 0 || RowStart >= 0 || AreaName != null
+                || RawColEnd != 0 || RawRowEnd != 0
+                || ExplicitColEnd >= 0 || ExplicitRowEnd >= 0;
         }
     }
 }

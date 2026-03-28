@@ -219,10 +219,20 @@ namespace Rend.Output.Image
                         }
 
                         // Extract the text substring for this range.
+                        // For bidi text, cluster values may not be monotonically increasing
+                        // (RTL segments have descending clusters), so we must handle both orders.
                         int textStart = (int)glyphs[rangeStart].Cluster;
                         int textEnd = rangeEnd < count
                             ? (int)glyphs[rangeEnd].Cluster
                             : text.Length;
+                        if (textEnd < textStart)
+                        {
+                            int tmp = textStart;
+                            textStart = textEnd;
+                            textEnd = tmp;
+                        }
+                        textStart = Math.Max(0, Math.Min(textStart, text.Length));
+                        textEnd = Math.Max(textStart, Math.Min(textEnd, text.Length));
                         string subText = text.Substring(textStart, textEnd - textStart);
 
                         // Shape the substring with the fallback font.

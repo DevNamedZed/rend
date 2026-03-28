@@ -47,7 +47,8 @@ namespace Rend.Html.Parser.Internal
             "Kappa",      // 26
             "Lambda",     // 27
             "Mu",         // 28
-            "Ntilde",     // 29
+            "NewLine",    // 29
+            "Ntilde",     // 30
             "Nu",         // 30
             "OElig",      // 31
             "Oacute",     // 32
@@ -66,8 +67,9 @@ namespace Rend.Html.Parser.Internal
             "Scaron",     // 45
             "Sigma",      // 46
             "THORN",      // 47
-            "Tau",        // 48
-            "Theta",      // 49
+            "Tab",        // 48
+            "Tau",        // 49
+            "Theta",      // 50
             "Uacute",     // 50
             "Ucirc",      // 51
             "Ugrave",     // 52
@@ -303,6 +305,7 @@ namespace Rend.Html.Parser.Internal
             0x039A, // Kappa
             0x039B, // Lambda
             0x039C, // Mu
+            0x000A, // NewLine
             0x00D1, // Ntilde
             0x039D, // Nu
             0x0152, // OElig
@@ -322,6 +325,7 @@ namespace Rend.Html.Parser.Internal
             0x0160, // Scaron
             0x03A3, // Sigma
             0x00DE, // THORN
+            0x0009, // Tab
             0x03A4, // Tau
             0x0398, // Theta
             0x00DA, // Uacute

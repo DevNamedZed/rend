@@ -1,3 +1,5 @@
+using System;
+
 namespace Rend.Css
 {
     /// <summary>
@@ -25,6 +27,13 @@ namespace Rend.Css
 
         /// <summary>Whether the user prefers reduced motion. Default: true (static output).</summary>
         public bool PrefersReducedMotion { get; set; } = true;
+
+        /// <summary>
+        /// [CSS-VALUES-4 §6.1] Callback to measure the advance width of a character
+        /// for font-relative units (ch). Arguments: (fontFamilies[], fontSize, codePoint).
+        /// Returns the advance width in px. When null, ch falls back to 0.5em approximation.
+        /// </summary>
+        public Func<string[], float, int, float>? MeasureCharWidth { get; set; }
 
         /// <summary>Default options.</summary>
         public static readonly StyleResolverOptions Default = new StyleResolverOptions();

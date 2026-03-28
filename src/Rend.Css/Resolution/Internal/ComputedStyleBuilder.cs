@@ -26,10 +26,13 @@ namespace Rend.Css.Resolution.Internal
     internal sealed class ComputedStyleBuilder
     {
         private readonly CssResolutionContext _ctx;
+        private readonly System.Func<string[], float, int, float>? _measureCharWidth;
 
-        public ComputedStyleBuilder(CssResolutionContext ctx)
+        public ComputedStyleBuilder(CssResolutionContext ctx,
+            System.Func<string[], float, int, float>? measureCharWidth = null)
         {
             _ctx = ctx;
+            _measureCharWidth = measureCharWidth;
         }
 
         /// <summary>
@@ -107,7 +110,40 @@ namespace Rend.Css.Resolution.Internal
                 }
             }
 
-            // 3. Apply winning declarations (all properties except font-size).
+            // 2b. [CSS-VALUES-4 §6.1] Resolve font-family early so ch unit can use
+            //     the actual "0" glyph advance width instead of the 0.5em approximation.
+            if (_measureCharWidth != null && winners.TryGetValue("font-family", out var fontFamilyDecl))
+            {
+                var ffProp = PropertyRegistry.GetByName("font-family");
+                if (ffProp != null)
+                {
+                    var ffValue = fontFamilyDecl.Declaration.Value;
+                    var ffSub = SubstituteVar(ffValue, customProperties);
+                    if (!(ffSub is GuaranteedInvalidValue)
+                        && ValueResolver.TryResolve(ffSub, ffProp, resolvedCtx, out var ffPv, out var ffRef))
+                    {
+                        if (!ffPv.IsSet && ffRef != null) { ffPv.IsSet = true; }
+                        values[ffProp.Id] = ffPv;
+                        refValues[ffProp.Id] = ffRef;
+                        if (ffRef is string[] fontFamilies)
+                        {
+                            float chWidth = _measureCharWidth(fontFamilies, resolvedCtx.FontSize, 0x0030);
+                            if (chWidth > 0)
+                            {
+                                resolvedCtx = new CssResolutionContext(
+                                    resolvedCtx.FontSize,
+                                    resolvedCtx.RootFontSize,
+                                    resolvedCtx.ViewportWidth,
+                                    resolvedCtx.ViewportHeight,
+                                    resolvedCtx.PercentBase,
+                                    chWidth);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Apply winning declarations (all properties except font-size and font-family).
             foreach (var kvp in winners)
             {
                 // Skip custom properties (already collected).
@@ -118,6 +154,13 @@ namespace Rend.Css.Resolution.Internal
 
                 // Skip font-size (already resolved above).
                 if (kvp.Key == "font-size")
+                {
+                    continue;
+                }
+
+                // Skip font-family if already resolved early for ch width.
+                if (kvp.Key == "font-family" && _measureCharWidth != null
+                    && refValues[PropertyId.FontFamily] != null)
                 {
                     continue;
                 }

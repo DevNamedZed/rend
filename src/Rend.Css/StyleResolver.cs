@@ -109,7 +109,7 @@ namespace Rend.Css
                 _options.ViewportHeight,
                 _options.ViewportWidth); // PercentBase: viewport width for percentage resolution
 
-            var builder = new ComputedStyleBuilder(ctx);
+            var builder = new ComputedStyleBuilder(ctx, _options.MeasureCharWidth);
             var computed = builder.Build(winners, parentStyle);
 
             // [CSS-VALUES §6.1] Track root element's computed font-size for rem resolution.
@@ -169,7 +169,7 @@ namespace Rend.Css
                 _options.ViewportHeight,
                 _options.ViewportWidth); // PercentBase: viewport width for percentage resolution
 
-            var builder = new ComputedStyleBuilder(ctx);
+            var builder = new ComputedStyleBuilder(ctx, _options.MeasureCharWidth);
             return builder.Build(winners, elementStyle);
         }
 
@@ -187,6 +187,14 @@ namespace Rend.Css
                 if (dirLower == "ltr" || dirLower == "rtl")
                 {
                     var decl = new CssDeclaration("direction", new CssKeywordValue(dirLower));
+                    var priority = new CascadePriority(CascadeOrigin.Author, false, CssSpecificity.Zero, -1);
+                    declarations.Add(new CascadedDeclaration(decl, priority));
+                }
+                else if (dirLower == "auto")
+                {
+                    // [HTML §3.2.6.5] dir=auto: detect from first strong directional character
+                    string resolved = DetectDirectionFromContent(element);
+                    var decl = new CssDeclaration("direction", new CssKeywordValue(resolved));
                     var priority = new CascadePriority(CascadeOrigin.Author, false, CssSpecificity.Zero, -1);
                     declarations.Add(new CascadedDeclaration(decl, priority));
                 }

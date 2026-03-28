@@ -77,7 +77,11 @@ namespace Rend
                 DefaultFontSize = _options.DefaultFontSize,
                 ApplyUserAgentStyles = true,
                 PrefersColorSchemeDark = _options.PrefersColorSchemeDark,
-                PrefersReducedMotion = true
+                PrefersReducedMotion = true,
+                MeasureCharWidth = (families, fontSize, codePoint) =>
+                    fontProvider.MeasureCharWidth(
+                        new Fonts.FontDescriptor(families),
+                        codePoint, fontSize)
             };
             var styleResolver = new StyleResolver(selectorMatcher, resolverOptions);
 
@@ -236,7 +240,11 @@ namespace Rend
                 DefaultFontSize = _options.DefaultFontSize,
                 ApplyUserAgentStyles = true,
                 PrefersColorSchemeDark = _options.PrefersColorSchemeDark,
-                PrefersReducedMotion = true
+                PrefersReducedMotion = true,
+                MeasureCharWidth = (families, fontSize, codePoint) =>
+                    fontProvider.MeasureCharWidth(
+                        new Fonts.FontDescriptor(families),
+                        codePoint, fontSize)
             };
             var styleResolver = new StyleResolver(selectorMatcher, resolverOptions);
 

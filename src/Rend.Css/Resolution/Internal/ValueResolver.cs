@@ -1448,6 +1448,9 @@ namespace Rend.Css.Resolution.Internal
                 case "rem": return CssLengthUnit.Rem;
                 case "ex": return CssLengthUnit.Ex;
                 case "ch": return CssLengthUnit.Ch;
+                case "ic": return CssLengthUnit.Ic;
+                case "lh": return CssLengthUnit.Lh;
+                case "rlh": return CssLengthUnit.Rlh;
                 case "pt": return CssLengthUnit.Pt;
                 case "pc": return CssLengthUnit.Pc;
                 case "cm": return CssLengthUnit.Cm;

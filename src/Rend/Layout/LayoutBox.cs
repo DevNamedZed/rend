@@ -111,6 +111,14 @@ namespace Rend.Layout
         internal bool CollapsedBorderCell { get; set; }
 
         /// <summary>
+        /// [CSS-GRID §9] For absolutely positioned grid items with grid placement,
+        /// the containing block is the grid area (not the grid container padding box).
+        /// When set, PositionedLayout.ApplyAbsolute uses this rectangle instead of
+        /// the containing block's PaddingRect.
+        /// </summary>
+        internal RectF? GridAreaContainingBlock { get; set; }
+
+        /// <summary>
         /// Resolved collapsed border colors (CSS 2.1 §17.6.2 priority).
         /// When set, the painter uses these instead of the cell's own border colors.
         /// </summary>
