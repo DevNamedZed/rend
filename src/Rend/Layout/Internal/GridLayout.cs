@@ -47,6 +47,14 @@ namespace Rend.Layout.Internal
             }
             if (float.IsNaN(colGap) || colGap < 0) { colGap = 0; }
 
+            // Read grid-template raw values and extract line names early (before item loop).
+            var colRaw = style.GetRefValue(PropertyId.GridTemplateColumns);
+            var rowRaw = style.GetRefValue(PropertyId.GridTemplateRows);
+            var colLineNames = new Dictionary<string, List<int>>();
+            var rowLineNames = new Dictionary<string, List<int>>();
+            ExtractLineNames(colRaw, colLineNames);
+            ExtractLineNames(rowRaw, rowLineNames);
+
             // Collect grid items with placement info.
             // [CSS-GRID §9] Abspos items with grid placement are collected separately;
             // they must NOT participate in track sizing or create implicit tracks.
@@ -253,7 +261,7 @@ namespace Rend.Layout.Internal
                     Order = childEl.Style.Order,
                     OriginalIndex = items.Count
                 };
-                ParsePlacement(childEl.Style, item);
+                ParsePlacement(childEl.Style, item, colLineNames, rowLineNames);
                 items.Add(item);
             }
 
@@ -271,8 +279,6 @@ namespace Rend.Layout.Internal
 
             // Detect CSS Subgrid: if grid-template-columns or grid-template-rows is "subgrid",
             // inherit track sizes from the parent grid for the lines this item spans.
-            var colRaw = style.GetRefValue(PropertyId.GridTemplateColumns);
-            var rowRaw = style.GetRefValue(PropertyId.GridTemplateRows);
             bool isSubgridCols = IsSubgrid(colRaw);
             bool isSubgridRows = IsSubgrid(rowRaw);
 
@@ -308,10 +314,10 @@ namespace Rend.Layout.Internal
             // Resolve explicit tracks (use subgrid tracks if the axis is subgridded)
             var explicitColTracks = isSubgridCols && subgridColTracks != null
                 ? subgridColTracks
-                : ResolveTrackList(colRaw, containerWidth, colGap);
+                : ResolveTrackList(colRaw, containerWidth, colGap, colLineNames);
             var explicitRowTracks = isSubgridRows && subgridRowTracks != null
                 ? subgridRowTracks
-                : ResolveTrackList(rowRaw, containerHeight, rowGap);
+                : ResolveTrackList(rowRaw, containerHeight, rowGap, rowLineNames);
 
             int explicitCols = explicitColTracks?.Length ?? 0;
             int explicitRows = explicitRowTracks?.Length ?? 0;
@@ -2038,23 +2044,31 @@ namespace Rend.Layout.Internal
             return sizes;
         }
 
-        private static void ParsePlacement(ComputedStyle style, GridItem item)
+        private static void ParsePlacement(ComputedStyle style, GridItem item,
+            Dictionary<string, List<int>>? colLineNames = null,
+            Dictionary<string, List<int>>? rowLineNames = null)
         {
             // Check if grid-row-start is a plain identifier (named area from grid-area shorthand)
             var rowStartRaw = style.GetRefValue(PropertyId.GridRowStart);
             if (rowStartRaw is CssKeywordValue areaKw && areaKw.Keyword != "auto" && areaKw.Keyword != "span")
             {
-                // This is a named area reference (e.g., grid-area: header)
-                item.AreaName = areaKw.Keyword;
-                return;
+                // Check if it's a named LINE (not area) by looking in line name maps
+                bool isNamedLine = (rowLineNames != null && rowLineNames.ContainsKey(areaKw.Keyword))
+                    || (colLineNames != null && colLineNames.ContainsKey(areaKw.Keyword));
+                if (!isNamedLine)
+                {
+                    // This is a named area reference (e.g., grid-area: header)
+                    item.AreaName = areaKw.Keyword;
+                    return;
+                }
             }
 
-            item.RowStart = ParseLineValue(rowStartRaw, out int rowSpan);
+            item.RowStart = ParseLineValue(rowStartRaw, out int rowSpan, rowLineNames);
             item.RowSpan = rowSpan;
 
             int endRowSpan;
             var rowEndRaw = style.GetRefValue(PropertyId.GridRowEnd);
-            int rowEnd = ParseLineValue(rowEndRaw, out endRowSpan);
+            int rowEnd = ParseLineValue(rowEndRaw, out endRowSpan, rowLineNames);
             bool rowEndIsNegativeLine = rowEnd < 0 && IsNegativeLineNumber(rowEndRaw);
             if (rowEnd >= 0 && item.RowStart >= 0 && rowEnd > item.RowStart)
             {
@@ -2083,12 +2097,12 @@ namespace Rend.Layout.Internal
                 item.ExplicitRowEnd = rowEnd;
             }
 
-            item.ColStart = ParseLineValue(style.GetRefValue(PropertyId.GridColumnStart), out int colSpan);
+            item.ColStart = ParseLineValue(style.GetRefValue(PropertyId.GridColumnStart), out int colSpan, colLineNames);
             item.ColSpan = colSpan;
 
             int endColSpan;
             var colEndRaw = style.GetRefValue(PropertyId.GridColumnEnd);
-            int colEnd = ParseLineValue(colEndRaw, out endColSpan);
+            int colEnd = ParseLineValue(colEndRaw, out endColSpan, colLineNames);
             bool colEndIsNegativeLine = colEnd < 0 && IsNegativeLineNumber(colEndRaw);
             if (colEnd >= 0 && item.ColStart >= 0 && colEnd > item.ColStart)
             {
@@ -2122,7 +2136,8 @@ namespace Rend.Layout.Internal
         /// Negative line numbers are stored as negative values (resolved later with grid size).
         /// Sets span to > 1 when "span N" is used.
         /// </summary>
-        private static int ParseLineValue(object? raw, out int span)
+        private static int ParseLineValue(object? raw, out int span,
+            Dictionary<string, List<int>>? lineNames = null)
         {
             span = 1;
             if (raw == null) return -1;
@@ -2131,6 +2146,11 @@ namespace Rend.Layout.Internal
             {
                 if (kw.Keyword == "auto") return -1;
                 if (kw.Keyword == "span") return -1;
+                // [CSS-GRID §8.3] Named line reference: grid-column: header-start
+                if (lineNames != null && lineNames.TryGetValue(kw.Keyword, out var indices) && indices.Count > 0)
+                {
+                    return indices[0]; // use first matching line
+                }
             }
 
             if (raw is CssNumberValue num)
@@ -2363,19 +2383,45 @@ namespace Rend.Layout.Internal
         /// Supports: px values, percentages, fr units, repeat(count, size).
         /// Returns null for "none" or missing values.
         /// </summary>
-        internal static float[]? ResolveTrackList(object? raw, float containerSize, float gap = 0)
+        internal static float[]? ResolveTrackList(object? raw, float containerSize, float gap = 0,
+            Dictionary<string, List<int>>? lineNames = null)
         {
             if (raw == null) return null;
             if (raw is CssKeywordValue kw && (kw.Keyword == "none" || kw.Keyword == "auto" || kw.Keyword == "subgrid"))
                 return null;
 
             // Flatten into a list of individual track values (expanding repeat())
+            // Line name brackets [name] are extracted and mapped to line indices.
             var flatValues = new List<object>();
             if (raw is CssListValue list)
             {
                 for (int i = 0; i < list.Values.Count; i++)
                 {
-                    FlattenTrackValue(list.Values[i], flatValues, containerSize, gap);
+                    var val = list.Values[i];
+                    // [CSS-GRID §7.1] Line name brackets: [name1 name2]
+                    if (val is CssListValue bracket && bracket.Separator == ' '
+                        && bracket.Values.Count > 0 && bracket.Values[0] is CssKeywordValue)
+                    {
+                        // This might be a line name bracket — check if ALL items are keywords
+                        bool allKeywords = true;
+                        for (int bi = 0; bi < bracket.Values.Count; bi++)
+                        {
+                            if (!(bracket.Values[bi] is CssKeywordValue)) { allKeywords = false; break; }
+                        }
+                        if (allKeywords && lineNames != null)
+                        {
+                            int lineIdx = flatValues.Count; // line before next track
+                            for (int bi = 0; bi < bracket.Values.Count; bi++)
+                            {
+                                string name = ((CssKeywordValue)bracket.Values[bi]).Keyword;
+                                if (!lineNames.ContainsKey(name))
+                                    lineNames[name] = new List<int>();
+                                lineNames[name].Add(lineIdx);
+                            }
+                            continue; // don't add to flatValues — it's a line name, not a track
+                        }
+                    }
+                    FlattenTrackValue(val, flatValues, containerSize, gap);
                 }
             }
             else
@@ -2496,6 +2542,74 @@ namespace Rend.Layout.Internal
         /// <summary>
         /// [CSS-GRID-1 §7.2.3.1] Checks if auto-fit repeat includes a flexible (fr) track max.
         /// </summary>
+        /// <summary>
+        /// Extracts named line mappings from grid-template-columns/rows raw values.
+        /// Named lines appear as [name] brackets between track sizes.
+        /// The CSS parser represents [name] as a CssListValue inside the track list.
+        /// </summary>
+        private static void ExtractLineNames(object? raw, Dictionary<string, List<int>> lineNames)
+        {
+            if (raw == null) return;
+            if (!(raw is CssListValue list)) return;
+
+            int trackIndex = 0;
+            for (int i = 0; i < list.Values.Count; i++)
+            {
+                var val = list.Values[i];
+
+                // Track-sizing values increment the track index
+                if (val is CssDimensionValue || val is CssNumberValue ||
+                    val is CssPercentageValue || val is CssFunctionValue)
+                {
+                    trackIndex++;
+                    continue;
+                }
+
+                // Keywords that are track sizes
+                if (val is CssKeywordValue kw)
+                {
+                    if (kw.Keyword == "auto" || kw.Keyword == "min-content" ||
+                        kw.Keyword == "max-content" || kw.Keyword == "fit-content")
+                    {
+                        trackIndex++;
+                        continue;
+                    }
+                    // Skip non-track keywords (none, subgrid, etc.)
+                    continue;
+                }
+
+                // Space-separated sub-list might be line names or a bracketed group
+                if (val is CssListValue subList && subList.Separator == ' ')
+                {
+                    // Check if all items are keywords (likely line names)
+                    bool allKw = true;
+                    for (int j = 0; j < subList.Values.Count; j++)
+                    {
+                        if (!(subList.Values[j] is CssKeywordValue)) { allKw = false; break; }
+                    }
+                    if (allKw)
+                    {
+                        for (int j = 0; j < subList.Values.Count; j++)
+                        {
+                            string name = ((CssKeywordValue)subList.Values[j]).Keyword;
+                            if (!lineNames.ContainsKey(name))
+                                lineNames[name] = new List<int>();
+                            lineNames[name].Add(trackIndex);
+                        }
+                    }
+                    else
+                    {
+                        // Mixed list — probably contains track values, count them
+                        for (int j = 0; j < subList.Values.Count; j++)
+                        {
+                            if (subList.Values[j] is CssDimensionValue || subList.Values[j] is CssFunctionValue)
+                                trackIndex++;
+                        }
+                    }
+                }
+            }
+        }
+
         private static bool HasAutoFitFr(object? raw)
         {
             if (raw is CssFunctionValue fn && fn.Name == "repeat" && fn.Arguments.Count >= 2)
@@ -3028,6 +3142,9 @@ namespace Rend.Layout.Internal
             }
 
             var colRaw = style.GetRefValue(PropertyId.GridTemplateColumns);
+            var colLineNames = new Dictionary<string, List<int>>();
+            var rowLineNames = new Dictionary<string, List<int>>();
+            ExtractLineNames(colRaw, colLineNames);
 
             // [CSS-GRID §12.1] For intrinsic sizing, auto-fill/auto-fit produce 1 repetition.
             // Flatten track definitions with intrinsic-mode flag.
@@ -3136,7 +3253,7 @@ namespace Rend.Layout.Internal
                     Order = childEl.Style.Order,
                     OriginalIndex = items.Count
                 };
-                ParsePlacement(childEl.Style, item);
+                ParsePlacement(childEl.Style, item, colLineNames, rowLineNames);
                 items.Add(item);
             }
 

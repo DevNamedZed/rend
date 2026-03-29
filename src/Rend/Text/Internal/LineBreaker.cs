@@ -28,9 +28,11 @@ namespace Rend.Text.Internal
         /// </summary>
         /// <param name="text">The input text.</param>
         /// <param name="lineBreak">The CSS line-break property value.</param>
+        /// <param name="breakSpaces">When true, every space is a wrapping opportunity (CSS break-spaces).</param>
         /// <returns>Array of break opportunities between adjacent characters.</returns>
         public LineBreakOpportunity[] FindBreaks(string text,
-            Css.CssLineBreak lineBreak = Css.CssLineBreak.Auto)
+            Css.CssLineBreak lineBreak = Css.CssLineBreak.Auto,
+            bool breakSpaces = false)
         {
             if (text == null) throw new ArgumentNullException(nameof(text));
 
@@ -129,13 +131,19 @@ namespace Rend.Text.Internal
                     continue;
                 }
 
-                // Rule: Break after spaces (unless next is start of line or special).
+                // Rule: Break after spaces.
                 if (current == ' ' || current == '\t' ||
                     IsUnicodeSpace(current))
                 {
-                    // Allow break after space before non-space.
-                    if (!IsUnicodeSpace(next) && next != ' ')
+                    // [CSS-TEXT-3 §4.1.3] break-spaces: every preserved space is
+                    // a wrapping opportunity — mark Allowed after EVERY space.
+                    if (breakSpaces)
                     {
+                        result[i] = LineBreakOpportunity.Allowed;
+                    }
+                    else if (!IsUnicodeSpace(next) && next != ' ')
+                    {
+                        // Normal: allow break after space before non-space only.
                         result[i] = LineBreakOpportunity.Allowed;
                     }
                     continue;
@@ -175,6 +183,22 @@ namespace Rend.Text.Internal
                         continue;
                     }
 
+                    // [CSS-TEXT-3 §5.3] line-break: strict — forbid breaks before
+                    // small kana, prolonged sound mark, and iteration marks.
+                    if (lineBreak == Css.CssLineBreak.Strict && IsSmallKanaOrIterationMark(next))
+                    {
+                        result[i] = LineBreakOpportunity.Forbidden;
+                        continue;
+                    }
+
+                    result[i] = LineBreakOpportunity.Allowed;
+                    continue;
+                }
+
+                // [CSS-TEXT-3 §5.3] line-break: loose — allow breaks before certain
+                // CJK mid-sentence punctuation that normal mode forbids.
+                if (lineBreak == Css.CssLineBreak.Loose && IsCjkLooseBreakBefore(next))
+                {
                     result[i] = LineBreakOpportunity.Allowed;
                     continue;
                 }
@@ -199,6 +223,48 @@ namespace Rend.Text.Internal
             return (ch >= 0x3400 && ch <= 0x4DBF) ||
                    (ch >= 0x4E00 && ch <= 0x9FFF) ||
                    (ch >= 0xF900 && ch <= 0xFAFF);
+        }
+
+        /// <summary>
+        /// [CSS-TEXT-3 §5.3] Small kana, prolonged sound mark, and iteration marks.
+        /// In strict mode, line breaks before these characters are forbidden.
+        /// </summary>
+        private static bool IsSmallKanaOrIterationMark(char ch)
+        {
+            // Hiragana small letters
+            if (ch == '\u3041' || ch == '\u3043' || ch == '\u3045' || ch == '\u3047' || ch == '\u3049' ||
+                ch == '\u3063' || ch == '\u3083' || ch == '\u3085' || ch == '\u3087' || ch == '\u308E' ||
+                ch == '\u3095' || ch == '\u3096')
+            {
+                return true;
+            }
+            // Katakana small letters
+            if (ch == '\u30A1' || ch == '\u30A3' || ch == '\u30A5' || ch == '\u30A7' || ch == '\u30A9' ||
+                ch == '\u30C3' || ch == '\u30E3' || ch == '\u30E5' || ch == '\u30E7' || ch == '\u30EE' ||
+                ch == '\u30F5' || ch == '\u30F6')
+            {
+                return true;
+            }
+            // Prolonged sound mark
+            if (ch == '\u30FC') { return true; }
+            // Iteration marks
+            if (ch == '\u3005' || ch == '\u303B' || ch == '\u309D' || ch == '\u309E' ||
+                ch == '\u30FD' || ch == '\u30FE')
+            {
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// [CSS-TEXT-3 §5.3] In loose mode, breaks before these CJK punctuation are allowed.
+        /// </summary>
+        private static bool IsCjkLooseBreakBefore(char ch)
+        {
+            return ch == '\u30FB' || // katakana middle dot
+                   ch == '\u3005' || // ideographic iteration mark
+                   ch == '\u301C' || // wave dash
+                   ch == '\u30A0';   // katakana-hiragana double hyphen
         }
     }
 }

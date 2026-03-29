@@ -111,8 +111,13 @@ namespace Rend.Layout.Internal
             // determined by the aspect-ratio (not explicitly set).
             {
                 float arRatio = ParseAspectRatio(style);
-                bool isAutoWidthWithKnownCbh = float.IsNaN(style.Width) && !float.IsNaN(containingBlockHeight);
-                if (arRatio > 0 && float.IsNaN(style.Height) && isAutoWidthWithKnownCbh)
+                // [CSS-SIZING-4 §5.2] Transfer min/max-height through aspect-ratio
+                // even when containing block height is indefinite, as long as
+                // min/max-height values are absolute (not percentage).
+                // Height is auto, or a percentage that can't resolve (indefinite CB)
+                bool heightIsIndefinite = float.IsNaN(style.Height)
+                    || (DeferredPercent.IsEncoded(style.Height) && float.IsNaN(containingBlockHeight));
+                if (arRatio > 0 && float.IsNaN(style.Width) && heightIsIndefinite)
                 {
                     float maxH = ResolvePercentHeight(style.MaxHeight, containingBlockHeight);
                     if (!float.IsNaN(maxH) && maxH >= 0)

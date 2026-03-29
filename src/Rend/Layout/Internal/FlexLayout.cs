@@ -336,8 +336,22 @@ namespace Rend.Layout.Internal
                 // For auto-sized column containers (no definite height), justify-content
                 // has no effect since there's no definite free space.
                 var effectiveJustify = style.JustifyContent;
+                // [CSS-ALIGN §6.1] left/right are physical — resolve to flex-start/flex-end
+                // based on whether the main axis runs left-to-right or right-to-left.
+                // For row: left=FlexStart, right=FlexEnd. For row-reverse: left=FlexEnd, right=FlexStart.
+                // For column: left/right have no effect (main axis is vertical).
+                if (effectiveJustify == CssJustifyContent.Left)
+                {
+                    effectiveJustify = (!isColumn && isReverse) ? CssJustifyContent.FlexEnd : CssJustifyContent.FlexStart;
+                }
+                else if (effectiveJustify == CssJustifyContent.Right)
+                {
+                    effectiveJustify = (!isColumn && isReverse) ? CssJustifyContent.FlexStart : CssJustifyContent.FlexEnd;
+                }
                 if (isAutoMainSize)
+                {
                     effectiveJustify = CssJustifyContent.FlexStart;
+                }
                 // For reverse directions, flex-start means the physical end (bottom/right),
                 // so swap flex-start ↔ flex-end for justify-content.
                 else if (isReverse)

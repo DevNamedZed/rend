@@ -1480,6 +1480,8 @@ namespace Rend.Css.Resolution.Internal
                 case "no-repeat": result = PropertyValue.FromKeyword(1); return true;
                 case "repeat-x": result = PropertyValue.FromKeyword(2); return true;
                 case "repeat-y": result = PropertyValue.FromKeyword(3); return true;
+                case "round": result = PropertyValue.FromKeyword(4); return true;
+                case "space": result = PropertyValue.FromKeyword(5); return true;
                 default: return false;
             }
         }

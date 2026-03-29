@@ -296,11 +296,43 @@ namespace Rend.Rendering.Internal
                 }
             }
 
+            // [CSS-BACKGROUNDS-3 §3.4] round: scale image so integer tiles fill the area.
+            // space: distribute extra space evenly between unscaled tiles.
+            bool isRound = repeatMode == (int)CssBackgroundRepeat.Round;
+            bool isSpace = repeatMode == (int)CssBackgroundRepeat.Space;
+            float spaceGapX = 0, spaceGapY = 0;
+            if (isRound && scaledW > 0 && scaledH > 0)
+            {
+                float areaW = clipRect.Width;
+                float areaH = clipRect.Height;
+                int tilesX = Math.Max(1, (int)Math.Round(areaW / scaledW));
+                int tilesY = Math.Max(1, (int)Math.Round(areaH / scaledH));
+                scaledW = areaW / tilesX;
+                scaledH = areaH / tilesY;
+            }
+            else if (isSpace && scaledW > 0 && scaledH > 0)
+            {
+                float areaW = clipRect.Width;
+                float areaH = clipRect.Height;
+                int tilesX = Math.Max(1, (int)(areaW / scaledW));
+                int tilesY = Math.Max(1, (int)(areaH / scaledH));
+                if (tilesX > 1)
+                {
+                    spaceGapX = (areaW - tilesX * scaledW) / (tilesX - 1);
+                }
+                if (tilesY > 1)
+                {
+                    spaceGapY = (areaH - tilesY * scaledH) / (tilesY - 1);
+                }
+            }
+
             // Draw image tile(s).
             bool repeatX = repeatMode == (int)CssBackgroundRepeat.Repeat ||
-                           repeatMode == (int)CssBackgroundRepeat.RepeatX;
+                           repeatMode == (int)CssBackgroundRepeat.RepeatX ||
+                           isRound || isSpace;
             bool repeatY = repeatMode == (int)CssBackgroundRepeat.Repeat ||
-                           repeatMode == (int)CssBackgroundRepeat.RepeatY;
+                           repeatMode == (int)CssBackgroundRepeat.RepeatY ||
+                           isRound || isSpace;
 
             if (!repeatX && !repeatY)
             {
@@ -373,6 +405,8 @@ namespace Rend.Rendering.Internal
                             case "no-repeat": return (int)CssBackgroundRepeat.NoRepeat;
                             case "repeat-x": return (int)CssBackgroundRepeat.RepeatX;
                             case "repeat-y": return (int)CssBackgroundRepeat.RepeatY;
+                            case "round": return (int)CssBackgroundRepeat.Round;
+                            case "space": return (int)CssBackgroundRepeat.Space;
                         }
                     }
                 }
@@ -1121,5 +1155,7 @@ namespace Rend.Rendering.Internal
         NoRepeat = 1,
         RepeatX = 2,
         RepeatY = 3,
+        Round = 4,
+        Space = 5,
     }
 }

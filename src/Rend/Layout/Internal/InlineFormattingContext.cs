@@ -927,7 +927,22 @@ namespace Rend.Layout.Internal
                 // Add extra width for letter-spacing and word-spacing
                 float adjustedWidth = shaped.TotalWidth + CalculateSpacingExtra(displayText, style);
 
-                if (cursorX + adjustedWidth <= startX + containingWidth || noWrap)
+                // [CSS-TEXT-3 §4.1.1] For pre-wrap/normal, trailing spaces hang and
+                // don't contribute to the wrap check width. For break-spaces, they DO.
+                float wrapCheckWidth = adjustedWidth;
+                if (style.WhiteSpace != CssWhiteSpace.BreakSpaces
+                    && style.WhiteSpace != CssWhiteSpace.Pre
+                    && displayText.Length > 0 && displayText[displayText.Length - 1] == ' ')
+                {
+                    string trimmedForWrap = displayText.TrimEnd(' ');
+                    if (trimmedForWrap.Length < displayText.Length && trimmedForWrap.Length > 0)
+                    {
+                        var trimShaped = context.TextMeasurer.Shape(trimmedForWrap, fontDesc, fontSize);
+                        wrapCheckWidth = trimShaped.TotalWidth + CalculateSpacingExtra(trimmedForWrap, style);
+                    }
+                }
+
+                if (cursorX + wrapCheckWidth <= startX + containingWidth || noWrap)
                 {
                     // Fits on current line (or no-wrap mode)
                     AddTextFragment(currentLine, displayText, shaped, cursorX, adjustedWidth, lineHeight, ascent, inlineAncestor, styleOverride, contentArea);
@@ -998,18 +1013,30 @@ namespace Rend.Layout.Internal
             CssWhiteSpace whiteSpace = CssWhiteSpace.Normal,
             CssLineBreak lineBreak = CssLineBreak.Auto)
         {
-            // For break-all, every character boundary is a break opportunity
-            if (wordBreak == CssWordBreak.BreakAll)
-            {
-                WrapTextBreakAll(text, fontDesc, fontSize, context, ref cursorX, ref cursorY, ref startX,
-                                 ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
-                                 lineHeight, ascent, parent, inlineAncestor, letterSpacing, wordSpacing);
-                return;
-            }
-
             // Find break opportunities
             var breaker = new LineBreaker();
-            var breaks = breaker.FindBreaks(text, lineBreak);
+            var breaks = breaker.FindBreaks(text, lineBreak,
+                breakSpaces: whiteSpace == CssWhiteSpace.BreakSpaces);
+
+            // [CSS-TEXT-3 §5.2] word-break: break-all — every character boundary
+            // is a break opportunity. Integrate into the breaks array instead of
+            // using the separate WrapTextBreakAll path, so trailing-space hanging,
+            // soft-hyphen handling, and accumulated-fragment optimization all work.
+            if (wordBreak == CssWordBreak.BreakAll)
+            {
+                for (int bi = 0; bi < breaks.Length; bi++)
+                {
+                    if (breaks[bi] == LineBreakOpportunity.Forbidden)
+                    {
+                        // Don't break surrogate pairs
+                        if (char.IsHighSurrogate(text[bi]) && bi + 1 < text.Length && char.IsLowSurrogate(text[bi + 1]))
+                        {
+                            continue;
+                        }
+                        breaks[bi] = LineBreakOpportunity.Allowed;
+                    }
+                }
+            }
 
             // keep-all: suppress CJK break opportunities
             if (wordBreak == CssWordBreak.KeepAll)
@@ -1150,9 +1177,11 @@ namespace Rend.Layout.Internal
                                 if (candidateEndsAtSoftHyphen) newLineCandidate += "-";
                                 if (newLineCandidate.Length > 0)
                                 {
-                                    string nlMeasure = newLineCandidate;
-                                    if (whiteSpace == CssWhiteSpace.PreWrap)
-                                        nlMeasure = newLineCandidate.TrimEnd(' ');
+                                    // [CSS-TEXT-3 §4.1.3] break-spaces: trailing spaces
+                                    // contribute to width (no trim). All other modes: trim.
+                                    string nlMeasure = whiteSpace == CssWhiteSpace.BreakSpaces
+                                        ? newLineCandidate
+                                        : newLineCandidate.TrimEnd(' ');
                                     if (nlMeasure.Length > 0)
                                     {
                                         var nlShape = context.TextMeasurer!.Shape(nlMeasure, fontDesc, fontSize);
@@ -1173,12 +1202,17 @@ namespace Rend.Layout.Internal
 
                     if (!wordHandled)
                     {
-                        // break-word fallback: if the word still doesn't fit on an empty line, break it character by character
-                        bool allowCharBreak = wordBreak == CssWordBreak.BreakWord ||
-                                              overflowWrap == CssOverflowWrap.BreakWord ||
-                                              overflowWrap == CssOverflowWrap.Anywhere;
-                        if (allowCharBreak &&
-                            lineFragStartX + candidateWidth > startX + containingWidth && currentLine.Fragments.Count == 0 && accumulatedWidth == 0)
+                        // [CSS-TEXT-3 §3.3] overflow-wrap/word-break fallback:
+                        // break-word: break mid-word ONLY when word alone overflows empty line
+                        // anywhere: break mid-word whenever word overflows, even on non-empty line
+                        bool isAnywhere = overflowWrap == CssOverflowWrap.Anywhere;
+                        bool isBreakWord = wordBreak == CssWordBreak.BreakWord ||
+                                           overflowWrap == CssOverflowWrap.BreakWord;
+                        bool wordOverflows = lineFragStartX + candidateWidth > startX + containingWidth;
+                        bool emptyLine = currentLine.Fragments.Count == 0 && accumulatedWidth == 0;
+                        bool allowCharBreak = (isAnywhere && wordOverflows) ||
+                                              (isBreakWord && wordOverflows && emptyLine);
+                        if (allowCharBreak)
                         {
                             WrapTextBreakAll(displayWord, fontDesc, fontSize, context, ref cursorX, ref cursorY, ref startX,
                                              ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,

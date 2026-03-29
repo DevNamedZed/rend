@@ -418,6 +418,15 @@ namespace Rend.Layout.Internal
                     {
                         intrinsicW = duW0;
                     }
+                    // [CSS-IMAGES-3 §2.2] SVG with viewBox: derive width from ratio × height
+                    if (intrinsicW <= 0 && childElement.TagName == "svg")
+                    {
+                        float svgRatio = ReplacedElementLayout.GetIntrinsicRatio(childElement);
+                        if (svgRatio > 0 && !float.IsNaN(childStyle.Height) && childStyle.Height > 0)
+                        {
+                            intrinsicW = childStyle.Height * svgRatio;
+                        }
+                    }
                     contentWidth = intrinsicW > 0 ? intrinsicW : 300;
                 }
                 else if (SizingKeyword.IsSizingKeyword(childStyle.Width))
@@ -544,6 +553,25 @@ namespace Rend.Layout.Internal
                         {
                             if (intrinsicW <= 0) intrinsicW = duW;
                             if (intrinsicH <= 0) intrinsicH = duH;
+                        }
+                        // [CSS-IMAGES-3 §2.2] SVG with viewBox but no width/height attrs:
+                        // use viewBox dimensions as intrinsic size for ratio calculation.
+                        if ((intrinsicW <= 0 || intrinsicH <= 0) && childElement.TagName == "svg")
+                        {
+                            string? viewBox = childElement.GetAttribute("viewbox");
+                            if (viewBox != null)
+                            {
+                                var vbParts = viewBox.Split(new[] { ' ', ',' }, System.StringSplitOptions.RemoveEmptyEntries);
+                                if (vbParts.Length >= 4
+                                    && float.TryParse(vbParts[2], System.Globalization.NumberStyles.Float,
+                                        System.Globalization.CultureInfo.InvariantCulture, out float vbW)
+                                    && float.TryParse(vbParts[3], System.Globalization.NumberStyles.Float,
+                                        System.Globalization.CultureInfo.InvariantCulture, out float vbH))
+                                {
+                                    if (intrinsicW <= 0) intrinsicW = vbW;
+                                    if (intrinsicH <= 0) intrinsicH = vbH;
+                                }
+                            }
                         }
                         ReplacedElementLayout.ResolveDimensions(childBox, childStyle, containingWidth, intrinsicW, intrinsicH);
                         contentWidth = childBox.ContentRect.Width;
@@ -713,6 +741,25 @@ namespace Rend.Layout.Internal
                         {
                             if (intrinsicW <= 0) intrinsicW = duW;
                             if (intrinsicH <= 0) intrinsicH = duH;
+                        }
+                        // [CSS-IMAGES-3 §2.2] SVG with viewBox but no width/height attrs:
+                        // use viewBox dimensions as intrinsic size for ratio calculation.
+                        if ((intrinsicW <= 0 || intrinsicH <= 0) && childElement.TagName == "svg")
+                        {
+                            string? viewBox = childElement.GetAttribute("viewbox");
+                            if (viewBox != null)
+                            {
+                                var vbParts = viewBox.Split(new[] { ' ', ',' }, System.StringSplitOptions.RemoveEmptyEntries);
+                                if (vbParts.Length >= 4
+                                    && float.TryParse(vbParts[2], System.Globalization.NumberStyles.Float,
+                                        System.Globalization.CultureInfo.InvariantCulture, out float vbW)
+                                    && float.TryParse(vbParts[3], System.Globalization.NumberStyles.Float,
+                                        System.Globalization.CultureInfo.InvariantCulture, out float vbH))
+                                {
+                                    if (intrinsicW <= 0) intrinsicW = vbW;
+                                    if (intrinsicH <= 0) intrinsicH = vbH;
+                                }
+                            }
                         }
                         ReplacedElementLayout.ResolveDimensions(childBox, childStyle, containingWidth, intrinsicW, intrinsicH);
                         contentWidth = childBox.ContentRect.Width;

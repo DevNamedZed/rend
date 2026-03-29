@@ -28,8 +28,8 @@ namespace Rend.Css.Properties.Internal
             // Dimensions: auto (use float NaN sentinel for "auto")
             _values[PropertyId.Width] = PropertyValue.FromLength(float.NaN); // auto
             _values[PropertyId.Height] = PropertyValue.FromLength(float.NaN); // auto
-            _values[PropertyId.MinWidth] = PropertyValue.FromLength(0);
-            _values[PropertyId.MinHeight] = PropertyValue.FromLength(0);
+            _values[PropertyId.MinWidth] = PropertyValue.FromLength(float.NaN); // auto
+            _values[PropertyId.MinHeight] = PropertyValue.FromLength(float.NaN); // auto
             _values[PropertyId.MaxWidth] = PropertyValue.FromLength(float.NaN); // none
             _values[PropertyId.MaxHeight] = PropertyValue.FromLength(float.NaN); // none
 

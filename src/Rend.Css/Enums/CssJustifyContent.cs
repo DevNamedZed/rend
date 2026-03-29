@@ -11,6 +11,8 @@ namespace Rend.Css
         SpaceEvenly,
         Start,
         End,
-        Stretch
+        Stretch,
+        Left,
+        Right
     }
 }

@@ -262,6 +262,7 @@ namespace Rend.Layout.Internal
         /// <summary>
         /// Returns true if the element is a form control that should be treated as replaced.
         /// </summary>
+
         public static bool IsFormControl(StyledElement element)
         {
             string tag = element.TagName;

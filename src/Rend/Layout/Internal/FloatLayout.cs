@@ -57,6 +57,21 @@ namespace Rend.Layout.Internal
             {
                 contentWidth = DimensionResolver.ResolveWidth(style, containingWidth, floatBox);
             }
+            // [CSS-SIZING-4 §5.2] Transfer min-height through aspect-ratio for floats
+            float arRatio = DimensionResolver.GetAspectRatio(style);
+            if (arRatio > 0 && float.IsNaN(style.Width))
+            {
+                float arMinH = style.MinHeight;
+                if (!float.IsNaN(arMinH) && arMinH > 0 && !DeferredPercent.IsEncoded(arMinH))
+                {
+                    float transferredW = arMinH * arRatio;
+                    if (contentWidth < transferredW)
+                    {
+                        contentWidth = transferredW;
+                    }
+                }
+            }
+
             // [CSS2 §10.4] Apply min-width/max-width to float content width
             float minW = DimensionResolver.ResolvePercentWidth(style.MinWidth, containingWidth);
             float maxW = DimensionResolver.ResolvePercentWidth(style.MaxWidth, containingWidth);
