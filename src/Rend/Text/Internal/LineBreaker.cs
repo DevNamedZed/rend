@@ -27,8 +27,10 @@ namespace Rend.Text.Internal
         /// and character at index <c>i + 1</c>.
         /// </summary>
         /// <param name="text">The input text.</param>
+        /// <param name="lineBreak">The CSS line-break property value.</param>
         /// <returns>Array of break opportunities between adjacent characters.</returns>
-        public LineBreakOpportunity[] FindBreaks(string text)
+        public LineBreakOpportunity[] FindBreaks(string text,
+            Css.CssLineBreak lineBreak = Css.CssLineBreak.Auto)
         {
             if (text == null) throw new ArgumentNullException(nameof(text));
 
@@ -38,6 +40,28 @@ namespace Rend.Text.Internal
             }
 
             var result = new LineBreakOpportunity[text.Length - 1];
+
+            // [CSS-TEXT-3 §5.3] line-break: anywhere — every position is a break opportunity
+            if (lineBreak == Css.CssLineBreak.Anywhere)
+            {
+                for (int i = 0; i < result.Length; i++)
+                {
+                    char current = text[i];
+                    if (current == '\n')
+                    {
+                        result[i] = LineBreakOpportunity.Mandatory;
+                    }
+                    else if (current == '\r')
+                    {
+                        result[i] = LineBreakOpportunity.Mandatory;
+                    }
+                    else
+                    {
+                        result[i] = LineBreakOpportunity.Allowed;
+                    }
+                }
+                return result;
+            }
 
             // Initialize all positions as Forbidden.
             for (int i = 0; i < result.Length; i++)

@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <RootNamespace>Rend.Pdf</RootNamespace>
     <AssemblyName>Rend.Pdf</AssemblyName>
     <Description>Standalone high-performance PDF 1.7 writer. Generate PDFs with text, images, vector graphics, fonts, annotations, and bookmarks.</Description>

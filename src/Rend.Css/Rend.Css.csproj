@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <RootNamespace>Rend.Css</RootNamespace>
     <AssemblyName>Rend.Css</AssemblyName>
     <Description>CSS3 parser, cascade engine, and style resolution for the Rend rendering engine.</Description>

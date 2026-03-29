@@ -42,6 +42,52 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
+        /// Returns the intrinsic aspect ratio (width/height) for a replaced element, or 0 if none.
+        /// For SVG with viewBox, the ratio comes from viewBox dimensions.
+        /// For img with width/height attributes, the ratio comes from those attributes.
+        /// </summary>
+        public static float GetIntrinsicRatio(StyledElement element)
+        {
+            string tag = element.TagName;
+            if (tag == "svg")
+            {
+                // SVG viewBox defines the intrinsic ratio
+                string? viewBox = element.GetAttribute("viewbox");
+                if (viewBox != null)
+                {
+                    var parts = viewBox.Split(new[] { ' ', ',' }, System.StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 4
+                        && float.TryParse(parts[2], System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out float vbW)
+                        && float.TryParse(parts[3], System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out float vbH)
+                        && vbH > 0)
+                    {
+                        return vbW / vbH;
+                    }
+                }
+            }
+            else if (tag == "img")
+            {
+                string? attrW = element.GetAttribute("width");
+                string? attrH = element.GetAttribute("height");
+                if (attrW != null && attrH != null
+                    && float.TryParse(attrW, out float iw)
+                    && float.TryParse(attrH, out float ih) && ih > 0)
+                {
+                    return iw / ih;
+                }
+            }
+            // CSS aspect-ratio property
+            float cssRatio = DimensionResolver.GetAspectRatio(element.Style);
+            if (cssRatio > 0)
+            {
+                return cssRatio;
+            }
+            return 0;
+        }
+
+        /// <summary>
         /// Returns the default intrinsic width for a form control element, or 0 if not a form control.
         /// </summary>
         public static float GetFormControlIntrinsicWidth(StyledElement element, TextMeasurer? measurer = null)

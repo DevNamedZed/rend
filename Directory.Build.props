@@ -2,7 +2,7 @@
   <Import Project="Version.props" />
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <DefaultItemExcludes>$(DefaultItemExcludes);conformance\Rend.VisualRegression\output\**;conformance\Rend.VisualRegression\results\history\**</DefaultItemExcludes>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -10,11 +10,9 @@
     <NoWarn>CS1591</NoWarn>
   </PropertyGroup>
 
-  <!-- Prevent MSBuild server nodes from persisting between builds.
-       Without this, dotnet.exe spawns worker processes that stay alive
-       and grow to 8GB+ over multiple builds. -->
   <PropertyGroup>
     <UseSharedCompilation>false</UseSharedCompilation>
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
   </PropertyGroup>
 
   <!-- Deterministic and reproducible builds -->
@@ -26,13 +24,13 @@
 
   <!-- NuGet package metadata -->
   <PropertyGroup>
-    <Authors>Ziad Elmalki</Authors>
+    <Authors>DevNamedZed</Authors>
     <Company>Rend</Company>
-    <Copyright>Copyright (c) 2026 Ziad Elmalki</Copyright>
+    <Copyright>Copyright (c) 2026 DevNamedZed</Copyright>
     <Description>HTML/CSS rendering engine for .NET. Renders to PDF and images.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/ArtifactCoding/rend</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/ArtifactCoding/rend</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/DevNamedZed/rend</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/DevNamedZed/rend</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>html;css;pdf;render;image;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>

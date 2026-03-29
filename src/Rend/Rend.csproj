@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <RootNamespace>Rend</RootNamespace>
     <AssemblyName>Rend</AssemblyName>
     <Description>High-fidelity HTML-to-PDF/image rendering engine. Orchestrates HTML parsing, CSS cascade, layout, and output.</Description>

@@ -47,6 +47,16 @@ namespace Rend.Css.Resolution.Internal
                         result = PropertyValue.FromLength(px);
                         return true;
                     }
+                    // [CSS-TEXT-3 §8.2] word-spacing percentage resolves against
+                    // the advance width of the space character (U+0020).
+                    // Use ChWidth as an approximation (similar advance to space).
+                    if (prop.Id == PropertyId.WordSpacing && value is CssPercentageValue wsPct)
+                    {
+                        float spaceWidth = ctx.ChWidth > 0 ? ctx.ChWidth : ctx.FontSize * 0.25f;
+                        float px = wsPct.Value * spaceWidth / 100f;
+                        result = PropertyValue.FromLength(px);
+                        return true;
+                    }
                     // For percentage properties that resolve against the containing block
                     // (not the viewport), defer resolution to layout time by encoding with
                     // a sentinel offset (via DeferredPercent.Encode). The layout engine
@@ -118,6 +128,28 @@ namespace Rend.Css.Resolution.Internal
                         refResult = value;
                         result = default;
                         result.IsSet = true;
+                        return true;
+                    }
+                    // [CSS-TEXT-3 §8.3] hanging-punctuation accepts space-separated flags:
+                    // e.g. "first force-end" or "first last".
+                    if (prop.Id == PropertyId.HangingPunctuation && value is CssListValue hpList
+                        && hpList.Separator == ' ')
+                    {
+                        CssHangingPunctuation flags = CssHangingPunctuation.None;
+                        for (int hpi = 0; hpi < hpList.Values.Count; hpi++)
+                        {
+                            if (hpList.Values[hpi] is CssKeywordValue hpKw)
+                            {
+                                switch (hpKw.Keyword)
+                                {
+                                    case "first": flags |= CssHangingPunctuation.First; break;
+                                    case "last": flags |= CssHangingPunctuation.Last; break;
+                                    case "force-end": flags |= CssHangingPunctuation.ForceEnd; break;
+                                    case "allow-end": flags |= CssHangingPunctuation.AllowEnd; break;
+                                }
+                            }
+                        }
+                        result = PropertyValue.FromKeyword((int)flags);
                         return true;
                     }
                     return TryResolveKeyword(value, prop.Id, out result);
@@ -502,6 +534,7 @@ namespace Rend.Css.Resolution.Internal
                 case PropertyId.TextTransform: return TryMapTextTransform(keyword, out result);
                 case PropertyId.WhiteSpace: return TryMapWhiteSpace(keyword, out result);
                 case PropertyId.WordBreak: return TryMapWordBreak(keyword, out result);
+                case PropertyId.LineBreak: return TryMapLineBreak(keyword, out result);
                 case PropertyId.VerticalAlign: return TryMapVerticalAlign(keyword, out result);
                 case PropertyId.Direction: return TryMapDirection(keyword, out result);
                 case PropertyId.UnicodeBidi: return TryMapUnicodeBidi(keyword, out result);
@@ -632,6 +665,8 @@ namespace Rend.Css.Resolution.Internal
                     return TryMapForcedColorAdjust(keyword, out result);
 
                 case PropertyId.HangingPunctuation:
+                    // Already handled single keyword; combined values are handled
+                    // in TryResolve via space-separated list check above.
                     return TryMapHangingPunctuation(keyword, out result);
 
                 case PropertyId.ContainerType:
@@ -1224,6 +1259,20 @@ namespace Rend.Css.Resolution.Internal
                 case "break-all": result = PropertyValue.FromKeyword((int)CssWordBreak.BreakAll); return true;
                 case "keep-all": result = PropertyValue.FromKeyword((int)CssWordBreak.KeepAll); return true;
                 case "break-word": result = PropertyValue.FromKeyword((int)CssWordBreak.BreakWord); return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryMapLineBreak(string kw, out PropertyValue result)
+        {
+            result = default;
+            switch (kw)
+            {
+                case "auto": result = PropertyValue.FromKeyword((int)CssLineBreak.Auto); return true;
+                case "loose": result = PropertyValue.FromKeyword((int)CssLineBreak.Loose); return true;
+                case "normal": result = PropertyValue.FromKeyword((int)CssLineBreak.Normal); return true;
+                case "strict": result = PropertyValue.FromKeyword((int)CssLineBreak.Strict); return true;
+                case "anywhere": result = PropertyValue.FromKeyword((int)CssLineBreak.Anywhere); return true;
                 default: return false;
             }
         }

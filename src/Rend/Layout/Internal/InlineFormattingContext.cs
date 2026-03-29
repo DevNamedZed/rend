@@ -172,7 +172,22 @@ namespace Rend.Layout.Internal
                                     float flContentArea = flAscent + flDescent;
                                     float flBaseline = flAscent + (flLineHeight - flContentArea) / 2f;
 
-                                    var flShaped = context.TextMeasurer.Shape(firstLetter, flFontDesc, flFontSize);
+                                    // [CSS-TEXT-3 §8] Cross-boundary shaping: when first-letter
+                                    // has the same font as the parent, shape the full text to
+                                    // preserve glyph connections (critical for Arabic/RTL scripts).
+                                    ShapedTextRun flShaped;
+                                    bool sameFontAsParent = flFontDesc.Family == styledElement.Style.FontFamily
+                                        && Math.Abs(flFontSize - styledElement.Style.FontSize) < 0.01f;
+                                    if (sameFontAsParent && context.TextMeasurer != null)
+                                    {
+                                        var fullShaped = context.TextMeasurer.Shape(trimmed, flFontDesc, flFontSize);
+                                        var split = fullShaped.SplitAtCharIndex(endIdx);
+                                        flShaped = split.first;
+                                    }
+                                    else
+                                    {
+                                        flShaped = context.TextMeasurer!.Shape(firstLetter, flFontDesc, flFontSize);
+                                    }
                                     float flTextWidth = flShaped.TotalWidth;
 
                                     // Box model from first-letter style
@@ -247,11 +262,33 @@ namespace Rend.Layout.Internal
                                 }
                                 else
                                 {
-                                    // Non-floated first letter: layout inline
-                                    var firstLetterText = new StyledText(firstLetter, flStyle);
-                                    LayoutTextRun(firstLetterText, context, ref cursorX, ref cursorY, ref startX,
-                                                  ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
-                                                  styleOverride: flStyle);
+                                    // [CSS-TEXT-3 §8] Cross-boundary shaping: shape full text
+                                    // to preserve glyph connections (Arabic/RTL), then split.
+                                    // Only when first-letter has the same font as parent.
+                                    bool sameFontNF = string.Equals(flStyle.FontFamily, styledElement.Style.FontFamily, StringComparison.OrdinalIgnoreCase)
+                                        && Math.Abs(flStyle.FontSize - styledElement.Style.FontSize) < 0.01f;
+                                    if (sameFontNF && context.TextMeasurer != null)
+                                    {
+                                        var flFontDesc2 = new Fonts.FontDescriptor(
+                                            flStyle.FontFamilies, flStyle.FontWeight, flStyle.FontStyle,
+                                            Fonts.FontDescriptor.StretchToPercentage(flStyle.FontStretch));
+                                        var fullShaped = context.TextMeasurer.Shape(trimmed, flFontDesc2, flStyle.FontSize);
+                                        var splitResult = fullShaped.SplitAtCharIndex(endIdx);
+                                        // First letter with cross-boundary shaped glyphs
+                                        var firstLetterText = new StyledText(firstLetter, flStyle);
+                                        LayoutTextRun(firstLetterText, context, ref cursorX, ref cursorY, ref startX,
+                                                      ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
+                                                      styleOverride: flStyle, preShapedRun: splitResult.first);
+                                        // Remainder also uses cross-boundary shaped glyphs
+                                        remainder = trimmed.Substring(endIdx);
+                                    }
+                                    else
+                                    {
+                                        var firstLetterText = new StyledText(firstLetter, flStyle);
+                                        LayoutTextRun(firstLetterText, context, ref cursorX, ref cursorY, ref startX,
+                                                      ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
+                                                      styleOverride: flStyle);
+                                    }
                                 }
 
                                 // Layout the remainder with normal style
@@ -352,7 +389,8 @@ namespace Rend.Layout.Internal
                 currentLine.IsLastLine = true;
                 FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, styledElement.Style.TextAlign,
                                 styledElement.Style.TextAlignLast, styledElement.Style.Direction,
-                                styledElement.Style.FontSize, styledElement.Style.TextJustify);
+                                styledElement.Style.FontSize, styledElement.Style.TextJustify,
+                                styledElement.Style.WhiteSpace);
                 lineBoxes.Add(currentLine);
             }
 
@@ -719,7 +757,8 @@ namespace Rend.Layout.Internal
             ref float cursorX, ref float cursorY, ref float startX, ref float containingWidth,
             ref LineBox currentLine, List<LineBox> lineBoxes,
             ref float maxLineHeight, ref float lineBaseline, LayoutBox parent,
-            StyledElement? inlineAncestor = null, ComputedStyle? styleOverride = null)
+            StyledElement? inlineAncestor = null, ComputedStyle? styleOverride = null,
+            ShapedTextRun? preShapedRun = null)
         {
             var style = textNode.Style;
             string text = textNode.Text;
@@ -790,7 +829,7 @@ namespace Rend.Layout.Internal
             var processedNode = new StyledText(text, style);
             LayoutTextRunSegment(processedNode, context, ref cursorX, ref cursorY, ref startX, ref containingWidth,
                                  ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
-                                 inlineAncestor, styleOverride);
+                                 inlineAncestor, styleOverride, preShapedRun: preShapedRun);
         }
 
         /// <summary>
@@ -801,7 +840,8 @@ namespace Rend.Layout.Internal
             ref float cursorX, ref float cursorY, ref float startX, ref float containingWidth,
             ref LineBox currentLine, List<LineBox> lineBoxes,
             ref float maxLineHeight, ref float lineBaseline, LayoutBox parent,
-            StyledElement? inlineAncestor = null, ComputedStyle? styleOverride = null)
+            StyledElement? inlineAncestor = null, ComputedStyle? styleOverride = null,
+            ShapedTextRun? preShapedRun = null)
         {
             var style = textNode.Style;
             string text = textNode.Text;
@@ -881,8 +921,8 @@ namespace Rend.Layout.Internal
                 if (style.Hyphens != CssHyphens.None && text.IndexOf('\u00AD') >= 0)
                     displayText = text.Replace("\u00AD", string.Empty);
 
-                // Shape and measure
-                var shaped = context.TextMeasurer.Shape(displayText, fontDesc, fontSize);
+                // Shape and measure (use pre-shaped run for cross-boundary shaping)
+                var shaped = preShapedRun ?? context.TextMeasurer.Shape(displayText, fontDesc, fontSize);
 
                 // Add extra width for letter-spacing and word-spacing
                 float adjustedWidth = shaped.TotalWidth + CalculateSpacingExtra(displayText, style);
@@ -900,7 +940,8 @@ namespace Rend.Layout.Internal
                     WrapText(text, fontDesc, fontSize, context, ref cursorX, ref cursorY, ref startX,
                              ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
                              lineHeight, ascent, parent, inlineAncestor, style.LetterSpacing, style.WordSpacing,
-                             style.WordBreak, style.OverflowWrap, style.Hyphens, style.WhiteSpace);
+                             style.WordBreak, style.OverflowWrap, style.Hyphens, style.WhiteSpace,
+                             style.LineBreak);
                 }
             }
             else
@@ -954,7 +995,8 @@ namespace Rend.Layout.Internal
             CssWordBreak wordBreak = CssWordBreak.Normal,
             CssOverflowWrap overflowWrap = CssOverflowWrap.Normal,
             CssHyphens hyphens = CssHyphens.Manual,
-            CssWhiteSpace whiteSpace = CssWhiteSpace.Normal)
+            CssWhiteSpace whiteSpace = CssWhiteSpace.Normal,
+            CssLineBreak lineBreak = CssLineBreak.Auto)
         {
             // For break-all, every character boundary is a break opportunity
             if (wordBreak == CssWordBreak.BreakAll)
@@ -967,7 +1009,7 @@ namespace Rend.Layout.Internal
 
             // Find break opportunities
             var breaker = new LineBreaker();
-            var breaks = breaker.FindBreaks(text);
+            var breaks = breaker.FindBreaks(text, lineBreak);
 
             // keep-all: suppress CJK break opportunities
             if (wordBreak == CssWordBreak.KeepAll)
@@ -1368,7 +1410,9 @@ namespace Rend.Layout.Internal
             var align = parentStyle?.Style.TextAlign ?? CssTextAlign.Left;
             var dir = parentStyle?.Style.Direction ?? CssDirection.Ltr;
             float pfs = parentStyle?.Style.FontSize ?? 14f;
-            FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, align, CssTextAlign.Auto, dir, pfs);
+            var ws = parentStyle?.Style.WhiteSpace ?? CssWhiteSpace.Normal;
+            FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, align, CssTextAlign.Auto, dir, pfs,
+                            whiteSpace: ws);
             lineBoxes.Add(currentLine);
             cursorY += currentLine.Height;
 
@@ -1413,7 +1457,9 @@ namespace Rend.Layout.Internal
                     var align = parentStyle?.Style.TextAlign ?? CssTextAlign.Left;
                     var dir = parentStyle?.Style.Direction ?? CssDirection.Ltr;
                     float pfs2 = parentStyle?.Style.FontSize ?? 14f;
-                    FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, align, CssTextAlign.Auto, dir, pfs2);
+                    var ws2 = parentStyle?.Style.WhiteSpace ?? CssWhiteSpace.Normal;
+                    FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, align, CssTextAlign.Auto, dir, pfs2,
+                                    whiteSpace: ws2);
                     lineBoxes.Add(currentLine);
                     cursorY += currentLine.Height;
                     currentLine = new LineBox { X = startX, Y = cursorY, Width = containingWidth };
@@ -1610,7 +1656,9 @@ namespace Rend.Layout.Internal
                 var align = parentStyle?.Style.TextAlign ?? CssTextAlign.Left;
                 var dir = parentStyle?.Style.Direction ?? CssDirection.Ltr;
                 float pfs3 = parentStyle?.Style.FontSize ?? 14f;
-                FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, align, CssTextAlign.Auto, dir, pfs3);
+                var ws3 = parentStyle?.Style.WhiteSpace ?? CssWhiteSpace.Normal;
+                FinalizeLineBox(currentLine, maxLineHeight, lineBaseline, align, CssTextAlign.Auto, dir, pfs3,
+                                whiteSpace: ws3);
                 lineBoxes.Add(currentLine);
                 cursorY += currentLine.Height;
                 currentLine = new LineBox { X = startX, Y = cursorY, Width = containingWidth };
@@ -2151,7 +2199,8 @@ namespace Rend.Layout.Internal
 
         private static void FinalizeLineBox(LineBox line, float height, float baseline, CssTextAlign textAlign,
             CssTextAlign textAlignLast = CssTextAlign.Auto, CssDirection direction = CssDirection.Ltr,
-            float parentFontSize = 14f, CssTextJustify textJustify = CssTextJustify.Auto)
+            float parentFontSize = 14f, CssTextJustify textJustify = CssTextJustify.Auto,
+            CssWhiteSpace whiteSpace = CssWhiteSpace.Normal)
         {
             float h = height > 0 ? height : 16f;
             // Chrome uses LayoutUnit internally (1/64th pixel precision, truncated).
@@ -2274,6 +2323,7 @@ namespace Rend.Layout.Internal
             // of the line — its advance width is excluded from content width for alignment.
             // [CSS-TEXT-3 §4.1.3] break-spaces: trailing spaces take up space (no hanging).
             float trailingWhitespaceWidth = 0;
+            bool skipTrailingHang = whiteSpace == CssWhiteSpace.BreakSpaces;
             for (int i = line.Fragments.Count - 1; i >= 0; i--)
             {
                 var frag = line.Fragments[i];
@@ -2307,7 +2357,10 @@ namespace Rend.Layout.Internal
                 }
                 break; // only check last text fragment
             }
-            contentWidth -= trailingWhitespaceWidth;
+            if (!skipTrailingHang)
+            {
+                contentWidth -= trailingWhitespaceWidth;
+            }
 
             line.NaturalContentWidth = contentWidth;
 
@@ -2490,10 +2543,10 @@ namespace Rend.Layout.Internal
         /// </summary>
         private static void ApplyHangingPunctuation(List<LineBox> lineBoxes, CssHangingPunctuation hp)
         {
-            bool hangFirst = hp == CssHangingPunctuation.First;
-            bool hangLast = hp == CssHangingPunctuation.Last;
-            bool hangForceEnd = hp == CssHangingPunctuation.ForceEnd;
-            bool hangAllowEnd = hp == CssHangingPunctuation.AllowEnd;
+            bool hangFirst = (hp & CssHangingPunctuation.First) != 0;
+            bool hangLast = (hp & CssHangingPunctuation.Last) != 0;
+            bool hangForceEnd = (hp & CssHangingPunctuation.ForceEnd) != 0;
+            bool hangAllowEnd = (hp & CssHangingPunctuation.AllowEnd) != 0;
 
             for (int li = 0; li < lineBoxes.Count; li++)
             {
@@ -2506,12 +2559,10 @@ namespace Rend.Layout.Internal
                     var firstFrag = line.Fragments[0];
                     if (!string.IsNullOrEmpty(firstFrag.Text) && IsOpeningPunctuation(firstFrag.Text![0]))
                     {
-                        // [CSS-TEXT-3 §8.3] Don't hang if preceded by non-zero-width border
                         bool hasBorder = firstFrag.InlineElement != null
                             && firstFrag.InlineElement.Style.BorderLeftWidth > 0;
                         if (!hasBorder)
                         {
-                            // Use actual first glyph advance if available
                             float charWidth;
                             if (firstFrag.ShapedRun != null && firstFrag.ShapedRun.Glyphs.Length > 0)
                             {
@@ -2529,8 +2580,8 @@ namespace Rend.Layout.Internal
                     }
                 }
 
-                // Hang last / force-end / allow-end: shift trailing punctuation outside the end
-                if (hangLast && line.IsLastLine || hangForceEnd || hangAllowEnd)
+                // Hang last / force-end / allow-end: trailing punctuation hangs past line end
+                if ((hangLast && line.IsLastLine) || hangForceEnd || hangAllowEnd)
                 {
                     var lastFrag = line.Fragments[line.Fragments.Count - 1];
                     if (!string.IsNullOrEmpty(lastFrag.Text))
@@ -2538,8 +2589,9 @@ namespace Rend.Layout.Internal
                         char lastChar = lastFrag.Text![lastFrag.Text!.Length - 1];
                         if (IsClosingPunctuation(lastChar))
                         {
-                            // No position shift needed — the trailing punctuation naturally
-                            // extends past the line box width, which is acceptable
+                            // Trailing punctuation extends past the line box end naturally.
+                            // No explicit shift needed — it hangs by not being included
+                            // in content width for alignment (handled by FinalizeLineBox).
                         }
                     }
                 }
@@ -2554,9 +2606,16 @@ namespace Rend.Layout.Internal
 
         private static bool IsClosingPunctuation(char c)
         {
+            return c == '\u201D' || c == '\u2019' || c == ')' || c == ']' || c == '}' ||
+                   c == '\u00BB' || c == '\u203A' || // », ›
+                   IsStopOrComma(c);
+        }
+
+        private static bool IsStopOrComma(char c)
+        {
             return c == '.' || c == ',' || c == ';' || c == ':' || c == '!' || c == '?' ||
-                   c == '\u201D' || c == '\u2019' || c == ')' || c == ']' || c == '}' ||
-                   c == '\u00BB' || c == '\u203A'; // », ›
+                   c == '\u3001' || c == '\u3002' || c == '\uFF0C' || c == '\uFF0E' || // CJK stops/commas
+                   c == '\uFF01' || c == '\uFF1F'; // fullwidth ! ?
         }
 
         private static void ApplyEllipsis(List<LineBox> lineBoxes, float startX, float containingWidth,

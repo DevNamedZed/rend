@@ -511,6 +511,12 @@ namespace Rend.Css
             get => (CssWordBreak)_values[PropertyId.WordBreak].IntValue;
         }
 
+        public CssLineBreak LineBreak
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (CssLineBreak)_values[PropertyId.LineBreak].IntValue;
+        }
+
         public CssTextOverflow TextOverflow
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]

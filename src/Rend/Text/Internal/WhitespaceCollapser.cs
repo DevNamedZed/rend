@@ -44,9 +44,9 @@ namespace Rend.Text.Internal
 
         /// <summary>
         /// Collapses consecutive whitespace characters to a single space.
-        /// Newlines are treated as spaces. Leading/trailing spaces are preserved
-        /// so that inline element boundaries retain inter-word spacing.
-        /// Edge trimming is handled by the inline formatting context at line boundaries.
+        /// [CSS-TEXT-3 §4.1.1] Segment breaks (newlines) between two East Asian
+        /// Fullwidth/Wide/Halfwidth characters are removed entirely instead of
+        /// collapsing to a space. All other whitespace collapses normally.
         /// Used for white-space: normal and nowrap.
         /// </summary>
         private static string CollapseAll(string text)
@@ -62,10 +62,23 @@ namespace Rend.Text.Internal
                 {
                     if (!lastWasSpace)
                     {
-                        sb.Append(' ');
-                        lastWasSpace = true;
+                        // [CSS-TEXT-3 §4.1.1] Check if this whitespace run contains
+                        // a segment break (newline) between two East Asian FWH characters.
+                        if (ContainsSegmentBreak(text, i) && ShouldRemoveSegmentBreak(text, sb, i))
+                        {
+                            // Skip the entire whitespace run — segment break removed.
+                            while (i + 1 < text.Length && IsCollapsibleWhitespace(text[i + 1]))
+                            {
+                                i++;
+                            }
+                            lastWasSpace = false;
+                        }
+                        else
+                        {
+                            sb.Append(' ');
+                            lastWasSpace = true;
+                        }
                     }
-                    // Skip additional whitespace.
                 }
                 else
                 {
@@ -75,6 +88,85 @@ namespace Rend.Text.Internal
             }
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Returns true if the whitespace run starting at position i contains
+        /// a newline (segment break).
+        /// </summary>
+        private static bool ContainsSegmentBreak(string text, int start)
+        {
+            for (int i = start; i < text.Length && IsCollapsibleWhitespace(text[i]); i++)
+            {
+                if (text[i] == '\n' || text[i] == '\r')
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// [CSS-TEXT-3 §4.1.1] Returns true if the segment break should be removed
+        /// (both adjacent non-whitespace characters are East Asian FWH).
+        /// </summary>
+        private static bool ShouldRemoveSegmentBreak(string text, StringBuilder sb, int wsStart)
+        {
+            // Find the last non-whitespace character before this run (from StringBuilder).
+            int charBefore = GetLastCodePoint(sb);
+            if (charBefore < 0)
+            {
+                return false;
+            }
+
+            // Find the first non-whitespace character after this run.
+            int afterIdx = wsStart;
+            while (afterIdx < text.Length && IsCollapsibleWhitespace(text[afterIdx]))
+            {
+                afterIdx++;
+            }
+            if (afterIdx >= text.Length)
+            {
+                return false;
+            }
+            int charAfter = GetCodePointAt(text, afterIdx);
+
+            // [CSS-TEXT-3 §4.1.1] If both characters are East Asian Fullwidth (F),
+            // Wide (W), or Halfwidth (H), remove the segment break.
+            return EastAsianWidth.IsEastAsianFWH(charBefore)
+                && EastAsianWidth.IsEastAsianFWH(charAfter);
+        }
+
+        /// <summary>
+        /// Gets the last Unicode code point from the StringBuilder.
+        /// Handles surrogate pairs. Returns -1 if empty.
+        /// </summary>
+        private static int GetLastCodePoint(StringBuilder sb)
+        {
+            if (sb.Length == 0)
+            {
+                return -1;
+            }
+            char last = sb[sb.Length - 1];
+            if (char.IsLowSurrogate(last) && sb.Length >= 2 && char.IsHighSurrogate(sb[sb.Length - 2]))
+            {
+                return char.ConvertToUtf32(sb[sb.Length - 2], last);
+            }
+            return last;
+        }
+
+        /// <summary>
+        /// Gets the Unicode code point at the given position in the string.
+        /// Handles surrogate pairs.
+        /// </summary>
+        private static int GetCodePointAt(string text, int index)
+        {
+            char ch = text[index];
+            if (char.IsHighSurrogate(ch) && index + 1 < text.Length && char.IsLowSurrogate(text[index + 1]))
+            {
+                return char.ConvertToUtf32(ch, text[index + 1]);
+            }
+            return ch;
         }
 
         /// <summary>

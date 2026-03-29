@@ -926,7 +926,7 @@ namespace Rend.Layout.Internal
                     // Pre-set height from explicit row track ONLY when the item has
                     // a percentage height that needs a definite containing block.
                     float preHeight = 0;
-                    bool hasPercentHeight = DeferredPercent.IsEncoded(item.StyledElement.Style.Height)
+                    bool hasPercentHeight = DeferredPercent.IsEncoded(item.StyledElement!.Style.Height)
                         || DeferredPercent.IsEncoded(item.StyledElement.Style.MinHeight);
                     if (hasPercentHeight && explicitRowTracks != null)
                     {

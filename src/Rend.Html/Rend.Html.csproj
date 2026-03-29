@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <RootNamespace>Rend.Html</RootNamespace>
     <AssemblyName>Rend.Html</AssemblyName>
     <Description>HTML5 parser with DOM tree construction, CSS selector matching, and WHATWG-compliant tokenization.</Description>
