@@ -162,6 +162,10 @@ namespace Rend.Css.Properties.Internal
             _refValues[PropertyId.Transform] = null; // none
             // Transform-origin: 50% 50% (center of border box)
             _refValues[PropertyId.TransformOrigin] = null; // default: 50% 50%
+            _refValues[PropertyId.Perspective] = null; // none
+            _refValues[PropertyId.PerspectiveOrigin] = null; // default: 50% 50%
+            _refValues[PropertyId.TransformStyle] = null; // flat
+            _refValues[PropertyId.BackfaceVisibility] = null; // visible
 
             // Multi-Column
             _values[PropertyId.ColumnCount] = PropertyValue.FromNumber(float.NaN); // auto

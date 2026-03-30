@@ -117,9 +117,9 @@ namespace Rend.Output.Image
                 SkewY = transform.M12,
                 ScaleY = transform.M22,
                 TransY = transform.M32,
-                Persp0 = 0f,
-                Persp1 = 0f,
-                Persp2 = 1f
+                Persp0 = transform.Persp0,
+                Persp1 = transform.Persp1,
+                Persp2 = transform.Persp2
             };
 
             // Apply DPI scaling before the custom transform so drawing coordinates
@@ -146,9 +146,9 @@ namespace Rend.Output.Image
                 SkewY = transform.M12,
                 ScaleY = transform.M22,
                 TransY = transform.M32,
-                Persp0 = 0f,
-                Persp1 = 0f,
-                Persp2 = 1f
+                Persp0 = transform.Persp0,
+                Persp1 = transform.Persp1,
+                Persp2 = transform.Persp2
             };
 
             _currentCanvas!.Concat(matrix);

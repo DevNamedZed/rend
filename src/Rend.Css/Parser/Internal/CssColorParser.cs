@@ -170,6 +170,9 @@ namespace Rend.Css.Parser.Internal
             if (!TryGetLabComponent(args[1], 125f, out float a)) return false;
             if (!TryGetLabComponent(args[2], 125f, out float b)) return false;
 
+            // [CSS-COLOR4 §6.1] L clamped to [0, 100] at parsed-value time
+            l = Math.Max(0f, Math.Min(100f, l));
+
             float alpha = 1f;
             if (args.Count >= 4)
             {
@@ -191,12 +194,22 @@ namespace Rend.Css.Parser.Internal
             if (!TryGetLabComponent(args[0], 100f, out float l)) return false;
             if (!TryGetLabComponent(args[1], 150f, out float c)) return false;
 
+            // [CSS-COLOR4 §6.1] L clamped to [0, 100] at parsed-value time
+            l = Math.Max(0f, Math.Min(100f, l));
+
             float h;
             if (args[2] is CssNumberValue hn)
+            {
                 h = hn.Value;
+            }
             else if (args[2] is CssDimensionValue hd)
+            {
                 h = ConvertAngle(hd.Value, hd.Unit);
-            else return false;
+            }
+            else
+            {
+                return false;
+            }
 
             float alpha = 1f;
             if (args.Count >= 4)
@@ -220,6 +233,9 @@ namespace Rend.Css.Parser.Internal
             if (!TryGetLabComponent(args[1], 0.4f, out float a)) return false;
             if (!TryGetLabComponent(args[2], 0.4f, out float b)) return false;
 
+            // [CSS-COLOR4 §6.1] L clamped to [0, 1] at parsed-value time
+            l = Math.Max(0f, Math.Min(1f, l));
+
             float alpha = 1f;
             if (args.Count >= 4)
             {
@@ -241,12 +257,22 @@ namespace Rend.Css.Parser.Internal
             if (!TryGetLabComponent(args[0], 1f, out float l)) return false;
             if (!TryGetLabComponent(args[1], 0.4f, out float c)) return false;
 
+            // [CSS-COLOR4 §6.1] L clamped to [0, 1] at parsed-value time
+            l = Math.Max(0f, Math.Min(1f, l));
+
             float h;
             if (args[2] is CssNumberValue hn)
+            {
                 h = hn.Value;
+            }
             else if (args[2] is CssDimensionValue hd)
+            {
                 h = ConvertAngle(hd.Value, hd.Unit);
-            else return false;
+            }
+            else
+            {
+                return false;
+            }
 
             float alpha = 1f;
             if (args.Count >= 4)
@@ -270,22 +296,157 @@ namespace Rend.Css.Parser.Internal
 
             // First two args should be "in" and a color space name
             if (!(args[0] is CssKeywordValue inKw) || !string.Equals(inKw.Keyword, "in", StringComparison.OrdinalIgnoreCase))
+            {
                 return false;
+            }
             if (!(args[1] is CssKeywordValue csKw))
+            {
                 return false;
-            // We support srgb mixing; other spaces just fall through to srgb
+            }
+
+            string interpolationSpace = csKw.Keyword.ToLowerInvariant();
+
             // Parse color1 [percentage1], color2 [percentage2]
             int idx = 2;
-            if (!TryExtractMixColor(args, ref idx, out var c1, out float p1)) return false;
-            if (!TryExtractMixColor(args, ref idx, out var c2, out float p2)) return false;
+            if (!TryExtractMixColor(args, ref idx, out var c1, out float p1))
+            {
+                return false;
+            }
+            if (!TryExtractMixColor(args, ref idx, out var c2, out float p2))
+            {
+                return false;
+            }
 
-            // Normalize percentages per spec
-            if (float.IsNaN(p1) && float.IsNaN(p2)) { p1 = 0.5f; p2 = 0.5f; }
-            else if (float.IsNaN(p1)) { p1 = 1f - p2; }
-            else if (float.IsNaN(p2)) { p2 = 1f - p1; }
+            // [CSS-COLOR5 §2.1] Normalize percentages
+            if (float.IsNaN(p1) && float.IsNaN(p2))
+            {
+                p1 = 0.5f;
+                p2 = 0.5f;
+            }
+            else if (float.IsNaN(p1))
+            {
+                p1 = 1f - p2;
+            }
+            else if (float.IsNaN(p2))
+            {
+                p2 = 1f - p1;
+            }
 
-            color = CssColor.Mix(c1, p1, c2, p2);
+            // [CSS-COLOR5 §2.1] If sum > 100%, normalize
+            float sum = p1 + p2;
+            if (sum > 0f && sum != 1f)
+            {
+                p1 /= sum;
+                p2 /= sum;
+            }
+
+            color = MixInSpace(interpolationSpace, c1, p1, c2, p2);
             return true;
+        }
+
+        /// <summary>
+        /// [CSS-COLOR5 §2.1] Mix two colors in the specified interpolation space.
+        /// </summary>
+        private static CssColor MixInSpace(string space, CssColor c1, float p1, CssColor c2, float p2)
+        {
+            float alpha = c1.A / 255f * p1 + c2.A / 255f * p2;
+
+            switch (space)
+            {
+                case "lab":
+                {
+                    SrgbToLab(c1, out float l1, out float a1, out float b1);
+                    SrgbToLab(c2, out float l2, out float a2, out float b2);
+                    return CssColor.FromLab(
+                        l1 * p1 + l2 * p2,
+                        a1 * p1 + a2 * p2,
+                        b1 * p1 + b2 * p2,
+                        alpha);
+                }
+
+                case "lch":
+                {
+                    SrgbToLch(c1, out float l1, out float ch1, out float h1);
+                    SrgbToLch(c2, out float l2, out float ch2, out float h2);
+                    float hue = InterpolateHueShorter(h1, h2, p1, p2);
+                    return CssColor.FromLch(
+                        l1 * p1 + l2 * p2,
+                        ch1 * p1 + ch2 * p2,
+                        hue,
+                        alpha);
+                }
+
+                case "oklab":
+                {
+                    SrgbToOklab(c1, out float l1, out float a1, out float b1);
+                    SrgbToOklab(c2, out float l2, out float a2, out float b2);
+                    return CssColor.FromOklab(
+                        l1 * p1 + l2 * p2,
+                        a1 * p1 + a2 * p2,
+                        b1 * p1 + b2 * p2,
+                        alpha);
+                }
+
+                case "oklch":
+                {
+                    SrgbToOklch(c1, out float l1, out float ch1, out float h1);
+                    SrgbToOklch(c2, out float l2, out float ch2, out float h2);
+                    float hue = InterpolateHueShorter(h1, h2, p1, p2);
+                    return CssColor.FromOklch(
+                        l1 * p1 + l2 * p2,
+                        ch1 * p1 + ch2 * p2,
+                        hue,
+                        alpha);
+                }
+
+                case "hsl":
+                {
+                    SrgbToHsl(c1, out float h1, out float s1, out float l1);
+                    SrgbToHsl(c2, out float h2, out float s2, out float l2);
+                    float hue = InterpolateHueShorter(h1, h2, p1, p2);
+                    return CssColor.FromHsl(
+                        hue,
+                        s1 * p1 + s2 * p2,
+                        l1 * p1 + l2 * p2,
+                        alpha);
+                }
+
+                case "hwb":
+                {
+                    SrgbToHwb(c1, out float h1, out float w1, out float bk1);
+                    SrgbToHwb(c2, out float h2, out float w2, out float bk2);
+                    float hue = InterpolateHueShorter(h1, h2, p1, p2);
+                    return CssColor.FromHwb(
+                        hue,
+                        w1 * p1 + w2 * p2,
+                        bk1 * p1 + bk2 * p2,
+                        alpha);
+                }
+
+                case "srgb":
+                default:
+                {
+                    return CssColor.Mix(c1, p1, c2, p2);
+                }
+            }
+        }
+
+        /// <summary>
+        /// [CSS-COLOR5 §12.1] Shorter hue interpolation.
+        /// </summary>
+        private static float InterpolateHueShorter(float h1, float h2, float p1, float p2)
+        {
+            float diff = h2 - h1;
+            if (diff > 180f)
+            {
+                h1 += 360f;
+            }
+            else if (diff < -180f)
+            {
+                h2 += 360f;
+            }
+            float result = h1 * p1 + h2 * p2;
+            return ((result % 360f) + 360f) % 360f;
         }
 
         /// <summary>
@@ -334,25 +495,104 @@ namespace Rend.Css.Parser.Internal
                     float linearG = SrgbToLinear(channel2);
                     float linearB = SrgbToLinear(channel3);
 
-                    // 2. Linear display-p3 to linear sRGB via matrix multiplication
-                    // Matrix derived from P3→XYZ(D65) then XYZ(D65)→sRGB
-                    float srgbLinearR = 1.2249401f * linearR - 0.2249402f * linearG + 0.0000000f * linearB;
-                    float srgbLinearG = -0.0420569f * linearR + 1.0420571f * linearG - 0.0000001f * linearB;
-                    float srgbLinearB = -0.0196376f * linearR - 0.0786507f * linearG + 1.0982882f * linearB;
+                    // 2. Linear display-p3 → XYZ(D65) → linear sRGB
+                    color = LinearDisplayP3ToSrgb(linearR, linearG, linearB, alphaByte);
+                    return true;
+                }
 
-                    // 3. Linear sRGB to gamma-encoded sRGB (with gamut clamping)
-                    color = new CssColor(
-                        LinearToSrgbByte(srgbLinearR),
-                        LinearToSrgbByte(srgbLinearG),
-                        LinearToSrgbByte(srgbLinearB),
-                        alphaByte);
+                case "a98-rgb":
+                {
+                    // [CSS-COLOR4 §10.1] Adobe RGB 1998 to sRGB
+                    // 1. Undo a98-rgb gamma (256/563) — sign-preserving
+                    float linearR = A98RgbToLinear(channel1);
+                    float linearG = A98RgbToLinear(channel2);
+                    float linearB = A98RgbToLinear(channel3);
+
+                    // 2. Linear a98-rgb → XYZ(D65)
+                    float x = 0.5766690429f * linearR + 0.1855582379f * linearG + 0.1882286462f * linearB;
+                    float y = 0.2973449753f * linearR + 0.6273635663f * linearG + 0.0752914585f * linearB;
+                    float z = 0.0270313614f * linearR + 0.0706888525f * linearG + 0.9913375368f * linearB;
+
+                    // 3. XYZ(D65) → linear sRGB → gamma sRGB
+                    color = XyzD65ToSrgb(x, y, z, alphaByte);
+                    return true;
+                }
+
+                case "prophoto-rgb":
+                {
+                    // [CSS-COLOR4 §10.1] ProPhoto RGB to sRGB
+                    // 1. Undo ProPhoto gamma (1/1.8, linear below 1/512)
+                    float linearR = ProPhotoToLinear(channel1);
+                    float linearG = ProPhotoToLinear(channel2);
+                    float linearB = ProPhotoToLinear(channel3);
+
+                    // 2. Linear ProPhoto → XYZ(D50)
+                    float xD50 = 0.7977604896f * linearR + 0.1351917082f * linearG + 0.0313493495f * linearB;
+                    float yD50 = 0.2880711282f * linearR + 0.7118432178f * linearG + 0.0000856540f * linearB;
+                    float zD50 = 0.0000000000f * linearR + 0.0000000000f * linearG + 0.8251046026f * linearB;
+
+                    // 3. D50 → D65 Bradford chromatic adaptation
+                    float x = xD50 * 0.9555766f + yD50 * -0.0230393f + zD50 * 0.0631636f;
+                    float y = xD50 * -0.0282895f + yD50 * 1.0099416f + zD50 * 0.0210077f;
+                    float z = xD50 * 0.0122982f + yD50 * -0.0204830f + zD50 * 1.3299098f;
+
+                    // 4. XYZ(D65) → linear sRGB → gamma sRGB
+                    color = XyzD65ToSrgb(x, y, z, alphaByte);
+                    return true;
+                }
+
+                case "rec2020":
+                {
+                    // [CSS-COLOR4 §10.1] Rec. 2020 to sRGB
+                    // 1. Undo Rec. 2020 transfer function
+                    float linearR = Rec2020ToLinear(channel1);
+                    float linearG = Rec2020ToLinear(channel2);
+                    float linearB = Rec2020ToLinear(channel3);
+
+                    // 2. Linear Rec2020 → XYZ(D65)
+                    float x = 0.6369580483f * linearR + 0.1446169036f * linearG + 0.1688809752f * linearB;
+                    float y = 0.2627002120f * linearR + 0.6779980715f * linearG + 0.0593017165f * linearB;
+                    float z = 0.0000000000f * linearR + 0.0280726930f * linearG + 1.0609850577f * linearB;
+
+                    // 3. XYZ(D65) → linear sRGB → gamma sRGB
+                    color = XyzD65ToSrgb(x, y, z, alphaByte);
+                    return true;
+                }
+
+                case "xyz-d50":
+                {
+                    // [CSS-COLOR4 §10.1] XYZ with D50 white point
+                    // 1. D50 → D65 Bradford chromatic adaptation
+                    float x = channel1 * 0.9555766f + channel2 * -0.0230393f + channel3 * 0.0631636f;
+                    float y = channel1 * -0.0282895f + channel2 * 1.0099416f + channel3 * 0.0210077f;
+                    float z = channel1 * 0.0122982f + channel2 * -0.0204830f + channel3 * 1.3299098f;
+
+                    // 2. XYZ(D65) → linear sRGB → gamma sRGB
+                    color = XyzD65ToSrgb(x, y, z, alphaByte);
+                    return true;
+                }
+
+                case "xyz-d65":
+                case "xyz":
+                {
+                    // [CSS-COLOR4 §10.1] XYZ with D65 white point (xyz is alias for xyz-d65)
+                    color = XyzD65ToSrgb(channel1, channel2, channel3, alphaByte);
                     return true;
                 }
 
                 case "srgb":
+                {
+                    color = new CssColor(
+                        (byte)Math.Round(Math.Max(0f, Math.Min(1f, channel1)) * 255f),
+                        (byte)Math.Round(Math.Max(0f, Math.Min(1f, channel2)) * 255f),
+                        (byte)Math.Round(Math.Max(0f, Math.Min(1f, channel3)) * 255f),
+                        alphaByte);
+                    return true;
+                }
+
                 default:
                 {
-                    // sRGB or unknown color space: clamp to 0-1 and treat as sRGB
+                    // Unknown color space — treat as sRGB (gamut clamp)
                     color = new CssColor(
                         (byte)Math.Round(Math.Max(0f, Math.Min(1f, channel1)) * 255f),
                         (byte)Math.Round(Math.Max(0f, Math.Min(1f, channel2)) * 255f),
@@ -391,6 +631,239 @@ namespace Rend.Css.Parser.Internal
                 return srgb / 12.92f;
             }
             return (float)Math.Pow((srgb + 0.055) / 1.055, 2.4);
+        }
+
+        /// <summary>
+        /// [CSS-COLOR4 §10.1] Convert linear-light Display P3 to gamma-encoded sRGB color.
+        /// </summary>
+        private static CssColor LinearDisplayP3ToSrgb(float linearR, float linearG, float linearB, byte alpha)
+        {
+            // Linear display-p3 → XYZ(D65)
+            float x = 0.4865709486f * linearR + 0.2656676932f * linearG + 0.1982172852f * linearB;
+            float y = 0.2289745641f * linearR + 0.6917385218f * linearG + 0.0792869141f * linearB;
+            float z = 0.0000000000f * linearR + 0.0451133819f * linearG + 1.0439443689f * linearB;
+
+            return XyzD65ToSrgb(x, y, z, alpha);
+        }
+
+        /// <summary>
+        /// [CSS-COLOR4 §10.1] Convert XYZ(D65) to gamma-encoded sRGB color.
+        /// </summary>
+        private static CssColor XyzD65ToSrgb(float x, float y, float z, byte alpha)
+        {
+            float rl = x * 3.2404542f + y * -1.5371385f + z * -0.4985314f;
+            float gl = x * -0.9692660f + y * 1.8760108f + z * 0.0415560f;
+            float bl = x * 0.0556434f + y * -0.2040259f + z * 1.0572252f;
+
+            return new CssColor(
+                LinearToSrgbByte(rl),
+                LinearToSrgbByte(gl),
+                LinearToSrgbByte(bl),
+                alpha);
+        }
+
+        /// <summary>
+        /// [CSS-COLOR4 §10.1] Adobe RGB 1998 gamma decode (sign-preserving, exponent 563/256).
+        /// </summary>
+        private static float A98RgbToLinear(float value)
+        {
+            float sign = value < 0f ? -1f : 1f;
+            return sign * (float)Math.Pow(Math.Abs(value), 563.0 / 256.0);
+        }
+
+        /// <summary>
+        /// [CSS-COLOR4 §10.1] ProPhoto RGB gamma decode (linear below 1/512, else exponent 1.8).
+        /// </summary>
+        private static float ProPhotoToLinear(float value)
+        {
+            const float threshold = 16f / 512f;
+            float sign = value < 0f ? -1f : 1f;
+            float abs = Math.Abs(value);
+            if (abs <= threshold)
+            {
+                return value / 16f;
+            }
+            return sign * (float)Math.Pow(abs, 1.8);
+        }
+
+        /// <summary>
+        /// [CSS-COLOR4 §10.1] Rec. 2020 transfer function decode (BT.2020).
+        /// </summary>
+        private static float Rec2020ToLinear(float value)
+        {
+            const float alpha = 1.09929682680944f;
+            const float beta = 0.018053968510807f;
+            float sign = value < 0f ? -1f : 1f;
+            float abs = Math.Abs(value);
+            if (abs < beta * 4.5f)
+            {
+                return value / 4.5f;
+            }
+            return sign * (float)Math.Pow((abs + alpha - 1f) / alpha, 1.0 / 0.45);
+        }
+
+        /// <summary>
+        /// Convert gamma-encoded sRGB byte to linear-light float.
+        /// </summary>
+        private static float SrgbByteToLinear(byte value)
+        {
+            float s = value / 255f;
+            if (s <= 0.04045f)
+            {
+                return s / 12.92f;
+            }
+            return (float)Math.Pow((s + 0.055) / 1.055, 2.4);
+        }
+
+        /// <summary>
+        /// Convert sRGB color to CIE Lab (D50) components.
+        /// </summary>
+        private static void SrgbToLab(CssColor color, out float labL, out float labA, out float labB)
+        {
+            // sRGB → linear sRGB
+            float rl = SrgbByteToLinear(color.R);
+            float gl = SrgbByteToLinear(color.G);
+            float bl = SrgbByteToLinear(color.B);
+
+            // linear sRGB → XYZ(D65)
+            float x = 0.4124564f * rl + 0.3575761f * gl + 0.1804375f * bl;
+            float y = 0.2126729f * rl + 0.7151522f * gl + 0.0721750f * bl;
+            float z = 0.0193339f * rl + 0.1191920f * gl + 0.9503041f * bl;
+
+            // XYZ(D65) → XYZ(D50) via Bradford
+            float xD50 = 1.0479298208f * x + 0.0229456979f * y + -0.0501922219f * z;
+            float yD50 = 0.0296278156f * x + 0.9904344267f * y + -0.0170737830f * z;
+            float zD50 = -0.0092430581f * x + 0.0150551440f * y + 0.7521225698f * z;
+
+            // XYZ(D50) → Lab
+            float xn = xD50 / 0.96422f;
+            float yn = yD50 / 1.0f;
+            float zn = zD50 / 0.82521f;
+
+            float fx = LabF(xn);
+            float fy = LabF(yn);
+            float fz = LabF(zn);
+
+            labL = 116f * fy - 16f;
+            labA = 500f * (fx - fy);
+            labB = 200f * (fy - fz);
+        }
+
+        /// <summary>
+        /// Lab forward transfer function f(t).
+        /// </summary>
+        private static float LabF(float t)
+        {
+            const float delta = 6f / 29f;
+            if (t > delta * delta * delta)
+            {
+                return (float)Math.Pow(t, 1.0 / 3.0);
+            }
+            return t / (3f * delta * delta) + 4f / 29f;
+        }
+
+        /// <summary>
+        /// Convert sRGB color to CIE LCH components.
+        /// </summary>
+        private static void SrgbToLch(CssColor color, out float lchL, out float lchC, out float lchH)
+        {
+            SrgbToLab(color, out lchL, out float a, out float b);
+            lchC = (float)Math.Sqrt(a * a + b * b);
+            lchH = (float)(Math.Atan2(b, a) * 180.0 / Math.PI);
+            if (lchH < 0f)
+            {
+                lchH += 360f;
+            }
+        }
+
+        /// <summary>
+        /// Convert sRGB color to OKLab components.
+        /// </summary>
+        private static void SrgbToOklab(CssColor color, out float okL, out float okA, out float okB)
+        {
+            float rl = SrgbByteToLinear(color.R);
+            float gl = SrgbByteToLinear(color.G);
+            float bl = SrgbByteToLinear(color.B);
+
+            // linear sRGB → LMS
+            float l = 0.4122214708f * rl + 0.5363325363f * gl + 0.0514459929f * bl;
+            float m = 0.2119034982f * rl + 0.6806995451f * gl + 0.1073969566f * bl;
+            float s = 0.0883024619f * rl + 0.2817188376f * gl + 0.6299787005f * bl;
+
+            // Cube root
+            float lCbrt = (float)Math.Pow(l, 1.0 / 3.0);
+            float mCbrt = (float)Math.Pow(m, 1.0 / 3.0);
+            float sCbrt = (float)Math.Pow(s, 1.0 / 3.0);
+
+            // LMS cube roots → OKLab
+            okL = 0.2104542553f * lCbrt + 0.7936177850f * mCbrt - 0.0040720468f * sCbrt;
+            okA = 1.9779984951f * lCbrt - 2.4285922050f * mCbrt + 0.4505937099f * sCbrt;
+            okB = 0.0259040371f * lCbrt + 0.7827717662f * mCbrt - 0.8086757660f * sCbrt;
+        }
+
+        /// <summary>
+        /// Convert sRGB color to OKLCH components.
+        /// </summary>
+        private static void SrgbToOklch(CssColor color, out float okL, out float okC, out float okH)
+        {
+            SrgbToOklab(color, out okL, out float a, out float b);
+            okC = (float)Math.Sqrt(a * a + b * b);
+            okH = (float)(Math.Atan2(b, a) * 180.0 / Math.PI);
+            if (okH < 0f)
+            {
+                okH += 360f;
+            }
+        }
+
+        /// <summary>
+        /// Convert sRGB color to HSL components.
+        /// </summary>
+        private static void SrgbToHsl(CssColor color, out float h, out float s, out float l)
+        {
+            float r = color.R / 255f;
+            float g = color.G / 255f;
+            float b = color.B / 255f;
+
+            float max = Math.Max(r, Math.Max(g, b));
+            float min = Math.Min(r, Math.Min(g, b));
+            float delta = max - min;
+
+            l = (max + min) / 2f;
+
+            if (delta < 0.0001f)
+            {
+                h = 0f;
+                s = 0f;
+                return;
+            }
+
+            s = l > 0.5f ? delta / (2f - max - min) : delta / (max + min);
+
+            if (max == r)
+            {
+                h = ((g - b) / delta + (g < b ? 6f : 0f)) * 60f;
+            }
+            else if (max == g)
+            {
+                h = ((b - r) / delta + 2f) * 60f;
+            }
+            else
+            {
+                h = ((r - g) / delta + 4f) * 60f;
+            }
+        }
+
+        /// <summary>
+        /// Convert sRGB color to HWB components.
+        /// </summary>
+        private static void SrgbToHwb(CssColor color, out float h, out float w, out float bk)
+        {
+            SrgbToHsl(color, out h, out _, out _);
+            float r = color.R / 255f;
+            float g = color.G / 255f;
+            float b = color.B / 255f;
+            w = Math.Min(r, Math.Min(g, b));
+            bk = 1f - Math.Max(r, Math.Max(g, b));
         }
 
         /// <summary>
@@ -500,6 +973,12 @@ namespace Rend.Css.Parser.Internal
                 result = p.Value / 100f * maxVal;
                 return true;
             }
+            // [CSS-COLOR4 §4.1] 'none' keyword treated as 0
+            if (val is CssKeywordValue kw && string.Equals(kw.Keyword, "none", StringComparison.OrdinalIgnoreCase))
+            {
+                result = 0f;
+                return true;
+            }
             return false;
         }
 
@@ -508,6 +987,12 @@ namespace Rend.Css.Parser.Internal
             result = 0;
             if (val is CssNumberValue n) { result = n.Value; return true; }
             if (val is CssPercentageValue p) { result = p.Value / 100f; return true; }
+            // [CSS-COLOR4 §4.1] 'none' keyword treated as 0
+            if (val is CssKeywordValue kw && string.Equals(kw.Keyword, "none", StringComparison.OrdinalIgnoreCase))
+            {
+                result = 0f;
+                return true;
+            }
             return false;
         }
 

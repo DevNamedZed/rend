@@ -1327,6 +1327,10 @@ namespace Rend.Layout.Internal
                         if (float.TryParse(widthAttr, out float aw)) { intrW = aw; }
                         if (float.TryParse(heightAttr, out float ah)) { intrH = ah; }
                     }
+                    // [CSS-IMAGES-3 §2.2] SVG with viewBox but no width/height:
+                    // has intrinsic RATIO but no intrinsic dimensions.
+                    // Don't set intrinsic W/H from viewBox — let ResolveDimensions
+                    // handle it through the ratio.
                 }
                 return isColumn ? intrH : intrW;
             }

@@ -247,7 +247,9 @@ namespace Rend.Css.Parser.Internal
             {
                 ParseFunctionArgs(args);
                 if (CssColorParser.TryParseColorFunction(args, out var color))
+                {
                     return new CssColorValue(color);
+                }
                 return new CssFunctionValue(lowerName, args);
             }
 

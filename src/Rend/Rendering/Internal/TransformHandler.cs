@@ -1,17 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using Rend.Core.Values;
 using Rend.Css;
 using Rend.Css.Properties.Internal;
 using Rend.Layout;
+using Transform2D = Rend.Core.Values.Matrix3x2;
 
 namespace Rend.Rendering.Internal
 {
     /// <summary>
     /// Handles CSS transform application by converting style transforms
-    /// to a <see cref="Matrix3x2"/> and applying them to the render target.
-    /// Supports: translate, translateX, translateY, rotate, scale, scaleX, scaleY,
-    /// skew, skewX, skewY, matrix.
+    /// to a matrix and applying them to the render target.
+    /// [CSS-TRANSFORM1] 2D: translate, scale, rotate, skew, matrix.
+    /// [CSS-TRANSFORM2] 3D: perspective, rotateX/Y/Z, rotate3d, translate3d/Z,
+    ///   scale3d/Z, matrix3d.
     /// </summary>
     internal static class TransformHandler
     {
@@ -46,28 +49,39 @@ namespace Rend.Rendering.Internal
                 return false;
             }
 
-            Matrix3x2 matrix = BuildTransformMatrix(transformValue, box.BorderRect);
-            if (matrix == Matrix3x2.Identity)
-            {
-                return false;
-            }
-
             // Compute transform origin (default: center of border box)
             RectF borderRect = box.BorderRect;
             float originX = borderRect.X + borderRect.Width * 0.5f;
             float originY = borderRect.Y + borderRect.Height * 0.5f;
 
-            // Check for custom transform-origin
             object? originValue = style.GetRefValue(PropertyId.TransformOrigin);
             if (originValue is CssValue originCss)
             {
                 ResolveTransformOrigin(originCss, borderRect, out originX, out originY);
             }
 
-            // Build final matrix: translate to origin -> apply transform -> translate back
-            Matrix3x2 toOrigin = Matrix3x2.CreateTranslation(-originX, -originY);
-            Matrix3x2 fromOrigin = Matrix3x2.CreateTranslation(originX, originY);
-            Matrix3x2 finalMatrix = toOrigin * matrix * fromOrigin;
+            // [CSS-TRANSFORM2 §7] Compose perspective + transform as 4x4, then flatten
+            Matrix4x4 parentPerspective = GetParentPerspective4x4(box);
+            Matrix4x4 transform4x4 = BuildTransformMatrix4x4(transformValue, borderRect);
+
+            if (parentPerspective == Matrix4x4.Identity && transform4x4 == Matrix4x4.Identity)
+            {
+                return false;
+            }
+
+            // [CSS-TRANSFORM2 §6] Row-vector composition (System.Numerics convention):
+            // CSS column-vector: fromOrigin * perspective * transform * toOrigin
+            // Row-vector equiv:  toOrigin * transform * perspective * fromOrigin
+            var toOrigin4 = Matrix4x4.CreateTranslation(-originX, -originY, 0);
+            var fromOrigin4 = Matrix4x4.CreateTranslation(originX, originY, 0);
+            Matrix4x4 composed = toOrigin4 * transform4x4 * parentPerspective * fromOrigin4;
+
+            // Flatten 4x4 → 3x3 for rendering
+            Transform2D finalMatrix = Transform2D.FromMatrix4x4(composed);
+            if (finalMatrix == Transform2D.Identity)
+            {
+                return false;
+            }
 
             target.Save();
             target.SetTransform(finalMatrix);
@@ -83,13 +97,127 @@ namespace Rend.Rendering.Internal
         }
 
         /// <summary>
-        /// Builds a Matrix3x2 from a CSS transform value (single function or space-separated list).
+        /// [CSS-TRANSFORM2 §7] Get the perspective matrix from the parent's CSS perspective property.
+        /// Returns a 4x4 matrix to be composed with the child's transform before flattening.
         /// </summary>
-        internal static Matrix3x2 BuildTransformMatrix(CssValue value, RectF? refBox = null)
+        private static Matrix4x4 GetParentPerspective4x4(LayoutBox box)
         {
-            // Collect the transform functions
-            var functions = new List<CssFunctionValue>();
+            LayoutBox? parent = box.Parent;
+            if (parent == null)
+            {
+                return Matrix4x4.Identity;
+            }
 
+            ComputedStyle? parentStyle = parent.StyledNode?.Style;
+            if (parentStyle == null)
+            {
+                return Matrix4x4.Identity;
+            }
+
+            object? perspValue = parentStyle.GetRefValue(PropertyId.Perspective);
+            if (perspValue == null)
+            {
+                return Matrix4x4.Identity;
+            }
+
+            float distance = 0f;
+            if (perspValue is CssValue perspCss)
+            {
+                if (perspCss is CssKeywordValue kwPersp && kwPersp.Keyword == "none")
+                {
+                    return Matrix4x4.Identity;
+                }
+                distance = ResolveLength(perspCss);
+            }
+
+            if (distance <= 0f)
+            {
+                return Matrix4x4.Identity;
+            }
+
+            // [CSS-TRANSFORM2 §7] perspective matrix: M34 = -1/d
+            var perspMatrix = Matrix4x4.Identity;
+            perspMatrix.M34 = -1f / distance;
+            return perspMatrix;
+        }
+
+        /// <summary>
+        /// Build the transform as a 4x4 matrix (always, for perspective composition).
+        /// </summary>
+        private static Matrix4x4 BuildTransformMatrix4x4(CssValue value, RectF? refBox)
+        {
+            var functions = CollectFunctions(value);
+            if (functions.Count == 0)
+            {
+                return Matrix4x4.Identity;
+            }
+
+            Matrix4x4 result = Matrix4x4.Identity;
+            for (int i = 0; i < functions.Count; i++)
+            {
+                Matrix4x4 m = Parse3DFunction(functions[i], refBox);
+                result = result * m;
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Builds a Matrix3x2 from a CSS transform value (single function or space-separated list).
+        /// Uses 4x4 matrix internally for 3D transforms, then flattens to 3x3.
+        /// </summary>
+        internal static Transform2D BuildTransformMatrix(CssValue value, RectF? refBox = null)
+        {
+            var functions = CollectFunctions(value);
+            if (functions.Count == 0)
+            {
+                return Transform2D.Identity;
+            }
+
+            // Check if any function requires 3D
+            bool has3D = false;
+            for (int i = 0; i < functions.Count; i++)
+            {
+                if (Is3DFunction(functions[i].Name))
+                {
+                    has3D = true;
+                    break;
+                }
+            }
+
+            if (has3D)
+            {
+                return Build3DTransform(functions, refBox);
+            }
+
+            return Build2DTransform(functions, refBox);
+        }
+
+        private static Transform2D Build2DTransform(List<CssFunctionValue> functions, RectF? refBox)
+        {
+            Transform2D result = Transform2D.Identity;
+            for (int i = 0; i < functions.Count; i++)
+            {
+                Transform2D m = Parse2DFunction(functions[i], refBox);
+                result = result * m;
+            }
+            return result;
+        }
+
+        private static Transform2D Build3DTransform(List<CssFunctionValue> functions, RectF? refBox)
+        {
+            // [CSS-TRANSFORM2 §5] Compose transforms as 4x4 matrices, then flatten
+            Matrix4x4 result = Matrix4x4.Identity;
+            for (int i = 0; i < functions.Count; i++)
+            {
+                Matrix4x4 m = Parse3DFunction(functions[i], refBox);
+                result = result * m;
+            }
+            return Transform2D.FromMatrix4x4(result);
+        }
+
+        private static List<CssFunctionValue> CollectFunctions(CssValue value)
+        {
+            var functions = new List<CssFunctionValue>();
             if (value is CssFunctionValue fn)
             {
                 functions.Add(fn);
@@ -104,92 +232,168 @@ namespace Rend.Rendering.Internal
                     }
                 }
             }
-
-            if (functions.Count == 0)
-            {
-                return Matrix3x2.Identity;
-            }
-
-            // Per CSS spec, transforms are applied right-to-left (post-multiply).
-            // We iterate left-to-right and multiply: result = fn1 * fn2 * fn3 ...
-            Matrix3x2 result = Matrix3x2.Identity;
-            for (int i = 0; i < functions.Count; i++)
-            {
-                Matrix3x2 m = ParseTransformFunction(functions[i], refBox);
-                result = result * m;
-            }
-
-            return result;
+            return functions;
         }
 
-        private static Matrix3x2 ParseTransformFunction(CssFunctionValue fn, RectF? refBox)
+        private static bool Is3DFunction(string name)
+        {
+            string lower = name.ToLowerInvariant();
+            return lower == "rotatex" || lower == "rotatey" || lower == "rotatez"
+                || lower == "rotate3d" || lower == "translatez" || lower == "translate3d"
+                || lower == "scalez" || lower == "scale3d" || lower == "matrix3d"
+                || lower == "perspective";
+        }
+
+        private static Matrix4x4 Parse3DFunction(CssFunctionValue fn, RectF? refBox)
         {
             string name = fn.Name.ToLowerInvariant();
             var args = fn.Arguments;
 
             switch (name)
             {
+                // --- 2D functions promoted to 4x4 ---
                 case "translate":
                 {
                     float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0) : 0;
                     float ty = args.Count > 1 ? ResolveLengthOrPercent(args[1], refBox?.Height ?? 0) : 0;
-                    return Matrix3x2.CreateTranslation(tx, ty);
+                    return Matrix4x4.CreateTranslation(tx, ty, 0);
                 }
 
                 case "translatex":
                 {
                     float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0) : 0;
-                    return Matrix3x2.CreateTranslation(tx, 0);
+                    return Matrix4x4.CreateTranslation(tx, 0, 0);
                 }
 
                 case "translatey":
                 {
                     float ty = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Height ?? 0) : 0;
-                    return Matrix3x2.CreateTranslation(0, ty);
+                    return Matrix4x4.CreateTranslation(0, ty, 0);
+                }
+
+                case "translatez":
+                {
+                    float tz = args.Count > 0 ? ResolveLength(args[0]) : 0;
+                    return Matrix4x4.CreateTranslation(0, 0, tz);
+                }
+
+                case "translate3d":
+                {
+                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0) : 0;
+                    float ty = args.Count > 1 ? ResolveLengthOrPercent(args[1], refBox?.Height ?? 0) : 0;
+                    float tz = args.Count > 2 ? ResolveLength(args[2]) : 0;
+                    return Matrix4x4.CreateTranslation(tx, ty, tz);
                 }
 
                 case "scale":
                 {
                     float sx = args.Count > 0 ? GetNumber(args[0]) : 1;
                     float sy = args.Count > 1 ? GetNumber(args[1]) : sx;
-                    return Matrix3x2.CreateScale(sx, sy);
+                    return Matrix4x4.CreateScale(sx, sy, 1);
                 }
 
                 case "scalex":
                 {
                     float sx = args.Count > 0 ? GetNumber(args[0]) : 1;
-                    return Matrix3x2.CreateScale(sx, 1);
+                    return Matrix4x4.CreateScale(sx, 1, 1);
                 }
 
                 case "scaley":
                 {
                     float sy = args.Count > 0 ? GetNumber(args[0]) : 1;
-                    return Matrix3x2.CreateScale(1, sy);
+                    return Matrix4x4.CreateScale(1, sy, 1);
+                }
+
+                case "scalez":
+                {
+                    float sz = args.Count > 0 ? GetNumber(args[0]) : 1;
+                    return Matrix4x4.CreateScale(1, 1, sz);
+                }
+
+                case "scale3d":
+                {
+                    float sx = args.Count > 0 ? GetNumber(args[0]) : 1;
+                    float sy = args.Count > 1 ? GetNumber(args[1]) : 1;
+                    float sz = args.Count > 2 ? GetNumber(args[2]) : 1;
+                    return Matrix4x4.CreateScale(sx, sy, sz);
                 }
 
                 case "rotate":
                 {
                     float angle = args.Count > 0 ? ResolveAngle(args[0]) : 0;
-                    return Matrix3x2.CreateRotation(angle);
+                    return Matrix4x4.CreateRotationZ(angle);
+                }
+
+                case "rotatex":
+                {
+                    float angle = args.Count > 0 ? ResolveAngle(args[0]) : 0;
+                    return Matrix4x4.CreateRotationX(angle);
+                }
+
+                case "rotatey":
+                {
+                    float angle = args.Count > 0 ? ResolveAngle(args[0]) : 0;
+                    return Matrix4x4.CreateRotationY(angle);
+                }
+
+                case "rotatez":
+                {
+                    float angle = args.Count > 0 ? ResolveAngle(args[0]) : 0;
+                    return Matrix4x4.CreateRotationZ(angle);
+                }
+
+                case "rotate3d":
+                {
+                    float rx = args.Count > 0 ? GetNumber(args[0]) : 0;
+                    float ry = args.Count > 1 ? GetNumber(args[1]) : 0;
+                    float rz = args.Count > 2 ? GetNumber(args[2]) : 0;
+                    float angle = args.Count > 3 ? ResolveAngle(args[3]) : 0;
+                    var axis = new Vector3(rx, ry, rz);
+                    float length = axis.Length();
+                    if (length < 0.0001f)
+                    {
+                        return Matrix4x4.Identity;
+                    }
+                    return Matrix4x4.CreateFromAxisAngle(axis / length, angle);
                 }
 
                 case "skew":
                 {
                     float ax = args.Count > 0 ? ResolveAngle(args[0]) : 0;
                     float ay = args.Count > 1 ? ResolveAngle(args[1]) : 0;
-                    return Matrix3x2.CreateSkew(ax, ay);
+                    var m = Matrix4x4.Identity;
+                    m.M21 = (float)Math.Tan(ax);
+                    m.M12 = (float)Math.Tan(ay);
+                    return m;
                 }
 
                 case "skewx":
                 {
                     float ax = args.Count > 0 ? ResolveAngle(args[0]) : 0;
-                    return Matrix3x2.CreateSkew(ax, 0);
+                    var m = Matrix4x4.Identity;
+                    m.M21 = (float)Math.Tan(ax);
+                    return m;
                 }
 
                 case "skewy":
                 {
                     float ay = args.Count > 0 ? ResolveAngle(args[0]) : 0;
-                    return Matrix3x2.CreateSkew(0, ay);
+                    var m = Matrix4x4.Identity;
+                    m.M12 = (float)Math.Tan(ay);
+                    return m;
+                }
+
+                case "perspective":
+                {
+                    // [CSS-TRANSFORM2 §14] perspective(d)
+                    float distance = args.Count > 0 ? ResolveLength(args[0]) : 0;
+                    if (distance <= 0)
+                    {
+                        return Matrix4x4.Identity;
+                    }
+                    var m = Matrix4x4.Identity;
+                    m.M34 = -1f / distance;
+                    return m;
                 }
 
                 case "matrix":
@@ -202,13 +406,126 @@ namespace Rend.Rendering.Internal
                         float d = GetNumber(args[3]);
                         float e = GetNumber(args[4]);
                         float f = GetNumber(args[5]);
-                        return new Matrix3x2(a, b, c, d, e, f);
+                        // CSS matrix(a,b,c,d,e,f) → 4x4
+                        return new Matrix4x4(
+                            a, b, 0, 0,
+                            c, d, 0, 0,
+                            0, 0, 1, 0,
+                            e, f, 0, 1);
                     }
-                    return Matrix3x2.Identity;
+                    return Matrix4x4.Identity;
+                }
+
+                case "matrix3d":
+                {
+                    // [CSS-TRANSFORM2 §14] matrix3d(16 values in column-major order)
+                    if (args.Count >= 16)
+                    {
+                        return new Matrix4x4(
+                            GetNumber(args[0]), GetNumber(args[1]),
+                            GetNumber(args[2]), GetNumber(args[3]),
+                            GetNumber(args[4]), GetNumber(args[5]),
+                            GetNumber(args[6]), GetNumber(args[7]),
+                            GetNumber(args[8]), GetNumber(args[9]),
+                            GetNumber(args[10]), GetNumber(args[11]),
+                            GetNumber(args[12]), GetNumber(args[13]),
+                            GetNumber(args[14]), GetNumber(args[15]));
+                    }
+                    return Matrix4x4.Identity;
                 }
 
                 default:
-                    return Matrix3x2.Identity;
+                    return Matrix4x4.Identity;
+            }
+        }
+
+        private static Transform2D Parse2DFunction(CssFunctionValue fn, RectF? refBox)
+        {
+            string name = fn.Name.ToLowerInvariant();
+            var args = fn.Arguments;
+
+            switch (name)
+            {
+                case "translate":
+                {
+                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0) : 0;
+                    float ty = args.Count > 1 ? ResolveLengthOrPercent(args[1], refBox?.Height ?? 0) : 0;
+                    return Transform2D.CreateTranslation(tx, ty);
+                }
+
+                case "translatex":
+                {
+                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0) : 0;
+                    return Transform2D.CreateTranslation(tx, 0);
+                }
+
+                case "translatey":
+                {
+                    float ty = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Height ?? 0) : 0;
+                    return Transform2D.CreateTranslation(0, ty);
+                }
+
+                case "scale":
+                {
+                    float sx = args.Count > 0 ? GetNumber(args[0]) : 1;
+                    float sy = args.Count > 1 ? GetNumber(args[1]) : sx;
+                    return Transform2D.CreateScale(sx, sy);
+                }
+
+                case "scalex":
+                {
+                    float sx = args.Count > 0 ? GetNumber(args[0]) : 1;
+                    return Transform2D.CreateScale(sx, 1);
+                }
+
+                case "scaley":
+                {
+                    float sy = args.Count > 0 ? GetNumber(args[0]) : 1;
+                    return Transform2D.CreateScale(1, sy);
+                }
+
+                case "rotate":
+                {
+                    float angle = args.Count > 0 ? ResolveAngle(args[0]) : 0;
+                    return Transform2D.CreateRotation(angle);
+                }
+
+                case "skew":
+                {
+                    float ax = args.Count > 0 ? ResolveAngle(args[0]) : 0;
+                    float ay = args.Count > 1 ? ResolveAngle(args[1]) : 0;
+                    return Transform2D.CreateSkew(ax, ay);
+                }
+
+                case "skewx":
+                {
+                    float ax = args.Count > 0 ? ResolveAngle(args[0]) : 0;
+                    return Transform2D.CreateSkew(ax, 0);
+                }
+
+                case "skewy":
+                {
+                    float ay = args.Count > 0 ? ResolveAngle(args[0]) : 0;
+                    return Transform2D.CreateSkew(0, ay);
+                }
+
+                case "matrix":
+                {
+                    if (args.Count >= 6)
+                    {
+                        float a = GetNumber(args[0]);
+                        float b = GetNumber(args[1]);
+                        float c = GetNumber(args[2]);
+                        float d = GetNumber(args[3]);
+                        float e = GetNumber(args[4]);
+                        float f = GetNumber(args[5]);
+                        return new Transform2D(a, b, c, d, e, f);
+                    }
+                    return Transform2D.Identity;
+                }
+
+                default:
+                    return Transform2D.Identity;
             }
         }
 
@@ -224,19 +541,17 @@ namespace Rend.Rendering.Internal
                 originX = borderRect.X + ResolveOriginComponent(list.Values[0], borderRect.Width);
                 originY = borderRect.Y + ResolveOriginComponent(list.Values[1], borderRect.Height);
             }
-            else if (value is CssKeywordValue kw)
+            else if (value is CssKeywordValue kwOrigin)
             {
-                ResolveOriginKeyword(kw.Keyword, borderRect, out originX, out originY);
+                ResolveOriginKeyword(kwOrigin.Keyword, borderRect, out originX, out originY);
             }
             else if (value is CssDimensionValue dim)
             {
                 originX = borderRect.X + ResolveLengthValue(dim);
-                // Y stays at center
             }
             else if (value is CssPercentageValue pct)
             {
                 originX = borderRect.X + pct.Value / 100f * borderRect.Width;
-                // Y stays at center
             }
         }
 
@@ -254,9 +569,9 @@ namespace Rend.Rendering.Internal
             {
                 return 0;
             }
-            if (value is CssKeywordValue kw)
+            if (value is CssKeywordValue kwComp)
             {
-                switch (kw.Keyword)
+                switch (kwComp.Keyword)
                 {
                     case "left":
                     case "top":
@@ -268,7 +583,7 @@ namespace Rend.Rendering.Internal
                         return size;
                 }
             }
-            return size * 0.5f; // default: center
+            return size * 0.5f;
         }
 
         private static void ResolveOriginKeyword(string keyword, RectF borderRect,
@@ -292,7 +607,6 @@ namespace Rend.Rendering.Internal
                     originY = borderRect.Y + borderRect.Height;
                     break;
                 case "center":
-                    // Already center
                     break;
             }
         }
@@ -305,7 +619,7 @@ namespace Rend.Rendering.Internal
             }
             if (value is CssNumberValue num)
             {
-                return num.Value; // unitless: treat as px
+                return num.Value;
             }
             if (value is CssPercentageValue pct)
             {
@@ -328,7 +642,9 @@ namespace Rend.Rendering.Internal
                 case "in": return dim.Value * 96f;
                 case "cm": return dim.Value * 96f / 2.54f;
                 case "mm": return dim.Value * 96f / 25.4f;
-                default: return dim.Value; // assume px
+                case "em": return dim.Value * 16f; // Approximate em as 16px
+                case "rem": return dim.Value * 16f;
+                default: return dim.Value;
             }
         }
 
@@ -342,13 +658,11 @@ namespace Rend.Rendering.Internal
                     case "rad": return dim.Value;
                     case "grad": return dim.Value * ((float)Math.PI / 200f);
                     case "turn": return dim.Value * 2f * (float)Math.PI;
-                    default: return dim.Value * ((float)Math.PI / 180f); // assume deg
+                    default: return dim.Value * ((float)Math.PI / 180f);
                 }
             }
             if (value is CssNumberValue num)
             {
-                // Unitless angle: CSS spec says 0 is valid, others are not,
-                // but we'll be lenient and treat as degrees
                 return num.Value * ((float)Math.PI / 180f);
             }
             return 0;

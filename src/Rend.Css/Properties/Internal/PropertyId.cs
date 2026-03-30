@@ -389,7 +389,13 @@ namespace Rend.Css.Properties.Internal
         public const int ContainIntrinsicWidth = 214;
         public const int ContainIntrinsicHeight = 215;
 
+        // 3D Transforms
+        public const int Perspective = 216;
+        public const int PerspectiveOrigin = 217;
+        public const int TransformStyle = 218;
+        public const int BackfaceVisibility = 219;
+
         // Total count
-        public const int Count = 216;
+        public const int Count = 220;
     }
 }
