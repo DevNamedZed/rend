@@ -148,6 +148,7 @@ namespace Rend.Rendering.Internal
             bool hasTransform = false;
 
             // Check CSS computed style for transform (from stylesheet rules)
+            string? svgTransformAttr = elem.GetAttribute("transform");
             if (styledElem != null)
             {
                 object? cssTransformVal = styledElem.Style.GetRefValue(PropertyId.Transform);
@@ -155,7 +156,14 @@ namespace Rend.Rendering.Internal
                     !(csvTransform is CssKeywordValue noneKw && noneKw.Keyword == "none"))
                 {
                     transformMatrix = TransformHandler.BuildTransformMatrix(csvTransform);
-                    hasTransform = true;
+                    // [CSS-TRANSFORM §1] Invalid CSS transform (zero/degenerate) → fall back to SVG attribute
+                    float det = transformMatrix.M11 * transformMatrix.M22 - transformMatrix.M12 * transformMatrix.M21;
+                    hasTransform = transformMatrix != Matrix3x2.Identity && Math.Abs(det) > 0.0001f;
+                    if (!hasTransform && svgTransformAttr != null)
+                    {
+                        transformMatrix = ParseTransform(svgTransformAttr);
+                        hasTransform = true;
+                    }
                 }
             }
 
@@ -166,16 +174,12 @@ namespace Rend.Rendering.Internal
                 if (cssInline != null)
                 {
                     transformMatrix = ParseCssTransform(cssInline);
-                    hasTransform = true;
+                    hasTransform = transformMatrix != Matrix3x2.Identity;
                 }
-                else
+                if (!hasTransform && svgTransformAttr != null)
                 {
-                    string? svgAttr = elem.GetAttribute("transform");
-                    if (svgAttr != null)
-                    {
-                        transformMatrix = ParseTransform(svgAttr);
-                        hasTransform = true;
-                    }
+                    transformMatrix = ParseTransform(svgTransformAttr);
+                    hasTransform = true;
                 }
             }
 
