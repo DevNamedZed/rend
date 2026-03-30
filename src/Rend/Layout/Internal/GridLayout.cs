@@ -1533,7 +1533,14 @@ namespace Rend.Layout.Internal
                     {
                         finalWidth = spanWidth - (outerWidth - finalWidth);
                     }
-                    if (IsStretch(alignBlock) && outerHeight < spanHeight && heightIsAuto)
+                    if (heightIsAuto && itemAspectRatio > 0 && !widthIsAuto
+                        && !IsStretch(alignBlock))
+                    {
+                        // [CSS-SIZING-4 §5.1] Width is definite + aspect-ratio → derive height
+                        // Only when NOT stretched — stretch overrides aspect-ratio.
+                        finalHeight = finalWidth / itemAspectRatio;
+                    }
+                    else if (IsStretch(alignBlock) && outerHeight < spanHeight && heightIsAuto)
                     {
                         finalHeight = spanHeight - (outerHeight - finalHeight);
                     }

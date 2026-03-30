@@ -166,6 +166,9 @@ namespace Rend.Css.Properties.Internal
             _refValues[PropertyId.PerspectiveOrigin] = null; // default: 50% 50%
             _refValues[PropertyId.TransformStyle] = null; // flat
             _refValues[PropertyId.BackfaceVisibility] = null; // visible
+            _refValues[PropertyId.Translate] = null; // none
+            _refValues[PropertyId.Rotate] = null; // none
+            _refValues[PropertyId.Scale] = null; // none
 
             // Multi-Column
             _values[PropertyId.ColumnCount] = PropertyValue.FromNumber(float.NaN); // auto

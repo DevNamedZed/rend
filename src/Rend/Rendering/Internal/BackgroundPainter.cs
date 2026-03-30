@@ -938,7 +938,7 @@ namespace Rend.Rendering.Internal
                 }
             }
 
-            var stops = ParseColorStops(fn.Arguments, colorStartIdx, 0, _currentColor);
+            var stops = ParseColorStops(fn.Arguments, colorStartIdx, 0, _currentColor, isConic: true);
             if (stops == null || stops.Length < 2) return null;
 
             return new GradientInfo(GradientType.Conic, stops)
@@ -981,14 +981,14 @@ namespace Rend.Rendering.Internal
             }
         }
 
-        private static GradientStop[]? ParseColorStops(System.Collections.Generic.IReadOnlyList<CssValue> args, int startIdx, float gradientLineLength = 0, CssColor? currentColor = null)
+        private static GradientStop[]? ParseColorStops(System.Collections.Generic.IReadOnlyList<CssValue> args, int startIdx, float gradientLineLength = 0, CssColor? currentColor = null, bool isConic = false)
         {
             var stops = new System.Collections.Generic.List<GradientStop>();
 
             for (int i = startIdx; i < args.Count; i++)
             {
                 CssColor? color = null;
-                float position = -1;
+                float position = float.NaN;
 
                 var val = args[i];
                 if (val is CssColorValue cv)
@@ -1020,7 +1020,7 @@ namespace Rend.Rendering.Internal
                 else continue;
 
                 // Check if next argument is a position
-                float position2 = -1;
+                float position2 = float.NaN;
                 if (i + 1 < args.Count)
                 {
                     var next = args[i + 1];
@@ -1031,14 +1031,28 @@ namespace Rend.Rendering.Internal
                     }
                     else if (next is CssDimensionValue posDim)
                     {
-                        // Convert px position to fraction of gradient line length
-                        float px = ResolveLengthValue(posDim);
-                        position = gradientLineLength > 0 ? px / gradientLineLength : px / 100f;
+                        if (isConic && IsAngleUnit(posDim.Unit))
+                        {
+                            // [CSS-IMAGES4 §3.4] Conic stops accept angle units
+                            position = ResolveAngleFraction(posDim);
+                        }
+                        else
+                        {
+                            // Convert px position to fraction of gradient line length
+                            float px = ResolveLengthValue(posDim);
+                            position = gradientLineLength > 0 ? px / gradientLineLength : px / 100f;
+                        }
+                        i++;
+                    }
+                    else if (next is CssNumberValue numPos && numPos.Value == 0)
+                    {
+                        // [CSS-IMAGES4 §3] Bare 0 is valid as 0% in gradient stops
+                        position = 0f;
                         i++;
                     }
 
                     // CSS double-position syntax: "color pos1 pos2" → two stops
-                    if (position >= 0 && i + 1 < args.Count)
+                    if (!float.IsNaN(position) && i + 1 < args.Count)
                     {
                         var next2 = args[i + 1];
                         if (next2 is CssPercentageValue pct2)
@@ -1048,8 +1062,20 @@ namespace Rend.Rendering.Internal
                         }
                         else if (next2 is CssDimensionValue posDim2)
                         {
-                            float px2 = ResolveLengthValue(posDim2);
-                            position2 = gradientLineLength > 0 ? px2 / gradientLineLength : px2 / 100f;
+                            if (isConic && IsAngleUnit(posDim2.Unit))
+                            {
+                                position2 = ResolveAngleFraction(posDim2);
+                            }
+                            else
+                            {
+                                float px2 = ResolveLengthValue(posDim2);
+                                position2 = gradientLineLength > 0 ? px2 / gradientLineLength : px2 / 100f;
+                            }
+                            i++;
+                        }
+                        else if (next2 is CssNumberValue numPos2 && numPos2.Value == 0)
+                        {
+                            position2 = 0f;
                             i++;
                         }
                     }
@@ -1059,7 +1085,7 @@ namespace Rend.Rendering.Internal
                 {
                     stops.Add(new GradientStop(color.Value, position));
                     // Double-position: add a second stop at the end position
-                    if (position2 >= 0)
+                    if (!float.IsNaN(position2))
                     {
                         stops.Add(new GradientStop(color.Value, position2));
                     }
@@ -1077,21 +1103,25 @@ namespace Rend.Rendering.Internal
         private static void DistributeStopPositions(System.Collections.Generic.List<GradientStop> stops)
         {
             // First stop defaults to 0, last to 1
-            if (stops[0].Position < 0)
+            if (float.IsNaN(stops[0].Position))
+            {
                 stops[0] = new GradientStop(stops[0].Color, 0f);
-            if (stops[stops.Count - 1].Position < 0)
+            }
+            if (float.IsNaN(stops[stops.Count - 1].Position))
+            {
                 stops[stops.Count - 1] = new GradientStop(stops[stops.Count - 1].Color, 1f);
+            }
 
             // Distribute remaining stops evenly between known positions
             int i = 0;
             while (i < stops.Count)
             {
-                if (stops[i].Position < 0)
+                if (float.IsNaN(stops[i].Position))
                 {
                     // Find the next stop with a position
                     int start = i - 1;
                     int end = i;
-                    while (end < stops.Count && stops[end].Position < 0) end++;
+                    while (end < stops.Count && float.IsNaN(stops[end].Position)) end++;
                     if (end >= stops.Count) end = stops.Count - 1;
 
                     float startPos = stops[start].Position;
@@ -1109,6 +1139,35 @@ namespace Rend.Rendering.Internal
                 {
                     i++;
                 }
+            }
+
+            // [CSS-IMAGES3 §3.4.3] Fixup: each position must be >= previous position
+            for (int j = 1; j < stops.Count; j++)
+            {
+                if (stops[j].Position < stops[j - 1].Position)
+                {
+                    stops[j] = new GradientStop(stops[j].Color, stops[j - 1].Position);
+                }
+            }
+        }
+
+        private static bool IsAngleUnit(string unit)
+        {
+            return unit == "deg" || unit == "grad" || unit == "rad" || unit == "turn";
+        }
+
+        /// <summary>
+        /// Convert an angle dimension to a 0-1 fraction of a full circle.
+        /// </summary>
+        private static float ResolveAngleFraction(CssDimensionValue dim)
+        {
+            switch (dim.Unit)
+            {
+                case "deg": return dim.Value / 360f;
+                case "grad": return dim.Value / 400f;
+                case "rad": return dim.Value / (2f * (float)Math.PI);
+                case "turn": return dim.Value;
+                default: return dim.Value / 360f;
             }
         }
 

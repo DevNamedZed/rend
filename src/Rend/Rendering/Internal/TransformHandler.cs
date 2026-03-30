@@ -31,20 +31,25 @@ namespace Rend.Rendering.Internal
                 return false;
             }
 
+            // Check for transform property
+            CssValue? transformValue = null;
             object? rawValue = style.GetRefValue(PropertyId.Transform);
-            if (rawValue == null)
+            if (rawValue is CssValue tv && !(tv is CssKeywordValue tkw && tkw.Keyword == "none"))
             {
-                return false;
+                transformValue = tv;
             }
 
-            var transformValue = rawValue as CssValue;
-            if (transformValue == null)
-            {
-                return false;
-            }
+            // [CSS-TRANSFORM2 §2.3] Check individual transform properties
+            CssValue? translateValue = style.GetRefValue(PropertyId.Translate) as CssValue;
+            CssValue? rotateValue = style.GetRefValue(PropertyId.Rotate) as CssValue;
+            CssValue? scaleValue = style.GetRefValue(PropertyId.Scale) as CssValue;
 
-            // transform: none
-            if (transformValue is CssKeywordValue kw && kw.Keyword == "none")
+            // Skip "none" keywords
+            if (translateValue is CssKeywordValue trKw && trKw.Keyword == "none") { translateValue = null; }
+            if (rotateValue is CssKeywordValue roKw && roKw.Keyword == "none") { rotateValue = null; }
+            if (scaleValue is CssKeywordValue scKw && scKw.Keyword == "none") { scaleValue = null; }
+
+            if (transformValue == null && translateValue == null && rotateValue == null && scaleValue == null)
             {
                 return false;
             }
@@ -62,16 +67,36 @@ namespace Rend.Rendering.Internal
 
             // [CSS-TRANSFORM2 §7] Compose perspective + transform as 4x4, then flatten
             Matrix4x4 parentPerspective = GetParentPerspective4x4(box);
-            Matrix4x4 transform4x4 = BuildTransformMatrix4x4(transformValue, borderRect);
+
+            // [CSS-TRANSFORM2 §2.3] Individual properties compose as:
+            // CSS: translate * rotate * scale * transform (column-vector)
+            // Row-vector: transform * scale * rotate * translate
+            Matrix4x4 transform4x4 = Matrix4x4.Identity;
+            if (transformValue != null)
+            {
+                transform4x4 = BuildTransformMatrix4x4(transformValue, borderRect);
+            }
+            if (scaleValue != null)
+            {
+                transform4x4 = transform4x4 * ResolveScaleProperty(scaleValue);
+            }
+            if (rotateValue != null)
+            {
+                transform4x4 = transform4x4 * ResolveRotateProperty(rotateValue);
+            }
+            if (translateValue != null)
+            {
+                transform4x4 = transform4x4 * ResolveTranslateProperty(translateValue, borderRect);
+            }
 
             if (parentPerspective == Matrix4x4.Identity && transform4x4 == Matrix4x4.Identity)
             {
                 return false;
             }
 
-            // [CSS-TRANSFORM2 §6] Row-vector composition (System.Numerics convention):
-            // CSS column-vector: fromOrigin * perspective * transform * toOrigin
-            // Row-vector equiv:  toOrigin * transform * perspective * fromOrigin
+            // [CSS-TRANSFORM2 §6] Row-vector composition:
+            // CSS column-vector: fromOrigin * perspective * (translate * rotate * scale * transform) * toOrigin
+            // Row-vector equiv:  toOrigin * (transform * scale * rotate * translate) * perspective * fromOrigin
             var toOrigin4 = Matrix4x4.CreateTranslation(-originX, -originY, 0);
             var fromOrigin4 = Matrix4x4.CreateTranslation(originX, originY, 0);
             Matrix4x4 composed = toOrigin4 * transform4x4 * parentPerspective * fromOrigin4;
@@ -139,6 +164,87 @@ namespace Rend.Rendering.Internal
             var perspMatrix = Matrix4x4.Identity;
             perspMatrix.M34 = -1f / distance;
             return perspMatrix;
+        }
+
+        /// <summary>
+        /// [CSS-TRANSFORM2 §2.3] Resolve the 'translate' individual property.
+        /// Syntax: none | x [y [z]]
+        /// </summary>
+        private static Matrix4x4 ResolveTranslateProperty(CssValue value, RectF borderRect)
+        {
+            if (value is CssListValue list && list.Separator == ' ')
+            {
+                float tx = list.Values.Count > 0 ? ResolveLengthOrPercent(list.Values[0], borderRect.Width) : 0;
+                float ty = list.Values.Count > 1 ? ResolveLengthOrPercent(list.Values[1], borderRect.Height) : 0;
+                float tz = list.Values.Count > 2 ? ResolveLength(list.Values[2]) : 0;
+                return Matrix4x4.CreateTranslation(tx, ty, tz);
+            }
+            float singleTx = ResolveLengthOrPercent(value, borderRect.Width);
+            return Matrix4x4.CreateTranslation(singleTx, 0, 0);
+        }
+
+        /// <summary>
+        /// [CSS-TRANSFORM2 §2.3] Resolve the 'rotate' individual property.
+        /// Syntax: none | angle | [x y z] angle
+        /// </summary>
+        private static Matrix4x4 ResolveRotateProperty(CssValue value)
+        {
+            if (value is CssListValue list && list.Separator == ' ')
+            {
+                if (list.Values.Count == 4)
+                {
+                    float rx = GetNumber(list.Values[0]);
+                    float ry = GetNumber(list.Values[1]);
+                    float rz = GetNumber(list.Values[2]);
+                    float angle = ResolveAngle(list.Values[3]);
+                    var axis = new Vector3(rx, ry, rz);
+                    float length = axis.Length();
+                    if (length < 0.0001f)
+                    {
+                        return Matrix4x4.Identity;
+                    }
+                    return Matrix4x4.CreateFromAxisAngle(axis / length, angle);
+                }
+                if (list.Values.Count == 2)
+                {
+                    // "x angle" or "y angle" or "z angle" keyword + angle
+                    if (list.Values[0] is CssKeywordValue axisKw)
+                    {
+                        float angle = ResolveAngle(list.Values[1]);
+                        switch (axisKw.Keyword)
+                        {
+                            case "x": return Matrix4x4.CreateRotationX(angle);
+                            case "y": return Matrix4x4.CreateRotationY(angle);
+                            case "z": return Matrix4x4.CreateRotationZ(angle);
+                        }
+                    }
+                }
+            }
+            // Single angle → rotateZ
+            float singleAngle = ResolveAngle(value);
+            return Matrix4x4.CreateRotationZ(singleAngle);
+        }
+
+        /// <summary>
+        /// [CSS-TRANSFORM2 §2.3] Resolve the 'scale' individual property.
+        /// Syntax: none | sx [sy [sz]]
+        /// </summary>
+        private static Matrix4x4 ResolveScaleProperty(CssValue value)
+        {
+            if (value is CssListValue list && list.Separator == ' ')
+            {
+                float sx = list.Values.Count > 0 ? GetNumber(list.Values[0]) : 1;
+                float sy = list.Values.Count > 1 ? GetNumber(list.Values[1]) : sx;
+                float sz = list.Values.Count > 2 ? GetNumber(list.Values[2]) : 1;
+                return Matrix4x4.CreateScale(sx, sy, sz);
+            }
+            if (value is CssPercentageValue pct)
+            {
+                float s = pct.Value / 100f;
+                return Matrix4x4.CreateScale(s, s, 1);
+            }
+            float singleScale = GetNumber(value);
+            return Matrix4x4.CreateScale(singleScale, singleScale, 1);
         }
 
         /// <summary>

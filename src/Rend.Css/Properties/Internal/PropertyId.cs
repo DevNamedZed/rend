@@ -395,7 +395,12 @@ namespace Rend.Css.Properties.Internal
         public const int TransformStyle = 218;
         public const int BackfaceVisibility = 219;
 
+        // Individual Transform Properties (CSS Transforms Level 2)
+        public const int Translate = 220;
+        public const int Rotate = 221;
+        public const int Scale = 222;
+
         // Total count
-        public const int Count = 220;
+        public const int Count = 223;
     }
 }

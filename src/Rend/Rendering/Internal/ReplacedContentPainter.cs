@@ -52,7 +52,7 @@ namespace Rend.Rendering.Internal
             // SVG elements: render inline
             if (tagName == "svg")
             {
-                SvgRenderer.Render(element.Element, target, box.ContentRect);
+                SvgRenderer.Render(element.Element, target, box.ContentRect, element);
                 return;
             }
 

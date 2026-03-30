@@ -167,6 +167,55 @@ namespace Rend.Html.Parser.Internal
 
         private static readonly string _span = StringPool.HtmlNames.Intern("span");
 
+        /// <summary>
+        /// [HTML5 §13.2.6.1] SVG elements have camelCase names that the tokenizer lowercases.
+        /// This adjusts them back to the correct SVG names.
+        /// </summary>
+        private static string AdjustSvgTagName(string tag)
+        {
+            switch (tag)
+            {
+                case "altglyph": return "altGlyph";
+                case "altglyphdef": return "altGlyphDef";
+                case "altglyphitem": return "altGlyphItem";
+                case "animatecolor": return "animateColor";
+                case "animatemotion": return "animateMotion";
+                case "animatetransform": return "animateTransform";
+                case "clippath": return "clipPath";
+                case "feblend": return "feBlend";
+                case "fecolormatrix": return "feColorMatrix";
+                case "fecomponenttransfer": return "feComponentTransfer";
+                case "fecomposite": return "feComposite";
+                case "feconvolvematrix": return "feConvolveMatrix";
+                case "fediffuselighting": return "feDiffuseLighting";
+                case "fedisplacementmap": return "feDisplacementMap";
+                case "fedistantlight": return "feDistantLight";
+                case "fedropshadow": return "feDropShadow";
+                case "feflood": return "feFlood";
+                case "fefunca": return "feFuncA";
+                case "fefuncb": return "feFuncB";
+                case "fefuncg": return "feFuncG";
+                case "fefuncr": return "feFuncR";
+                case "fegaussianblur": return "feGaussianBlur";
+                case "feimage": return "feImage";
+                case "femerge": return "feMerge";
+                case "femergenode": return "feMergeNode";
+                case "femorphology": return "feMorphology";
+                case "feoffset": return "feOffset";
+                case "fepointlight": return "fePointLight";
+                case "fespecularlighting": return "feSpecularLighting";
+                case "fespotlight": return "feSpotLight";
+                case "fetile": return "feTile";
+                case "feturbulence": return "feTurbulence";
+                case "foreignobject": return "foreignObject";
+                case "glyphref": return "glyphRef";
+                case "lineargradient": return "linearGradient";
+                case "radialgradient": return "radialGradient";
+                case "textpath": return "textPath";
+                default: return tag;
+            }
+        }
+
         private void HandleForeignContent(ref HtmlToken token)
         {
             if (token.Type == HtmlTokenType.Character)
@@ -178,12 +227,15 @@ namespace Rend.Html.Parser.Internal
 
             if (token.Type == HtmlTokenType.StartTag)
             {
-                string tag = token.TagName!;
+                // [HTML5 §13.2.6.1] Adjust SVG element names (lowercase → camelCase)
+                string tag = AdjustSvgTagName(token.TagName!);
                 var el = InsertElement(tag);
                 CopyAttributes(el);
                 // In foreign content, self-closing tags are immediately closed
                 if (token.SelfClosing)
+                {
                     PopOpenElement();
+                }
                 return;
             }
 

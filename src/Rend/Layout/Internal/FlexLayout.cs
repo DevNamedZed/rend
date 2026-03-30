@@ -1288,6 +1288,29 @@ namespace Rend.Layout.Internal
                 {
                     // Row: main=width, cross=height. If height is definite, width = height * ratio.
                     float crossHeight = DimensionResolver.ResolveHeight(style, containerHeight, box);
+
+                    // [CSS-FLEXBOX §9.2 + CSS-SIZING-4 §5.1] If cross size is auto but the item
+                    // will be stretched to the container's definite cross size, that counts as
+                    // a definite cross size for aspect-ratio purposes.
+                    if (float.IsNaN(crossHeight) && !float.IsNaN(containerHeight) && containerHeight > 0)
+                    {
+                        // [CSS-FLEXBOX §9.2] align-self: auto (255) inherits parent's align-items.
+                        // Default align-items is stretch, so auto also means stretch.
+                        // [CSS-FLEXBOX §8.1] Auto margins on cross axis prevent stretching.
+                        var alignSelf = style.AlignSelf;
+                        bool willStretch = alignSelf == CssAlignItems.Stretch
+                            || (int)alignSelf == 0
+                            || (int)alignSelf == 255;
+                        bool hasAutoCrossMargin = float.IsNaN(style.MarginTop) || float.IsNaN(style.MarginBottom);
+                        if (willStretch && !hasAutoCrossMargin)
+                        {
+                            crossHeight = containerHeight
+                                - box.PaddingTop - box.PaddingBottom
+                                - box.BorderTopWidth - box.BorderBottomWidth
+                                - box.MarginTop - box.MarginBottom;
+                        }
+                    }
+
                     if (!float.IsNaN(crossHeight) && crossHeight > 0)
                     {
                         if (style.BoxSizing == CssBoxSizing.BorderBox)

@@ -221,8 +221,11 @@ namespace Rend.Css.Properties.Internal
             Register(byName, "transform-origin", PropertyId.TransformOrigin, false, PropertyValueType.Raw);
             Register(byName, "perspective", PropertyId.Perspective, false, PropertyValueType.Raw);
             Register(byName, "perspective-origin", PropertyId.PerspectiveOrigin, false, PropertyValueType.Raw);
-            Register(byName, "transform-style", PropertyId.TransformStyle, false, PropertyValueType.Keyword);
-            Register(byName, "backface-visibility", PropertyId.BackfaceVisibility, false, PropertyValueType.Keyword);
+            Register(byName, "transform-style", PropertyId.TransformStyle, false, PropertyValueType.Raw);
+            Register(byName, "backface-visibility", PropertyId.BackfaceVisibility, false, PropertyValueType.Raw);
+            Register(byName, "translate", PropertyId.Translate, false, PropertyValueType.Raw);
+            Register(byName, "rotate", PropertyId.Rotate, false, PropertyValueType.Raw);
+            Register(byName, "scale", PropertyId.Scale, false, PropertyValueType.Raw);
 
             // Multi-Column
             Register(byName, "column-count", PropertyId.ColumnCount, false, PropertyValueType.Number);
