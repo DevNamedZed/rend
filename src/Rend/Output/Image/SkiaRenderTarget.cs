@@ -1263,6 +1263,22 @@ namespace Rend.Output.Image
                 GradientStop first = brush.Gradient.Stops[0];
                 paint.Color = new SKColor(first.Color.R, first.Color.G, first.Color.B, (byte)(first.Color.A * _currentOpacity));
             }
+            else if (brush.Image != null)
+            {
+                // Tiled image fill (e.g. SVG <pattern>)
+                var imageData = brush.Image;
+                using (var skData = SKData.CreateCopy(imageData.Data))
+                using (var skImage = SKImage.FromEncodedData(skData))
+                {
+                    if (skImage != null)
+                    {
+                        paint.Shader = skImage.ToShader(SKShaderTileMode.Repeat, SKShaderTileMode.Repeat);
+                        paint.Color = new SKColor(255, 255, 255, alpha);
+                        return;
+                    }
+                }
+                paint.Color = new SKColor(brush.Color.R, brush.Color.G, brush.Color.B, (byte)(brush.Color.A * _currentOpacity));
+            }
             else
             {
                 paint.Color = new SKColor(brush.Color.R, brush.Color.G, brush.Color.B, (byte)(brush.Color.A * _currentOpacity));

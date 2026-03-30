@@ -191,6 +191,40 @@ namespace Rend.Rendering.Internal
 
             if (hasTransform)
             {
+                // [CSS-TRANSFORM §8] Apply transform-origin
+                float originX = 0f;
+                float originY = 0f;
+                bool hasOrigin = false;
+
+                // Check CSS computed style for transform-origin
+                if (styledElem != null)
+                {
+                    object? originVal = styledElem.Style.GetRefValue(PropertyId.TransformOrigin);
+                    if (originVal is CssValue originCss)
+                    {
+                        ParseSvgTransformOrigin(originCss, out originX, out originY);
+                        hasOrigin = true;
+                    }
+                }
+
+                // Fall back to SVG attribute
+                if (!hasOrigin)
+                {
+                    string? originAttr = elem.GetAttribute("transform-origin");
+                    if (originAttr != null && originAttr.Length > 0)
+                    {
+                        ParseSvgOriginAttr(originAttr, out originX, out originY);
+                        hasOrigin = true;
+                    }
+                }
+
+                if (hasOrigin && (originX != 0f || originY != 0f))
+                {
+                    var toOrigin = Matrix3x2.CreateTranslation(-originX, -originY);
+                    var fromOrigin = Matrix3x2.CreateTranslation(originX, originY);
+                    transformMatrix = toOrigin * transformMatrix * fromOrigin;
+                }
+
                 target.ConcatTransform(transformMatrix);
             }
 
@@ -850,6 +884,87 @@ namespace Rend.Rendering.Internal
             return num;
         }
 
+        /// <summary>Parse SVG transform-origin from CSS computed value.</summary>
+        private static void ParseSvgTransformOrigin(CssValue value, out float originX, out float originY)
+        {
+            originX = 0f;
+            originY = 0f;
+
+            if (value is CssListValue list && list.Separator == ' ' && list.Values.Count >= 2)
+            {
+                originX = ResolveSvgOriginValue(list.Values[0]);
+                originY = ResolveSvgOriginValue(list.Values[1]);
+            }
+            else
+            {
+                originX = ResolveSvgOriginValue(value);
+            }
+        }
+
+        private static float ResolveSvgOriginValue(CssValue value)
+        {
+            if (value is CssDimensionValue dim)
+            {
+                return ParseCssLength(dim.Value + dim.Unit);
+            }
+            if (value is CssPercentageValue pct)
+            {
+                // For SVG without transform-box, percentages are ambiguous.
+                // Default: treat as viewport fraction (not useful). Return 0.
+                return 0f;
+            }
+            if (value is CssNumberValue num)
+            {
+                return num.Value;
+            }
+            if (value is CssKeywordValue kw)
+            {
+                switch (kw.Keyword)
+                {
+                    case "center": return 0f; // Would need element size context
+                    case "left":
+                    case "top": return 0f;
+                }
+            }
+            return 0f;
+        }
+
+        /// <summary>Parse SVG transform-origin attribute value (e.g. "75" or "75 75").</summary>
+        private static void ParseSvgOriginAttr(string attr, out float originX, out float originY)
+        {
+            originX = 0f;
+            originY = 0f;
+
+            var parts = attr.Trim().Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0)
+            {
+                return;
+            }
+
+            // SVG presentation attribute: only numeric values (px) are valid
+            if (!TryParseFloat(parts[0].Trim().TrimEnd('p', 'x'), out originX))
+            {
+                originX = 0f;
+                return;
+            }
+
+            if (parts.Length >= 2)
+            {
+                if (!TryParseFloat(parts[1].Trim().TrimEnd('p', 'x'), out originY))
+                {
+                    // Invalid second value → use default
+                    originX = 0f;
+                    originY = 0f;
+                    return;
+                }
+            }
+            else
+            {
+                // Single value: second defaults to same as first (matching Chrome)
+                originY = originX;
+            }
+        }
+
         private static bool IsUrlRef(string? value)
         {
             return value != null && value.StartsWith("url(");
@@ -884,6 +999,8 @@ namespace Rend.Rendering.Internal
                     return BuildLinearGradientBrush(refElem, root, fillOpacity);
                 case "radialGradient":
                     return BuildRadialGradientBrush(refElem, root, fillOpacity);
+                case "pattern":
+                    return BuildPatternBrush(refElem, root, fillOpacity);
                 default:
                     return null;
             }
@@ -942,6 +1059,101 @@ namespace Rend.Rendering.Internal
                 Repeating = spreadMethod == "repeat" || spreadMethod == "reflect"
             };
             return BrushInfo.FromGradient(gradient);
+        }
+
+        private static BrushInfo? BuildPatternBrush(Element patternElem, Element root, float fillOpacity)
+        {
+            // Parse pattern dimensions
+            float patternWidth = ParseAttrFloat(patternElem, "width", 0);
+            float patternHeight = ParseAttrFloat(patternElem, "height", 0);
+            if (patternWidth <= 0 || patternHeight <= 0)
+            {
+                return null;
+            }
+
+            // Build a simple solid-color tile by evaluating the pattern's child rects
+            // This is a simplified approach: render children as colored rectangles
+            int tileW = Math.Max(1, (int)Math.Ceiling(patternWidth));
+            int tileH = Math.Max(1, (int)Math.Ceiling(patternHeight));
+
+            using (var tileBitmap = new SkiaSharp.SKBitmap(tileW, tileH, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul))
+            using (var tileCanvas = new SkiaSharp.SKCanvas(tileBitmap))
+            {
+                tileCanvas.Clear(SkiaSharp.SKColors.Transparent);
+
+                // Draw each child element directly on the tile canvas
+                var paint = new SkiaSharp.SKPaint { IsAntialias = true };
+                var child = patternElem.FirstChild;
+                while (child != null)
+                {
+                    if (child is Element childElem)
+                    {
+                        DrawPatternChild(childElem, tileCanvas, paint);
+                    }
+                    child = child.NextSibling;
+                }
+                paint.Dispose();
+
+                // Encode the tile and create an ImageData for tiled fill
+                using (var image = SkiaSharp.SKImage.FromBitmap(tileBitmap))
+                {
+                    if (image == null)
+                    {
+                        return null;
+                    }
+                    var encoded = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                    if (encoded == null)
+                    {
+                        return null;
+                    }
+                    var imageData = new ImageData(encoded.ToArray(), tileW, tileH, "png");
+                    return new BrushInfo { Image = imageData };
+                }
+            }
+        }
+
+        /// <summary>
+        /// Draw a simple SVG element directly onto an SKCanvas (for pattern tiles).
+        /// Supports rect, circle, ellipse, and path.
+        /// </summary>
+        private static void DrawPatternChild(Element elem, SkiaSharp.SKCanvas canvas, SkiaSharp.SKPaint paint)
+        {
+            string tag = elem.TagName;
+            var fillColor = ParseColor(elem.GetAttribute("fill"), CssColor.Black);
+            if (IsNone(elem.GetAttribute("fill")))
+            {
+                return;
+            }
+
+            paint.Color = new SkiaSharp.SKColor(fillColor.R, fillColor.G, fillColor.B, fillColor.A);
+            paint.Style = SkiaSharp.SKPaintStyle.Fill;
+
+            switch (tag)
+            {
+                case "rect":
+                {
+                    float x = ParseAttrFloat(elem, "x", 0);
+                    float y = ParseAttrFloat(elem, "y", 0);
+                    float w = ParseAttrFloat(elem, "width", 0);
+                    float h = ParseAttrFloat(elem, "height", 0);
+                    if (w > 0 && h > 0)
+                    {
+                        canvas.DrawRect(x, y, w, h, paint);
+                    }
+                    break;
+                }
+                case "circle":
+                {
+                    float cx = ParseAttrFloat(elem, "cx", 0);
+                    float cy = ParseAttrFloat(elem, "cy", 0);
+                    float r = ParseAttrFloat(elem, "r", 0);
+                    if (r > 0)
+                    {
+                        canvas.DrawCircle(cx, cy, r, paint);
+                    }
+                    break;
+                }
+            }
         }
 
         /// <summary>
