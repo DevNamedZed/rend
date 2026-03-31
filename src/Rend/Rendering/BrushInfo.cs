@@ -16,6 +16,15 @@ namespace Rend.Rendering
         /// <summary>Gets or sets the image fill data, or null for non-image fills.</summary>
         public ImageData? Image { get; set; }
 
+        /// <summary>X offset for tiled image patterns (SVG patternTransform).</summary>
+        public float ImageOffsetX { get; set; }
+
+        /// <summary>Y offset for tiled image patterns (SVG patternTransform).</summary>
+        public float ImageOffsetY { get; set; }
+
+        /// <summary>Optional local transform applied to the gradient/image shader (SVG gradientTransform).</summary>
+        public Core.Values.Matrix3x2? ShaderTransform { get; set; }
+
         /// <summary>
         /// Creates a <see cref="BrushInfo"/> for a solid color fill.
         /// </summary>

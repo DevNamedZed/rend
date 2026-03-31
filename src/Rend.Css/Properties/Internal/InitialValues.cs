@@ -169,6 +169,7 @@ namespace Rend.Css.Properties.Internal
             _refValues[PropertyId.Translate] = null; // none
             _refValues[PropertyId.Rotate] = null; // none
             _refValues[PropertyId.Scale] = null; // none
+            _refValues[PropertyId.TransformBox] = null; // view-box (SVG default)
 
             // Multi-Column
             _values[PropertyId.ColumnCount] = PropertyValue.FromNumber(float.NaN); // auto

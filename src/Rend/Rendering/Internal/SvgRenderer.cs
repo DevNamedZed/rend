@@ -174,12 +174,13 @@ namespace Rend.Rendering.Internal
                 if (cssInline != null)
                 {
                     transformMatrix = ParseCssTransform(cssInline);
-                    hasTransform = transformMatrix != Matrix3x2.Identity;
+                    float inlineDet = transformMatrix.M11 * transformMatrix.M22 - transformMatrix.M12 * transformMatrix.M21;
+                    hasTransform = transformMatrix != Matrix3x2.Identity && Math.Abs(inlineDet) > 0.0001f;
                 }
                 if (!hasTransform && svgTransformAttr != null)
                 {
                     transformMatrix = ParseTransform(svgTransformAttr);
-                    hasTransform = true;
+                    hasTransform = transformMatrix != Matrix3x2.Identity;
                 }
             }
 
@@ -200,13 +201,34 @@ namespace Rend.Rendering.Internal
                 float originY = 0f;
                 bool hasOrigin = false;
 
+                // Determine transform-box context for resolving percentages/keywords
+                bool isFillBox = false;
+                if (styledElem != null)
+                {
+                    object? boxVal = styledElem.Style.GetRefValue(PropertyId.TransformBox);
+                    if (boxVal is CssKeywordValue boxKw && boxKw.Keyword == "fill-box")
+                    {
+                        isFillBox = true;
+                    }
+                }
+
+                // Get element bounding box for fill-box resolution
+                RectF elementBbox = isFillBox ? GetElementBbox(elem) : default;
+
                 // Check CSS computed style for transform-origin
                 if (styledElem != null)
                 {
                     object? originVal = styledElem.Style.GetRefValue(PropertyId.TransformOrigin);
                     if (originVal is CssValue originCss)
                     {
-                        ParseSvgTransformOrigin(originCss, out originX, out originY);
+                        if (isFillBox)
+                        {
+                            ResolveFillBoxOrigin(originCss, elementBbox, out originX, out originY);
+                        }
+                        else
+                        {
+                            ParseSvgTransformOrigin(originCss, out originX, out originY);
+                        }
                         hasOrigin = true;
                     }
                 }
@@ -217,7 +239,14 @@ namespace Rend.Rendering.Internal
                     string? originAttr = elem.GetAttribute("transform-origin");
                     if (originAttr != null && originAttr.Length > 0)
                     {
-                        ParseSvgOriginAttr(originAttr, out originX, out originY);
+                        if (isFillBox)
+                        {
+                            ParseSvgOriginAttrFillBox(originAttr, elementBbox, out originX, out originY);
+                        }
+                        else
+                        {
+                            ParseSvgOriginAttr(originAttr, out originX, out originY);
+                        }
                         hasOrigin = true;
                     }
                 }
@@ -230,6 +259,14 @@ namespace Rend.Rendering.Internal
                 }
 
                 target.ConcatTransform(transformMatrix);
+            }
+
+            // Handle clip-path
+            bool hasClipPath = false;
+            string? clipPathAttr = elem.GetAttribute("clip-path");
+            if (IsUrlRef(clipPathAttr))
+            {
+                hasClipPath = ApplySvgClipPath(elem, target, clipPathAttr!);
             }
 
             // Build the fill brush (gradient or solid)
@@ -282,8 +319,14 @@ namespace Rend.Rendering.Internal
                     break;
             }
 
+            if (hasClipPath)
+            {
+                target.PopClip();
+            }
             if (hasTransform || opacity < 1f)
+            {
                 target.Restore();
+            }
         }
 
         private static void RenderRect(Element elem, IRenderTarget target,
@@ -581,13 +624,18 @@ namespace Rend.Rendering.Internal
         private static float ParseAttrFloat(Element elem, string name, float defaultValue)
         {
             string? val = elem.GetAttribute(name);
-            if (val == null) return defaultValue;
+            if (val == null)
+            {
+                return defaultValue;
+            }
 
-            // Strip "px" suffix if present
-            if (val.EndsWith("px"))
-                val = val.Substring(0, val.Length - 2);
+            // Handle CSS length units (cm, mm, in, pt, px, etc.)
+            if (TryParseSvgLength(val.Trim(), out float result))
+            {
+                return result;
+            }
 
-            return TryParseFloat(val, out float result) ? result : defaultValue;
+            return defaultValue;
         }
 
         private static bool TryParseFloat(string s, out float result)
@@ -628,10 +676,31 @@ namespace Rend.Rendering.Internal
                 string argsStr = transform.Substring(argsStart, i - argsStart);
                 i++; // skip ')'
 
+                // [SVG §7.6] Detect invalid syntax: trailing/leading/double commas
+                string trimmedArgs = argsStr.Trim();
+                if (trimmedArgs.EndsWith(",") || trimmedArgs.StartsWith(",") || trimmedArgs.Contains(",,"))
+                {
+                    return Matrix3x2.Identity;
+                }
+
                 var args = argsStr.Split(new[] { ',', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
                 float[] vals = new float[args.Length];
+                bool invalidArg = false;
                 for (int j = 0; j < args.Length; j++)
-                    TryParseFloat(args[j].Trim(), out vals[j]);
+                {
+                    string arg = args[j].Trim();
+                    // SVG transform values must be plain numbers — reject % and other units
+                    if (arg.EndsWith("%") || !TryParseFloat(arg, out vals[j]))
+                    {
+                        invalidArg = true;
+                        break;
+                    }
+                }
+                if (invalidArg)
+                {
+                    // [SVG §7.6] Invalid value → entire transform attribute is ignored
+                    return Matrix3x2.Identity;
+                }
 
                 switch (name)
                 {
@@ -650,18 +719,21 @@ namespace Rend.Rendering.Internal
                         break;
 
                     case "rotate":
-                        if (vals.Length >= 3)
+                        if (vals.Length == 3)
                         {
                             // rotate(angle, cx, cy) — rotate around a point
-                            // Prepend order: T(cx,cy) first, then R, then T(-cx,-cy)
-                            // so point * result = point * T(-cx,-cy) * R(angle) * T(cx,cy)
                             result = Matrix3x2.CreateTranslation(vals[1], vals[2]) * result;
                             result = Matrix3x2.CreateRotation(vals[0] * (float)(Math.PI / 180.0)) * result;
                             result = Matrix3x2.CreateTranslation(-vals[1], -vals[2]) * result;
                         }
-                        else if (vals.Length >= 1)
+                        else if (vals.Length == 1)
                         {
                             result = Matrix3x2.CreateRotation(vals[0] * (float)(Math.PI / 180.0)) * result;
+                        }
+                        else
+                        {
+                            // [SVG §7.6] rotate takes 1 or 3 args — other counts are invalid
+                            return Matrix3x2.Identity;
                         }
                         break;
 
@@ -888,6 +960,271 @@ namespace Rend.Rendering.Internal
             return num;
         }
 
+        /// <summary>
+        /// Apply SVG clipPath referenced by url(#id).
+        /// Finds the clipPath element, builds a clip rect from its children.
+        /// </summary>
+        private static bool ApplySvgClipPath(Element elem, IRenderTarget target, string clipPathValue)
+        {
+            string trimmed = clipPathValue.Trim();
+            int hashIdx = trimmed.IndexOf('#');
+            if (hashIdx < 0)
+            {
+                return false;
+            }
+
+            int endIdx = trimmed.IndexOf(')', hashIdx);
+            if (endIdx < 0)
+            {
+                endIdx = trimmed.Length;
+            }
+
+            string refId = trimmed.Substring(hashIdx + 1, endIdx - hashIdx - 1).Trim('\'', '"', ' ');
+            if (string.IsNullOrEmpty(refId))
+            {
+                return false;
+            }
+
+            var root = _currentSvgRoot ?? FindRoot(elem);
+            if (root == null)
+            {
+                return false;
+            }
+
+            var clipElem = FindById(root, refId);
+            if (clipElem == null || clipElem.TagName != "clipPath")
+            {
+                return false;
+            }
+
+            // Build clip region from clipPath children (simplified: use first rect)
+            var child = clipElem.FirstChild;
+            while (child != null)
+            {
+                if (child is Element clipChild && clipChild.TagName == "rect")
+                {
+                    float x = ParseAttrFloat(clipChild, "x", 0);
+                    float y = ParseAttrFloat(clipChild, "y", 0);
+                    float w = ParseAttrFloat(clipChild, "width", 0);
+                    float h = ParseAttrFloat(clipChild, "height", 0);
+                    if (w > 0 && h > 0)
+                    {
+                        target.PushClipRect(new RectF(x, y, w, h));
+                        return true;
+                    }
+                }
+                child = child.NextSibling;
+            }
+
+            return false;
+        }
+
+        /// <summary>Get the bounding box of an SVG element from its geometry attributes.</summary>
+        private static RectF GetElementBbox(Element elem)
+        {
+            switch (elem.TagName)
+            {
+                case "rect":
+                {
+                    float x = ParseAttrFloat(elem, "x", 0);
+                    float y = ParseAttrFloat(elem, "y", 0);
+                    float w = ParseAttrFloat(elem, "width", 0);
+                    float h = ParseAttrFloat(elem, "height", 0);
+                    return new RectF(x, y, w, h);
+                }
+                case "circle":
+                {
+                    float cx = ParseAttrFloat(elem, "cx", 0);
+                    float cy = ParseAttrFloat(elem, "cy", 0);
+                    float r = ParseAttrFloat(elem, "r", 0);
+                    return new RectF(cx - r, cy - r, r * 2, r * 2);
+                }
+                case "ellipse":
+                {
+                    float cx = ParseAttrFloat(elem, "cx", 0);
+                    float cy = ParseAttrFloat(elem, "cy", 0);
+                    float rx = ParseAttrFloat(elem, "rx", 0);
+                    float ry = ParseAttrFloat(elem, "ry", 0);
+                    return new RectF(cx - rx, cy - ry, rx * 2, ry * 2);
+                }
+                default:
+                    return default;
+            }
+        }
+
+        /// <summary>
+        /// Resolve transform-origin relative to the element's fill-box (bounding box).
+        /// Percentages and keywords resolve against the bbox dimensions.
+        /// </summary>
+        private static void ResolveFillBoxOrigin(CssValue value, RectF bbox,
+            out float originX, out float originY)
+        {
+            originX = bbox.X + bbox.Width * 0.5f;
+            originY = bbox.Y + bbox.Height * 0.5f;
+
+            if (value is CssListValue list && list.Separator == ' ' && list.Values.Count >= 2)
+            {
+                originX = bbox.X + ResolveFillBoxComponent(list.Values[0], bbox.Width);
+                originY = bbox.Y + ResolveFillBoxComponent(list.Values[1], bbox.Height);
+            }
+            else
+            {
+                originX = bbox.X + ResolveFillBoxComponent(value, bbox.Width);
+                originY = bbox.Y + bbox.Height * 0.5f;
+            }
+        }
+
+        private static float ResolveFillBoxComponent(CssValue value, float size)
+        {
+            if (value is CssDimensionValue dim)
+            {
+                return ParseCssLength(dim.Value + dim.Unit);
+            }
+            if (value is CssPercentageValue pct)
+            {
+                return pct.Value / 100f * size;
+            }
+            if (value is CssNumberValue num)
+            {
+                return num.Value;
+            }
+            if (value is CssKeywordValue kw)
+            {
+                switch (kw.Keyword)
+                {
+                    case "left":
+                    case "top": return 0f;
+                    case "center": return size * 0.5f;
+                    case "right":
+                    case "bottom": return size;
+                }
+            }
+            return size * 0.5f;
+        }
+
+        /// <summary>Parse SVG transform-origin attribute with fill-box context.</summary>
+        private static void ParseSvgOriginAttrFillBox(string attr, RectF bbox,
+            out float originX, out float originY)
+        {
+            originX = 0f;
+            originY = 0f;
+
+            var parts = attr.Trim().Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0)
+            {
+                return;
+            }
+
+            if (parts.Length == 1)
+            {
+                // Single value: try as X, Y defaults to center
+                if (IsYKeyword(parts[0]))
+                {
+                    // Single Y keyword: X=center
+                    originX = bbox.X + bbox.Width * 0.5f;
+                    TryParseOriginPartFillBox(parts[0], bbox.Height, false, out float oy);
+                    originY = bbox.Y + oy;
+                }
+                else if (TryParseOriginPartFillBox(parts[0], bbox.Width, true, out float ox))
+                {
+                    originX = bbox.X + ox;
+                    originY = bbox.Y + bbox.Height * 0.5f;
+                }
+                return;
+            }
+
+            // [SVG] Y keyword (top/bottom) as first value with non-keyword second → invalid
+            if (IsYKeyword(parts[0]) && !IsKeyword(parts[1]))
+            {
+                return;
+            }
+            // X keyword (left/right) as second value with non-keyword first → invalid
+            if (IsXKeyword(parts[1]) && !IsKeyword(parts[0]))
+            {
+                return;
+            }
+
+            // Determine axis assignment when both are keywords
+            string xPart = parts[0];
+            string yPart = parts[1];
+
+            // Swap if needed: Y keyword first or X keyword second
+            if (IsYKeyword(parts[0]) || IsXKeyword(parts[1]))
+            {
+                xPart = parts[1];
+                yPart = parts[0];
+            }
+
+            if (TryParseOriginPartFillBox(xPart, bbox.Width, true, out float ox2) &&
+                TryParseOriginPartFillBox(yPart, bbox.Height, false, out float oy2))
+            {
+                originX = bbox.X + ox2;
+                originY = bbox.Y + oy2;
+            }
+        }
+
+        private static bool IsYKeyword(string part)
+        {
+            return part == "top" || part == "bottom";
+        }
+
+        private static bool IsXKeyword(string part)
+        {
+            return part == "left" || part == "right";
+        }
+
+        private static bool IsKeyword(string part)
+        {
+            return part == "left" || part == "right" || part == "top" || part == "bottom" || part == "center";
+        }
+
+        /// <summary>
+        /// Parse one component of SVG transform-origin attribute with fill-box.
+        /// With fill-box, keywords resolve against the element bounding box.
+        /// </summary>
+        private static bool TryParseOriginPartFillBox(string part, float size,
+            bool isHorizontal, out float result)
+        {
+            result = 0f;
+            part = part.Trim();
+
+            switch (part)
+            {
+                case "center":
+                    result = size * 0.5f;
+                    return true;
+                case "left":
+                    result = isHorizontal ? 0f : float.NaN;
+                    return !float.IsNaN(result);
+                case "right":
+                    result = isHorizontal ? size : float.NaN;
+                    return !float.IsNaN(result);
+                case "top":
+                    result = !isHorizontal ? 0f : float.NaN;
+                    return !float.IsNaN(result);
+                case "bottom":
+                    result = !isHorizontal ? size : float.NaN;
+                    return !float.IsNaN(result);
+            }
+
+            if (part.EndsWith("%"))
+            {
+                if (TryParseFloat(part.TrimEnd('%'), out float pct))
+                {
+                    result = pct / 100f * size;
+                    return true;
+                }
+                return false;
+            }
+
+            if (TryParseSvgLength(part, out result))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
         /// <summary>Parse SVG transform-origin from CSS computed value.</summary>
         private static void ParseSvgTransformOrigin(CssValue value, out float originX, out float originY)
         {
@@ -933,7 +1270,7 @@ namespace Rend.Rendering.Internal
             return 0f;
         }
 
-        /// <summary>Parse SVG transform-origin attribute value (e.g. "75" or "75 75").</summary>
+        /// <summary>Parse SVG transform-origin attribute value (e.g. "75" or "75 75" or "2cm 2cm").</summary>
         private static void ParseSvgOriginAttr(string attr, out float originX, out float originY)
         {
             originX = 0f;
@@ -945,8 +1282,7 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
-            // SVG presentation attribute: only numeric values (px) are valid
-            if (!TryParseFloat(parts[0].Trim().TrimEnd('p', 'x'), out originX))
+            if (!TryParseSvgLength(parts[0].Trim(), out originX))
             {
                 originX = 0f;
                 return;
@@ -954,9 +1290,8 @@ namespace Rend.Rendering.Internal
 
             if (parts.Length >= 2)
             {
-                if (!TryParseFloat(parts[1].Trim().TrimEnd('p', 'x'), out originY))
+                if (!TryParseSvgLength(parts[1].Trim(), out originY))
                 {
-                    // Invalid second value → use default
                     originX = 0f;
                     originY = 0f;
                     return;
@@ -964,9 +1299,55 @@ namespace Rend.Rendering.Internal
             }
             else
             {
-                // Single value: second defaults to same as first (matching Chrome)
                 originY = originX;
             }
+        }
+
+        /// <summary>Parse an SVG length value with optional CSS units (px, cm, mm, in, pt, em).</summary>
+        private static bool TryParseSvgLength(string value, out float result)
+        {
+            result = 0f;
+            if (string.IsNullOrEmpty(value))
+            {
+                return false;
+            }
+
+            // Check for known CSS keywords (invalid in numeric context)
+            if (char.IsLetter(value[0]) && value != "0")
+            {
+                return false;
+            }
+
+            if (value.EndsWith("cm"))
+            {
+                return TryParseFloat(value.Substring(0, value.Length - 2), out result) && (result *= 96f / 2.54f) >= 0 || true;
+            }
+            if (value.EndsWith("mm"))
+            {
+                return TryParseFloat(value.Substring(0, value.Length - 2), out result) && (result *= 96f / 25.4f) >= 0 || true;
+            }
+            if (value.EndsWith("in"))
+            {
+                return TryParseFloat(value.Substring(0, value.Length - 2), out result) && (result *= 96f) >= 0 || true;
+            }
+            if (value.EndsWith("pt"))
+            {
+                return TryParseFloat(value.Substring(0, value.Length - 2), out result) && (result *= 96f / 72f) >= 0 || true;
+            }
+            if (value.EndsWith("pc"))
+            {
+                return TryParseFloat(value.Substring(0, value.Length - 2), out result) && (result *= 96f / 6f) >= 0 || true;
+            }
+            if (value.EndsWith("px"))
+            {
+                return TryParseFloat(value.Substring(0, value.Length - 2), out result);
+            }
+            if (value.EndsWith("em"))
+            {
+                return TryParseFloat(value.Substring(0, value.Length - 2), out result) && (result *= 16f) >= 0 || true;
+            }
+
+            return TryParseFloat(value, out result);
         }
 
         private static bool IsUrlRef(string? value)
@@ -1012,7 +1393,6 @@ namespace Rend.Rendering.Internal
 
         private static BrushInfo? BuildLinearGradientBrush(Element gradElem, Element root, float fillOpacity)
         {
-            // Resolve href/xlink:href inheritance
             gradElem = ResolveGradientHref(gradElem, root);
 
             float x1 = ParseGradientCoord(gradElem, "x1", 0f);
@@ -1023,12 +1403,24 @@ namespace Rend.Rendering.Internal
             var stops = ParseGradientStops(gradElem, fillOpacity);
             if (stops == null || stops.Length < 2) { return null; }
 
-            // Convert SVG coordinates to angle for GradientInfo
+            // [SVG §13.2.2] Parse gradientTransform for shader local matrix
+            Matrix3x2? shaderTransform = null;
+            string? gradTransformAttr = gradElem.GetAttribute("gradientTransform")
+                ?? gradElem.GetAttribute("gradienttransform");
+            if (gradTransformAttr != null)
+            {
+                var gradMatrix = ParseTransform(gradTransformAttr);
+                if (gradMatrix != Matrix3x2.Identity)
+                {
+                    shaderTransform = gradMatrix;
+                }
+            }
+
             float dx = x2 - x1;
             float dy = y2 - y1;
             float angleDeg = (float)(Math.Atan2(dy, dx) * 180.0 / Math.PI) + 90f;
 
-            string spreadMethod = gradElem.GetAttribute("spreadMethod") ?? "pad";
+            string spreadMethod = gradElem.GetAttribute("spreadMethod") ?? gradElem.GetAttribute("spreadmethod") ?? "pad";
 
             var gradient = new GradientInfo
             {
@@ -1037,7 +1429,9 @@ namespace Rend.Rendering.Internal
                 Angle = angleDeg,
                 Repeating = spreadMethod == "repeat" || spreadMethod == "reflect"
             };
-            return BrushInfo.FromGradient(gradient);
+            var brush = BrushInfo.FromGradient(gradient);
+            brush.ShaderTransform = shaderTransform;
+            return brush;
         }
 
         private static BrushInfo? BuildRadialGradientBrush(Element gradElem, Element root, float fillOpacity)
@@ -1051,7 +1445,7 @@ namespace Rend.Rendering.Internal
             var stops = ParseGradientStops(gradElem, fillOpacity);
             if (stops == null || stops.Length < 2) { return null; }
 
-            string spreadMethod = gradElem.GetAttribute("spreadMethod") ?? "pad";
+            string spreadMethod = gradElem.GetAttribute("spreadMethod") ?? gradElem.GetAttribute("spreadmethod") ?? "pad";
 
             var gradient = new GradientInfo
             {
@@ -1067,7 +1461,6 @@ namespace Rend.Rendering.Internal
 
         private static BrushInfo? BuildPatternBrush(Element patternElem, Element root, float fillOpacity)
         {
-            // Parse pattern dimensions
             float patternWidth = ParseAttrFloat(patternElem, "width", 0);
             float patternHeight = ParseAttrFloat(patternElem, "height", 0);
             if (patternWidth <= 0 || patternHeight <= 0)
@@ -1075,8 +1468,19 @@ namespace Rend.Rendering.Internal
                 return null;
             }
 
-            // Build a simple solid-color tile by evaluating the pattern's child rects
-            // This is a simplified approach: render children as colored rectangles
+            // [SVG §13.4.5] Apply patternTransform to the pattern coordinate system
+            float patternOffsetX = ParseAttrFloat(patternElem, "x", 0);
+            float patternOffsetY = ParseAttrFloat(patternElem, "y", 0);
+            string? patTransformAttr = patternElem.GetAttribute("patternTransform")
+                ?? patternElem.GetAttribute("patterntransform");
+            if (patTransformAttr != null)
+            {
+                var patMatrix = ParseTransform(patTransformAttr);
+                // For translate-only transforms, adjust the pattern offset
+                patternOffsetX += patMatrix.M31;
+                patternOffsetY += patMatrix.M32;
+            }
+
             int tileW = Math.Max(1, (int)Math.Ceiling(patternWidth));
             int tileH = Math.Max(1, (int)Math.Ceiling(patternHeight));
 
@@ -1111,7 +1515,12 @@ namespace Rend.Rendering.Internal
                         return null;
                     }
                     var imageData = new ImageData(encoded.ToArray(), tileW, tileH, "png");
-                    return new BrushInfo { Image = imageData };
+                    return new BrushInfo
+                    {
+                        Image = imageData,
+                        ImageOffsetX = patternOffsetX,
+                        ImageOffsetY = patternOffsetY
+                    };
                 }
             }
         }

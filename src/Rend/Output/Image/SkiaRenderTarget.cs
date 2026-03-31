@@ -1254,6 +1254,23 @@ namespace Rend.Output.Image
                 var shader = SkiaGradientBuilder.CreateShader(brush.Gradient, bounds);
                 if (shader != null)
                 {
+                    // [SVG §13.2.2] Apply gradientTransform — transform the shader's local matrix
+                    if (brush.ShaderTransform.HasValue)
+                    {
+                        var m = brush.ShaderTransform.Value;
+                        var skm = new SKMatrix
+                        {
+                            ScaleX = m.M11, SkewX = m.M21, TransX = m.M31,
+                            SkewY = m.M12, ScaleY = m.M22, TransY = m.M32,
+                            Persp0 = 0f, Persp1 = 0f, Persp2 = 1f
+                        };
+                        shader.Dispose();
+                        shader = SkiaGradientBuilder.CreateShader(brush.Gradient, bounds, skm);
+                        if (shader == null)
+                        {
+                            return;
+                        }
+                    }
                     paint.Shader = shader;
                     paint.Color = new SKColor(255, 255, 255, alpha);
                     return;
@@ -1272,7 +1289,16 @@ namespace Rend.Output.Image
                 {
                     if (skImage != null)
                     {
-                        paint.Shader = skImage.ToShader(SKShaderTileMode.Repeat, SKShaderTileMode.Repeat);
+                        if (brush.ImageOffsetX != 0f || brush.ImageOffsetY != 0f)
+                        {
+                            // Apply pattern offset via shader local matrix
+                            var offsetMatrix = SKMatrix.CreateTranslation(brush.ImageOffsetX, brush.ImageOffsetY);
+                            paint.Shader = skImage.ToShader(SKShaderTileMode.Repeat, SKShaderTileMode.Repeat, offsetMatrix);
+                        }
+                        else
+                        {
+                            paint.Shader = skImage.ToShader(SKShaderTileMode.Repeat, SKShaderTileMode.Repeat);
+                        }
                         paint.Color = new SKColor(255, 255, 255, alpha);
                         return;
                     }

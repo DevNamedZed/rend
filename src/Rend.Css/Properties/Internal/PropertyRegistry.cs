@@ -226,6 +226,7 @@ namespace Rend.Css.Properties.Internal
             Register(byName, "translate", PropertyId.Translate, false, PropertyValueType.Raw);
             Register(byName, "rotate", PropertyId.Rotate, false, PropertyValueType.Raw);
             Register(byName, "scale", PropertyId.Scale, false, PropertyValueType.Raw);
+            Register(byName, "transform-box", PropertyId.TransformBox, false, PropertyValueType.Raw);
 
             // Multi-Column
             Register(byName, "column-count", PropertyId.ColumnCount, false, PropertyValueType.Number);

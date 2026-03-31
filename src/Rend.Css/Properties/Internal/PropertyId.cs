@@ -399,8 +399,9 @@ namespace Rend.Css.Properties.Internal
         public const int Translate = 220;
         public const int Rotate = 221;
         public const int Scale = 222;
+        public const int TransformBox = 223;
 
         // Total count
-        public const int Count = 223;
+        public const int Count = 224;
     }
 }

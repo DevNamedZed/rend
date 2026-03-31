@@ -15,8 +15,9 @@ namespace Rend.Output.Image.Internal
         /// </summary>
         /// <param name="gradient">The gradient definition to convert.</param>
         /// <param name="bounds">The bounding rectangle for the gradient.</param>
+        /// <param name="localMatrix">Optional transform applied to the gradient shader.</param>
         /// <returns>An SKShader, or null if the gradient has no stops.</returns>
-        internal static SKShader? CreateShader(GradientInfo gradient, RectF bounds)
+        internal static SKShader? CreateShader(GradientInfo gradient, RectF bounds, SKMatrix? localMatrix = null)
         {
             if (gradient.Stops.Length == 0)
             {
@@ -40,18 +41,18 @@ namespace Rend.Output.Image.Internal
             switch (gradient.Type)
             {
                 case GradientType.Linear:
-                    return CreateLinearShader(gradient, shaderBounds, colors, positions);
+                    return CreateLinearShader(gradient, shaderBounds, colors, positions, localMatrix);
                 case GradientType.Radial:
                     return CreateRadialShader(gradient, shaderBounds, colors, positions);
                 case GradientType.Conic:
                     return CreateSweepShader(gradient, shaderBounds, colors, positions);
                 default:
-                    return CreateLinearShader(gradient, bounds, colors, positions);
+                    return CreateLinearShader(gradient, bounds, colors, positions, localMatrix);
             }
         }
 
         private static SKShader CreateLinearShader(GradientInfo gradient, RectF bounds,
-            SKColor[] colors, float[] positions)
+            SKColor[] colors, float[] positions, SKMatrix? localMatrix = null)
         {
             // CSS gradient angles: 0deg = "to top" (upward), clockwise rotation.
             // In screen coordinates (Y-down): direction = (sin(angle), -cos(angle)).
@@ -96,6 +97,15 @@ namespace Rend.Output.Image.Internal
 
             var defaultStart = new SKPoint(cx - dx * halfLen, cy - dy * halfLen);
             var defaultEnd = new SKPoint(cx + dx * halfLen, cy + dy * halfLen);
+
+            // [SVG §13.2.2] Apply gradientTransform to shader start/end points
+            if (localMatrix.HasValue)
+            {
+                var m = localMatrix.Value;
+                defaultStart = m.MapPoint(defaultStart);
+                defaultEnd = m.MapPoint(defaultEnd);
+            }
+
             return SKShader.CreateLinearGradient(defaultStart, defaultEnd, colors, positions, tileMode);
         }
 
