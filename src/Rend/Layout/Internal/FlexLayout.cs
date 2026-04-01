@@ -55,19 +55,52 @@ namespace Rend.Layout.Internal
                 }
             }
 
+            // [CSS-FLEXBOX §3] In vertical writing modes, row↔column axes are swapped.
+            // Row flex in vertical-rl/lr has vertical main axis (like column in horizontal).
+            bool isVerticalWM = BlockFormattingContext.IsVerticalWritingMode(style);
             bool isColumn = style.FlexDirection == CssFlexDirection.Column ||
                             style.FlexDirection == CssFlexDirection.ColumnReverse;
+            if (isVerticalWM)
+            {
+                isColumn = !isColumn;
+            }
             bool isReverse = style.FlexDirection == CssFlexDirection.RowReverse ||
                              style.FlexDirection == CssFlexDirection.ColumnReverse;
             bool isWrap = style.FlexWrap != CssFlexWrap.Nowrap;
+
+            // [CSS-FLEXBOX §9.4] For ROW flex, min-height provides a definite cross size
+            // floor so stretch and percentage resolution work. Only for cross axis (height
+            // in row flex), NOT main axis (height in column flex).
+            if (!isColumn)
+            {
+                float containerMinHeight = style.MinHeight;
+                if (!float.IsNaN(containerMinHeight) && containerMinHeight > 0
+                    && !DeferredPercent.IsEncoded(containerMinHeight))
+                {
+                    if (style.BoxSizing == CssBoxSizing.BorderBox)
+                    {
+                        containerMinHeight -= parent.PaddingTop + parent.PaddingBottom
+                            + parent.BorderTopWidth + parent.BorderBottomWidth;
+                        if (containerMinHeight < 0) { containerMinHeight = 0; }
+                    }
+                    if (float.IsNaN(containerHeight) || containerHeight < containerMinHeight)
+                    {
+                        containerHeight = containerMinHeight;
+                    }
+                }
+            }
 
             float mainSize = isColumn ? containerHeight : containerWidth;
             bool isAutoMainSize = false;
             if (float.IsNaN(mainSize) || mainSize <= 0)
             {
                 mainSize = isColumn ? 10000f : containerWidth;
-                if (isColumn) isAutoMainSize = true;
+                if (isColumn) { isAutoMainSize = true; }
             }
+            // Note: column flex percentage height indefiniteness is complex.
+            // The container height may come from stretch, min-height, or abs-pos insets,
+            // all of which count as definite. Only the top-level auto-height case is handled
+            // via isAutoMainSize above.
 
             float gap = isColumn ? style.RowGap : style.ColumnGap;
             if (DeferredPercent.IsEncoded(gap))
@@ -160,7 +193,7 @@ namespace Rend.Layout.Internal
                     var pseudoBox = new LayoutBox(pseudoStyled, BoxType.Block);
                     BoxModelCalculator.ApplyBoxModel(pseudoBox, pseudoStyle, containerWidth);
 
-                    float pseudoBaseSize = ResolveFlexBasis(pseudoStyle, isColumn, containerWidth, containerHeight, pseudoBox, pseudoStyled, context);
+                    float pseudoBaseSize = ResolveFlexBasis(pseudoStyle, isColumn, containerWidth, containerHeight, pseudoBox, pseudoStyled, context, isAutoMainSize);
                     items.Add(new FlexItem
                     {
                         Box = pseudoBox,
@@ -192,7 +225,56 @@ namespace Rend.Layout.Internal
                     BlockFormattingContext.LayoutChildren(posBox, context);
                     context.FloatContext = savedFc;
                     if (posHeight <= 0) posHeight = CalculateAutoHeight(posBox);
-                    posBox.ContentRect = new RectF(posBox.ContentRect.X, posBox.ContentRect.Y, posWidth, posHeight);
+
+                    // [CSS-FLEXBOX §9.3] Static position for abspos flex children:
+                    // positioned as if the sole flex item, honoring justify-content
+                    // and align-items for the static position offset.
+                    float staticX = parent.ContentRect.X;
+                    float staticY = parent.ContentRect.Y;
+                    float outerW = posWidth + posBox.MarginLeft + posBox.MarginRight
+                                 + posBox.PaddingLeft + posBox.PaddingRight
+                                 + posBox.BorderLeftWidth + posBox.BorderRightWidth;
+                    float outerH = posHeight + posBox.MarginTop + posBox.MarginBottom
+                                 + posBox.PaddingTop + posBox.PaddingBottom
+                                 + posBox.BorderTopWidth + posBox.BorderBottomWidth;
+                    // Main-axis: justify-content
+                    float mainFree = (isColumn ? containerHeight : containerWidth) - (isColumn ? outerH : outerW);
+                    if (mainFree > 0)
+                    {
+                        var justify = style.JustifyContent;
+                        if (justify == CssJustifyContent.Center)
+                        {
+                            if (isColumn) { staticY += mainFree / 2; }
+                            else { staticX += mainFree / 2; }
+                        }
+                        else if (justify == CssJustifyContent.FlexEnd || justify == CssJustifyContent.End)
+                        {
+                            if (isColumn) { staticY += mainFree; }
+                            else { staticX += mainFree; }
+                        }
+                    }
+                    // Cross-axis: align-items / align-self
+                    float crossFree = (isColumn ? containerWidth : containerHeight) - (isColumn ? outerW : outerH);
+                    if (crossFree > 0)
+                    {
+                        var alignSelf = childElement.Style.AlignSelf;
+                        if ((int)alignSelf == 255 || (int)alignSelf == 0)
+                        {
+                            alignSelf = style.AlignItems;
+                        }
+                        if (alignSelf == CssAlignItems.Center)
+                        {
+                            if (isColumn) { staticX += crossFree / 2; }
+                            else { staticY += crossFree / 2; }
+                        }
+                        else if (alignSelf == CssAlignItems.FlexEnd)
+                        {
+                            if (isColumn) { staticX += crossFree; }
+                            else { staticY += crossFree; }
+                        }
+                    }
+
+                    posBox.ContentRect = new RectF(staticX, staticY, posWidth, posHeight);
                     parent.AddChild(posBox);
                     continue;
                 }
@@ -200,7 +282,7 @@ namespace Rend.Layout.Internal
                 var box = new LayoutBox(childElement, BoxType.Block);
                 BoxModelCalculator.ApplyBoxModel(box, childElement.Style, containerWidth);
 
-                float baseSize = ResolveFlexBasis(childElement.Style, isColumn, containerWidth, containerHeight, box, childElement, context);
+                float baseSize = ResolveFlexBasis(childElement.Style, isColumn, containerWidth, containerHeight, box, childElement, context, isAutoMainSize);
                 items.Add(new FlexItem
                 {
                     Box = box,
@@ -234,14 +316,55 @@ namespace Rend.Layout.Internal
                 // the automatic minimum = content-based minimum size.
                 if (isColumn)
                 {
-                    if (isAutoMainSize && minMain <= 0
-                        && item.Style.OverflowY == CssOverflow.Visible)
+                    // [CSS-FLEXBOX §4.5] Auto min-height for column flex items.
+                    // When min-height is auto (NaN) and overflow-y is visible,
+                    // auto min = min(content size suggestion, specified size suggestion).
+                    // Content size suggestion = min-content height, clamped by max-height.
+                    // Specified size suggestion = computed height if definite (NOT flex-basis).
+                    if (minMain <= 0 && item.Style.OverflowY == CssOverflow.Visible
+                        && float.IsNaN(item.Style.MinHeight))
                     {
+                        // [CSS-FLEXBOX §4.5] When the container has definite height
+                        // and the item has a definite height, the specified size suggestion
+                        // will clamp the result. If the item's height would make auto min 0
+                        // (because content-size ≤ specified-size), we can skip measurement.
+                        // But when the container has auto height OR the item has no definite
+                        // height, we must measure content.
+                        bool shouldMeasure = isAutoMainSize
+                            || float.IsNaN(item.Style.Height)
+                            || item.Style.Height <= 0;
+                        if (shouldMeasure)
+                        {
                         float contentMin = ComputeContentMinHeight(item, containerWidth, context);
+
+                        // [CSS-FLEXBOX §4.5] Clamp content size suggestion by max-height
+                        float itemMaxH = item.Style.MaxHeight;
+                        if (DeferredPercent.IsEncoded(itemMaxH))
+                        {
+                            itemMaxH = DeferredPercent.Resolve(itemMaxH, containerHeight);
+                        }
+                        if (!float.IsNaN(itemMaxH) && itemMaxH >= 0 && contentMin > itemMaxH)
+                        {
+                            contentMin = itemMaxH;
+                        }
+
+                        // [CSS-FLEXBOX §4.5] Specified size suggestion = computed height
+                        // (not flex-basis) if definite. auto min = min(content, specified).
+                        float specHeight = item.Style.Height;
+                        if (DeferredPercent.IsEncoded(specHeight))
+                        {
+                            specHeight = DeferredPercent.Resolve(specHeight, containerHeight);
+                        }
+                        if (!float.IsNaN(specHeight) && specHeight >= 0)
+                        {
+                            contentMin = Math.Min(contentMin, specHeight);
+                        }
+
                         if (contentMin > minMain)
                         {
                             minMain = contentMin;
                             item.AutoMinMain = contentMin;
+                        }
                         }
                     }
                 }
@@ -254,7 +377,19 @@ namespace Rend.Layout.Internal
                         && float.IsNaN(item.Style.MinWidth))
                     {
                         float contentMin = ComputeContentMinWidth(item, containerWidth, context);
-                        // Clamp to specified width if set
+
+                        // [CSS-FLEXBOX §4.5] Clamp content size suggestion by max-width
+                        float itemMaxW = item.Style.MaxWidth;
+                        if (DeferredPercent.IsEncoded(itemMaxW))
+                        {
+                            itemMaxW = DeferredPercent.Resolve(itemMaxW, containerWidth);
+                        }
+                        if (!float.IsNaN(itemMaxW) && itemMaxW >= 0 && contentMin > itemMaxW)
+                        {
+                            contentMin = itemMaxW;
+                        }
+
+                        // [CSS-FLEXBOX §4.5] Specified size suggestion = computed width
                         float specWidth = item.Style.Width;
                         if (!float.IsNaN(specWidth) && specWidth >= 0
                             && !DeferredPercent.IsEncoded(specWidth))
@@ -266,6 +401,20 @@ namespace Rend.Layout.Internal
                             minMain = contentMin;
                             item.AutoMinMain = contentMin;
                         }
+                    }
+                }
+
+                // [CSS-SIZING §5.2] Resolve sizing keywords for min-width/min-height
+                float minMainRaw = isColumn ? item.Style.MinHeight : item.Style.MinWidth;
+                if (SizingKeyword.IsSizingKeyword(minMainRaw))
+                {
+                    float resolvedKeywordMin = isColumn
+                        ? ComputeContentMinHeight(item, containerWidth, context)
+                        : ComputeContentMinWidth(item, containerWidth, context);
+                    item.SizingKeywordMinMain = resolvedKeywordMin;
+                    if (resolvedKeywordMin > minMain)
+                    {
+                        minMain = resolvedKeywordMin;
                     }
                 }
 
@@ -336,30 +485,43 @@ namespace Rend.Layout.Internal
                 // For auto-sized column containers (no definite height), justify-content
                 // has no effect since there's no definite free space.
                 var effectiveJustify = style.JustifyContent;
-                // [CSS-ALIGN §6.1] left/right are physical — resolve to flex-start/flex-end
-                // based on whether the main axis runs left-to-right or right-to-left.
-                // For row: left=FlexStart, right=FlexEnd. For row-reverse: left=FlexEnd, right=FlexStart.
-                // For column: left/right have no effect (main axis is vertical).
-                if (effectiveJustify == CssJustifyContent.Left)
-                {
-                    effectiveJustify = (!isColumn && isReverse) ? CssJustifyContent.FlexEnd : CssJustifyContent.FlexStart;
-                }
-                else if (effectiveJustify == CssJustifyContent.Right)
-                {
-                    effectiveJustify = (!isColumn && isReverse) ? CssJustifyContent.FlexStart : CssJustifyContent.FlexEnd;
-                }
                 if (isAutoMainSize)
                 {
                     effectiveJustify = CssJustifyContent.FlexStart;
                 }
-                // For reverse directions, flex-start means the physical end (bottom/right),
-                // so swap flex-start ↔ flex-end for justify-content.
+                // [CSS-FLEXBOX §8.2] For reverse directions, swap flex-start ↔ flex-end.
+                // Only applies to flex-relative keywords, NOT physical ones.
                 else if (isReverse)
                 {
                     if (effectiveJustify == CssJustifyContent.FlexStart)
+                    {
                         effectiveJustify = CssJustifyContent.FlexEnd;
+                    }
                     else if (effectiveJustify == CssJustifyContent.FlexEnd)
+                    {
                         effectiveJustify = CssJustifyContent.FlexStart;
+                    }
+                }
+                // [CSS-ALIGN §6.1] Physical/logical keywords resolve AFTER flex-relative swap.
+                // start/end: writing-mode start/end. For LTR: start=left, end=right.
+                // left/right: physical. For row: left=start, right=end.
+                // For column: left/right/start/end map to flex-start (main axis is vertical,
+                // horizontal directions don't apply).
+                if (effectiveJustify == CssJustifyContent.Start
+                    || effectiveJustify == CssJustifyContent.Left)
+                {
+                    // LTR start/left: for row = physical left = flex-start.
+                    // For column = no horizontal axis → flex-start (top).
+                    effectiveJustify = CssJustifyContent.FlexStart;
+                }
+                else if (effectiveJustify == CssJustifyContent.End
+                         || effectiveJustify == CssJustifyContent.Right)
+                {
+                    // LTR end/right: for row = physical right = flex-end.
+                    // For column = no horizontal axis → flex-start (per spec: maps to start).
+                    effectiveJustify = isColumn
+                        ? CssJustifyContent.FlexStart
+                        : CssJustifyContent.FlexEnd;
                 }
 
                 // Compute remaining free space for justify-content
@@ -439,6 +601,13 @@ namespace Rend.Layout.Internal
                             {
                                 crossMax = DeferredPercent.Resolve(crossMax, containerWidth);
                             }
+                            // [CSS-SIZING §5.2] Resolve sizing keywords for max-width
+                            if (SizingKeyword.IsSizingKeyword(crossMax)
+                                && item.Box.StyledNode is StyledElement maxWEl)
+                            {
+                                crossMax = BlockFormattingContext.MeasureIntrinsicWidth(
+                                    maxWEl, crossMax, containerWidth, context);
+                            }
                             if (!float.IsNaN(crossMax) && crossMax >= 0)
                             {
                                 if (item.Style.BoxSizing == CssBoxSizing.BorderBox)
@@ -485,6 +654,19 @@ namespace Rend.Layout.Internal
                         // [CSS-SIZING §5.2] Apply cross-axis min/max constraints
                         float crossMinW = DimensionResolver.ResolvePercentWidth(item.Style.MinWidth, containerWidth);
                         float crossMaxW = DimensionResolver.ResolvePercentWidth(item.Style.MaxWidth, containerWidth);
+                        // [CSS-SIZING §5.2] Resolve sizing keywords for min/max-width
+                        if (SizingKeyword.IsSizingKeyword(item.Style.MaxWidth)
+                            && item.Box.StyledNode is StyledElement crossMaxEl)
+                        {
+                            crossMaxW = BlockFormattingContext.MeasureIntrinsicWidth(
+                                crossMaxEl, item.Style.MaxWidth, containerWidth, context);
+                        }
+                        if (SizingKeyword.IsSizingKeyword(item.Style.MinWidth)
+                            && item.Box.StyledNode is StyledElement crossMinEl)
+                        {
+                            crossMinW = BlockFormattingContext.MeasureIntrinsicWidth(
+                                crossMinEl, item.Style.MinWidth, containerWidth, context);
+                        }
                         if (item.Style.BoxSizing == CssBoxSizing.BorderBox)
                         {
                             float hExtra = box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth;
@@ -555,7 +737,8 @@ namespace Rend.Layout.Internal
                                     - box.PaddingTop - box.PaddingBottom
                                     - box.BorderTopWidth - box.BorderBottomWidth
                                     - box.MarginTop - box.MarginBottom;
-                                if (contentCross < 0) contentCross = 0;
+                                if (contentCross < 0) { contentCross = 0; }
+                                box.HasDefiniteCrossSize = true;
                             }
                         }
 
@@ -742,6 +925,40 @@ namespace Rend.Layout.Internal
             {
                 ApplyAlignContent(lines, style, isColumn, containerWidth, containerHeight, crossGap);
             }
+
+            // [CSS-FLEXBOX §9.4] flex-wrap: wrap-reverse swaps cross-start/end.
+            // For single-line containers, shift items to the cross-end.
+            if (style.FlexWrap == CssFlexWrap.WrapReverse)
+            {
+                float containerCross = isColumn ? containerWidth : containerHeight;
+                if (!float.IsNaN(containerCross) && containerCross > 0)
+                {
+                    float totalCrossUsed = 0;
+                    for (int li = 0; li < lines.Count; li++)
+                    {
+                        totalCrossUsed += lines[li].CrossSize;
+                        if (li < lines.Count - 1) { totalCrossUsed += crossGap; }
+                    }
+                    float shift = containerCross - totalCrossUsed;
+                    if (shift > 0.5f)
+                    {
+                        for (int li = 0; li < lines.Count; li++)
+                        {
+                            for (int ii = 0; ii < lines[li].Items.Count; ii++)
+                            {
+                                if (isColumn)
+                                {
+                                    OffsetBoxInPlace(lines[li].Items[ii].Box, shift, 0);
+                                }
+                                else
+                                {
+                                    OffsetBoxInPlace(lines[li].Items[ii].Box, 0, shift);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -843,25 +1060,38 @@ namespace Rend.Layout.Internal
                 {
                     containerHeight = style.Height;
                 }
+                // [CSS-FLEXBOX §9.9.1] max-height also constrains column wrap
+                if (containerHeight <= 0)
+                {
+                    float maxH = style.MaxHeight;
+                    if (!float.IsNaN(maxH) && maxH > 0 && !DeferredPercent.IsEncoded(maxH))
+                    {
+                        containerHeight = maxH;
+                    }
+                }
                 if (isWrap && containerHeight > 0 && !isMinContent)
                 {
+                    // [CSS-FLEXBOX §5.4] Sort items by order for wrapping calculation
+                    var orderedChildren = new System.Collections.Generic.List<StyledElement>();
+                    for (int oi = 0; oi < children.Count; oi++)
+                    {
+                        if (children[oi] is StyledElement oe && !oe.IsText
+                            && oe.Style.Display != CssDisplay.None
+                            && oe.Style.Position != CssPosition.Absolute
+                            && oe.Style.Position != CssPosition.Fixed)
+                        {
+                            orderedChildren.Add(oe);
+                        }
+                    }
+                    orderedChildren.Sort((a, b) => a.Style.Order.CompareTo(b.Style.Order));
+
                     float columnWidth = 0;
                     float totalWidth = 0;
                     float usedHeight = 0;
                     int colItemIndex = 0;
-                    for (int ci = 0; ci < children.Count; ci++)
+                    for (int ci = 0; ci < orderedChildren.Count; ci++)
                     {
-                        if (children[ci].IsText || children[ci] is StyledPseudoElement)
-                        {
-                            continue;
-                        }
-                        var ce = children[ci] as StyledElement;
-                        if (ce == null || ce.Style.Display == CssDisplay.None
-                            || ce.Style.Position == CssPosition.Absolute
-                            || ce.Style.Position == CssPosition.Fixed)
-                        {
-                            continue;
-                        }
+                        var ce = orderedChildren[ci];
 
                         float itemHeight = ResolveFlexBasis(ce.Style, true, containingWidth, containerHeight,
                             new LayoutBox(ce, BoxType.Block), ce, context);
@@ -887,7 +1117,12 @@ namespace Rend.Layout.Internal
             }
             else
             {
-                if (isMinContent)
+                // [CSS-FLEXBOX §9.9.1] Row flex intrinsic main size.
+                // For wrapping containers, min-content = widest single item.
+                // For single-line containers, min-content = sum of all items' min-content + gaps
+                // (all items are forced onto one line).
+                bool isWrap = style.FlexWrap != CssFlexWrap.Nowrap;
+                if (isMinContent && isWrap)
                 {
                     return maxItemWidth;
                 }
@@ -1027,6 +1262,22 @@ namespace Rend.Layout.Internal
                         flexBasis = 0;
                     }
                 }
+
+                // [CSS-FLEXBOX §9.9.1] Max-content contribution is clamped by auto min-width.
+                // When min-width is auto and overflow is visible, the content-based minimum
+                // provides a floor for the intrinsic contribution.
+                float minW = childStyle.MinWidth;
+                bool autoMinWidth = float.IsNaN(minW) || minW < 0;
+                if (autoMinWidth && childStyle.OverflowX == CssOverflow.Visible && !isMinContent)
+                {
+                    float contentMin = MeasureChildIntrinsicContentWidth(childElement, childStyle,
+                        measureBox, true, containingWidth, context);
+                    if (contentMin > flexBasis)
+                    {
+                        flexBasis = contentMin;
+                    }
+                }
+
                 return flexBasis + horizontalExtra;
             }
 
@@ -1080,7 +1331,8 @@ namespace Rend.Layout.Internal
         }
 
         private static float ResolveFlexBasis(ComputedStyle style, bool isColumn, float containerWidth,
-            float containerHeight, LayoutBox box, StyledElement element, LayoutContext context)
+            float containerHeight, LayoutBox box, StyledElement element, LayoutContext context,
+            bool isAutoMainSize = false)
         {
             float basis = style.FlexBasis;
             if (!float.IsNaN(basis) && basis >= 0)
@@ -1162,10 +1414,15 @@ namespace Rend.Layout.Internal
                 indefinitePercentBasis = true;
             }
 
-            // [CSS-FLEXBOX §7.1.1] flex-basis: content (stored as MaxContent sentinel)
-            // → skip width/height fallback, go straight to content measurement.
+            // [CSS-FLEXBOX §7.1.1] flex-basis: content → use max-content size directly.
+            // Unlike auto basis, this uses intrinsic sizing (not container-constrained).
             if (SizingKeyword.IsSizingKeyword(basis))
             {
+                if (element != null && !isColumn)
+                {
+                    return BlockFormattingContext.MeasureIntrinsicWidth(
+                        element, SizingKeyword.MaxContent, containerWidth, context);
+                }
                 indefinitePercentBasis = true;
             }
 
@@ -1210,7 +1467,16 @@ namespace Rend.Layout.Internal
                     // Resolve deferred percentage (sentinel offset encoding)
                     if (DeferredPercent.IsEncoded(size))
                     {
-                        size = DeferredPercent.Resolve(size, isColumn ? containerHeight : containerWidth);
+                        // [CSS-FLEXBOX §9.8] Percentage main sizes in column flex with
+                        // indefinite container height resolve to auto (content-based).
+                        if (isAutoMainSize && isColumn)
+                        {
+                            size = float.NaN;
+                        }
+                        else
+                        {
+                            size = DeferredPercent.Resolve(size, isColumn ? containerHeight : containerWidth);
+                        }
                     }
                     if (size >= 0)
                     {
@@ -1422,7 +1688,14 @@ namespace Rend.Layout.Internal
                 w = containerWidth - BoxModelCalculator.GetHorizontalSpacing(measureBox);
             }
             measureBox.ContentRect = new RectF(0, 0, w, 0);
+            var savedFloatCtx = context.FloatContext;
+            var savedCbw = context.ContainingBlockWidth;
+            var savedCbh = context.ContainingBlockHeight;
+            context.FloatContext = null;
             BlockFormattingContext.LayoutChildren(measureBox, context);
+            context.FloatContext = savedFloatCtx;
+            context.ContainingBlockWidth = savedCbw;
+            context.ContainingBlockHeight = savedCbh;
             return CalculateAutoHeight(measureBox);
         }
 
@@ -1444,9 +1717,13 @@ namespace Rend.Layout.Internal
             float measureWidth = 10000f;
             measureBox.ContentRect = new RectF(0, 0, measureWidth, 0);
             var savedFloatCtx = context.FloatContext;
+            var savedCbw = context.ContainingBlockWidth;
+            var savedCbh = context.ContainingBlockHeight;
             context.FloatContext = null;
             BlockFormattingContext.LayoutChildren(measureBox, context);
             context.FloatContext = savedFloatCtx;
+            context.ContainingBlockWidth = savedCbw;
+            context.ContainingBlockHeight = savedCbh;
             float contentWidth = BlockFormattingContext.GetContentExtent(measureBox);
             return contentWidth;
         }
@@ -1595,21 +1872,19 @@ namespace Rend.Layout.Internal
                     box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y,
                                                 box.ContentRect.Width, newHeight);
 
-                    if (newHeight > oldHeight + 0.01f)
+                    // [CSS-FLEXBOX §9.8] After stretch, the item's cross size is definite.
+                    box.HasDefiniteCrossSize = true;
+
+                    // Re-layout children so percentage heights resolve against the
+                    // stretched size, not the initial content-based size.
+                    if (newHeight > oldHeight + 0.01f && box.Children.Count > 0)
                     {
-                        bool needsRelayout = item.Style.Display == CssDisplay.Flex
-                            || item.Style.Display == CssDisplay.InlineFlex
-                            || item.Style.Display == CssDisplay.Grid
-                            || item.Style.Display == CssDisplay.InlineGrid;
-                        if (needsRelayout)
-                        {
-                            box.ClearChildren();
-                            box.LineBoxes?.Clear();
-                            var savedFc = context.FloatContext;
-                            context.FloatContext = null;
-                            BlockFormattingContext.LayoutChildren(box, context);
-                            context.FloatContext = savedFc;
-                        }
+                        box.ClearChildren();
+                        box.LineBoxes?.Clear();
+                        var savedFc = context.FloatContext;
+                        context.FloatContext = null;
+                        BlockFormattingContext.LayoutChildren(box, context);
+                        context.FloatContext = savedFc;
                     }
                 }
             }
@@ -1629,12 +1904,14 @@ namespace Rend.Layout.Internal
             totalLineCross += crossGap * (lines.Count - 1);
 
             float crossSpace = isColumn ? containerWidth : containerHeight;
-            if (float.IsNaN(crossSpace) || crossSpace <= totalLineCross)
+            if (float.IsNaN(crossSpace) || crossSpace <= 0)
             {
                 return;
             }
 
             float freeCrossSpace = crossSpace - totalLineCross;
+            // [CSS-FLEXBOX §9.4] align-content applies even when content overflows
+            // (freeCrossSpace < 0). Only skip for distribution modes with no free space.
             var alignContent = style.AlignContent;
             float lineOffset = 0;
             float lineGap = 0;
@@ -1648,30 +1925,45 @@ namespace Rend.Layout.Internal
                 case CssAlignItems.End:
                     lineOffset = freeCrossSpace;
                     break;
+                // Distribution modes fall back to flex-start when no positive free space
+                // [CSS-ALIGN §5.3] If free space is negative, behave as start alignment
                 case CssAlignItems.SpaceBetween:
-                    if (lines.Count > 1)
+                    if (freeCrossSpace > 0 && lines.Count > 1)
                     {
                         lineGap = freeCrossSpace / (lines.Count - 1);
                     }
                     break;
                 case CssAlignItems.SpaceAround:
-                    if (lines.Count > 0)
+                    if (freeCrossSpace > 0 && lines.Count > 0)
                     {
                         float halfGap = freeCrossSpace / (lines.Count * 2);
                         lineOffset = halfGap;
                         lineGap = halfGap * 2;
                     }
+                    else if (freeCrossSpace < 0)
+                    {
+                        // [CSS-ALIGN §5.3] Fallback to center when negative
+                        lineOffset = freeCrossSpace / 2;
+                    }
                     break;
                 case CssAlignItems.SpaceEvenly:
-                    if (lines.Count > 0)
+                    if (freeCrossSpace > 0 && lines.Count > 0)
                     {
                         float evenGap = freeCrossSpace / (lines.Count + 1);
                         lineOffset = evenGap;
                         lineGap = evenGap;
                     }
+                    else if (freeCrossSpace < 0)
+                    {
+                        lineOffset = freeCrossSpace / 2;
+                    }
                     break;
                 case CssAlignItems.Stretch:
                 default:
+                    if (freeCrossSpace <= 0)
+                    {
+                        return;
+                    }
                     ApplyAlignContentStretch(lines, style, freeCrossSpace, isColumn);
                     return;
                 case CssAlignItems.FlexStart:
@@ -1680,12 +1972,12 @@ namespace Rend.Layout.Internal
                     break;
             }
 
-            if (lineOffset > 0 || lineGap > 0)
+            if (lineOffset != 0 || lineGap != 0)
             {
                 float cumOffset = lineOffset;
                 for (int li = 0; li < lines.Count; li++)
                 {
-                    if (cumOffset > 0)
+                    if (cumOffset != 0)
                     {
                         for (int i = 0; i < lines[li].Items.Count; i++)
                         {
@@ -2080,6 +2372,16 @@ namespace Rend.Layout.Internal
                 explicitMin = DeferredPercent.Resolve(explicitMin,
                     isColumn ? item.ContainerHeight : item.ContainerWidth);
             }
+            // [CSS-SIZING §5.2] Resolve sizing keywords (min-content, max-content, fit-content)
+            // for min-width/min-height to actual pixel values.
+            if (SizingKeyword.IsSizingKeyword(explicitMin))
+            {
+                if (item.SizingKeywordMinMain > 0)
+                {
+                    return item.SizingKeywordMinMain;
+                }
+                return 0;
+            }
             if (!float.IsNaN(explicitMin) && explicitMin > 0)
             {
                 return explicitMin;
@@ -2223,6 +2525,7 @@ namespace Rend.Layout.Internal
             public float ResolvedMainSize { get; set; }
             public int Order { get; set; }
             public float AutoMinMain { get; set; }
+            public float SizingKeywordMinMain { get; set; }
             public float ContainerWidth { get; set; }
             public float ContainerHeight { get; set; }
         }

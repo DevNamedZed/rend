@@ -88,9 +88,21 @@ namespace Rend.Layout.Internal
                              + floatBox.BorderLeftWidth + floatBox.BorderRightWidth
                              + floatBox.MarginLeft + floatBox.MarginRight;
 
-            // Layout contents to get height
+            // Layout contents to get height.
+            // [CSS2 §9.5] For flex/grid/table floats, dispatch to the correct formatting
+            // context. For plain blocks, use BFC.Layout which handles mixed content,
+            // anonymous blocks, and margin collapsing correctly.
             floatBox.ContentRect = new RectF(0, 0, contentWidth, 0);
-            BlockFormattingContext.Layout(floatBox, context);
+            if (style.Display == CssDisplay.Flex || style.Display == CssDisplay.InlineFlex
+                || style.Display == CssDisplay.Grid || style.Display == CssDisplay.InlineGrid
+                || style.Display == CssDisplay.Table)
+            {
+                BlockFormattingContext.LayoutChildren(floatBox, context);
+            }
+            else
+            {
+                BlockFormattingContext.Layout(floatBox, context);
+            }
 
             float contentHeight = DimensionResolver.ResolveHeight(style, float.NaN, floatBox);
             if (float.IsNaN(contentHeight))

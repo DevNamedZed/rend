@@ -109,9 +109,15 @@ namespace Rend.Css.Resolution.Internal
                     if (TryResolveNumber(value, out result))
                     {
                         // [CSS-FLEXBOX §7.2/§7.3] flex-grow and flex-shrink must be non-negative.
-                        // [CSS-COLOR §3.2] opacity must be in [0,1] but clamps, not rejects.
                         if ((prop.Id == PropertyId.FlexGrow || prop.Id == PropertyId.FlexShrink)
                             && result.FloatValue < 0)
+                        {
+                            result = default;
+                            return false;
+                        }
+                        // [CSS-FLEXBOX §5.4] order must be an integer
+                        if (prop.Id == PropertyId.Order
+                            && result.FloatValue != (float)(int)result.FloatValue)
                         {
                             result = default;
                             return false;
@@ -1394,8 +1400,8 @@ namespace Rend.Css.Resolution.Internal
                 case "start": result = PropertyValue.FromKeyword((int)CssJustifyContent.Start); return true;
                 case "end": result = PropertyValue.FromKeyword((int)CssJustifyContent.End); return true;
                 case "stretch": result = PropertyValue.FromKeyword((int)CssJustifyContent.Stretch); return true;
-                case "left": result = PropertyValue.FromKeyword((int)CssJustifyContent.FlexStart); return true;
-                case "right": result = PropertyValue.FromKeyword((int)CssJustifyContent.FlexEnd); return true;
+                case "left": result = PropertyValue.FromKeyword((int)CssJustifyContent.Left); return true;
+                case "right": result = PropertyValue.FromKeyword((int)CssJustifyContent.Right); return true;
                 case "normal": result = PropertyValue.FromKeyword((int)CssJustifyContent.FlexStart); return true;
                 default: return false;
             }

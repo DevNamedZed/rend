@@ -25,7 +25,6 @@ namespace Rend.Layout.Internal
             // Build table context: collect rows and cells
             var tableCtx = new TableContext();
             CollectTableStructure(styledElement, tableCtx);
-
             if (tableCtx.Rows.Count == 0) return;
 
             int numCols = tableCtx.GetColumnCount();
@@ -1012,10 +1011,46 @@ namespace Rend.Layout.Internal
                         {
                             var rowEl = (StyledElement)rowChild;
                             if (rowEl.Style.Display == CssDisplay.TableRow || rowEl.TagName == "tr")
+                            {
                                 ctx.Rows.Add(BuildRow(rowEl));
+                            }
                         }
                     }
                 }
+                else if (display == CssDisplay.TableCell ||
+                         childEl.TagName == "td" || childEl.TagName == "th")
+                {
+                    // [CSS-TABLES §4] Bare td/th without tr → create anonymous row
+                    if (ctx.AnonymousRow == null)
+                    {
+                        ctx.AnonymousRow = new TableRow { StyledElement = childEl };
+                    }
+                    int colspan = 1;
+                    var csVal = childEl.GetAttribute("colspan");
+                    if (csVal != null && int.TryParse(csVal, out int cs) && cs > 0)
+                    {
+                        colspan = cs;
+                    }
+                    int rowspan = 1;
+                    var rsVal = childEl.GetAttribute("rowspan");
+                    if (rsVal != null && int.TryParse(rsVal, out int rs) && rs > 0)
+                    {
+                        rowspan = rs;
+                    }
+                    ctx.AnonymousRow.Cells.Add(new TableCell
+                    {
+                        StyledElement = childEl,
+                        ColSpan = colspan,
+                        RowSpan = rowspan
+                    });
+                }
+            }
+
+            // Flush anonymous row if any bare td/th were collected
+            if (ctx.AnonymousRow != null)
+            {
+                ctx.Rows.Add(ctx.AnonymousRow);
+                ctx.AnonymousRow = null;
             }
         }
 
@@ -1578,6 +1613,7 @@ namespace Rend.Layout.Internal
     {
         public List<TableRow> Rows { get; } = new List<TableRow>();
         public List<StyledElement> Captions { get; } = new List<StyledElement>();
+        public TableRow? AnonymousRow { get; set; }
 
         public int GetColumnCount()
         {

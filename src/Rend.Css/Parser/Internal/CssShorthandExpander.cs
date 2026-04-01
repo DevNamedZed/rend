@@ -806,11 +806,20 @@ namespace Rend.Css.Parser.Internal
             int numIdx = 0;
             foreach (var p in parts)
             {
-                if (p is CssNumberValue || (p is CssKeywordValue k2 && k2.Keyword == "0"))
+                if (p is CssNumberValue numVal || (p is CssKeywordValue k2 && k2.Keyword == "0"))
                 {
                     if (numIdx == 0) { grow = p; }
                     else if (numIdx == 1) { shrink = p; }
-                    else if (numIdx == 2) { explicitBasis = new CssDimensionValue(0, "px"); }
+                    else if (numIdx == 2)
+                    {
+                        // [CSS-FLEXBOX §7.1.1] Non-zero unitless flex-basis is invalid
+                        float basisNum = p is CssNumberValue nv ? nv.Value : 0;
+                        if (basisNum != 0)
+                        {
+                            return false;
+                        }
+                        explicitBasis = new CssDimensionValue(0, "px");
+                    }
                     numIdx++;
                 }
                 else if (p is CssDimensionValue || p is CssPercentageValue ||

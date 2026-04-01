@@ -49,6 +49,7 @@ namespace Rend.Layout.Internal
 
             // Determine the parent's definite content height for percentage height resolution.
             // If the parent has an explicit CSS height, use it; otherwise NaN (auto).
+            // [CSS-FLEXBOX §9.8] Stretched flex items have definite cross size.
             float parentContentHeight = parent.ContentRect.Height;
             if (float.IsNaN(parentContentHeight) || parentContentHeight <= 0)
             {
@@ -56,8 +57,12 @@ namespace Rend.Layout.Internal
                 if (parentStyled != null)
                 {
                     float h = parentStyled.Style.Height;
-                    if (!float.IsNaN(h) && h > 0) parentContentHeight = h;
+                    if (!float.IsNaN(h) && h > 0) { parentContentHeight = h; }
                 }
+            }
+            if ((float.IsNaN(parentContentHeight) || parentContentHeight <= 0) && parent.HasDefiniteCrossSize)
+            {
+                parentContentHeight = parent.ContentRect.Height;
             }
 
             var styledElement = parent.StyledNode as StyledElement;
@@ -462,6 +467,18 @@ namespace Rend.Layout.Internal
                 else
                 {
                     contentWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, childBox, parentContentHeight);
+                }
+
+                // [CSS-SIZING §5.2] Apply min-width/max-width constraints
+                float cwMinW = DimensionResolver.ResolvePercentWidth(childStyle.MinWidth, containingWidth);
+                float cwMaxW = DimensionResolver.ResolvePercentWidth(childStyle.MaxWidth, containingWidth);
+                if (!float.IsNaN(cwMaxW) && cwMaxW >= 0 && contentWidth > cwMaxW)
+                {
+                    contentWidth = cwMaxW;
+                }
+                if (!float.IsNaN(cwMinW) && cwMinW >= 0 && contentWidth < cwMinW)
+                {
+                    contentWidth = cwMinW;
                 }
 
                 // Resolve auto margins
@@ -1049,6 +1066,23 @@ namespace Rend.Layout.Internal
                     break;
                 case CssDisplay.Table:
                     TableLayout.Layout(box, context);
+                    // [CSS-TABLES §4] If table layout produced no children (no table
+                    // rows/cells found — e.g., div with display:table and non-table children),
+                    // fall back to block layout so content is still rendered.
+                    // Only apply when no child has table-related display.
+                    if (box.Children.Count == 0 && styledElement.Children.Count > 0
+                        && !HasTableChildren(styledElement)
+                        && styledElement.TagName != "table")
+                    {
+                        if (HasBlockChildren(styledElement))
+                        {
+                            Layout(box, context);
+                        }
+                        else
+                        {
+                            InlineFormattingContext.Layout(box, context);
+                        }
+                    }
                     break;
                 default:
                     // Check for multi-column layout
@@ -1071,6 +1105,33 @@ namespace Rend.Layout.Internal
                     }
                     break;
             }
+        }
+
+        private static bool HasTableChildren(StyledElement element)
+        {
+            for (int i = 0; i < element.Children.Count; i++)
+            {
+                if (element.Children[i] is StyledElement child)
+                {
+                    var d = child.Style.Display;
+                    if (d == CssDisplay.TableRow || d == CssDisplay.TableRowGroup ||
+                        d == CssDisplay.TableHeaderGroup || d == CssDisplay.TableFooterGroup ||
+                        d == CssDisplay.TableCell || d == CssDisplay.TableCaption ||
+                        d == CssDisplay.TableColumn || d == CssDisplay.TableColumnGroup)
+                    {
+                        return true;
+                    }
+                    // Also check for actual <tr>, <td>, <th>, <caption> HTML elements
+                    string tag = child.TagName;
+                    if (tag == "tr" || tag == "td" || tag == "th" || tag == "caption" ||
+                        tag == "thead" || tag == "tbody" || tag == "tfoot" ||
+                        tag == "col" || tag == "colgroup")
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         private static bool HasBlockChildren(StyledElement element)

@@ -101,6 +101,12 @@ namespace Rend.Layout
         /// <summary>Z-index for stacking order.</summary>
         public float ZIndex { get; set; }
 
+        /// <summary>
+        /// [CSS-FLEXBOX §9.8] Set when this flex item's cross size becomes definite
+        /// after stretch. Children can resolve percentage heights against ContentRect.Height.
+        /// </summary>
+        public bool HasDefiniteCrossSize { get; set; }
+
         /// <summary>Column rules to paint between multi-column columns.</summary>
         internal List<ColumnRuleInfo>? ColumnRules { get; set; }
 
