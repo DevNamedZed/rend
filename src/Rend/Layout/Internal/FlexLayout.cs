@@ -408,9 +408,22 @@ namespace Rend.Layout.Internal
                 float minMainRaw = isColumn ? item.Style.MinHeight : item.Style.MinWidth;
                 if (SizingKeyword.IsSizingKeyword(minMainRaw))
                 {
-                    float resolvedKeywordMin = isColumn
-                        ? ComputeContentMinHeight(item, containerWidth, context)
-                        : ComputeContentMinWidth(item, containerWidth, context);
+                    float resolvedKeywordMin;
+                    if (isColumn)
+                    {
+                        // Column flex: min-height keyword → measure content height
+                        resolvedKeywordMin = ComputeContentMinHeight(item, containerWidth, context);
+                    }
+                    else if (item.Box.StyledNode is StyledElement minKeywordEl)
+                    {
+                        // Row flex: min-width keyword → use MeasureIntrinsicWidth with the actual keyword
+                        resolvedKeywordMin = BlockFormattingContext.MeasureIntrinsicWidth(
+                            minKeywordEl, minMainRaw, containerWidth, context);
+                    }
+                    else
+                    {
+                        resolvedKeywordMin = 0;
+                    }
                     item.SizingKeywordMinMain = resolvedKeywordMin;
                     if (resolvedKeywordMin > minMain)
                     {
@@ -1709,22 +1722,18 @@ namespace Rend.Layout.Internal
             {
                 return 0;
             }
-            // [CSS-FLEXBOX §4.5] Measure intrinsic content width unconstrained.
-            // The automatic minimum is the min-content width of the item's content,
-            // NOT clamped to the container width.
-            var measureBox = new LayoutBox(element, BoxType.Block);
-            BoxModelCalculator.ApplyBoxModel(measureBox, item.Style, containerWidth);
-            float measureWidth = 10000f;
-            measureBox.ContentRect = new RectF(0, 0, measureWidth, 0);
+            // [CSS-FLEXBOX §4.5] The content size suggestion is the MIN-CONTENT
+            // width of the item. Use MeasureIntrinsicWidth which correctly handles
+            // flex containers, grid containers, and regular blocks.
             var savedFloatCtx = context.FloatContext;
             var savedCbw = context.ContainingBlockWidth;
             var savedCbh = context.ContainingBlockHeight;
             context.FloatContext = null;
-            BlockFormattingContext.LayoutChildren(measureBox, context);
+            float contentWidth = BlockFormattingContext.MeasureIntrinsicWidth(
+                element, SizingKeyword.MinContent, containerWidth, context);
             context.FloatContext = savedFloatCtx;
             context.ContainingBlockWidth = savedCbw;
             context.ContainingBlockHeight = savedCbh;
-            float contentWidth = BlockFormattingContext.GetContentExtent(measureBox);
             return contentWidth;
         }
 
