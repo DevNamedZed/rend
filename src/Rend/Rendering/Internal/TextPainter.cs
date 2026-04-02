@@ -56,6 +56,9 @@ namespace Rend.Rendering.Internal
             // Paint text decorations.
             PaintDecorations(fragment, lineX, lineY, lineBaseline, target, style);
 
+            // Paint text emphasis marks (above or below text per text-emphasis-position).
+            TextEmphasisPainter.Paint(fragment, lineX, lineY, lineBaseline, target, style);
+
             // Paint ruby annotation text if present
             if (fragment.RubyText != null)
             {
@@ -303,129 +306,61 @@ namespace Rend.Rendering.Internal
             // (same Floor as glyph rendering), not the raw fragment top + baseline.
             float baselineY = (float)Math.Floor(snappedFragY + fragment.Baseline);
 
-            if (decoration == CssTextDecorationLine.Underline)
-            {
-                // [CSS-TEXT-DECOR-4 §3.3] text-underline-position: under places the
-                // underline below the descenders rather than at the font's underline position.
-                float underlineY;
-                if (style.TextUnderlinePosition == CssTextUnderlinePosition.Under)
-                {
-                    // Compute descent from baseline to bottom of content area.
-                    float halfLeading = fragment.ContentHeight > 0
-                        ? (fragment.Height - fragment.ContentHeight) / 2f
-                        : 0f;
-                    float fontDescent = fragment.ContentHeight - (fragment.Baseline - halfLeading);
-                    underlineY = baselineY + fontDescent + underlineOffset;
-                }
-                else
-                {
-                    underlineY = baselineY + metrics.UnderlinePosition + underlineOffset;
-                }
+            // Precompute shared metrics for underline/overline positioning.
+            float halfLeading = fragment.ContentHeight > 0
+                ? (fragment.Height - fragment.ContentHeight) / 2f
+                : 0f;
 
-                if (useFillRect)
-                {
-                    // Chrome floors the underline Y via PixelSnappedIntRect (floor origin, ceil far edge).
-                    float snappedY = (float)Math.Floor(underlineY);
-                    float snappedH = Math.Max(1f, (float)Math.Round(strokeWidth));
-                    target.FillRect(new RectF(startX, snappedY, endX - startX, snappedH),
-                                    BrushInfo.Solid(decoColor));
-                }
-                else
-                {
-                    DrawLine(target, pen, startX, underlineY, endX, underlineY);
-                }
-            }
-            else if (decoration == CssTextDecorationLine.Overline)
+            // [CSS-TEXT-DECOR-4 §3.1] decoration is a flags enum — paint each line type independently.
+            if ((decoration & CssTextDecorationLine.Underline) != 0)
             {
-                // Chrome: overline offset from baseline is -ascent.
-                // Compute font ascent: distance from baseline to top of content area.
-                float halfLeading = fragment.ContentHeight > 0
-                    ? (fragment.Height - fragment.ContentHeight) / 2f
-                    : 0f;
+                float underlineY = ComputeUnderlineY(style, fragment, baselineY,
+                    halfLeading, underlineOffset, metrics);
+                PaintDecorationLine(target, pen, useFillRect, decoColor, strokeWidth,
+                    startX, endX, underlineY);
+            }
+
+            if ((decoration & CssTextDecorationLine.Overline) != 0)
+            {
                 float fontAscent = fragment.Baseline - halfLeading;
                 float overlineY = baselineY - fontAscent;
-                if (useFillRect)
-                {
-                    float snappedY = (float)Math.Floor(overlineY);
-                    float snappedH = Math.Max(1f, (float)Math.Round(strokeWidth));
-                    target.FillRect(new RectF(startX, snappedY, endX - startX, snappedH),
-                                    BrushInfo.Solid(decoColor));
-                }
-                else
-                    DrawLine(target, pen, startX, overlineY, endX, overlineY);
+                PaintDecorationLine(target, pen, useFillRect, decoColor, strokeWidth,
+                    startX, endX, overlineY);
             }
-            else if (decoration == CssTextDecorationLine.LineThrough)
+
+            if ((decoration & CssTextDecorationLine.LineThrough) != 0)
             {
-                // Chrome uses the font's OS/2 strikeoutPosition relative to baseline,
-                // not the middle of the content area.
                 float strikeY = baselineY + metrics.StrikeoutPosition;
-                if (useFillRect)
-                {
-                    float snappedY = (float)Math.Floor(strikeY);
-                    float snappedH = Math.Max(1f, (float)Math.Round(strokeWidth));
-                    target.FillRect(new RectF(startX, snappedY, endX - startX, snappedH),
-                                    BrushInfo.Solid(decoColor));
-                }
-                else
-                    DrawLine(target, pen, startX, strikeY, endX, strikeY);
+                PaintDecorationLine(target, pen, useFillRect, decoColor, strokeWidth,
+                    startX, endX, strikeY);
             }
 
-            // Compute base underline Y (before wavy/double offset) for reuse.
-            float baseUnderlineY;
-            if (style.TextUnderlinePosition == CssTextUnderlinePosition.Under)
+            // For "wavy" or "double" style, draw a second offset line for each active decoration.
+            if (decoStyle == CssTextDecorationStyle.Wavy || decoStyle == CssTextDecorationStyle.Double)
             {
-                float hlU = fragment.ContentHeight > 0
-                    ? (fragment.Height - fragment.ContentHeight) / 2f
-                    : 0f;
-                float fontDescentU = fragment.ContentHeight - (fragment.Baseline - hlU);
-                baseUnderlineY = baselineY + fontDescentU + underlineOffset;
-            }
-            else
-            {
-                baseUnderlineY = baselineY + metrics.UnderlinePosition + underlineOffset;
-            }
+                float offset = strokeWidth * 2f;
 
-            // For "wavy" style, draw a second offset line to approximate a wave.
-            if (decoStyle == CssTextDecorationStyle.Wavy)
-            {
-                float wavyOffset = strokeWidth * 2f;
-                if (decoration == CssTextDecorationLine.Underline)
+                if ((decoration & CssTextDecorationLine.Underline) != 0)
                 {
-                    float underlineY = baseUnderlineY + wavyOffset;
-                    DrawLine(target, pen, startX, underlineY, endX, underlineY);
+                    float underlineY = ComputeUnderlineY(style, fragment, baselineY,
+                        halfLeading, underlineOffset, metrics);
+                    DrawLine(target, pen, startX, underlineY + offset, endX, underlineY + offset);
                 }
-                else if (decoration == CssTextDecorationLine.Overline)
-                {
-                    float hl = fragment.ContentHeight > 0 ? (fragment.Height - fragment.ContentHeight) / 2f : 0f;
-                    float overlineY = snappedFragY + hl + wavyOffset;
-                    DrawLine(target, pen, startX, overlineY, endX, overlineY);
-                }
-                else if (decoration == CssTextDecorationLine.LineThrough)
-                {
-                    float strikeY = baselineY + metrics.StrikeoutPosition + wavyOffset;
-                    DrawLine(target, pen, startX, strikeY, endX, strikeY);
-                }
-            }
 
-            // For "double" style, draw a second line offset below/above.
-            if (decoStyle == CssTextDecorationStyle.Double)
-            {
-                float doubleOffset = strokeWidth * 2f;
-                if (decoration == CssTextDecorationLine.Underline)
+                if ((decoration & CssTextDecorationLine.Overline) != 0)
                 {
-                    float underlineY = baseUnderlineY + doubleOffset;
-                    DrawLine(target, pen, startX, underlineY, endX, underlineY);
+                    float fontAscent = fragment.Baseline - halfLeading;
+                    float overlineY = baselineY - fontAscent;
+                    float secondY = decoStyle == CssTextDecorationStyle.Double
+                        ? overlineY - offset
+                        : overlineY + offset;
+                    DrawLine(target, pen, startX, secondY, endX, secondY);
                 }
-                else if (decoration == CssTextDecorationLine.Overline)
+
+                if ((decoration & CssTextDecorationLine.LineThrough) != 0)
                 {
-                    float hl = fragment.ContentHeight > 0 ? (fragment.Height - fragment.ContentHeight) / 2f : 0f;
-                    float overlineY = snappedFragY + hl - doubleOffset;
-                    DrawLine(target, pen, startX, overlineY, endX, overlineY);
-                }
-                else if (decoration == CssTextDecorationLine.LineThrough)
-                {
-                    float strikeY = baselineY + metrics.StrikeoutPosition + doubleOffset;
-                    DrawLine(target, pen, startX, strikeY, endX, strikeY);
+                    float strikeY = baselineY + metrics.StrikeoutPosition;
+                    DrawLine(target, pen, startX, strikeY + offset, endX, strikeY + offset);
                 }
             }
         }
@@ -462,6 +397,40 @@ namespace Rend.Rendering.Internal
                 default:
                     // Solid, double, wavy all use a solid pen (double/wavy draw extra lines).
                     return new PenInfo(color, strokeWidth);
+            }
+        }
+
+        /// <summary>
+        /// Computes the Y position for an underline, accounting for text-underline-position.
+        /// </summary>
+        private static float ComputeUnderlineY(ComputedStyle style, LineFragment fragment,
+            float baselineY, float halfLeading, float underlineOffset,
+            (float UnderlinePosition, float UnderlineThickness, float StrikeoutPosition, float StrikeoutThickness) metrics)
+        {
+            if (style.TextUnderlinePosition == CssTextUnderlinePosition.Under)
+            {
+                float fontDescent = fragment.ContentHeight - (fragment.Baseline - halfLeading);
+                return baselineY + fontDescent + underlineOffset;
+            }
+            return baselineY + metrics.UnderlinePosition + underlineOffset;
+        }
+
+        /// <summary>
+        /// Paints a single decoration line, using FillRect for solid or StrokePath for other styles.
+        /// </summary>
+        private static void PaintDecorationLine(IRenderTarget target, PenInfo pen, bool useFillRect,
+            CssColor color, float strokeWidth, float startX, float endX, float lineY)
+        {
+            if (useFillRect)
+            {
+                float snappedY = (float)Math.Floor(lineY);
+                float snappedH = Math.Max(1f, (float)Math.Round(strokeWidth));
+                target.FillRect(new RectF(startX, snappedY, endX - startX, snappedH),
+                    BrushInfo.Solid(color));
+            }
+            else
+            {
+                DrawLine(target, pen, startX, lineY, endX, lineY);
             }
         }
 

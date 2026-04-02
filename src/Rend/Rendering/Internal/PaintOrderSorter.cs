@@ -100,9 +100,8 @@ namespace Rend.Rendering.Internal
                              positionedZeroAuto.Count + positiveZIndex.Count;
 
             // [CSS-FLEXBOX §5.4] Flex items paint in order-modified document order.
-            // Only non-positioned flex items use 'order' for paint ordering.
-            // Absolutely positioned children of flex containers are NOT flex items
-            // and paint in raw document order.
+            // Absolutely positioned children are NOT flex items and paint in raw
+            // document order (CSS 2.1 paint order).
             bool isFlexParent = root.BoxType == BoxType.Flex;
             if (isFlexParent)
             {

@@ -487,6 +487,36 @@ namespace Rend.Css
             get => (CssTextUnderlinePosition)_values[PropertyId.TextUnderlinePosition].IntValue;
         }
 
+        /// <summary>
+        /// Gets the text-emphasis-style raw value. Returns the CssValue AST node
+        /// which may be a keyword ("none", "filled", "open", "dot", "circle", etc.)
+        /// or a string value.
+        /// </summary>
+        public CssValue? TextEmphasisStyle =>
+            _refValues[PropertyId.TextEmphasisStyle] as CssValue;
+
+        /// <summary>
+        /// Gets the text-emphasis-color. Falls back to currentColor (the element's color).
+        /// </summary>
+        public CssColor TextEmphasisColor
+        {
+            get
+            {
+                var pv = _values[PropertyId.TextEmphasisColor];
+                if (pv.IsCurrentColor())
+                {
+                    return Color;
+                }
+                return pv.ToColor();
+            }
+        }
+
+        /// <summary>
+        /// Gets the text-emphasis-position raw value ("over right", "under left", etc.).
+        /// </summary>
+        public CssValue? TextEmphasisPosition =>
+            _refValues[PropertyId.TextEmphasisPosition] as CssValue;
+
         public CssTextTransform TextTransform
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]

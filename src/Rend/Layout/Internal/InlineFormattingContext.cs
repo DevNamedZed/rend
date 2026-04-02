@@ -1987,6 +1987,14 @@ namespace Rend.Layout.Internal
                 {
                     if (childEl.Style.Display == CssDisplay.None) continue;
 
+                    // Handle <br> as forced line break inside inline elements
+                    if (childEl.TagName == "br")
+                    {
+                        StartNewLine(parent, ref cursorX, ref cursorY, ref startX, ref containingWidth,
+                                     ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, context);
+                        continue;
+                    }
+
                     if (childEl.Style.Display == CssDisplay.InlineBlock ||
                         childEl.Style.Display == CssDisplay.InlineFlex ||
                         childEl.Style.Display == CssDisplay.InlineGrid)

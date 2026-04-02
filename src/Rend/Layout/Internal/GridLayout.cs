@@ -1707,15 +1707,13 @@ namespace Rend.Layout.Internal
                 bool widthIsAuto = float.IsNaN(item.StyledElement.Style.Width);
                 if (widthIsAuto)
                 {
-                    // [CSS2 §10.3.7] Auto width on abspos → shrink-to-fit
-                    posBox.ContentRect = new RectF(0, 0, areaWidth, 0);
-                    BlockFormattingContext.LayoutChildren(posBox, context);
-                    posWidth = BlockFormattingContext.GetContentExtent(posBox);
+                    // [CSS2 §10.3.7] Auto width on abspos → shrink-to-fit (= fit-content).
+                    posWidth = BlockFormattingContext.MeasureIntrinsicWidth(
+                        item.StyledElement, SizingKeyword.FitContent, areaWidth, context);
                     if (posWidth > areaWidth)
                     {
                         posWidth = areaWidth;
                     }
-                    posBox.ClearChildren();
                 }
                 else
                 {
@@ -1723,7 +1721,7 @@ namespace Rend.Layout.Internal
                         item.StyledElement.Style, areaWidth, posBox);
                 }
 
-                // Use grid area origin as static position for layout.
+                // Layout children at the resolved static position and width.
                 posBox.ContentRect = new RectF(gridArea.X, gridArea.Y, posWidth, 0);
                 BlockFormattingContext.LayoutChildren(posBox, context);
 
@@ -2775,7 +2773,7 @@ namespace Rend.Layout.Internal
             {
                 if (fn.Name == "minmax" && fn.Arguments.Count >= 2)
                 {
-                    // minmax(min, max): use max if it's fr, otherwise use min as a floor
+                    // minmax(min, max): use max if it's fr, otherwise clamp between min and max
                     var maxVal = ParseTrackValue(fn.Arguments[fn.Arguments.Count - 1], containerSize);
                     if (maxVal.isFr)
                     {
@@ -2784,8 +2782,16 @@ namespace Rend.Layout.Internal
                         return maxVal;
                     }
                     var minVal = ParseTrackValue(fn.Arguments[0], containerSize);
-                    // Both fixed: use maximum of the two
-                    return (Math.Max(minVal.value, maxVal.value), false);
+                    // [CSS-GRID §7.2.4] Both fixed: use max as the track size,
+                    // but clamp to container when the container has a definite size
+                    // and the min is a definite non-intrinsic value.
+                    float trackSize = Math.Max(minVal.value, maxVal.value);
+                    if (!minVal.isFr && !maxVal.isFr && containerSize > 0
+                        && minVal.value >= 0 && trackSize > containerSize)
+                    {
+                        trackSize = Math.Max(minVal.value, containerSize);
+                    }
+                    return (trackSize, false);
                 }
                 if (fn.Name == "fit-content" && fn.Arguments.Count >= 1)
                 {

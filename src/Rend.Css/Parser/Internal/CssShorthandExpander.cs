@@ -1174,9 +1174,11 @@ namespace Rend.Css.Parser.Internal
         private static bool ExpandTextDecoration(CssValue value, bool important, List<CssDeclaration> output)
         {
             // text-decoration: <line> || <style> || <color>
+            // [CSS-TEXT-DECOR-4 §3] line component accepts space-separated flags:
+            // e.g. "underline overline line-through"
             var parts = GetListValues(value);
 
-            CssValue line = new CssKeywordValue("none");
+            var lineValues = new List<CssValue>();
             CssValue decoStyle = new CssKeywordValue("solid");
             CssValue color = new CssKeywordValue("currentcolor");
 
@@ -1185,17 +1187,44 @@ namespace Rend.Css.Parser.Internal
                 if (p is CssKeywordValue kw)
                 {
                     if (kw.Keyword == "underline" || kw.Keyword == "overline" ||
-                        kw.Keyword == "line-through" || kw.Keyword == "none")
-                        line = p;
+                        kw.Keyword == "line-through")
+                    {
+                        lineValues.Add(p);
+                    }
+                    else if (kw.Keyword == "none")
+                    {
+                        lineValues.Clear();
+                        lineValues.Add(p);
+                    }
                     else if (kw.Keyword == "solid" || kw.Keyword == "double" ||
                              kw.Keyword == "dotted" || kw.Keyword == "dashed" ||
                              kw.Keyword == "wavy")
+                    {
                         decoStyle = p;
+                    }
                     else
+                    {
                         color = p;
+                    }
                 }
                 else if (p is CssColorValue)
+                {
                     color = p;
+                }
+            }
+
+            CssValue line;
+            if (lineValues.Count > 1)
+            {
+                line = new CssListValue(lineValues, ' ');
+            }
+            else if (lineValues.Count == 1)
+            {
+                line = lineValues[0];
+            }
+            else
+            {
+                line = new CssKeywordValue("none");
             }
 
             output.Add(new CssDeclaration("text-decoration-line", line, important));

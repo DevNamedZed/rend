@@ -780,6 +780,18 @@ namespace Rend.Layout.Internal
                     // can detect that this box is a flex item (establishes BFC).
                     box.Parent = parent;
 
+                    // [CSS-FLEXBOX §4.3] Flex items with z-index other than auto
+                    // create stacking contexts even if position is static.
+                    if (item.Style != null)
+                    {
+                        float itemZIndex = item.Style.ZIndex;
+                        if (!float.IsNaN(itemZIndex))
+                        {
+                            box.EstablishesStackingContext = true;
+                            box.ZIndex = itemZIndex;
+                        }
+                    }
+
                     // Layout item contents.
                     // For anonymous text items (which already have line boxes from initial
                     // inline layout), skip re-layout but offset line boxes to match the
@@ -870,7 +882,7 @@ namespace Rend.Layout.Internal
                     {
                         // Width already resolved
                     }
-                    else if (float.IsNaN(item.Style.Height))
+                    else if (item.Style != null && float.IsNaN(item.Style.Height))
                     {
                         // [CSS-SIZING-4 §5.1] If aspect-ratio already resolved a definite
                         // cross size, keep it — don't override with content-based height.

@@ -300,11 +300,12 @@ namespace Rend.Layout.Internal
                                 if (box.ColumnRules == null)
                                     box.ColumnRules = new List<ColumnRuleInfo>();
                                 float ruleX = (float)Math.Round(colX - columnGap / 2);
+                                float ruleHeight = tallestColumn > 0 ? tallestColumn : columnHeight;
                                 box.ColumnRules.Add(new ColumnRuleInfo
                                 {
                                     X = ruleX,
                                     Y = startY,
-                                    Height = tallestColumn > 0 ? tallestColumn : columnHeight,
+                                    Height = ruleHeight,
                                     Width = ruleWidth,
                                     Style = ruleStyle,
                                     Color = ruleColor

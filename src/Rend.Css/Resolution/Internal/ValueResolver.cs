@@ -136,6 +136,33 @@ namespace Rend.Css.Resolution.Internal
                         result.IsSet = true;
                         return true;
                     }
+                    // [CSS-TEXT-DECOR-4 §3.1] text-decoration-line accepts space-separated flags:
+                    // e.g. "underline overline" or "underline overline line-through".
+                    // Any unknown keyword (e.g. "blink") invalidates the entire value.
+                    if (prop.Id == PropertyId.TextDecoration_Line && value is CssListValue tdlList
+                        && tdlList.Separator == ' ')
+                    {
+                        CssTextDecorationLine tdlFlags = CssTextDecorationLine.None;
+                        for (int tdli = 0; tdli < tdlList.Values.Count; tdli++)
+                        {
+                            if (tdlList.Values[tdli] is CssKeywordValue tdlKw)
+                            {
+                                switch (tdlKw.Keyword)
+                                {
+                                    case "underline": tdlFlags |= CssTextDecorationLine.Underline; break;
+                                    case "overline": tdlFlags |= CssTextDecorationLine.Overline; break;
+                                    case "line-through": tdlFlags |= CssTextDecorationLine.LineThrough; break;
+                                    default: return false; // Unknown keyword invalidates declaration
+                                }
+                            }
+                            else
+                            {
+                                return false; // Non-keyword value invalidates declaration
+                            }
+                        }
+                        result = PropertyValue.FromKeyword((int)tdlFlags);
+                        return true;
+                    }
                     // [CSS-TEXT-3 §8.3] hanging-punctuation accepts space-separated flags:
                     // e.g. "first force-end" or "first last".
                     if (prop.Id == PropertyId.HangingPunctuation && value is CssListValue hpList
@@ -1455,7 +1482,7 @@ namespace Rend.Css.Resolution.Internal
             result = default;
             switch (kw)
             {
-                case "none": result = PropertyValue.FromKeyword((int)CssTextDecorationLine.None); return true;
+                case "none": result = PropertyValue.FromKeyword(0); return true;
                 case "underline": result = PropertyValue.FromKeyword((int)CssTextDecorationLine.Underline); return true;
                 case "overline": result = PropertyValue.FromKeyword((int)CssTextDecorationLine.Overline); return true;
                 case "line-through": result = PropertyValue.FromKeyword((int)CssTextDecorationLine.LineThrough); return true;

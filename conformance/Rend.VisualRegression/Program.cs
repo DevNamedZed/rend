@@ -28,13 +28,18 @@ class Program
         //   results/history/{runId}/   — archived report + results.json (lightweight)
         var projectRoot = FindProjectRoot();
         var runId = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
+        bool earlyFastMode = args.Contains("--fast");
         var outputDir = Path.Combine(projectRoot, "output", runId);
         var resourcesDir = Path.Combine(outputDir, "resources");
         var resultsDir = Path.Combine(projectRoot, "results");
         var historyDir = Path.Combine(resultsDir, "history", runId);
-        Directory.CreateDirectory(resourcesDir);
+        Directory.CreateDirectory(outputDir);
         Directory.CreateDirectory(resultsDir);
-        Directory.CreateDirectory(historyDir);
+        if (!earlyFastMode)
+        {
+            Directory.CreateDirectory(resourcesDir);
+            Directory.CreateDirectory(historyDir);
+        }
 
         // Download Chrome 116 to match SkiaSharp's bundled Skia m116.
         const string chromeBuildId = "116.0.5845.96";
@@ -132,6 +137,7 @@ class Program
         int workerCount = Math.Clamp(Environment.ProcessorCount / 2, 2, 4);
         string? filterPattern = null;
         string? tagFilter = null;
+        bool fastMode = false;
         for (int ai = 0; ai < args.Length; ai++)
         {
             if (args[ai] == "--parallel" && ai + 1 < args.Length && int.TryParse(args[ai + 1], out int p))
@@ -146,8 +152,12 @@ class Program
             {
                 tagFilter = args[ai + 1];
             }
+            else if (args[ai] == "--fast")
+            {
+                fastMode = true;
+            }
         }
-        Console.WriteLine($"Workers: {workerCount}");
+        Console.WriteLine($"Workers: {workerCount}{(fastMode ? " (fast mode)" : "")}");
 
         // Shared font provider (read-only after init).
         var fontProvider = CreateSharedFontProvider();
@@ -193,7 +203,7 @@ class Program
             async (testCase, ct) =>
             {
                 var renderer = renderResources.Value!;
-                var result = await RunTest(testCase, browserPool, fontProvider, renderer, resourcesDir, captureLayoutTree: captureLayoutTree);
+                var result = await RunTest(testCase, browserPool, fontProvider, renderer, resourcesDir, captureLayoutTree: captureLayoutTree, fastMode: fastMode);
                 if (result != null)
                 {
                     results.Add(result);
@@ -217,11 +227,6 @@ class Program
         var jsonPath = Path.Combine(outputDir, "results.json");
         WriteResultsJson(sortedResults, jsonPath, runId, totalSw.Elapsed);
 
-        // Generate HTML report — all reports use "resources/" prefix.
-        Console.WriteLine();
-        var reportPath = Path.Combine(outputDir, "report.html");
-        ReportGenerator.Generate(sortedResults, reportPath, "resources/");
-
         double avgDiff = sortedResults.Where(r => r.Outcome != ComparisonOutcome.Error)
             .Select(r => r.DiffPercentage)
             .DefaultIfEmpty(0)
@@ -231,28 +236,50 @@ class Program
         int failCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Fail);
         int errorCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Error);
 
+        Console.WriteLine();
         Console.WriteLine($"Results: {sortedResults.Count} tests, {passCount} passed, {failCount} failed, {errorCount} errors, avg diff {avgDiff:F4}%");
         Console.WriteLine($"Duration: {totalSw.Elapsed.TotalSeconds:F1}s");
 
-        // Copy to results/ (latest) and history/.
-        var latestReportPath = Path.Combine(resultsDir, "report.html");
-        var latestJsonPath = Path.Combine(resultsDir, "results.json");
-        File.Copy(reportPath, latestReportPath, overwrite: true);
-        File.Copy(jsonPath, latestJsonPath, overwrite: true);
-        Console.Write($"Copying resources...");
-        var copySw = Stopwatch.StartNew();
-        CopyDirectoryParallel(resourcesDir, Path.Combine(resultsDir, "resources"));
-        Console.Write($" results({copySw.Elapsed.TotalSeconds:F1}s)...");
-        File.Copy(reportPath, Path.Combine(historyDir, "report.html"), overwrite: true);
-        File.Copy(jsonPath, Path.Combine(historyDir, "results.json"), overwrite: true);
-        CopyDirectoryParallel(resourcesDir, Path.Combine(historyDir, "resources"));
-        Console.WriteLine($" history({copySw.Elapsed.TotalSeconds:F1}s). Done.");
+        if (!fastMode)
+        {
+            // Generate HTML report.
+            var reportPath = Path.Combine(outputDir, "report.html");
+            ReportGenerator.Generate(sortedResults, reportPath, "resources/");
+
+            // Copy to results/ (latest) — skip for filtered runs to avoid
+            // overwriting full suite results with partial data.
+            bool isFullRun = string.IsNullOrEmpty(filterPattern) && string.IsNullOrEmpty(tagFilter);
+            var latestReportPath = Path.Combine(resultsDir, "report.html");
+            var latestJsonPath = Path.Combine(resultsDir, "results.json");
+            if (isFullRun)
+            {
+                File.Copy(reportPath, latestReportPath, overwrite: true);
+                File.Copy(jsonPath, latestJsonPath, overwrite: true);
+            }
+            Console.Write($"Copying resources...");
+            var copySw = Stopwatch.StartNew();
+            CopyDirectoryParallel(resourcesDir, Path.Combine(resultsDir, "resources"));
+            Console.Write($" results({copySw.Elapsed.TotalSeconds:F1}s)...");
+            File.Copy(reportPath, Path.Combine(historyDir, "report.html"), overwrite: true);
+            File.Copy(jsonPath, Path.Combine(historyDir, "results.json"), overwrite: true);
+            CopyDirectoryParallel(resourcesDir, Path.Combine(historyDir, "resources"));
+            Console.WriteLine($" history({copySw.Elapsed.TotalSeconds:F1}s). Done.");
+            Console.WriteLine($"Report:  {latestReportPath}");
+        }
+        else
+        {
+            // Fast mode: copy JSON to results/ only for full runs (no filter).
+            // Filtered runs should NOT overwrite the latest results.
+            if (string.IsNullOrEmpty(filterPattern) && string.IsNullOrEmpty(tagFilter))
+            {
+                var latestJsonPath = Path.Combine(resultsDir, "results.json");
+                File.Copy(jsonPath, latestJsonPath, overwrite: true);
+            }
+        }
 
         Console.WriteLine($"Output:  {outputDir}");
         Console.WriteLine($"Results: {resultsDir}");
-        Console.WriteLine($"History: {historyDir}");
-        Console.WriteLine($"Report:  {latestReportPath}");
-        Console.WriteLine($"JSON:    {latestJsonPath}");
+        Console.WriteLine($"JSON:    {Path.Combine(resultsDir, "results.json")}");
 
         return failCount > 0 || errorCount > 0 ? 1 : 0;
     }
@@ -263,7 +290,8 @@ class Program
         Rend.Fonts.IFontProvider fontProvider,
         HtmlRenderer renderer,
         string resourcesDir,
-        bool captureLayoutTree = true)
+        bool captureLayoutTree = true,
+        bool fastMode = false)
     {
         var sw = Stopwatch.StartNew();
         var result = new ComparisonResult
@@ -376,9 +404,9 @@ class Program
                 ? ComparisonOutcome.Pass
                 : ComparisonOutcome.Fail;
 
-            // Only write resource files for failing tests (report needs them).
-            // Passing tests skip disk I/O — saves ~100ms per test.
-            if (result.Outcome != ComparisonOutcome.Pass)
+            // Only write resource files for failing tests when not in fast mode.
+            // Fast mode skips all disk I/O for maximum speed.
+            if (result.Outcome != ComparisonOutcome.Pass && !fastMode)
             {
                 var chromePath = Path.Combine(resourcesDir, $"{testCase.Id}-chrome.png");
                 File.WriteAllBytes(chromePath, chromePng);

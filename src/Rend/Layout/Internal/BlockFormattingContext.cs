@@ -137,7 +137,42 @@ namespace Rend.Layout.Internal
 
                 if (child is StyledPseudoElement pseudo)
                 {
-                    // Pseudo-element: render as inline text with its own style
+                    var pseudoDisplay = pseudo.Style.Display;
+                    // [CSS2 §12.1] Pseudo-elements with block-level display (flex, grid,
+                    // block, table) create proper layout boxes, not inline text.
+                    if (pseudoDisplay == CssDisplay.Flex || pseudoDisplay == CssDisplay.InlineFlex
+                        || pseudoDisplay == CssDisplay.Grid || pseudoDisplay == CssDisplay.InlineGrid
+                        || pseudoDisplay == CssDisplay.Block || pseudoDisplay == CssDisplay.Table)
+                    {
+                        var doc = styledElement.Element.OwnerDocument;
+                        var pseudoEl = doc!.CreateElement("div");
+                        var pseudoChildren = new List<StyledNode>();
+                        if (!string.IsNullOrEmpty(pseudo.Content))
+                        {
+                            pseudoChildren.Add(new StyledText(pseudo.Content, pseudo.Style));
+                        }
+                        var pseudoStyled = new StyledElement(pseudoEl, pseudo.Style, pseudoChildren);
+                        var pseudoBox = CreateLayoutBox(pseudoStyled);
+                        BoxModelCalculator.ApplyBoxModel(pseudoBox, pseudo.Style, containingWidth);
+                        float pseudoW = DimensionResolver.ResolveWidth(pseudo.Style, containingWidth, pseudoBox);
+                        float pseudoH = DimensionResolver.ResolveHeight(pseudo.Style, float.NaN, pseudoBox);
+                        if (float.IsNaN(pseudoH)) { pseudoH = 0; }
+                        float pseudoY = cursorY + MarginCollapsing.Collapse(prevMarginBottom, pseudoBox.MarginTop)
+                                      + pseudoBox.BorderTopWidth + pseudoBox.PaddingTop;
+                        pseudoBox.ContentRect = new RectF(
+                            parent.ContentRect.X + pseudoBox.MarginLeft + pseudoBox.BorderLeftWidth + pseudoBox.PaddingLeft,
+                            pseudoY, pseudoW, pseudoH);
+                        LayoutChildren(pseudoBox, context);
+                        if (pseudoH <= 0) { pseudoH = CalculateAutoHeight(pseudoBox); }
+                        pseudoBox.ContentRect = new RectF(pseudoBox.ContentRect.X, pseudoBox.ContentRect.Y, pseudoW, pseudoH);
+                        parent.AddChild(pseudoBox);
+                        cursorY = pseudoBox.ContentRect.Y + pseudoH + pseudoBox.PaddingBottom + pseudoBox.BorderBottomWidth;
+                        prevMarginBottom = pseudoBox.MarginBottom;
+                        isFirstInFlowChild = false;
+                        continue;
+                    }
+
+                    // Inline pseudo-element: render as inline text
                     var pseudoText = new StyledText(pseudo.Content, pseudo.Style);
                     if (vertical)
                     {
@@ -1139,7 +1174,18 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < element.Children.Count; i++)
             {
                 var child = element.Children[i];
-                if (child.IsText || child is StyledPseudoElement) continue;
+                if (child.IsText) continue;
+                // [CSS2 §12.1] Pseudo-elements with block-level display count as block children.
+                if (child is StyledPseudoElement pseudoChild)
+                {
+                    var pd = pseudoChild.Style.Display;
+                    if (pd == CssDisplay.Block || pd == CssDisplay.Flex || pd == CssDisplay.InlineFlex
+                        || pd == CssDisplay.Grid || pd == CssDisplay.InlineGrid || pd == CssDisplay.Table)
+                    {
+                        return true;
+                    }
+                    continue;
+                }
                 var childElement = (StyledElement)child;
                 var display = childElement.Style.Display;
                 // display:contents — look through its children
