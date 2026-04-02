@@ -182,6 +182,9 @@ namespace Rend.Css.Parser.Internal
             if (lowerName == "rgb" || lowerName == "rgba")
             {
                 ParseFunctionArgs(args);
+                // [CSS-COLOR-5 §5] Relative Color Syntax: rgb(from <color> r g b [/ a])
+                var rcsResult = TryResolveRelativeColor(args, lowerName);
+                if (rcsResult != null) { return rcsResult; }
                 if (CssColorParser.TryParseRgb(args, out var color))
                     return new CssColorValue(color);
                 return new CssFunctionValue(lowerName, args);
@@ -190,6 +193,8 @@ namespace Rend.Css.Parser.Internal
             if (lowerName == "hsl" || lowerName == "hsla")
             {
                 ParseFunctionArgs(args);
+                var rcsResult = TryResolveRelativeColor(args, lowerName);
+                if (rcsResult != null) { return rcsResult; }
                 if (CssColorParser.TryParseHsl(args, out var color))
                     return new CssColorValue(color);
                 return new CssFunctionValue(lowerName, args);
@@ -198,6 +203,8 @@ namespace Rend.Css.Parser.Internal
             if (lowerName == "hwb")
             {
                 ParseFunctionArgs(args);
+                var rcsResult = TryResolveRelativeColor(args, lowerName);
+                if (rcsResult != null) { return rcsResult; }
                 if (CssColorParser.TryParseHwb(args, out var color))
                     return new CssColorValue(color);
                 return new CssFunctionValue(lowerName, args);
@@ -206,6 +213,8 @@ namespace Rend.Css.Parser.Internal
             if (lowerName == "lab")
             {
                 ParseFunctionArgs(args);
+                var rcsResult = TryResolveRelativeColor(args, lowerName);
+                if (rcsResult != null) { return rcsResult; }
                 if (CssColorParser.TryParseLab(args, out var color))
                     return new CssColorValue(color);
                 return new CssFunctionValue(lowerName, args);
@@ -214,6 +223,8 @@ namespace Rend.Css.Parser.Internal
             if (lowerName == "lch")
             {
                 ParseFunctionArgs(args);
+                var rcsResult = TryResolveRelativeColor(args, lowerName);
+                if (rcsResult != null) { return rcsResult; }
                 if (CssColorParser.TryParseLch(args, out var color))
                     return new CssColorValue(color);
                 return new CssFunctionValue(lowerName, args);
@@ -222,6 +233,8 @@ namespace Rend.Css.Parser.Internal
             if (lowerName == "oklab")
             {
                 ParseFunctionArgs(args);
+                var rcsResult = TryResolveRelativeColor(args, lowerName);
+                if (rcsResult != null) { return rcsResult; }
                 if (CssColorParser.TryParseOklab(args, out var color))
                     return new CssColorValue(color);
                 return new CssFunctionValue(lowerName, args);
@@ -230,6 +243,8 @@ namespace Rend.Css.Parser.Internal
             if (lowerName == "oklch")
             {
                 ParseFunctionArgs(args);
+                var rcsResult = TryResolveRelativeColor(args, lowerName);
+                if (rcsResult != null) { return rcsResult; }
                 if (CssColorParser.TryParseOklch(args, out var color))
                     return new CssColorValue(color);
                 return new CssFunctionValue(lowerName, args);
@@ -246,6 +261,8 @@ namespace Rend.Css.Parser.Internal
             if (lowerName == "color")
             {
                 ParseFunctionArgs(args);
+                var rcsResult = TryResolveRelativeColor(args, lowerName);
+                if (rcsResult != null) { return rcsResult; }
                 if (CssColorParser.TryParseColorFunction(args, out var color))
                 {
                     return new CssColorValue(color);
@@ -412,6 +429,91 @@ namespace Rend.Css.Parser.Internal
                 {
                     _pos++;
                 }
+            }
+        }
+
+        /// <summary>
+        /// [CSS-COLOR-5 §5] Detect Relative Color Syntax in function arguments.
+        /// If the first arg is "from" and the base is "currentcolor" with identity
+        /// channel mapping, return a currentcolor keyword. Otherwise return null.
+        /// </summary>
+        private static CssValue? TryResolveRelativeColor(List<CssValue> args, string functionName)
+        {
+            if (args.Count < 4) { return null; }
+            if (!(args[0] is CssKeywordValue fromKw) || fromKw.Keyword != "from") { return null; }
+
+            // Base color must be currentcolor for deferred resolution
+            bool isCurrentColor = args[1] is CssKeywordValue baseKw
+                && baseKw.Keyword == "currentcolor";
+            if (!isCurrentColor) { return null; }
+
+            // Determine expected identity channel names per color function
+            string[]? identityChannels = GetIdentityChannels(functionName, args);
+            if (identityChannels == null) { return null; }
+
+            // Check if channels match identity mapping (skip "from" and base color args)
+            int channelStart = functionName == "color" ? 3 : 2; // color() has space name after base
+            if (args.Count < channelStart + identityChannels.Length) { return null; }
+
+            bool isIdentity = true;
+            for (int i = 0; i < identityChannels.Length; i++)
+            {
+                if (!(args[channelStart + i] is CssKeywordValue chKw)
+                    || chKw.Keyword != identityChannels[i])
+                {
+                    isIdentity = false;
+                    break;
+                }
+            }
+
+            if (isIdentity)
+            {
+                // Identity RCS with currentColor = currentColor itself
+                return new CssKeywordValue("currentcolor");
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Returns the identity channel names for a given color function.
+        /// </summary>
+        private static string[]? GetIdentityChannels(string functionName, List<CssValue> args)
+        {
+            switch (functionName)
+            {
+                case "rgb":
+                case "rgba":
+                    return new[] { "r", "g", "b" };
+                case "hsl":
+                case "hsla":
+                    return new[] { "h", "s", "l" };
+                case "hwb":
+                    return new[] { "h", "w", "b" };
+                case "lab":
+                    return new[] { "l", "a", "b" };
+                case "lch":
+                    return new[] { "l", "c", "h" };
+                case "oklab":
+                    return new[] { "l", "a", "b" };
+                case "oklch":
+                    return new[] { "l", "c", "h" };
+                case "color":
+                    // color(from currentColor <space> r g b)
+                    // The color space name is at args[2]
+                    if (args.Count >= 3 && args[2] is CssKeywordValue spaceKw)
+                    {
+                        string space = spaceKw.Keyword;
+                        if (space == "xyz-d50" || space == "xyz-d65" || space == "xyz")
+                        {
+                            return new[] { "x", "y", "z" };
+                        }
+                        // srgb, display-p3, a98-rgb, prophoto-rgb, rec2020, srgb-linear
+                        return new[] { "r", "g", "b" };
+                    }
+                    return null;
+                default:
+                    return null;
             }
         }
 

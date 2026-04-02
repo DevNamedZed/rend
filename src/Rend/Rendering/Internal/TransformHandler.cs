@@ -101,6 +101,22 @@ namespace Rend.Rendering.Internal
             var fromOrigin4 = Matrix4x4.CreateTranslation(originX, originY, 0);
             Matrix4x4 composed = toOrigin4 * transform4x4 * parentPerspective * fromOrigin4;
 
+            // [CSS-TRANSFORM2 §5] backface-visibility: hidden — if the element's
+            // back face is toward the viewer, skip rendering entirely.
+            CssValue? backfaceValue = style.GetRefValue(PropertyId.BackfaceVisibility) as CssValue;
+            bool backfaceHidden = backfaceValue is CssKeywordValue bfKw && bfKw.Keyword == "hidden";
+            if (backfaceHidden)
+            {
+                // Transform the surface normal (0,0,1) by the composed matrix.
+                // If the resulting Z is negative, the back face is showing.
+                float normalZ = composed.M13 * 0 + composed.M23 * 0 + composed.M33 * 1 + composed.M43 * 0;
+                if (normalZ < 0)
+                {
+                    box.BackfaceHidden = true;
+                    return false;
+                }
+            }
+
             // Flatten 4x4 → 3x3 for rendering
             Transform2D finalMatrix = Transform2D.FromMatrix4x4(composed);
             if (finalMatrix == Transform2D.Identity)

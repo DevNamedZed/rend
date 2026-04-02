@@ -125,6 +125,12 @@ namespace Rend.Layout
         internal RectF? GridAreaContainingBlock { get; set; }
 
         /// <summary>
+        /// [CSS-TRANSFORM2 §5] When true, the element's back face is toward the viewer
+        /// and backface-visibility is hidden, so painting should be skipped.
+        /// </summary>
+        internal bool BackfaceHidden { get; set; }
+
+        /// <summary>
         /// Resolved collapsed border colors (CSS 2.1 §17.6.2 priority).
         /// When set, the painter uses these instead of the cell's own border colors.
         /// </summary>

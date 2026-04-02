@@ -500,6 +500,13 @@ namespace Rend.Css.Parser.Internal
                     return true;
                 }
 
+                case "display-p3-linear":
+                {
+                    // [CSS-COLOR4 §10.1] Already linear — skip gamma undo
+                    color = LinearDisplayP3ToSrgb(channel1, channel2, channel3, alphaByte);
+                    return true;
+                }
+
                 case "a98-rgb":
                 {
                     // [CSS-COLOR4 §10.1] Adobe RGB 1998 to sRGB

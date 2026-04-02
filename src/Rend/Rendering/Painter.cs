@@ -298,6 +298,12 @@ namespace Rend.Rendering
             // 1. Apply transform if present.
             bool hasTransform = TransformHandler.Apply(box, target);
 
+            // [CSS-TRANSFORM2 §5] Skip painting if backface is hidden and facing viewer.
+            if (box.BackfaceHidden)
+            {
+                return;
+            }
+
             // 2. Apply opacity if < 1.
             bool hasOpacity = OpacityCompositor.Apply(box, target);
 
