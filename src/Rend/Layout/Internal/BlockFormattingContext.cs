@@ -893,7 +893,10 @@ namespace Rend.Layout.Internal
                                 float ciHeight = childStyle.GetValues()[PropertyId.ContainIntrinsicHeight].FloatValue;
                                 contentHeight = (!float.IsNaN(ciHeight) && ciHeight > 0) ? ciHeight : 0;
                             }
-                            else if (childStyle.Display == CssDisplay.Table && childBox.ContentRect.Height > 0)
+                            else if ((childStyle.Display == CssDisplay.Table
+                                     || childStyle.Display == CssDisplay.Grid
+                                     || childStyle.Display == CssDisplay.InlineGrid)
+                                    && childBox.ContentRect.Height > 0)
                                 contentHeight = childBox.ContentRect.Height;
                             else
                                 contentHeight = CalculateAutoHeight(childBox);
@@ -1218,7 +1221,11 @@ namespace Rend.Layout.Internal
             {
                 return true;
             }
-            if (style.OverflowX != CssOverflow.Visible || style.OverflowY != CssOverflow.Visible)
+            // [CSS-OVERFLOW-3 §3.1] overflow: hidden/scroll/auto establish a BFC.
+            // overflow: clip does NOT establish a BFC — it clips visually but
+            // doesn't affect layout (no float avoidance, no margin isolation).
+            if ((style.OverflowX != CssOverflow.Visible && style.OverflowX != CssOverflow.Clip) ||
+                (style.OverflowY != CssOverflow.Visible && style.OverflowY != CssOverflow.Clip))
             {
                 return true;
             }
@@ -1719,6 +1726,14 @@ namespace Rend.Layout.Internal
                 var child = box.Children[i];
                 var cr = child.ContentRect;
                 child.ContentRect = new RectF(cr.X, cr.Y + deltaY, cr.Width, cr.Height);
+
+                // [CSS-GRID §9] Keep GridAreaContainingBlock in sync with shifted coordinates.
+                if (child.GridAreaContainingBlock != null)
+                {
+                    var ga = child.GridAreaContainingBlock.Value;
+                    child.GridAreaContainingBlock = new RectF(ga.X, ga.Y + deltaY, ga.Width, ga.Height);
+                }
+
                 ShiftDescendants(child, deltaY);
             }
         }

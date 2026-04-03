@@ -162,9 +162,11 @@ namespace Rend.Css.Properties.Internal
             Register(byName, "justify-content", PropertyId.JustifyContent, false, PropertyValueType.Keyword);
             Register(byName, "order", PropertyId.Order, false, PropertyValueType.Number);
 
-            // Gap
+            // Gap (and legacy grid-*-gap aliases per CSS Box Alignment §A)
             Register(byName, "row-gap", PropertyId.RowGap, false, PropertyValueType.Length);
             Register(byName, "column-gap", PropertyId.ColumnGap, false, PropertyValueType.Length);
+            Register(byName, "grid-row-gap", PropertyId.RowGap, false, PropertyValueType.Length);
+            Register(byName, "grid-column-gap", PropertyId.ColumnGap, false, PropertyValueType.Length);
 
             // Table
             Register(byName, "table-layout", PropertyId.TableLayout, false, PropertyValueType.Keyword);
@@ -238,6 +240,7 @@ namespace Rend.Css.Properties.Internal
             // Text Overflow
             Register(byName, "text-overflow", PropertyId.TextOverflow, false, PropertyValueType.Keyword);
             Register(byName, "overflow-wrap", PropertyId.OverflowWrap, true, PropertyValueType.Keyword);
+            Register(byName, "word-wrap", PropertyId.OverflowWrap, true, PropertyValueType.Keyword);
 
             // Text Decoration Detail
             Register(byName, "text-decoration-thickness", PropertyId.TextDecorationThickness, false, PropertyValueType.Length);

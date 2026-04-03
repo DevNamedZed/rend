@@ -89,6 +89,13 @@ namespace Rend.Layout
         public List<LineBox>? LineBoxes { get; set; }
 
         /// <summary>
+        /// Per-row heights from a subgrid layout. When this box is a grid item
+        /// with grid-template-rows: subgrid, the subgrid's row heights are stored
+        /// here so the parent grid can use them for track sizing (CSS Grid §8).
+        /// </summary>
+        internal float[]? SubgridRowHeights { get; set; }
+
+        /// <summary>
         /// Y offset to apply to line boxes during painting. Used by the paginator
         /// when line boxes are shared from the original (unpaginated) layout —
         /// the offset shifts line box coordinates into page-local space.

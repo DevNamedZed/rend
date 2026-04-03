@@ -55,9 +55,12 @@ namespace Rend.Layout.Internal
         {
             float dx = 0, dy = 0;
 
-            // [CSS2 §9.4.3] Percentage offsets resolve against containing block dimensions.
-            float cbWidth = containingBlock.ContentRect.Width;
-            float cbHeight = containingBlock.ContentRect.Height;
+            // [CSS2 §10.1] For relative/static elements, the containing block is the
+            // content edge of the nearest block container ancestor, NOT the nearest
+            // positioned ancestor. Use the parent's dimensions for percentage resolution.
+            var cb = box.Parent ?? containingBlock;
+            float cbWidth = cb.ContentRect.Width;
+            float cbHeight = cb.ContentRect.Height;
             float top = ResolvePositionValue(style.Top, cbHeight);
             float left = ResolvePositionValue(style.Left, cbWidth);
             float bottom = ResolvePositionValue(style.Bottom, cbHeight);

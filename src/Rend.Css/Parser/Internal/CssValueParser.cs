@@ -151,6 +151,39 @@ namespace Rend.Css.Parser.Internal
                     return new CssKeywordValue(ident.ToLowerInvariant());
                 }
 
+                case CssTokenType.LeftBracket:
+                {
+                    // [CSS-GRID §7.1] Square bracket groups for named grid lines: [name1 name2]
+                    _pos++; // skip '['
+                    var bracketItems = new List<CssValue>();
+                    while (_pos < _count && _tokens[_pos].Type != CssTokenType.RightBracket)
+                    {
+                        if (_tokens[_pos].Type == CssTokenType.Whitespace)
+                        {
+                            _pos++;
+                            continue;
+                        }
+                        var inner = ParseSingleValue();
+                        if (inner != null)
+                        {
+                            bracketItems.Add(inner);
+                        }
+                        else
+                        {
+                            _pos++;
+                        }
+                    }
+                    if (_pos < _count && _tokens[_pos].Type == CssTokenType.RightBracket)
+                    {
+                        _pos++; // skip ']'
+                    }
+                    if (bracketItems.Count == 1)
+                    {
+                        return new CssListValue(bracketItems, ' ');
+                    }
+                    return new CssListValue(bracketItems, ' ');
+                }
+
                 case CssTokenType.Delim:
                 {
                     // Handle '/' separator (e.g. in font shorthand, border-radius)

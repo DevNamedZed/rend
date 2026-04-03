@@ -1018,23 +1018,42 @@ namespace Rend.Layout.Internal
             var breaks = breaker.FindBreaks(text, lineBreak,
                 breakSpaces: whiteSpace == CssWhiteSpace.BreakSpaces);
 
-            // [CSS-TEXT-3 §5.2] word-break: break-all — every character boundary
-            // is a break opportunity. Integrate into the breaks array instead of
-            // using the separate WrapTextBreakAll path, so trailing-space hanging,
-            // soft-hyphen handling, and accumulated-fragment optimization all work.
+            // [CSS-TEXT-3 §5.2] word-break: break-all — treat all typographic letter
+            // units as CJK ideographs for line-breaking. This allows breaks between
+            // any pair, but still respects line-break prohibitions:
+            // - No break before closing punctuation (CL/EX/NS)
+            // - No break after opening punctuation (OP)
             if (wordBreak == CssWordBreak.BreakAll)
             {
                 for (int bi = 0; bi < breaks.Length; bi++)
                 {
-                    if (breaks[bi] == LineBreakOpportunity.Forbidden)
+                    if (breaks[bi] != LineBreakOpportunity.Forbidden)
                     {
-                        // Don't break surrogate pairs
-                        if (char.IsHighSurrogate(text[bi]) && bi + 1 < text.Length && char.IsLowSurrogate(text[bi + 1]))
-                        {
-                            continue;
-                        }
-                        breaks[bi] = LineBreakOpportunity.Allowed;
+                        continue;
                     }
+                    // Don't break surrogate pairs
+                    if (char.IsHighSurrogate(text[bi]) && bi + 1 < text.Length
+                        && char.IsLowSurrogate(text[bi + 1]))
+                    {
+                        continue;
+                    }
+                    // [CSS-TEXT-3 §5.2] break-all follows CJK ideograph rules:
+                    // still respect closing/opening punctuation prohibitions.
+                    char nextChar = text[bi + 1];
+                    var nextClass = Text.Internal.LineBreakClassifier.GetClass(nextChar);
+                    if (nextClass == Text.Internal.LineBreakClass.CL
+                        || nextClass == Text.Internal.LineBreakClass.EX
+                        || nextClass == Text.Internal.LineBreakClass.NS)
+                    {
+                        continue; // no break before closing punctuation
+                    }
+                    char currentChar = text[bi];
+                    var currentClass = Text.Internal.LineBreakClassifier.GetClass(currentChar);
+                    if (currentClass == Text.Internal.LineBreakClass.OP)
+                    {
+                        continue; // no break after opening punctuation
+                    }
+                    breaks[bi] = LineBreakOpportunity.Allowed;
                 }
             }
 
@@ -1714,7 +1733,22 @@ namespace Rend.Layout.Internal
                 BlockFormattingContext.LayoutChildren(box, context);
                 contentHeight = DimensionResolver.ResolveHeight(element.Style, float.NaN, box);
                 if (float.IsNaN(contentHeight))
-                    contentHeight = CalculateContentHeight(box);
+                {
+                    // [CSS-GRID §12.4 / CSS-TABLES §4] Grid and table containers
+                    // compute their own content height from tracks/rows during layout.
+                    // Use that instead of CalculateContentHeight (which only checks children).
+                    if ((element.Style.Display == CssDisplay.Grid
+                         || element.Style.Display == CssDisplay.InlineGrid
+                         || element.Style.Display == CssDisplay.Table)
+                        && box.ContentRect.Height > 0)
+                    {
+                        contentHeight = box.ContentRect.Height;
+                    }
+                    else
+                    {
+                        contentHeight = CalculateContentHeight(box);
+                    }
+                }
 
                 // [CSS2 §10.7] Apply min-height/max-height
                 float ibMinH = DimensionResolver.ResolvePercentHeight(element.Style.MinHeight, float.NaN);
@@ -2939,5 +2973,6 @@ namespace Rend.Layout.Internal
                    (ch >= 0x30A0 && ch <= 0x30FF) ||
                    (ch >= 0xFF00 && ch <= 0xFFEF);
         }
+
     }
 }

@@ -194,6 +194,16 @@ namespace Rend.Layout
                 var child = box.Children[i];
                 var cr = child.ContentRect;
                 child.ContentRect = new RectF(cr.X + dx, cr.Y + dy, cr.Width, cr.Height);
+
+                // [CSS-GRID §9] Abspos grid items store their grid area as a containing
+                // block. This must be shifted in sync with the layout box coordinates so
+                // that PositionedLayout.ApplyAbsolute uses the correct reference frame.
+                if (child.GridAreaContainingBlock != null)
+                {
+                    var ga = child.GridAreaContainingBlock.Value;
+                    child.GridAreaContainingBlock = new RectF(ga.X + dx, ga.Y + dy, ga.Width, ga.Height);
+                }
+
                 ShiftDescendants(child, dx, dy);
             }
         }

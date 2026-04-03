@@ -40,6 +40,7 @@ namespace Rend.Css.Parser.Internal
                 case "overflow":
                 case "overscroll-behavior":
                 case "gap":
+                case "grid-gap":
                 case "border-spacing":
                 case "place-content":
                 case "place-items":
@@ -155,7 +156,9 @@ namespace Rend.Css.Parser.Internal
 
                 case "overflow": return ExpandTwoValue(value, important, output, "overflow-x", "overflow-y");
                 case "overscroll-behavior": return ExpandTwoValue(value, important, output, "overscroll-behavior-x", "overscroll-behavior-y");
-                case "gap": return ExpandTwoValue(value, important, output, "row-gap", "column-gap");
+                case "gap":
+                case "grid-gap":
+                    return ExpandTwoValue(value, important, output, "row-gap", "column-gap");
                 case "border-spacing": return ExpandTwoValue(value, important, output, "border-spacing-h", "border-spacing-v");
                 case "place-content": return ExpandTwoValue(value, important, output, "align-content", "justify-content");
                 case "place-items": return ExpandTwoValue(value, important, output, "align-items", "justify-items");
@@ -1595,6 +1598,7 @@ namespace Rend.Css.Parser.Internal
                 ["flex"] = new[] { "flex-grow", "flex-shrink", "flex-basis" },
                 ["outline"] = new[] { "outline-width", "outline-style", "outline-color" },
                 ["gap"] = new[] { "row-gap", "column-gap" },
+                ["grid-gap"] = new[] { "row-gap", "column-gap" },
                 ["inset"] = new[] { "top", "right", "bottom", "left" },
                 ["overflow"] = new[] { "overflow-x", "overflow-y" },
                 ["overscroll-behavior"] = new[] { "overscroll-behavior-x", "overscroll-behavior-y" },
@@ -1622,6 +1626,7 @@ namespace Rend.Css.Parser.Internal
             ["flex"] = new[] { "flex-grow", "flex-shrink", "flex-basis" },
             ["outline"] = new[] { "outline-width", "outline-style", "outline-color" },
             ["gap"] = new[] { "row-gap", "column-gap" },
+            ["grid-gap"] = new[] { "row-gap", "column-gap" },
             ["inset"] = new[] { "top", "right", "bottom", "left" },
             ["overflow"] = new[] { "overflow-x", "overflow-y" },
             ["overscroll-behavior"] = new[] { "overscroll-behavior-x", "overscroll-behavior-y" },

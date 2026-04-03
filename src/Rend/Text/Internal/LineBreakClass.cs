@@ -163,8 +163,11 @@ namespace Rend.Text.Internal
                 (codePoint >= 0x20000 && codePoint <= 0x2FA1F))   // CJK Unified Ext B-F, Compatibility Supplement
                 return LineBreakClass.ID;
 
-            // CJK punctuation
+            // CJK punctuation (U+3000-303F)
             if (codePoint >= 0x3001 && codePoint <= 0x3002) return LineBreakClass.CL; // ideographic comma/full stop
+            if (codePoint >= 0x3003 && codePoint <= 0x3004) return LineBreakClass.ID; // ditto mark, JIS symbol
+            if (codePoint == 0x3005) return LineBreakClass.NS; // ideographic iteration mark
+            if (codePoint >= 0x3006 && codePoint <= 0x3007) return LineBreakClass.ID; // ideographic closing mark, number zero
             if (codePoint == 0x3008 || codePoint == 0x300A || codePoint == 0x300C || codePoint == 0x300E ||
                 codePoint == 0x3010 || codePoint == 0x3014 || codePoint == 0x3016 || codePoint == 0x3018 ||
                 codePoint == 0x301A || codePoint == 0xFF08 || codePoint == 0xFF3B || codePoint == 0xFF5B)
@@ -173,6 +176,35 @@ namespace Rend.Text.Internal
                 codePoint == 0x3011 || codePoint == 0x3015 || codePoint == 0x3017 || codePoint == 0x3019 ||
                 codePoint == 0x301B || codePoint == 0xFF09 || codePoint == 0xFF3D || codePoint == 0xFF5D)
                 return LineBreakClass.CL;
+            if (codePoint == 0x301C) return LineBreakClass.NS; // wave dash
+            if (codePoint == 0x301D) return LineBreakClass.OP; // reversed double prime quotation
+            if (codePoint >= 0x301E && codePoint <= 0x301F) return LineBreakClass.CL; // double prime quotation marks
+            if (codePoint == 0x3030) return LineBreakClass.ID; // wavy dash
+            if (codePoint == 0x303B) return LineBreakClass.NS; // vertical ideographic iteration mark
+            if (codePoint == 0x303C) return LineBreakClass.ID; // masu mark
+
+            // Hiragana / Katakana → ID (ideographic, allows breaks around them)
+            if (codePoint >= 0x3041 && codePoint <= 0x3096) return LineBreakClass.ID; // Hiragana
+            if (codePoint >= 0x3099 && codePoint <= 0x309A) return LineBreakClass.CM; // combining marks
+            if (codePoint >= 0x309B && codePoint <= 0x309E) return LineBreakClass.NS; // voiced/semi-voiced marks, iteration
+            if (codePoint == 0x309F) return LineBreakClass.ID; // Hiragana digraph yori
+            if (codePoint >= 0x30A1 && codePoint <= 0x30FA) return LineBreakClass.ID; // Katakana
+            if (codePoint == 0x30FB) return LineBreakClass.NS; // katakana middle dot
+            if (codePoint == 0x30FC) return LineBreakClass.NS; // prolonged sound mark (CJ→NS default)
+            if (codePoint >= 0x30FD && codePoint <= 0x30FE) return LineBreakClass.NS; // katakana iteration marks
+            if (codePoint == 0x30FF) return LineBreakClass.ID; // Katakana digraph koto
+
+            // Fullwidth punctuation (U+FF00-FFEF)
+            if (codePoint == 0xFF01) return LineBreakClass.EX; // fullwidth exclamation
+            if (codePoint == 0xFF0C) return LineBreakClass.CL; // fullwidth comma
+            if (codePoint == 0xFF0E) return LineBreakClass.CL; // fullwidth full stop
+            if (codePoint == 0xFF1A) return LineBreakClass.NS; // fullwidth colon
+            if (codePoint == 0xFF1B) return LineBreakClass.NS; // fullwidth semicolon
+            if (codePoint == 0xFF1F) return LineBreakClass.EX; // fullwidth question mark
+            // Fullwidth Latin letters/digits → ID in CJK context
+            if (codePoint >= 0xFF10 && codePoint <= 0xFF19) return LineBreakClass.ID; // fullwidth digits
+            if (codePoint >= 0xFF21 && codePoint <= 0xFF3A) return LineBreakClass.ID; // fullwidth uppercase
+            if (codePoint >= 0xFF41 && codePoint <= 0xFF5A) return LineBreakClass.ID; // fullwidth lowercase
 
             // Hangul Jamo
             if (codePoint >= 0x1100 && codePoint <= 0x115F) return LineBreakClass.JL;
