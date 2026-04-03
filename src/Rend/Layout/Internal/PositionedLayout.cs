@@ -145,6 +145,27 @@ namespace Rend.Layout.Internal
                     w = cb.Width - left - right - box.MarginLeft - box.MarginRight
                       - box.BorderLeftWidth - box.BorderRightWidth - box.PaddingLeft - box.PaddingRight;
                     w = Math.Max(0, w);
+
+                    // [CSS-SIZING-4 §5.1] Transfer max-height/min-height → width
+                    // through aspect-ratio when width is auto (computed from left+right).
+                    float arTransfer = DimensionResolver.GetAspectRatio(style);
+                    if (arTransfer > 0)
+                    {
+                        float trMaxH = style.MaxHeight;
+                        if (!float.IsNaN(trMaxH) && trMaxH >= 0
+                            && !DeferredPercent.IsEncoded(trMaxH))
+                        {
+                            float transferredMaxW = trMaxH * arTransfer;
+                            if (w > transferredMaxW) { w = transferredMaxW; }
+                        }
+                        float trMinH = style.MinHeight;
+                        if (!float.IsNaN(trMinH) && trMinH > 0
+                            && !DeferredPercent.IsEncoded(trMinH))
+                        {
+                            float transferredMinW = trMinH * arTransfer;
+                            if (w < transferredMinW) { w = transferredMinW; }
+                        }
+                    }
                 }
                 else
                 {

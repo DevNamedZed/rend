@@ -342,6 +342,46 @@ namespace Rend.Layout.Internal
                             }
                         }
                     }
+                    // [CSS-SIZING-4 §5.1] Transfer max-height → max-width through
+                    // aspect-ratio for abspos elements. When an element has aspect-ratio
+                    // and max-height, the effective max-width = max-height * ratio.
+                    {
+                        float absAr = DimensionResolver.GetAspectRatio(childStyle);
+                        if (absAr > 0)
+                        {
+                            float maxH = childStyle.MaxHeight;
+                            if (!float.IsNaN(maxH) && maxH >= 0 && !DeferredPercent.IsEncoded(maxH))
+                            {
+                                float transferredMaxW = maxH * absAr;
+                                if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
+                                {
+                                    transferredMaxW -= posBox.PaddingLeft + posBox.PaddingRight
+                                                    + posBox.BorderLeftWidth + posBox.BorderRightWidth;
+                                    if (transferredMaxW < 0) { transferredMaxW = 0; }
+                                }
+                                if (posWidth > transferredMaxW)
+                                {
+                                    posWidth = transferredMaxW;
+                                }
+                            }
+                            float minH = childStyle.MinHeight;
+                            if (!float.IsNaN(minH) && minH > 0 && !DeferredPercent.IsEncoded(minH))
+                            {
+                                float transferredMinW = minH * absAr;
+                                if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
+                                {
+                                    transferredMinW -= posBox.PaddingLeft + posBox.PaddingRight
+                                                    + posBox.BorderLeftWidth + posBox.BorderRightWidth;
+                                    if (transferredMinW < 0) { transferredMinW = 0; }
+                                }
+                                if (posWidth < transferredMinW)
+                                {
+                                    posWidth = transferredMinW;
+                                }
+                            }
+                        }
+                    }
+
                     // [CSS2 §10.4] Apply min/max-width to abspos shrink-to-fit
                     float absMinW = DimensionResolver.ResolvePercentWidth(childStyle.MinWidth, containingWidth);
                     float absMaxW = DimensionResolver.ResolvePercentWidth(childStyle.MaxWidth, containingWidth);

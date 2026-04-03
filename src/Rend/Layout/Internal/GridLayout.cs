@@ -1275,6 +1275,25 @@ namespace Rend.Layout.Internal
                 }
             }
 
+            // [CSS-GRID-2 §8] Subgrid per-row contributions to parent rows.
+            for (int i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item.Box.SubgridRowHeights == null || item.RowSpan <= 1)
+                {
+                    continue;
+                }
+                float[] subH = item.Box.SubgridRowHeights;
+                for (int sr = 0; sr < subH.Length && sr < item.RowSpan; sr++)
+                {
+                    int parentRow = item.RowStart + sr;
+                    if (parentRow >= 0 && parentRow < finalRows && subH[sr] > rowHeights[parentRow])
+                    {
+                        rowHeights[parentRow] = subH[sr];
+                    }
+                }
+            }
+
             // [CSS-GRID §7.2.4.1] Extract fit-content row limits early for auto minimum save.
             float[]? fitContentRowLimits = ExtractFitContentLimits(
                 rowRaw, finalRows, containerHeight, rowGap);
@@ -1285,31 +1304,6 @@ namespace Rend.Layout.Internal
             {
                 autoMinRowHeights = new float[finalRows];
                 Array.Copy(rowHeights, autoMinRowHeights, finalRows);
-            }
-
-            // [CSS-GRID-2 §8] Subgrid row contributions: when a spanning item is a
-            // row-subgrid, its per-row heights contribute directly to parent rows
-            // instead of distributing the total height evenly.
-            for (int i = 0; i < items.Count; i++)
-            {
-                var item = items[i];
-                if (item.RowSpan <= 1 || item.Box.SubgridRowHeights == null)
-                {
-                    continue;
-                }
-                float[] subRowH = item.Box.SubgridRowHeights;
-                for (int sr = 0; sr < subRowH.Length && sr < item.RowSpan; sr++)
-                {
-                    int parentRow = item.RowStart + sr;
-                    if (parentRow < finalRows)
-                    {
-                        float contribution = subRowH[sr];
-                        if (contribution > rowHeights[parentRow])
-                        {
-                            rowHeights[parentRow] = contribution;
-                        }
-                    }
-                }
             }
 
             // Pass 2: Distribute extra space for spanning items
@@ -1351,10 +1345,16 @@ namespace Rend.Layout.Internal
             // Intrinsic sentinels (negative values) keep the content-sized height from above.
             if (isSubgridRows && subgridRowTracks != null)
             {
-                // Subgridded rows: use the parent's row sizes directly.
+                // [CSS-GRID-2 §8] Store content-based row heights BEFORE applying
+                // inherited tracks. Parent uses these for its own row sizing.
+                parent.SubgridRowHeights = new float[finalRows];
+                Array.Copy(rowHeights, parent.SubgridRowHeights, finalRows);
+
+                // Subgridded rows: use inherited sizes, but keep content heights
+                // when they exceed inherited (parent auto rows start at 0).
                 for (int r = 0; r < Math.Min(subgridRowTracks.Length, finalRows); r++)
                 {
-                    rowHeights[r] = subgridRowTracks[r];
+                    rowHeights[r] = Math.Max(rowHeights[r], subgridRowTracks[r]);
                 }
             }
             else if (explicitRowTracks != null)
@@ -1984,17 +1984,6 @@ namespace Rend.Layout.Internal
             }
 
             // [CSS-GRID §12.4] Set grid container auto height from row tracks so
-            // [CSS-GRID-2 §8] Store per-row heights so parent grids can use subgrid
-            // row contributions for their own track sizing.
-            if (isSubgridRows)
-            {
-                parent.SubgridRowHeights = new float[finalRows];
-                for (int r = 0; r < finalRows; r++)
-                {
-                    parent.SubgridRowHeights[r] = rowHeights[r];
-                }
-            }
-
             // BFC can use it (instead of CalculateAutoHeight which misses tracks).
             if (parent.ContentRect.Height <= 0)
             {
@@ -2820,8 +2809,12 @@ namespace Rend.Layout.Internal
             Dictionary<string, List<int>>? lineNames = null)
         {
             if (raw == null) return null;
-            if (raw is CssKeywordValue kw && (kw.Keyword == "none" || kw.Keyword == "auto" || kw.Keyword == "subgrid"))
+            if (raw is CssKeywordValue kw && (kw.Keyword == "none" || kw.Keyword == "subgrid"))
                 return null;
+            // [CSS-GRID §7.2] 'auto' as a standalone keyword = one auto-sized track.
+            // Don't confuse with 'none' (no explicit tracks). ParseTrackValue handles
+            // 'auto' as a track sizing function (≈ 1fr for now).
+            // Falls through to normal track parsing below.
 
             // Flatten into a list of individual track values (expanding repeat())
             // Line name brackets [name] are extracted and mapped to line indices.
@@ -3244,6 +3237,13 @@ namespace Rend.Layout.Internal
                         return maxVal;
                     }
                     var minVal = ParseTrackValue(fn.Arguments[0], containerSize);
+                    // [CSS-GRID §7.2.4] minmax(auto, fixed): auto min = min-content,
+                    // clamped by the max. Use the max value as track size.
+                    // Full iterative min-size-auto resolution not yet implemented.
+                    if (minVal.isFr)
+                    {
+                        return (maxVal.value, false);
+                    }
                     // Both fixed: use max as the track size,
                     // but clamp to container when the container has a definite size
                     // and the min is a definite non-intrinsic value.
@@ -3328,6 +3328,125 @@ namespace Rend.Layout.Internal
                 }
             }
             return limits;
+        }
+
+        /// <summary>
+        /// [CSS-GRID-2 §8] Pre-measures a row-subgrid item's children to contribute
+        /// per-row heights to the parent grid's row sizing. This runs BEFORE the main
+        /// layout pass so parent auto rows get sized from subgrid content.
+        /// </summary>
+        private static void PreMeasureSubgridRowContributions(
+            GridItem subgridItem, float[] parentRowHeights, int parentRows,
+            float[] parentColWidths, int parentCols,
+            float colGap, float rowGap,
+            Dictionary<string, List<int>> colLineNames,
+            Dictionary<string, List<int>> rowLineNames,
+            LayoutContext context)
+        {
+            var element = subgridItem.StyledElement!;
+            var children = BlockFormattingContext.FlattenContents(element);
+            if (children.Count == 0)
+            {
+                return;
+            }
+
+            int subRows = subgridItem.RowSpan;
+
+            // Build subgrid column widths from parent's columns
+            float subgridWidth = 0;
+            int subCols = subgridItem.ColSpan;
+            for (int c = subgridItem.ColStart; c < subgridItem.ColStart + subCols && c < parentCols; c++)
+            {
+                subgridWidth += parentColWidths[c];
+            }
+            if (subCols > 1)
+            {
+                subgridWidth += (subCols - 1) * colGap;
+            }
+
+            // Collect and place subgrid children in their rows
+            int autoRow = 0;
+            for (int ci = 0; ci < children.Count; ci++)
+            {
+                var child = children[ci];
+                if (child.IsText)
+                {
+                    continue;
+                }
+                var childEl = (StyledElement)child;
+                if (childEl.Style.Display == CssDisplay.None)
+                {
+                    continue;
+                }
+                if (childEl.Style.Position == CssPosition.Absolute ||
+                    childEl.Style.Position == CssPosition.Fixed)
+                {
+                    continue;
+                }
+
+                // Determine which subgrid row this child lands in
+                int childRow = -1;
+                int childRowSpan = 1;
+                var childRowStartRaw = childEl.Style.GetRefValue(PropertyId.GridRowStart);
+                if (childRowStartRaw is CssNumberValue rowNum && rowNum.Value > 0)
+                {
+                    childRow = (int)rowNum.Value - 1; // 1-based to 0-based
+                }
+                else if (childRowStartRaw is CssDimensionValue rowDim && rowDim.Value > 0)
+                {
+                    childRow = (int)rowDim.Value - 1;
+                }
+
+                if (childRow < 0)
+                {
+                    // Auto-placement: use next available row
+                    childRow = autoRow;
+                }
+                if (childRow >= subRows)
+                {
+                    continue; // outside subgrid span
+                }
+                autoRow = childRow + childRowSpan;
+
+                // Measure this child's height contribution
+                var tempBox = new LayoutBox(childEl, BoxType.Block);
+                BoxModelCalculator.ApplyBoxModel(tempBox, childEl.Style, subgridWidth);
+
+                float contentHeight;
+                float explicitH = DimensionResolver.ResolveHeight(childEl.Style, float.NaN, tempBox);
+                if (!float.IsNaN(explicitH) && explicitH >= 0)
+                {
+                    contentHeight = explicitH;
+                }
+                else
+                {
+                    // Measure content: lay out at available width to get auto height
+                    float availW = subgridWidth - tempBox.PaddingLeft - tempBox.PaddingRight
+                                 - tempBox.BorderLeftWidth - tempBox.BorderRightWidth;
+                    if (availW < 0) { availW = 0; }
+                    tempBox.ContentRect = new RectF(0, 0, availW, 0);
+                    var savedFloat = context.FloatContext;
+                    var savedParent = context.ParentGridContext;
+                    context.FloatContext = new FloatContext(0, availW);
+                    context.ParentGridContext = null;
+                    BlockFormattingContext.LayoutChildren(tempBox, context);
+                    context.ParentGridContext = savedParent;
+                    context.FloatContext = savedFloat;
+                    contentHeight = CalculateAutoHeight(tempBox);
+                }
+
+                float totalHeight = contentHeight
+                    + tempBox.PaddingTop + tempBox.PaddingBottom
+                    + tempBox.BorderTopWidth + tempBox.BorderBottomWidth
+                    + tempBox.MarginTop + tempBox.MarginBottom;
+
+                int parentRow = subgridItem.RowStart + childRow;
+                if (parentRow >= 0 && parentRow < parentRows
+                    && totalHeight > parentRowHeights[parentRow])
+                {
+                    parentRowHeights[parentRow] = totalHeight;
+                }
+            }
         }
 
         private static float AlignOffset(CssAlignItems align, float cellSize, float itemSize)
