@@ -190,17 +190,34 @@ namespace Rend.Rendering.Internal
                 Italic = fontStyle == CssFontStyle.Italic || fontStyle == CssFontStyle.Oblique
             };
 
-            // Compute pixel line height for vertical centering
+            // Compute pixel line height for vertical centering. For "normal" line-height,
+            // delegate to GetNormalLineHeight so we use the same metric-based value as
+            // the inline text layout (font metrics, not 1.2x fontSize).
+            var (ascent, descent) = target.GetFontMetrics(textStyle.Font, fontSize);
             float rawLh = style.LineHeight;
             float pixelLineHeight;
-            if (float.IsNaN(rawLh) || rawLh == 0) pixelLineHeight = fontSize * 1.2f;
-            else if (rawLh < 0) pixelLineHeight = Math.Abs(rawLh) * fontSize;
-            else pixelLineHeight = rawLh;
+            if (float.IsNaN(rawLh) || rawLh == 0)
+            {
+                float normalLh = target.GetNormalLineHeight(textStyle.Font, fontSize);
+                pixelLineHeight = (!float.IsNaN(normalLh) && normalLh > 0) ? normalLh : fontSize * 1.2f;
+            }
+            else if (rawLh < 0)
+            {
+                pixelLineHeight = Math.Abs(rawLh) * fontSize;
+            }
+            else
+            {
+                pixelLineHeight = rawLh;
+            }
 
-            // Position at baseline using CSS half-leading model:
+            // Position at baseline matching TextPainter's snapping for inline text.
+            // CSS half-leading: contentArea = ascent + descent (font metrics).
             // halfLeading = (lineHeight - contentArea) / 2
-            // baseline Y = top + halfLeading + ascent
-            float y = contentRect.Y + (pixelLineHeight - fontSize) / 2f + fontSize * 0.8f;
+            // baseline Y from top of line box = halfLeading + ascent
+            // TextPainter then snaps: Math.Floor(Math.Round(lineY) + baseline)
+            float contentArea = ascent + descent;
+            float baselineFromTop = (pixelLineHeight - contentArea) / 2f + ascent;
+            float y = (float)Math.Floor(Math.Round(contentRect.Y) + baselineFromTop);
 
             if (isInside)
             {

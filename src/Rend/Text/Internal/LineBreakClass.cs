@@ -129,19 +129,91 @@ namespace Rend.Text.Internal
             if (codePoint == 0x2010 || codePoint == 0x2013) return LineBreakClass.BA; // hyphen, en dash
             if (codePoint == 0x00AD) return LineBreakClass.BA; // soft hyphen
 
-            // Open punctuation
+            // [UAX #14] Open punctuation (OP)
             if (codePoint == 0x0028 || codePoint == 0x005B || codePoint == 0x007B)
                 return LineBreakClass.OP;
+            if (codePoint == 0x0F3A || codePoint == 0x0F3C) return LineBreakClass.OP; // Tibetan brackets
+            if (codePoint == 0x169B) return LineBreakClass.OP; // Ogham feather mark
+            if (codePoint == 0x201A || codePoint == 0x201E) return LineBreakClass.OP; // low-9 quotation marks
+            if (codePoint == 0x2045) return LineBreakClass.OP; // left square bracket with quill
+            if (codePoint == 0x207D) return LineBreakClass.OP; // superscript left parenthesis
+            if (codePoint == 0x208D) return LineBreakClass.OP; // subscript left parenthesis
+            if (codePoint == 0x2329) return LineBreakClass.OP; // left-pointing angle bracket
+            if (codePoint == 0x2768 || codePoint == 0x276A || codePoint == 0x276C ||
+                codePoint == 0x276E || codePoint == 0x2770 || codePoint == 0x2772 ||
+                codePoint == 0x2774)
+                return LineBreakClass.OP; // ornament left brackets
+            if (codePoint == 0x27C5) return LineBreakClass.OP; // left s-shaped bag delimiter
+            if (codePoint == 0x27E6 || codePoint == 0x27E8 || codePoint == 0x27EA ||
+                codePoint == 0x27EC || codePoint == 0x27EE)
+                return LineBreakClass.OP; // mathematical left brackets
+            if (codePoint == 0x2983 || codePoint == 0x2985 || codePoint == 0x2987 ||
+                codePoint == 0x2989 || codePoint == 0x298B || codePoint == 0x298D ||
+                codePoint == 0x298F || codePoint == 0x2991 || codePoint == 0x2993 ||
+                codePoint == 0x2995 || codePoint == 0x2997)
+                return LineBreakClass.OP; // misc mathematical left brackets
+            if (codePoint == 0x29D8 || codePoint == 0x29DA) return LineBreakClass.OP; // wiggly fences
+            if (codePoint == 0x29FC) return LineBreakClass.OP; // left-pointing curved angle bracket
+            if (codePoint == 0xFE35 || codePoint == 0xFE37 || codePoint == 0xFE39 ||
+                codePoint == 0xFE3B || codePoint == 0xFE3D || codePoint == 0xFE3F ||
+                codePoint == 0xFE41 || codePoint == 0xFE43 || codePoint == 0xFE47)
+                return LineBreakClass.OP; // presentation forms vertical left brackets
+            if (codePoint == 0xFE59 || codePoint == 0xFE5B || codePoint == 0xFE5D)
+                return LineBreakClass.OP; // small left brackets
+            if (codePoint == 0xFF5F || codePoint == 0xFF62) return LineBreakClass.OP; // fullwidth/halfwidth left brackets
             if (codePoint == 0x00AB) return LineBreakClass.QU; // left guillemet
 
-            // Close punctuation
+            // [UAX #14] Close punctuation (CL)
+            if (codePoint == 0x0F3B || codePoint == 0x0F3D) return LineBreakClass.CL; // Tibetan brackets
+            if (codePoint == 0x169C) return LineBreakClass.CL; // Ogham reversed feather mark
+            if (codePoint == 0x2046) return LineBreakClass.CL; // right square bracket with quill
+            if (codePoint == 0x207E) return LineBreakClass.CL; // superscript right parenthesis
+            if (codePoint == 0x208E) return LineBreakClass.CL; // subscript right parenthesis
+            if (codePoint == 0x232A) return LineBreakClass.CL; // right-pointing angle bracket
+            if (codePoint == 0x2769 || codePoint == 0x276B || codePoint == 0x276D ||
+                codePoint == 0x276F || codePoint == 0x2771 || codePoint == 0x2773 ||
+                codePoint == 0x2775)
+                return LineBreakClass.CL; // ornament right brackets
+            if (codePoint == 0x27C6) return LineBreakClass.CL; // right s-shaped bag delimiter
+            if (codePoint == 0x27E7 || codePoint == 0x27E9 || codePoint == 0x27EB ||
+                codePoint == 0x27ED || codePoint == 0x27EF)
+                return LineBreakClass.CL; // mathematical right brackets
+            if (codePoint == 0x2984 || codePoint == 0x2986 || codePoint == 0x2988 ||
+                codePoint == 0x298A || codePoint == 0x298C || codePoint == 0x298E ||
+                codePoint == 0x2990 || codePoint == 0x2992 || codePoint == 0x2994 ||
+                codePoint == 0x2996 || codePoint == 0x2998)
+                return LineBreakClass.CL; // misc mathematical right brackets
+            if (codePoint == 0x29D9 || codePoint == 0x29DB) return LineBreakClass.CL; // wiggly fences
+            if (codePoint == 0x29FD) return LineBreakClass.CL; // right-pointing curved angle bracket
+            if (codePoint == 0xFE36 || codePoint == 0xFE38 || codePoint == 0xFE3A ||
+                codePoint == 0xFE3C || codePoint == 0xFE3E || codePoint == 0xFE40 ||
+                codePoint == 0xFE42 || codePoint == 0xFE44 || codePoint == 0xFE48)
+                return LineBreakClass.CL; // presentation forms vertical right brackets
+            if (codePoint == 0xFE50 || codePoint == 0xFE52) return LineBreakClass.CL; // small comma, small full stop
+            if (codePoint == 0xFE5A || codePoint == 0xFE5C || codePoint == 0xFE5E)
+                return LineBreakClass.CL; // small right brackets
+            if (codePoint == 0xFF60 || codePoint == 0xFF63) return LineBreakClass.CL; // fullwidth/halfwidth right brackets
+            if (codePoint == 0xFF61 || codePoint == 0xFF64) return LineBreakClass.CL; // halfwidth ideographic period/comma
+
+            // [UAX #14] Close parenthesis (CP) — same break behaviour as CL for our rules
             if (codePoint == 0x0029 || codePoint == 0x005D || codePoint == 0x007D)
                 return LineBreakClass.CP;
             if (codePoint == 0x00BB) return LineBreakClass.QU; // right guillemet
 
-            // Exclamation / question
+            // [UAX #14] Exclamation / interrogation (EX)
             if (codePoint == 0x0021 || codePoint == 0x003F || codePoint == 0x203C || codePoint == 0x2047 || codePoint == 0x2048 || codePoint == 0x2049)
                 return LineBreakClass.EX;
+
+            // [UAX #14] Infix separators (IS) — small punctuation
+            if (codePoint == 0xFE54 || codePoint == 0xFE55) return LineBreakClass.IS_; // small semicolon, small colon
+
+            // [UAX #14] Non-starters (NS) — characters that cannot start a line
+            if (codePoint == 0x0E5A || codePoint == 0x0E5B) return LineBreakClass.NS; // Thai signs
+            if (codePoint == 0x17D4 || codePoint == 0x17D6 || codePoint == 0x17DA) return LineBreakClass.NS; // Khmer signs
+            if (codePoint == 0x303C) return LineBreakClass.NS; // masu mark (was incorrectly ID below)
+            if (codePoint == 0x30A0) return LineBreakClass.NS; // katakana-hiragana double hyphen
+            if (codePoint == 0xFF65) return LineBreakClass.NS; // halfwidth katakana middle dot
+            if (codePoint == 0xFF9E || codePoint == 0xFF9F) return LineBreakClass.NS; // halfwidth katakana voiced/semi-voiced
 
             // Quotation marks
             if (codePoint == 0x0022 || codePoint == 0x0027 || codePoint == 0x2018 || codePoint == 0x2019 ||
@@ -181,7 +253,7 @@ namespace Rend.Text.Internal
             if (codePoint >= 0x301E && codePoint <= 0x301F) return LineBreakClass.CL; // double prime quotation marks
             if (codePoint == 0x3030) return LineBreakClass.ID; // wavy dash
             if (codePoint == 0x303B) return LineBreakClass.NS; // vertical ideographic iteration mark
-            if (codePoint == 0x303C) return LineBreakClass.ID; // masu mark
+            // U+303C masu mark is NS — handled in the NS block above
 
             // Hiragana / Katakana → ID (ideographic, allows breaks around them)
             if (codePoint >= 0x3041 && codePoint <= 0x3096) return LineBreakClass.ID; // Hiragana

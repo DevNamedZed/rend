@@ -174,6 +174,13 @@ namespace Rend.Rendering
                 return;
             }
 
+            // [CSS-BACKGROUNDS §2.11.2] Body background propagation is suppressed when
+            // the root element establishes containment (contain: paint/layout/strict/content).
+            if (EstablishesContainment(rootStyle))
+            {
+                return;
+            }
+
             // [CSS2 §14.2] Root has no background — propagate body's background to canvas.
             var rootElement = rootBox.StyledNode as StyledElement;
             if (rootElement == null) return;
@@ -191,6 +198,13 @@ namespace Rend.Rendering
                         break;
                     }
 
+                    // [CSS-BACKGROUNDS §2.11.2] Body background does not propagate when
+                    // body itself establishes containment (contain: paint, etc.).
+                    if (EstablishesContainment(childElem.Style))
+                    {
+                        break;
+                    }
+
                     var bodyBg = childElem.Style.BackgroundColor;
                     if (bodyBg.A > 0)
                     {
@@ -203,6 +217,15 @@ namespace Rend.Rendering
                     break;
                 }
             }
+        }
+
+        private static bool EstablishesContainment(ComputedStyle style)
+        {
+            var contain = style.Contain;
+            return contain == CssContain.Paint
+                || contain == CssContain.Layout
+                || contain == CssContain.Content
+                || contain == CssContain.Strict;
         }
 
         /// <summary>

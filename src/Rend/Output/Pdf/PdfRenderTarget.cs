@@ -572,6 +572,16 @@ namespace Rend.Output.Pdf
         }
 
         /// <inheritdoc />
+        public float GetNormalLineHeight(FontDescriptor font, float fontSize)
+        {
+            // Match the inline layout's "normal" line-height: ascent + descent
+            // (no line gap), per WinAscent/WinDescent half-leading model.
+            var (ascent, descent) = GetFontMetrics(font, fontSize);
+            float lh = ascent + descent;
+            return lh > 0 ? lh : float.NaN;
+        }
+
+        /// <inheritdoc />
         public void AddLink(RectF rect, string uri)
         {
             if (_currentPage == null || string.IsNullOrEmpty(uri))

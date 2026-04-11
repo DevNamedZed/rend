@@ -159,6 +159,7 @@ namespace Rend.Tests.Rendering
                 FilledRects.Add((rect, brush));
             }
             public (float Ascent, float Descent) GetFontMetrics(FontDescriptor font, float fontSize) => (fontSize * 0.8f, fontSize * 0.2f);
+            public float GetNormalLineHeight(FontDescriptor font, float fontSize) => fontSize * 1.2f;
 
             public void FillPath(PathData path, BrushInfo brush)
             {

@@ -166,16 +166,18 @@ namespace Rend.Text.Internal
                 // Rule: CJK ideographs can break before and after.
                 if (IsCjkIdeograph(current) || IsCjkIdeograph(next))
                 {
-                    // Do not break before certain CJK closing punctuation.
+                    // [UAX #14 LB13] Do not break before closing punctuation, exclamation,
+                    // infix separators, symbols, or non-starters.
                     var nextClass = LineBreakClassifier.GetClass(next);
-                    if (nextClass == LineBreakClass.CL || nextClass == LineBreakClass.EX ||
-                        nextClass == LineBreakClass.NS)
+                    if (nextClass == LineBreakClass.CL || nextClass == LineBreakClass.CP ||
+                        nextClass == LineBreakClass.EX || nextClass == LineBreakClass.IS_ ||
+                        nextClass == LineBreakClass.SY || nextClass == LineBreakClass.NS)
                     {
                         result[i] = LineBreakOpportunity.Forbidden;
                         continue;
                     }
 
-                    // Do not break after CJK opening punctuation.
+                    // [UAX #14 LB14] Do not break after opening punctuation.
                     var currentClass = LineBreakClassifier.GetClass(current);
                     if (currentClass == LineBreakClass.OP)
                     {

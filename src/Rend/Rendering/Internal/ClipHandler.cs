@@ -28,17 +28,46 @@ namespace Rend.Rendering.Internal
             CssOverflow overflowX = style.OverflowX;
             CssOverflow overflowY = style.OverflowY;
 
+            // contain: paint, content, or strict also establishes clipping
+            CssContain contain = style.Contain;
+            bool styleEstablishesContainment = contain == CssContain.Paint
+                || contain == CssContain.Layout
+                || contain == CssContain.Content
+                || contain == CssContain.Strict;
+
             // [CSS2 §11.1.1] The root element's overflow propagates to the viewport,
-            // not to the element itself. Skip clipping for the root html element.
+            // not to the element itself. Skip clipping for the root html element
+            // unless it has its own containment (contain: paint/etc.) which forces clipping.
             if (box.StyledNode is Style.StyledElement rootElem
                 && rootElem.TagName == "html"
-                && box.Parent == null)
+                && box.Parent == null
+                && !styleEstablishesContainment)
             {
                 return false;
             }
 
-            // contain: paint, content, or strict also establishes clipping
-            CssContain contain = style.Contain;
+            // [CSS-OVERFLOW-3 §3.5] When the root element (html) has overflow:visible
+            // (initial value), the body element's overflow propagates to the viewport.
+            // The body itself behaves as if it has overflow:visible, and the canvas/viewport
+            // applies the body's original overflow value. Skip clipping for body in this case.
+            //
+            // Propagation is suppressed when body is its own scroll container (e.g. has
+            // contain: paint/layout/strict/content, transform, position: fixed/sticky, etc.).
+            if (box.StyledNode is Style.StyledElement bodyElem
+                && bodyElem.TagName == "body"
+                && box.Parent != null
+                && box.Parent.StyledNode is Style.StyledElement parentHtml
+                && parentHtml.TagName == "html")
+            {
+                CssOverflow rootOverflowX = parentHtml.Style.OverflowX;
+                CssOverflow rootOverflowY = parentHtml.Style.OverflowY;
+                if (rootOverflowX == CssOverflow.Visible
+                    && rootOverflowY == CssOverflow.Visible
+                    && !styleEstablishesContainment)
+                {
+                    return false;
+                }
+            }
             bool needsClip = NeedsClipping(overflowX) || NeedsClipping(overflowY)
                 || contain == CssContain.Paint || contain == CssContain.Content || contain == CssContain.Strict;
             if (!needsClip)

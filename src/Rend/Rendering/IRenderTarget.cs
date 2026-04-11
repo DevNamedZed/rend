@@ -158,6 +158,13 @@ namespace Rend.Rendering
         /// </summary>
         (float Ascent, float Descent) GetFontMetrics(FontDescriptor font, float fontSize);
 
+        /// <summary>
+        /// Returns the font's "normal" line height in pixels (ascent + descent + lineGap).
+        /// This matches what the inline layout uses for <c>line-height: normal</c>.
+        /// Returns NaN if the font cannot be resolved.
+        /// </summary>
+        float GetNormalLineHeight(FontDescriptor font, float fontSize);
+
         /// <summary>Draws a text string at the specified position using the given style.</summary>
         /// <param name="text">The text to draw.</param>
         /// <param name="x">The X coordinate of the text origin.</param>
