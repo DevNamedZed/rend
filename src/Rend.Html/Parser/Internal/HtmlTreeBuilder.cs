@@ -2102,10 +2102,9 @@ namespace Rend.Html.Parser.Internal
                 target = _openElements.Count > 0 ? (Node)CurrentNode : (Node)_document;
             }
 
-            // If the last child is a text node, append to it
             if (target.LastChild is TextNode existingText)
             {
-                existingText.Data += c;
+                existingText.AppendData(c);
                 return;
             }
 

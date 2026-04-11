@@ -17,6 +17,10 @@ namespace Rend.VisualRegression.Infrastructure
             @"<link\s[^>]*rel\s*=\s*[""']stylesheet[""'][^>]*>",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        private static readonly Regex InlineStyleBlockPattern = new Regex(
+            @"<style\b[^>]*>(?<content>[\s\S]*?)</style\s*>",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         private static readonly Regex HrefPattern = new Regex(
             @"href\s*=\s*[""']([^""']+)[""']",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -122,10 +126,39 @@ namespace Rend.VisualRegression.Infrastructure
                 }
 
                 html = InlineStylesheets(html, Path.GetDirectoryName(path)!);
+                html = InlineStyleBlockFontUrls(html, Path.GetDirectoryName(path)!);
                 return html;
             });
 
             return testCase;
+        }
+
+        /// <summary>
+        /// Rewrites <c>url(...)</c> references inside inline <c>&lt;style&gt;</c> blocks
+        /// to <c>data:</c> URIs. This is the only way WPT tests that declare
+        /// <c>@font-face src: url(/fonts/...)</c> inside an inline style block can be
+        /// rendered consistently by Chrome (via Puppeteer <c>SetContentAsync</c>) and
+        /// by our Rend pipeline, since neither side has a working HTTP server or a
+        /// file-system resource loader rooted at the WPT root.
+        /// Without this, both sides silently fall back to system fonts (typically
+        /// picking different ones), producing a large CJK rasterisation diff.
+        /// </summary>
+        private static string InlineStyleBlockFontUrls(string html, string baseDir)
+        {
+            return InlineStyleBlockPattern.Replace(html, match =>
+            {
+                string block = match.Value;
+                string content = match.Groups["content"].Value;
+                string rewritten = InlineFontUrls(content, baseDir);
+                if (ReferenceEquals(rewritten, content) || rewritten == content)
+                {
+                    return block;
+                }
+                int openTagEnd = block.IndexOf('>');
+                if (openTagEnd < 0) return block;
+                string openTag = block.Substring(0, openTagEnd + 1);
+                return openTag + rewritten + "</style>";
+            });
         }
 
         /// <summary>
@@ -206,20 +239,27 @@ namespace Rend.VisualRegression.Infrastructure
                     return match.Value;
                 }
 
-                // Resolve font path. Absolute URLs (starting with /) resolve
-                // against the WPT repo root, not the CSS file directory.
+                var extension = Path.GetExtension(urlValue).ToLowerInvariant();
+                string mimeType;
+                switch (extension)
+                {
+                    case ".ttf": mimeType = "font/ttf"; break;
+                    case ".otf": mimeType = "font/otf"; break;
+                    case ".woff": mimeType = "font/woff"; break;
+                    case ".woff2": mimeType = "font/woff2"; break;
+                    default:
+                        return match.Value;
+                }
+
                 string fontPath;
                 if (urlValue.StartsWith("/"))
                 {
                     var wptRoot = FindWptRoot();
-                    if (wptRoot != null)
-                    {
-                        fontPath = Path.GetFullPath(Path.Combine(wptRoot, urlValue.TrimStart('/')));
-                    }
-                    else
+                    if (wptRoot == null)
                     {
                         return match.Value;
                     }
+                    fontPath = Path.GetFullPath(Path.Combine(wptRoot, urlValue.TrimStart('/')));
                 }
                 else
                 {
@@ -234,15 +274,6 @@ namespace Rend.VisualRegression.Infrastructure
                 {
                     var fontBytes = File.ReadAllBytes(fontPath);
                     var base64 = Convert.ToBase64String(fontBytes);
-                    var extension = Path.GetExtension(fontPath).ToLower();
-                    var mimeType = extension switch
-                    {
-                        ".ttf" => "font/ttf",
-                        ".otf" => "font/otf",
-                        ".woff" => "font/woff",
-                        ".woff2" => "font/woff2",
-                        _ => "application/octet-stream"
-                    };
                     return $"url(data:{mimeType};base64,{base64})";
                 }
                 catch

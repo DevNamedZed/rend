@@ -856,8 +856,8 @@ namespace Rend.Output.Image
             SKTypeface typeface = _fontMapper.GetOrCreate(style.Font, style.FontData);
             using var skFont = new SKFont(typeface, style.FontSize);
             skFont.Subpixel = true;
-            skFont.Edging = SKFontEdging.Antialias;
-
+            skFont.Edging = SKFontEdging.SubpixelAntialias;
+            
             // Check for missing glyphs and measure with fallback if needed.
             var glyphIds = skFont.GetGlyphs(text);
             bool needsFallback = false;
@@ -905,7 +905,8 @@ namespace Rend.Output.Image
                     {
                         using var fallbackFont = new SKFont(fallbackTypeface, style.FontSize);
                         fallbackFont.Subpixel = true;
-                        total += fallbackFont.MeasureText(segment);
+                        fallbackFont.Edging = SKFontEdging.SubpixelAntialias;
+                                                total += fallbackFont.MeasureText(segment);
                     }
                     else
                     {
@@ -931,9 +932,8 @@ namespace Rend.Output.Image
                 SKTypeface typeface = _fontMapper.GetOrCreate(style.Font, style.FontData);
                 using var skFont = new SKFont(typeface, style.FontSize);
                 skFont.Subpixel = true;
-
-                skFont.Edging = SKFontEdging.Antialias;
-
+                skFont.Edging = SKFontEdging.SubpixelAntialias;
+                
                 // Check for missing glyphs and use font fallback if needed.
                 bool needsFallback = false;
                 var glyphIds = skFont.GetGlyphs(text);
@@ -991,7 +991,7 @@ namespace Rend.Output.Image
                     {
                         using var skFont = new SKFont(typeface, run.FontSize);
                         skFont.Subpixel = true;
-                        skFont.Edging = SKFontEdging.Antialias;
+                        skFont.Edging = SKFontEdging.SubpixelAntialias;
 
                         var glyphIds = new ushort[glyphs.Length];
                         var positions = new SKPoint[glyphs.Length];
@@ -1016,8 +1016,8 @@ namespace Rend.Output.Image
                         {
                             using var fallbackFont = new SKFont(typeface, run.FontSize);
                             fallbackFont.Subpixel = true;
-                            fallbackFont.Edging = SKFontEdging.Antialias;
-                            _currentCanvas!.DrawText(run.OriginalText, x, y, SKTextAlign.Left, fallbackFont, paint);
+                            fallbackFont.Edging = SKFontEdging.SubpixelAntialias;
+                                                        _currentCanvas!.DrawText(run.OriginalText, x, y, SKTextAlign.Left, fallbackFont, paint);
                         }
                     }
                 }
@@ -1025,9 +1025,8 @@ namespace Rend.Output.Image
                 {
                     using var skFont = new SKFont(typeface, run.FontSize);
                     skFont.Subpixel = true;
-
-                    skFont.Edging = SKFontEdging.Antialias;
-                    _currentCanvas!.DrawText(run.OriginalText, x, y, SKTextAlign.Left, skFont, paint);
+                    skFont.Edging = SKFontEdging.SubpixelAntialias;
+                                        _currentCanvas!.DrawText(run.OriginalText, x, y, SKTextAlign.Left, skFont, paint);
                 }
             }
             finally
@@ -1077,8 +1076,8 @@ namespace Rend.Output.Image
                 {
                     using var skFont = new SKFont(segTypeface, run.FontSize);
                     skFont.Subpixel = true;
-                    skFont.Edging = SKFontEdging.Antialias;
-
+                    skFont.Edging = SKFontEdging.SubpixelAntialias;
+                    
                     var segGlyphIds = new ushort[segLen];
                     var segPositions = new SKPoint[segLen];
                     for (int j = 0; j < segLen; j++)
@@ -1427,8 +1426,8 @@ namespace Rend.Output.Image
 
                     using var fallbackFont = new SKFont(useTypeface, style.FontSize);
                     fallbackFont.Subpixel = true;
-                    fallbackFont.Edging = SKFontEdging.Antialias;
-
+                    fallbackFont.Edging = SKFontEdging.SubpixelAntialias;
+                    
                     _currentCanvas!.DrawText(segment, cx, y, SKTextAlign.Left, fallbackFont, paint);
                     cx += fallbackFont.MeasureText(segment);
                 }

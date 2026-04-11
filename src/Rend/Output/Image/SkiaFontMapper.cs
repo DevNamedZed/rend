@@ -47,12 +47,13 @@ namespace Rend.Output.Image
     /// </summary>
     public sealed class SkiaFontMapper : IDisposable
     {
-        private const int MaxCacheEntries = 30;
+        private const int MaxCacheEntries = 500;
 
         private readonly Dictionary<FontDescriptor, SKTypeface> _cache = new Dictionary<FontDescriptor, SKTypeface>();
         private readonly Dictionary<FontDataKey, SKTypeface> _typefaceCache = new();
         private readonly Dictionary<string, SKTypeface> _familyCache = new();
         private readonly Dictionary<int, SKTypeface?> _charFallbackCache = new();
+        private readonly List<SKTypeface> _retainedTypefaces = new();
         private readonly object _lock = new();
         private bool _disposed;
 
@@ -88,6 +89,7 @@ namespace Rend.Output.Image
 
                         EvictIfNeeded(_typefaceCache, MaxCacheEntries);
                         _typefaceCache[dataKey] = typeface;
+                        RetainTypeface(typeface);
                     }
                 }
                 _cache[descriptor] = typeface;
@@ -134,6 +136,7 @@ namespace Rend.Output.Image
 
                 EvictIfNeeded(_typefaceCache, MaxCacheEntries);
                 _typefaceCache[dataKey] = typeface;
+                RetainTypeface(typeface);
                 return typeface;
             }
         }
@@ -167,6 +170,10 @@ namespace Rend.Output.Image
 
                 EvictIfNeeded(_charFallbackCache, MaxCacheEntries);
                 _charFallbackCache[codepoint] = typeface;
+                if (typeface != null)
+                {
+                    RetainTypeface(typeface);
+                }
             }
             return typeface;
         }
@@ -205,6 +212,7 @@ namespace Rend.Output.Image
 
                         EvictIfNeeded(_familyCache, MaxCacheEntries);
                         _familyCache[cacheKey] = typeface;
+                        RetainTypeface(typeface);
                     }
                     return typeface;
                 }
@@ -227,6 +235,7 @@ namespace Rend.Output.Image
 
                                 EvictIfNeeded(_familyCache, MaxCacheEntries);
                                 _familyCache[cacheKey] = typeface;
+                                RetainTypeface(typeface);
                             }
                             return typeface;
                         }
@@ -256,6 +265,18 @@ namespace Rend.Output.Image
         }
 
         /// <summary>
+        /// Records a newly-created typeface so it is disposed exactly once at
+        /// <see cref="Dispose"/> time. Must be called while holding <see cref="_lock"/>.
+        /// </summary>
+        private void RetainTypeface(SKTypeface typeface)
+        {
+            if (typeface != SKTypeface.Default && typeface.Handle != IntPtr.Zero)
+            {
+                _retainedTypefaces.Add(typeface);
+            }
+        }
+
+        /// <summary>
         /// Disposes an SKTypeface if it is not the Default and has not already been disposed.
         /// Uses IntPtr (native handle) for identity-based dedup that works across all .NET targets.
         /// </summary>
@@ -272,7 +293,9 @@ namespace Rend.Output.Image
 
         /// <summary>
         /// Evicts the oldest entry from a dictionary if it exceeds the maximum size.
-        /// Uses the first key from the enumerator as the eviction target.
+        /// Does not dispose evicted typefaces: they may still be referenced by another cache
+        /// (e.g. <see cref="_cache"/>) or held by an in-flight draw call. Typefaces are
+        /// disposed exactly once at <see cref="Dispose"/> time via <see cref="_retainedTypefaces"/>.
         /// </summary>
         private static void EvictIfNeeded<TKey, TValue>(Dictionary<TKey, TValue> dictionary, int maxEntries)
             where TKey : notnull
@@ -282,18 +305,10 @@ namespace Rend.Output.Image
                 return;
             }
 
-            // Remove the first entry (oldest insertion order in .NET Dictionary).
             using var enumerator = dictionary.GetEnumerator();
             if (enumerator.MoveNext())
             {
-                var keyToRemove = enumerator.Current.Key;
-                var valueToRemove = enumerator.Current.Value;
-                dictionary.Remove(keyToRemove);
-
-                if (valueToRemove is SKTypeface typeface && typeface != SKTypeface.Default)
-                {
-                    typeface.Dispose();
-                }
+                dictionary.Remove(enumerator.Current.Key);
             }
         }
 
@@ -308,31 +323,16 @@ namespace Rend.Output.Image
 
             lock (_lock)
             {
-                // Track disposed typefaces by identity to avoid double-dispose.
-                // A typeface may appear in multiple caches (e.g., _cache references
-                // typefaces also stored in _typefaceCache or _familyCache).
                 var disposedTypefaces = new HashSet<IntPtr>();
-
-                foreach (var kvp in _typefaceCache)
+                foreach (var typeface in _retainedTypefaces)
                 {
-                    DisposeTypeface(kvp.Value, disposedTypefaces);
+                    DisposeTypeface(typeface, disposedTypefaces);
                 }
+                _retainedTypefaces.Clear();
+
                 _typefaceCache.Clear();
-
-                foreach (var kvp in _familyCache)
-                {
-                    DisposeTypeface(kvp.Value, disposedTypefaces);
-                }
                 _familyCache.Clear();
-
-                foreach (var kvp in _charFallbackCache)
-                {
-                    DisposeTypeface(kvp.Value, disposedTypefaces);
-                }
                 _charFallbackCache.Clear();
-
-                // The _cache entries reference typefaces that are also in the other caches,
-                // so they've already been disposed above. Just clear.
                 _cache.Clear();
             }
         }
