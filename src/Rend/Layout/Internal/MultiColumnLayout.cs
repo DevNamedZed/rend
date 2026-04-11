@@ -32,25 +32,14 @@ namespace Rend.Layout.Internal
             float columnWidth = (availableWidth - totalGaps) / columnCount;
             if (columnWidth < 1) columnWidth = availableWidth;
 
-            // Check for column-span: all elements among direct children.
-            // If found, split content into segments around spanning elements.
-            bool hasSpanners = false;
-            for (int i = 0; i < styledElement.Children.Count; i++)
+            // [CSS-MULTICOL §7.2] column-span: all applies to the nearest multicol
+            // ancestor, even when nested inside in-flow wrappers. Hoistable spanners
+            // are gathered into a flat segment list; wrappers with content around a
+            // spanner are split into pre/post fragments.
+            if (columnCount > 1 && HasHoistableSpanner(styledElement))
             {
-                var child = styledElement.Children[i];
-                if (!child.IsText && !(child is StyledPseudoElement) && child is StyledElement childEl)
-                {
-                    if (childEl.Style.ColumnSpan == CssColumnSpan.All)
-                    {
-                        hasSpanners = true;
-                        break;
-                    }
-                }
-            }
-
-            if (hasSpanners && columnCount > 1)
-            {
-                LayoutWithSpanners(box, styledElement, context, columnCount, columnWidth, columnGap);
+                var segmentList = BuildHoistedSegmentList(styledElement);
+                LayoutWithSpanners(box, segmentList, context, columnCount, columnWidth, columnGap);
                 return;
             }
 
@@ -79,18 +68,89 @@ namespace Rend.Layout.Internal
 
             float contentHeight = CalculateContentHeight(columnBox);
 
+            // [CSS-MULTICOL §7.1] The multicol container's specified/resolved
+            // block size constrains the column height. Prefer box.ContentRect.Height
+            // (already clamped by parent BFC through ResolveHeight, so min-height/
+            // max-height and box-sizing are honoured) over the raw style.Height.
+            float specifiedHeight = box.ContentRect.Height;
+            if (specifiedHeight <= 0 && !float.IsNaN(style.Height))
+            {
+                specifiedHeight = style.Height;
+            }
+
+            // [CSS-BREAK-3 §5.1] Forced column breaks on direct children split the
+            // flow into segments. When more segments exist than columns, excess
+            // segments become "virtual columns" per Chrome's implementation
+            // (see chromium issue 385595003): they are not painted and their
+            // height does not contribute to the balanced column height.
+            //
+            // The wrapper-fragmentation path handles multicols that contain a
+            // single fragmentable in-flow wrapper whose grandchildren carry the
+            // forced breaks — the wrapper is split into one fragment per
+            // segment so its background is replicated in each column.
+            var wrapperFragments = TryFragmentWrapperOnForcedBreaks(columnBox);
+            if (wrapperFragments != null)
+            {
+                columnBox.ClearChildren();
+                for (int i = 0; i < wrapperFragments.Count; i++)
+                {
+                    columnBox.AddChild(wrapperFragments[i]);
+                }
+            }
+
+            var forcedSegments = BuildForcedBreakSegments(columnBox.Children);
+            if (wrapperFragments != null)
+            {
+                // Each wrapper fragment is already its own segment even though
+                // there is no break-before/after on them — the wrapper
+                // fragmentation pass created them across forced-break seams on
+                // grandchildren.
+                forcedSegments = new List<List<LayoutBox>>();
+                for (int i = 0; i < wrapperFragments.Count; i++)
+                {
+                    forcedSegments.Add(new List<LayoutBox> { wrapperFragments[i] });
+                }
+            }
+            bool hasForcedBreaks = forcedSegments.Count > 1;
+
             // Calculate target column height
             float targetHeight;
-            if (style.ColumnFill == CssColumnFill.Auto)
+            if (hasForcedBreaks && style.ColumnFill == CssColumnFill.Balance)
             {
-                // Auto: fill columns sequentially; use explicit height if set, else total
-                float explicitHeight = style.Height;
-                targetHeight = float.IsNaN(explicitHeight) ? totalHeight : explicitHeight;
+                // [CSS-MULTICOL §3.3] Balance with forced breaks: the used column
+                // height is the tallest segment that lands in a real column.
+                // Segments assigned to virtual columns (index >= columnCount) do
+                // not contribute.
+                float forcedBalancedHeight = MeasureRealSegmentMaxHeight(forcedSegments, columnCount);
+                if (specifiedHeight > 0)
+                {
+                    // Balance with specified height: used col height may be less
+                    // than the container's specified block size.
+                    targetHeight = Math.Min(forcedBalancedHeight, specifiedHeight);
+                }
+                else
+                {
+                    targetHeight = forcedBalancedHeight;
+                }
+            }
+            else if (specifiedHeight > 0)
+            {
+                // [CSS-MULTICOL §7.1] When the multicol element has a specified
+                // block size, the column height is the specified height. Both
+                // column-fill:auto and column-fill:balance respect this — the
+                // fill mode only affects how content flows between columns, not
+                // the column height itself.
+                targetHeight = specifiedHeight;
+            }
+            else if (style.ColumnFill == CssColumnFill.Auto)
+            {
+                // Auto without specified height: use measured content height.
+                targetHeight = totalHeight;
             }
             else
             {
-                // Balance: binary search for the minimum column height that fits all
-                // content into the available number of columns
+                // Balance without specified height: binary search for the minimum
+                // column height that fits all content into the available columns.
                 targetHeight = BinarySearchColumnHeight(columnBox, columnCount, contentHeight);
             }
 
@@ -112,24 +172,105 @@ namespace Rend.Layout.Internal
                 colLineBoxes[i] = new List<LineBox>();
             }
 
+            if (hasForcedBreaks)
+            {
+                // [CSS-BREAK-3 §5.1] Segment-based column assignment. Each
+                // forced-break segment is assigned to its own column in order.
+                // Excess segments (index >= columnCount) are placed in virtual
+                // columns that are not painted.
+                for (int segIdx = 0; segIdx < forcedSegments.Count; segIdx++)
+                {
+                    if (segIdx >= columnCount)
+                    {
+                        break;
+                    }
+                    var segment = forcedSegments[segIdx];
+                    for (int i = 0; i < segment.Count; i++)
+                    {
+                        colChildren[segIdx].Add(segment[i]);
+                    }
+                }
+
+                // [CSS-MULTICOL §3.3] Wrapper fragments across real columns
+                // stretch to the balanced column height so the wrapper's
+                // background replicates across every column it occupies. The
+                // grandchildren carried by the fragment stay anchored at the
+                // fragment's top — only the fragment's block size grows.
+                if (wrapperFragments != null)
+                {
+                    int stretchCount = Math.Min(wrapperFragments.Count, columnCount);
+                    for (int i = 0; i < stretchCount; i++)
+                    {
+                        var fragment = wrapperFragments[i];
+                        fragment.ContentRect = new RectF(
+                            fragment.ContentRect.X,
+                            fragment.ContentRect.Y,
+                            fragment.ContentRect.Width,
+                            columnHeight);
+                    }
+                }
+                goto afterMainFill;
+            }
+
             // Position-based column filling: use BFC-computed positions (which already
             // account for margin collapsing) to determine column breaks. Track the Y
             // position where the current column started rather than accumulating heights.
+            // Pending list allows a child to be replaced by its continuation fragment
+            // after atomic/line splits for N-way splitting across columns.
+            // [CSS-BREAK-3 §5] break-avoid linkage between siblings is soft and easily
+            // violated when it would leave usable space unused, so this loop does not
+            // coalesce siblings into groups — avoid linkage only influences the column
+            // height chosen by BinarySearchColumnHeight.
+            {
+            var pendingChildren = new List<LayoutBox>(columnBox.Children);
             int currentCol = 0;
             float colStartY = contentOriginY;
             bool colHasContent = false;
-            foreach (var child in columnBox.Children)
+            int childIdx = 0;
+            while (childIdx < pendingChildren.Count)
             {
+                var child = pendingChildren[childIdx];
                 float childBottomY = child.BorderRect.Bottom;
                 float heightInCol = childBottomY - colStartY;
+                bool overflows = heightInCol > columnHeight && currentCol < columnCount - 1;
 
-                // Check if this child overflows the current column
-                if (colHasContent && heightInCol > columnHeight
-                    && currentCol < columnCount - 1)
+                if (overflows)
                 {
+                    // [CSS-BREAK-3 §5] break-inside: avoid is a soft preference. When the
+                    // element is taller than the column itself, there is no way to honour
+                    // it — allow the break anyway. Otherwise, honour it by moving the
+                    // whole element to the next column instead of splitting.
+                    float childHeight = child.BorderRect.Height;
+                    bool breakInsideAvoid = HasBreakInsideAvoid(child) && childHeight <= columnHeight;
+
+                    // [CSS-FRAGMENTATION §4] Atomic block with no internal fragmentation
+                    // points (no children, no line boxes). Split the background/padding box
+                    // at the column boundary so the remaining content flows into the next
+                    // column. Atomic split makes progress even on the first child of a
+                    // column because the split position is strictly greater than colStartY.
+                    if (!breakInsideAvoid
+                        && (child.Children == null || child.Children.Count == 0)
+                        && (child.LineBoxes == null || child.LineBoxes.Count == 0))
+                    {
+                        float splitY = colStartY + columnHeight;
+                        var atomicSplit = SplitAtomicBoxAtY(child, splitY);
+                        if (atomicSplit.IsValid)
+                        {
+                            colChildren[currentCol].Add(atomicSplit.First!);
+                            currentCol++;
+                            colStartY = splitY;
+                            colHasContent = false;
+                            pendingChildren[childIdx] = atomicSplit.Second!;
+                            continue;
+                        }
+                    }
+
                     // CSS Fragmentation Level 3: split block at line boundaries when it
                     // overflows the remaining column space, for balanced column layout.
-                    if (child.LineBoxes != null && child.LineBoxes.Count > 1)
+                    if (!breakInsideAvoid
+                        && colHasContent
+                        && child.LineBoxes != null
+                        && child.LineBoxes.Count > 1)
                     {
                         float availableForLines = colStartY + columnHeight - child.ContentRect.Y;
                         if (availableForLines > 0)
@@ -152,27 +293,71 @@ namespace Rend.Layout.Internal
                             if (splitAfter >= 0 && splitAfter < child.LineBoxes.Count - 1)
                             {
                                 var split = SplitBoxAtLine(child, splitAfter);
-                                if (split.first != null && split.second != null)
+                                if (split.IsValid)
                                 {
-                                    colChildren[currentCol].Add(split.first);
+                                    colChildren[currentCol].Add(split.First!);
                                     currentCol++;
                                     colStartY = child.LineBoxes[splitAfter + 1].Y;
                                     colHasContent = true;
-                                    colChildren[currentCol].Add(split.second);
+                                    colChildren[currentCol].Add(split.Second!);
+                                    childIdx++;
                                     continue;
                                 }
                             }
                         }
                     }
+
+                    // [CSS-BREAK-3 §5.1] Block container class-C break points.
+                    // When a tall child has block children (not line boxes) and
+                    // is not atomic — typically a nested multicol or a plain
+                    // block wrapper — fragment at the column boundary by
+                    // partitioning its block children. Straddling children are
+                    // recursively split via SplitBlockBoxAtY. First half stays
+                    // in the current column; second half is re-queued so the
+                    // next iteration can split it again if it is still taller
+                    // than the remaining column space. Monolithic boxes
+                    // (scrolling containers, atomic inlines, contain:size,
+                    // break-inside:avoid) fall through to the whole-child move
+                    // path instead. Only split when the child itself is taller
+                    // than a full column — otherwise the move-whole fallback
+                    // keeps the box intact in the next column, which matches
+                    // Chrome's preference to avoid unnecessary fragmentation.
+                    if (!breakInsideAvoid
+                        && !IsMonolithic(child)
+                        && childHeight >= columnHeight
+                        && child.Children != null
+                        && child.Children.Count > 0
+                        && (child.LineBoxes == null || child.LineBoxes.Count == 0))
+                    {
+                        float splitY = colStartY + columnHeight;
+                        var blockSplit = SplitBlockBoxAtY(child, splitY);
+                        if (blockSplit.IsValid)
+                        {
+                            colChildren[currentCol].Add(blockSplit.First!);
+                            currentCol++;
+                            colStartY = splitY;
+                            colHasContent = false;
+                            pendingChildren[childIdx] = blockSplit.Second!;
+                            continue;
+                        }
+                    }
+
                     // No split possible — move whole child to next column
-                    currentCol++;
-                    colStartY = child.BorderRect.Y;
-                    colHasContent = false;
+                    if (colHasContent)
+                    {
+                        currentCol++;
+                        colStartY = child.BorderRect.Y;
+                        colHasContent = false;
+                    }
                 }
 
                 colChildren[currentCol].Add(child);
                 colHasContent = true;
+                childIdx++;
             }
+            }
+
+            afterMainFill:
 
             // Assign line boxes to columns (for inline content).
             // Use position-based tracking (matching block child assignment)
@@ -316,8 +501,22 @@ namespace Rend.Layout.Internal
                 }
             }
 
-            // Set the box height to the tallest column
-            float finalHeight = tallestColumn > 0 ? tallestColumn : columnHeight;
+            // [CSS-MULTICOL §7.1] The multicol box keeps its specified block size
+            // when one is set. With forced breaks present, the used column height
+            // can be less than the specified height (balance mode shrinks columns
+            // to the tallest real segment), but the multicol container itself
+            // still occupies the specified block size — Chrome paints the area
+            // between the column strip bottom and the container bottom using the
+            // multicol's own background.
+            float finalHeight;
+            if (specifiedHeight > 0 && hasForcedBreaks)
+            {
+                finalHeight = specifiedHeight;
+            }
+            else
+            {
+                finalHeight = tallestColumn > 0 ? tallestColumn : columnHeight;
+            }
             box.ContentRect = new RectF(
                 box.ContentRect.X, box.ContentRect.Y,
                 box.ContentRect.Width, finalHeight);
@@ -325,29 +524,31 @@ namespace Rend.Layout.Internal
 
         /// <summary>
         /// Handles multi-column layout when column-span: all elements are present.
-        /// Content is split into segments: multi-column sections interleaved with
-        /// full-width spanning elements.
+        /// Consumes a pre-flattened list where hoistable nested spanners appear at
+        /// the top level interleaved with block content fragments. See
+        /// <see cref="BuildHoistedSegmentList"/>.
         /// </summary>
-        private static void LayoutWithSpanners(LayoutBox box, StyledElement styledElement,
+        private static void LayoutWithSpanners(LayoutBox box, List<StyledNode> segmentList,
             LayoutContext context, int columnCount, float columnWidth, float columnGap)
         {
             float startX = box.ContentRect.X;
             float cursorY = box.ContentRect.Y;
             float availableWidth = box.ContentRect.Width;
-            float prevMarginBottom = 0; // trailing margin for collapsing
+            float prevMarginBottom = 0;
 
-            // Collect segments: groups of non-spanning children, separated by spanning elements
             var currentSegment = new List<StyledNode>();
 
-            for (int i = 0; i < styledElement.Children.Count; i++)
+            for (int i = 0; i < segmentList.Count; i++)
             {
-                var child = styledElement.Children[i];
+                var child = segmentList[i];
                 bool isSpanner = false;
 
                 if (!child.IsText && !(child is StyledPseudoElement) && child is StyledElement childEl)
                 {
                     if (childEl.Style.ColumnSpan == CssColumnSpan.All)
+                    {
                         isSpanner = true;
+                    }
                 }
 
                 if (isSpanner)
@@ -441,7 +642,15 @@ namespace Rend.Layout.Internal
                 return startY;
             }
 
-            float targetHeight = Math.Max(totalHeight / columnCount, 1);
+            // [CSS-MULTICOL §3.3] Balance columns so each is as short as possible.
+            // BinarySearchColumnHeight also respects atomic blocks — for a segment
+            // with a single unbreakable item, the target equals its height rather
+            // than `totalHeight / columnCount`, which would leave content overflowing.
+            float targetHeight = BinarySearchColumnHeight(tempBox, columnCount, totalHeight);
+            if (targetHeight < 1)
+            {
+                targetHeight = totalHeight;
+            }
 
             // Sequential content-aware fragmentation with line-level splitting
             var segColChildren = new List<LayoutBox>[columnCount];
@@ -486,13 +695,13 @@ namespace Rend.Layout.Internal
                             if (splitAfter >= 0 && splitAfter < child.LineBoxes.Count - 1)
                             {
                                 var split = SplitBoxAtLine(child, splitAfter);
-                                if (split.first != null && split.second != null)
+                                if (split.IsValid)
                                 {
-                                    segColChildren[curCol].Add(split.first);
+                                    segColChildren[curCol].Add(split.First!);
                                     curCol++;
                                     segColStartY = child.LineBoxes[splitAfter + 1].Y;
                                     segColHasContent = true;
-                                    segColChildren[curCol].Add(split.second);
+                                    segColChildren[curCol].Add(split.Second!);
                                     continue;
                                 }
                             }
@@ -563,6 +772,9 @@ namespace Rend.Layout.Internal
         /// (block children and/or line boxes) to fit within the given number of columns.
         /// Supports line-level fragmentation: blocks with multiple line boxes can be
         /// split at line boundaries for better column balance (CSS Fragmentation Level 3).
+        /// Break groups (<see cref="BuildBreakGroups"/>) are treated as atomic units so
+        /// <c>break-inside: avoid</c> and <c>break-*: avoid</c> siblings contribute their
+        /// full combined height to the minimum column height.
         /// </summary>
         private static float BinarySearchColumnHeight(LayoutBox columnBox, int columnCount, float contentHeight)
         {
@@ -571,44 +783,9 @@ namespace Rend.Layout.Internal
                 return contentHeight;
             }
 
-            // Find minimum possible height: tallest single non-splittable unit
-            float minHeight = 0;
-            foreach (var child in columnBox.Children)
-            {
-                if (child.LineBoxes != null && child.LineBoxes.Count > 1)
-                {
-                    // Splittable block: min height = one line + top overhead
-                    float topOverhead = child.PaddingTop + child.BorderTopWidth + child.MarginTop;
-                    foreach (var line in child.LineBoxes)
-                    {
-                        float lineH = line.Height + topOverhead;
-                        if (lineH > minHeight)
-                        {
-                            minHeight = lineH;
-                        }
-                        topOverhead = 0; // only first line carries top overhead
-                    }
-                }
-                else
-                {
-                    // Atomic block: can't split
-                    float h = child.BorderRect.Height + child.MarginTop + child.MarginBottom;
-                    if (h > minHeight)
-                    {
-                        minHeight = h;
-                    }
-                }
-            }
-            if (columnBox.LineBoxes != null)
-            {
-                foreach (var line in columnBox.LineBoxes)
-                {
-                    if (line.Height > minHeight)
-                    {
-                        minHeight = line.Height;
-                    }
-                }
-            }
+            var groups = BuildBreakGroups(columnBox.Children);
+
+            float minHeight = ComputeMinColumnHeight(groups, columnBox.LineBoxes);
 
             if (minHeight <= 0)
             {
@@ -622,7 +799,7 @@ namespace Rend.Layout.Internal
             for (int iter = 0; iter < 40 && hi - lo > 0.01f; iter++)
             {
                 float mid = (lo + hi) * 0.5f;
-                if (FitsInColumnsWithSplitting(columnBox, columnCount, mid))
+                if (FitsInColumnsWithSplitting(columnBox, columnCount, mid, groups))
                 {
                     hi = mid;
                 }
@@ -637,35 +814,113 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
+        /// Computes the minimum column height required to accommodate the
+        /// tallest non-splittable unit among the break groups and any direct
+        /// line boxes. Single-child groups whose child is splittable (has
+        /// multiple line boxes and no <c>break-inside: avoid</c>) contribute
+        /// only their tallest line plus top overhead; all other groups
+        /// contribute their full combined height.
+        /// </summary>
+        private static float ComputeMinColumnHeight(List<BreakGroup> groups, List<LineBox>? directLineBoxes)
+        {
+            float minHeight = 0;
+            foreach (var group in groups)
+            {
+                bool splittable = group.Children.Count == 1
+                    && !HasBreakInsideAvoid(group.Children[0])
+                    && group.Children[0].LineBoxes != null
+                    && group.Children[0].LineBoxes!.Count > 1;
+
+                if (splittable)
+                {
+                    var child = group.Children[0];
+                    float topOverhead = child.PaddingTop + child.BorderTopWidth + child.MarginTop;
+                    foreach (var line in child.LineBoxes!)
+                    {
+                        float lineHeight = line.Height + topOverhead;
+                        if (lineHeight > minHeight)
+                        {
+                            minHeight = lineHeight;
+                        }
+                        topOverhead = 0;
+                    }
+                }
+                else
+                {
+                    float groupHeight = MeasureGroupMinHeight(group);
+                    if (groupHeight > minHeight)
+                    {
+                        minHeight = groupHeight;
+                    }
+                }
+            }
+
+            if (directLineBoxes != null)
+            {
+                foreach (var line in directLineBoxes)
+                {
+                    if (line.Height > minHeight)
+                    {
+                        minHeight = line.Height;
+                    }
+                }
+            }
+
+            return minHeight;
+        }
+
+        /// <summary>
+        /// Returns the height a break group would consume if placed in a fresh
+        /// column, measured as the extent from the first child's border-box top
+        /// to the last child's border-box bottom (plus the outer margins that
+        /// would be present as unsplittable top/bottom overhead).
+        /// </summary>
+        private static float MeasureGroupMinHeight(BreakGroup group)
+        {
+            var first = group.Children[0];
+            var last = group.Children[group.Children.Count - 1];
+            float top = first.BorderRect.Y;
+            float bottom = last.BorderRect.Bottom;
+            return (bottom - top) + first.MarginTop + last.MarginBottom;
+        }
+
+        /// <summary>
         /// Check if content fits within the given number of columns at the specified height,
         /// using BFC-computed positions (which already account for margin collapsing) to
-        /// determine column breaks. Allows blocks with line boxes to be split at line boundaries.
+        /// determine column breaks. Honors break groups (break-avoid linkage) and allows
+        /// splittable single-child groups to split at line boundaries.
         /// </summary>
-        private static bool FitsInColumnsWithSplitting(LayoutBox columnBox, int columnCount, float columnHeight)
+        private static bool FitsInColumnsWithSplitting(LayoutBox columnBox, int columnCount,
+            float columnHeight, List<BreakGroup> groups)
         {
             float contentOriginY = columnBox.ContentRect.Y;
             int col = 0;
             float colStartY = contentOriginY;
             bool colHasContent = false;
 
-            foreach (var child in columnBox.Children)
+            foreach (var group in groups)
             {
-                float childBottomY = child.BorderRect.Bottom;
-                float heightInCol = childBottomY - colStartY;
+                var firstChild = group.Children[0];
+                var lastChild = group.Children[group.Children.Count - 1];
+
+                float groupBottomY = lastChild.BorderRect.Bottom;
+                float heightInCol = groupBottomY - colStartY;
 
                 if (colHasContent && heightInCol > columnHeight)
                 {
-                    // Try splitting at line boundary
-                    if (child.LineBoxes != null && child.LineBoxes.Count > 1)
+                    if (group.Children.Count == 1
+                        && !HasBreakInsideAvoid(firstChild)
+                        && firstChild.LineBoxes != null
+                        && firstChild.LineBoxes.Count > 1)
                     {
-                        float contentStartY = child.ContentRect.Y;
+                        float contentStartY = firstChild.ContentRect.Y;
                         float availableForLines = colStartY + columnHeight - contentStartY;
                         if (availableForLines > 0)
                         {
                             int splitAfter = -1;
-                            for (int i = 0; i < child.LineBoxes.Count; i++)
+                            for (int i = 0; i < firstChild.LineBoxes.Count; i++)
                             {
-                                float lineBottom = child.LineBoxes[i].Y + child.LineBoxes[i].Height - contentStartY;
+                                float lineBottom = firstChild.LineBoxes[i].Y + firstChild.LineBoxes[i].Height - contentStartY;
                                 if (lineBottom <= availableForLines)
                                 {
                                     splitAfter = i;
@@ -676,7 +931,7 @@ namespace Rend.Layout.Internal
                                 }
                             }
 
-                            if (splitAfter >= 0 && splitAfter < child.LineBoxes.Count - 1)
+                            if (splitAfter >= 0 && splitAfter < firstChild.LineBoxes.Count - 1)
                             {
                                 col++;
                                 if (col >= columnCount)
@@ -684,20 +939,19 @@ namespace Rend.Layout.Internal
                                     return false;
                                 }
 
-                                colStartY = child.LineBoxes[splitAfter + 1].Y;
+                                colStartY = firstChild.LineBoxes[splitAfter + 1].Y;
                                 colHasContent = true;
                                 continue;
                             }
                         }
                     }
 
-                    // No split possible — move whole item to next column
                     col++;
                     if (col >= columnCount)
                     {
                         return false;
                     }
-                    colStartY = child.BorderRect.Y;
+                    colStartY = firstChild.BorderRect.Y;
                     colHasContent = false;
                 }
 
@@ -818,17 +1072,21 @@ namespace Rend.Layout.Internal
         /// in the first part and lines splitAfter+1..end go in the second part.
         /// Returns (first, second) partial boxes.
         /// </summary>
-        private static (LayoutBox? first, LayoutBox? second) SplitBoxAtLine(
-            LayoutBox box, int splitAfter)
+        private static BoxSplit SplitBoxAtLine(LayoutBox box, int splitAfter)
         {
+            if (IsMonolithic(box))
+            {
+                return BoxSplit.None;
+            }
+
             if (box.LineBoxes == null || box.LineBoxes.Count < 2)
             {
-                return (null, null);
+                return BoxSplit.None;
             }
 
             if (splitAfter < 0 || splitAfter >= box.LineBoxes.Count - 1)
             {
-                return (null, null);
+                return BoxSplit.None;
             }
 
             float contentStartY = box.ContentRect.Y;
@@ -889,7 +1147,852 @@ namespace Rend.Layout.Internal
                 box.ContentRect.X, secondStartY,
                 box.ContentRect.Width, secondContentHeight);
 
-            return (firstBox, secondBox);
+            return BoxSplit.Create(firstBox, secondBox);
+        }
+
+        /// <summary>
+        /// [CSS-FRAGMENTATION §4] Splits an atomic block with no inner fragmentation
+        /// points (no child boxes, no line boxes) at the given Y coordinate. The first
+        /// fragment receives top-side padding/border/margin, the second receives the
+        /// bottom side, and each carries its share of the content height so painting
+        /// draws the background on both halves.
+        /// </summary>
+        private static BoxSplit SplitAtomicBoxAtY(LayoutBox box, float splitY)
+        {
+            if (IsMonolithic(box))
+            {
+                return BoxSplit.None;
+            }
+
+            float boxTop = box.ContentRect.Y;
+            float boxBottom = box.ContentRect.Y + box.ContentRect.Height;
+            if (splitY <= boxTop || splitY >= boxBottom)
+            {
+                return BoxSplit.None;
+            }
+
+            float firstHeight = splitY - boxTop;
+            float secondHeight = boxBottom - splitY;
+            if (firstHeight <= 0 || secondHeight <= 0)
+            {
+                return BoxSplit.None;
+            }
+
+            var firstBox = new LayoutBox(box.StyledNode, box.BoxType);
+            firstBox.PaddingTop = box.PaddingTop;
+            firstBox.PaddingRight = box.PaddingRight;
+            firstBox.PaddingBottom = 0;
+            firstBox.PaddingLeft = box.PaddingLeft;
+            firstBox.BorderTopWidth = box.BorderTopWidth;
+            firstBox.BorderRightWidth = box.BorderRightWidth;
+            firstBox.BorderBottomWidth = 0;
+            firstBox.BorderLeftWidth = box.BorderLeftWidth;
+            firstBox.MarginTop = box.MarginTop;
+            firstBox.MarginRight = box.MarginRight;
+            firstBox.MarginBottom = 0;
+            firstBox.MarginLeft = box.MarginLeft;
+            firstBox.ContentRect = new RectF(
+                box.ContentRect.X, boxTop,
+                box.ContentRect.Width, firstHeight);
+
+            var secondBox = new LayoutBox(box.StyledNode, box.BoxType);
+            secondBox.PaddingTop = 0;
+            secondBox.PaddingRight = box.PaddingRight;
+            secondBox.PaddingBottom = box.PaddingBottom;
+            secondBox.PaddingLeft = box.PaddingLeft;
+            secondBox.BorderTopWidth = 0;
+            secondBox.BorderRightWidth = box.BorderRightWidth;
+            secondBox.BorderBottomWidth = box.BorderBottomWidth;
+            secondBox.BorderLeftWidth = box.BorderLeftWidth;
+            secondBox.MarginTop = 0;
+            secondBox.MarginRight = box.MarginRight;
+            secondBox.MarginBottom = box.MarginBottom;
+            secondBox.MarginLeft = box.MarginLeft;
+            secondBox.ContentRect = new RectF(
+                box.ContentRect.X, splitY,
+                box.ContentRect.Width, secondHeight);
+
+            return BoxSplit.Create(firstBox, secondBox);
+        }
+
+        /// <summary>
+        /// [CSS-BREAK-3 §5.1] Splits a block container at the given Y coordinate
+        /// by partitioning its block children. Children whose border-box bottom
+        /// sits at or above <paramref name="splitY"/> go to the first fragment;
+        /// children whose border-box top sits at or below it go to the second;
+        /// any child that straddles the line is recursively split using the
+        /// appropriate helper (atomic, line-boxed, or block). Returns
+        /// <see cref="BoxSplit.None"/> if no legal partition exists — the
+        /// caller must fall back to a whole-child move.
+        /// </summary>
+        private static BoxSplit SplitBlockBoxAtY(LayoutBox box, float splitY)
+        {
+            if (IsMonolithic(box))
+            {
+                return BoxSplit.None;
+            }
+            if (box.LineBoxes != null && box.LineBoxes.Count > 0)
+            {
+                return BoxSplit.None;
+            }
+            if (box.Children == null || box.Children.Count == 0)
+            {
+                return BoxSplit.None;
+            }
+
+            float boxTop = box.ContentRect.Y;
+            float boxBottom = box.ContentRect.Y + box.ContentRect.Height;
+            if (splitY <= boxTop || splitY >= boxBottom)
+            {
+                return BoxSplit.None;
+            }
+
+            var firstChildren = new List<LayoutBox>();
+            var secondChildren = new List<LayoutBox>();
+
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                float childTop = child.BorderRect.Y;
+                float childBottom = child.BorderRect.Bottom;
+
+                if (childBottom <= splitY)
+                {
+                    firstChildren.Add(child);
+                    continue;
+                }
+                if (childTop >= splitY)
+                {
+                    secondChildren.Add(child);
+                    continue;
+                }
+
+                BoxSplit childSplit = BoxSplit.None;
+                if (child.LineBoxes != null && child.LineBoxes.Count > 1)
+                {
+                    float contentStartY = child.ContentRect.Y;
+                    int splitAfter = -1;
+                    for (int li = 0; li < child.LineBoxes.Count; li++)
+                    {
+                        float lineBottom = child.LineBoxes[li].Y + child.LineBoxes[li].Height;
+                        if (lineBottom <= splitY)
+                        {
+                            splitAfter = li;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    if (splitAfter >= 0 && splitAfter < child.LineBoxes.Count - 1)
+                    {
+                        childSplit = SplitBoxAtLine(child, splitAfter);
+                    }
+                }
+                else if (child.Children != null && child.Children.Count > 0)
+                {
+                    childSplit = SplitBlockBoxAtY(child, splitY);
+                }
+                else
+                {
+                    childSplit = SplitAtomicBoxAtY(child, splitY);
+                }
+
+                if (!childSplit.IsValid)
+                {
+                    return BoxSplit.None;
+                }
+
+                firstChildren.Add(childSplit.First!);
+                secondChildren.Add(childSplit.Second!);
+            }
+
+            if (firstChildren.Count == 0 || secondChildren.Count == 0)
+            {
+                return BoxSplit.None;
+            }
+
+            var firstBox = new LayoutBox(box.StyledNode, box.BoxType);
+            firstBox.PaddingTop = box.PaddingTop;
+            firstBox.PaddingRight = box.PaddingRight;
+            firstBox.PaddingBottom = 0;
+            firstBox.PaddingLeft = box.PaddingLeft;
+            firstBox.BorderTopWidth = box.BorderTopWidth;
+            firstBox.BorderRightWidth = box.BorderRightWidth;
+            firstBox.BorderBottomWidth = 0;
+            firstBox.BorderLeftWidth = box.BorderLeftWidth;
+            firstBox.MarginTop = box.MarginTop;
+            firstBox.MarginRight = box.MarginRight;
+            firstBox.MarginBottom = 0;
+            firstBox.MarginLeft = box.MarginLeft;
+            firstBox.ContentRect = new RectF(
+                box.ContentRect.X, boxTop,
+                box.ContentRect.Width, splitY - boxTop);
+            for (int i = 0; i < firstChildren.Count; i++)
+            {
+                firstBox.AddChild(firstChildren[i]);
+            }
+
+            var secondBox = new LayoutBox(box.StyledNode, box.BoxType);
+            secondBox.PaddingTop = 0;
+            secondBox.PaddingRight = box.PaddingRight;
+            secondBox.PaddingBottom = box.PaddingBottom;
+            secondBox.PaddingLeft = box.PaddingLeft;
+            secondBox.BorderTopWidth = 0;
+            secondBox.BorderRightWidth = box.BorderRightWidth;
+            secondBox.BorderBottomWidth = box.BorderBottomWidth;
+            secondBox.BorderLeftWidth = box.BorderLeftWidth;
+            secondBox.MarginTop = 0;
+            secondBox.MarginRight = box.MarginRight;
+            secondBox.MarginBottom = box.MarginBottom;
+            secondBox.MarginLeft = box.MarginLeft;
+            secondBox.ContentRect = new RectF(
+                box.ContentRect.X, splitY,
+                box.ContentRect.Width, boxBottom - splitY);
+            for (int i = 0; i < secondChildren.Count; i++)
+            {
+                secondBox.AddChild(secondChildren[i]);
+            }
+
+            return BoxSplit.Create(firstBox, secondBox);
+        }
+
+        /// <summary>
+        /// [CSS-BREAK-3 §5] Walks the direct children of a fragmentation root
+        /// and coalesces them into break groups. Adjacent siblings connected by
+        /// <c>break-after: avoid</c>/<c>break-before: avoid</c> (or the legacy
+        /// <c>page-break-*: avoid</c> aliases) join the same group so the
+        /// column filling pass can treat them as a single unbreakable unit.
+        /// Forced breaks (<c>break-*: column</c>/<c>always</c>) terminate the
+        /// current group and start a new one; the top-level
+        /// <see cref="BuildForcedBreakSegments"/> pass then drives column
+        /// assignment off the forced-break boundaries.
+        /// </summary>
+        private static List<BreakGroup> BuildBreakGroups(IReadOnlyList<LayoutBox> children)
+        {
+            var groups = new List<BreakGroup>();
+            if (children == null || children.Count == 0)
+            {
+                return groups;
+            }
+
+            var current = new BreakGroup();
+            current.Children.Add(children[0]);
+
+            for (int i = 1; i < children.Count; i++)
+            {
+                var previous = children[i - 1];
+                var child = children[i];
+                bool forced = HasBreakAfterForced(previous) || HasBreakBeforeForced(child);
+                bool avoid = HasBreakAfterAvoid(previous) || HasBreakBeforeAvoid(child);
+
+                if (!forced && avoid)
+                {
+                    current.Children.Add(child);
+                    continue;
+                }
+
+                groups.Add(current);
+                current = new BreakGroup();
+                current.Children.Add(child);
+            }
+
+            groups.Add(current);
+
+            return groups;
+        }
+
+        /// <summary>
+        /// [CSS-BREAK-3 §5.1] Walks the direct children of a fragmentation root
+        /// and splits them on forced column breaks (<c>break-before/after: column</c>,
+        /// <c>always</c>, <c>page</c>, <c>left</c>, <c>right</c>, plus the legacy
+        /// <c>page-break-*</c> aliases). A forced break between two siblings closes
+        /// the current segment and starts a new one; a forced break on the very
+        /// first child is a no-op because there is no earlier content to break
+        /// away from. The resulting list never contains empty segments.
+        /// </summary>
+        private static List<List<LayoutBox>> BuildForcedBreakSegments(IReadOnlyList<LayoutBox> children)
+        {
+            var segments = new List<List<LayoutBox>>();
+            if (children == null || children.Count == 0)
+            {
+                return segments;
+            }
+
+            var current = new List<LayoutBox>();
+            current.Add(children[0]);
+
+            for (int i = 1; i < children.Count; i++)
+            {
+                var previous = children[i - 1];
+                var child = children[i];
+                bool forced = HasBreakAfterForced(previous) || HasBreakBeforeForced(child);
+
+                if (forced)
+                {
+                    segments.Add(current);
+                    current = new List<LayoutBox>();
+                }
+                current.Add(child);
+            }
+
+            segments.Add(current);
+            return segments;
+        }
+
+        /// <summary>
+        /// [CSS-BREAK-3 §5.1] When the multicol has a single in-flow wrapper
+        /// child whose grandchildren carry forced column breaks, split the
+        /// wrapper into one fragment per forced-break segment. Each fragment
+        /// reuses the wrapper's styled node so its background/border paints in
+        /// every column it lands in. Returns null when no wrapper
+        /// fragmentation applies (either because the multicol has direct
+        /// forced breaks, has multiple direct children, the single child is
+        /// not fragmentable, or the grandchildren have no forced breaks).
+        /// Fragmentation is only performed for wrappers with no borders, no
+        /// padding, and no specified block size — non-trivial wrappers need
+        /// border joining across fragments which is not yet implemented.
+        /// </summary>
+        private static List<LayoutBox>? TryFragmentWrapperOnForcedBreaks(LayoutBox columnBox)
+        {
+            if (columnBox.Children == null || columnBox.Children.Count != 1)
+            {
+                return null;
+            }
+            var wrapper = columnBox.Children[0];
+            if (wrapper.Children == null || wrapper.Children.Count < 2)
+            {
+                return null;
+            }
+
+            if (wrapper.BorderTopWidth > 0 || wrapper.BorderBottomWidth > 0
+                || wrapper.BorderLeftWidth > 0 || wrapper.BorderRightWidth > 0
+                || wrapper.PaddingTop > 0 || wrapper.PaddingBottom > 0)
+            {
+                return null;
+            }
+            var wrapperStyle = wrapper.StyledNode?.Style;
+            if (wrapperStyle != null && !float.IsNaN(wrapperStyle.Height))
+            {
+                return null;
+            }
+
+            bool hasForcedBreak = false;
+            for (int i = 1; i < wrapper.Children.Count; i++)
+            {
+                if (HasBreakBeforeForced(wrapper.Children[i])
+                    || HasBreakAfterForced(wrapper.Children[i - 1]))
+                {
+                    hasForcedBreak = true;
+                    break;
+                }
+            }
+            if (!hasForcedBreak)
+            {
+                return null;
+            }
+
+            var innerSegments = BuildForcedBreakSegments(wrapper.Children);
+            if (innerSegments.Count < 2)
+            {
+                return null;
+            }
+
+            var fragments = new List<LayoutBox>();
+            for (int segIdx = 0; segIdx < innerSegments.Count; segIdx++)
+            {
+                var seg = innerSegments[segIdx];
+                var fragment = new LayoutBox(wrapper.StyledNode, wrapper.BoxType);
+                fragment.PaddingTop = 0;
+                fragment.PaddingRight = wrapper.PaddingRight;
+                fragment.PaddingBottom = 0;
+                fragment.PaddingLeft = wrapper.PaddingLeft;
+                fragment.BorderTopWidth = 0;
+                fragment.BorderRightWidth = wrapper.BorderRightWidth;
+                fragment.BorderBottomWidth = 0;
+                fragment.BorderLeftWidth = wrapper.BorderLeftWidth;
+                fragment.MarginTop = segIdx == 0 ? wrapper.MarginTop : 0;
+                fragment.MarginRight = wrapper.MarginRight;
+                fragment.MarginBottom = segIdx == innerSegments.Count - 1 ? wrapper.MarginBottom : 0;
+                fragment.MarginLeft = wrapper.MarginLeft;
+
+                var segFirst = seg[0];
+                var segLast = seg[seg.Count - 1];
+                float segTop = segFirst.BorderRect.Y;
+                float segBottom = segLast.BorderRect.Bottom;
+                fragment.ContentRect = new RectF(
+                    wrapper.ContentRect.X, segTop,
+                    wrapper.ContentRect.Width, segBottom - segTop);
+
+                for (int i = 0; i < seg.Count; i++)
+                {
+                    fragment.AddChild(seg[i]);
+                }
+
+                fragments.Add(fragment);
+            }
+
+            return fragments;
+        }
+
+        /// <summary>
+        /// [CSS-MULTICOL §3.3] Computes the tallest segment height for the
+        /// segments that land in real columns (segment index &lt; <paramref name="columnCount"/>).
+        /// Chrome excludes virtual-column segments from the balanced height
+        /// calculation — see chromium issue 385595003. Each segment's height is
+        /// measured as the distance from the first child's border-box top to the
+        /// last child's border-box bottom.
+        /// </summary>
+        private static float MeasureRealSegmentMaxHeight(List<List<LayoutBox>> segments, int columnCount)
+        {
+            int realCount = Math.Min(segments.Count, columnCount);
+            float maxHeight = 0;
+            for (int i = 0; i < realCount; i++)
+            {
+                var segment = segments[i];
+                if (segment.Count == 0)
+                {
+                    continue;
+                }
+                var first = segment[0];
+                var last = segment[segment.Count - 1];
+                float height = last.BorderRect.Bottom - first.BorderRect.Y;
+                if (height > maxHeight)
+                {
+                    maxHeight = height;
+                }
+            }
+            return maxHeight;
+        }
+
+        /// <summary>
+        /// Returns true when the box's style requests that fragmentation inside
+        /// the box be avoided for column or generic fragmentation contexts.
+        /// Honors both the modern <c>break-inside</c> property and the legacy
+        /// <c>page-break-inside</c> alias.
+        /// </summary>
+        private static bool HasBreakInsideAvoid(LayoutBox box)
+        {
+            var style = box.StyledNode?.Style;
+            if (style == null)
+            {
+                return false;
+            }
+            var value = style.BreakInside;
+            if (value == CssBreakValue.Avoid
+                || value == CssBreakValue.AvoidColumn
+                || value == CssBreakValue.AvoidPage)
+            {
+                return true;
+            }
+            return style.PageBreakInside == CssPageBreak.Avoid;
+        }
+
+        /// <summary>
+        /// [CSS-BREAK-3 §3.2, §5] Returns true when a box is a monolithic
+        /// fragmentation unit that must not be split across columns. Scrolling
+        /// containers (any non-visible overflow), atomic inline-level boxes
+        /// (<c>inline-block</c>, <c>inline-flex</c>, <c>inline-grid</c>),
+        /// containment roots (<c>contain: size|strict|content</c>), and boxes
+        /// requesting <c>break-inside: avoid</c> all qualify. Split helpers
+        /// refuse to operate on monolithic boxes so the caller falls back to
+        /// placing the box whole in the next column.
+        /// <spec>CSS-BREAK-3 §3.2 https://drafts.csswg.org/css-break-3/#possible-breaks</spec>
+        /// </summary>
+        private static bool IsMonolithic(LayoutBox box)
+        {
+            var style = box.StyledNode?.Style;
+            if (style == null)
+            {
+                return false;
+            }
+
+            if (style.OverflowX != CssOverflow.Visible || style.OverflowY != CssOverflow.Visible)
+            {
+                return true;
+            }
+
+            if (HasBreakInsideAvoid(box))
+            {
+                return true;
+            }
+
+            var display = style.Display;
+            if (display == CssDisplay.InlineBlock
+                || display == CssDisplay.InlineFlex
+                || display == CssDisplay.InlineGrid)
+            {
+                return true;
+            }
+
+            var contain = style.Contain;
+            if (contain == CssContain.Size
+                || contain == CssContain.Strict
+                || contain == CssContain.Content)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Returns true when the box has a forced column break before it
+        /// (<c>break-before: column</c>/<c>always</c>/<c>page</c>/left/right or
+        /// the legacy <c>page-break-before: always</c>/left/right).
+        /// </summary>
+        private static bool HasBreakBeforeForced(LayoutBox box)
+        {
+            var style = box.StyledNode?.Style;
+            if (style == null)
+            {
+                return false;
+            }
+            var value = style.BreakBefore;
+            if (value == CssBreakValue.Column
+                || value == CssBreakValue.Always
+                || value == CssBreakValue.Page
+                || value == CssBreakValue.Left
+                || value == CssBreakValue.Right)
+            {
+                return true;
+            }
+            var legacy = style.PageBreakBefore;
+            return legacy == CssPageBreak.Always
+                || legacy == CssPageBreak.Left
+                || legacy == CssPageBreak.Right;
+        }
+
+        /// <summary>
+        /// Returns true when the box has a forced column break after it
+        /// (<c>break-after: column</c>/<c>always</c>/<c>page</c>/left/right or
+        /// the legacy <c>page-break-after: always</c>/left/right).
+        /// </summary>
+        private static bool HasBreakAfterForced(LayoutBox box)
+        {
+            var style = box.StyledNode?.Style;
+            if (style == null)
+            {
+                return false;
+            }
+            var value = style.BreakAfter;
+            if (value == CssBreakValue.Column
+                || value == CssBreakValue.Always
+                || value == CssBreakValue.Page
+                || value == CssBreakValue.Left
+                || value == CssBreakValue.Right)
+            {
+                return true;
+            }
+            var legacy = style.PageBreakAfter;
+            return legacy == CssPageBreak.Always
+                || legacy == CssPageBreak.Left
+                || legacy == CssPageBreak.Right;
+        }
+
+        /// <summary>
+        /// Returns true when the box requests that a break immediately before
+        /// it be avoided (<c>break-before: avoid</c>/<c>avoid-column</c>/
+        /// <c>avoid-page</c> or legacy <c>page-break-before: avoid</c>).
+        /// </summary>
+        private static bool HasBreakBeforeAvoid(LayoutBox box)
+        {
+            var style = box.StyledNode?.Style;
+            if (style == null)
+            {
+                return false;
+            }
+            var value = style.BreakBefore;
+            if (value == CssBreakValue.Avoid
+                || value == CssBreakValue.AvoidColumn
+                || value == CssBreakValue.AvoidPage)
+            {
+                return true;
+            }
+            return style.PageBreakBefore == CssPageBreak.Avoid;
+        }
+
+        /// <summary>
+        /// Returns true when the box requests that a break immediately after
+        /// it be avoided (<c>break-after: avoid</c>/<c>avoid-column</c>/
+        /// <c>avoid-page</c> or legacy <c>page-break-after: avoid</c>).
+        /// </summary>
+        private static bool HasBreakAfterAvoid(LayoutBox box)
+        {
+            var style = box.StyledNode?.Style;
+            if (style == null)
+            {
+                return false;
+            }
+            var value = style.BreakAfter;
+            if (value == CssBreakValue.Avoid
+                || value == CssBreakValue.AvoidColumn
+                || value == CssBreakValue.AvoidPage)
+            {
+                return true;
+            }
+            return style.PageBreakAfter == CssPageBreak.Avoid;
+        }
+
+        /// <summary>
+        /// [CSS-MULTICOL §7.2] Walks the multicol subtree looking for an element
+        /// with column-span: all that can reach the multicol root without crossing
+        /// an element that establishes a new formatting context. A wrapper with a
+        /// visible box (border/padding/background/fixed dimensions) also stops the
+        /// walk because fragmenting it is not yet implemented — see
+        /// <see cref="IsTrivialWrapperBox"/>.
+        /// </summary>
+        private static bool HasHoistableSpanner(StyledElement element)
+        {
+            for (int i = 0; i < element.Children.Count; i++)
+            {
+                if (!(element.Children[i] is StyledElement childElement))
+                {
+                    continue;
+                }
+                if (childElement.Style.ColumnSpan == CssColumnSpan.All)
+                {
+                    return true;
+                }
+                if (EstablishesNewFormattingContext(childElement.Style))
+                {
+                    continue;
+                }
+                if (!IsTrivialWrapperBox(childElement.Style))
+                {
+                    continue;
+                }
+                if (HasHoistableSpanner(childElement))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Flattens the multicol root's children into a linear list where hoistable
+        /// nested spanners are promoted to the top level. Wrappers that contain a
+        /// spanner are split into pre- and post-spanner clones so the surrounding
+        /// content flows correctly inside columns.
+        /// </summary>
+        private static List<StyledNode> BuildHoistedSegmentList(StyledElement multicolRoot)
+        {
+            var output = new List<StyledNode>();
+            FlattenChildrenForHoisting(multicolRoot, output);
+            return output;
+        }
+
+        private static void FlattenChildrenForHoisting(StyledElement parent, List<StyledNode> output)
+        {
+            for (int i = 0; i < parent.Children.Count; i++)
+            {
+                var child = parent.Children[i];
+                if (child is StyledElement childElement)
+                {
+                    if (childElement.Style.ColumnSpan == CssColumnSpan.All)
+                    {
+                        output.Add(child);
+                        continue;
+                    }
+                    if (!EstablishesNewFormattingContext(childElement.Style)
+                        && IsTrivialWrapperBox(childElement.Style)
+                        && HasHoistableSpanner(childElement))
+                    {
+                        FragmentWrapperAroundSpanners(childElement, output);
+                        continue;
+                    }
+                }
+                output.Add(child);
+            }
+        }
+
+        /// <summary>
+        /// [CSS-MULTICOL §7.2] Fragmentation of a wrapper around a spanner requires
+        /// splitting the wrapper's borders and backgrounds across the fragments. We
+        /// only support this when the wrapper has no visible box (no border, padding,
+        /// explicit dimensions, or painted background). Wrappers with visible styling
+        /// are left intact and their spanners are not hoisted — this is incorrect per
+        /// spec but avoids catastrophic regressions in cases we cannot render yet.
+        /// </summary>
+        private static bool IsTrivialWrapperBox(ComputedStyle style)
+        {
+            if (!float.IsNaN(style.Width) || !float.IsNaN(style.Height))
+            {
+                return false;
+            }
+            if (!float.IsNaN(style.MinHeight) && style.MinHeight > 0)
+            {
+                return false;
+            }
+            if (!float.IsNaN(style.MaxHeight))
+            {
+                return false;
+            }
+            if (style.BorderTopWidth > 0 || style.BorderBottomWidth > 0
+                || style.BorderLeftWidth > 0 || style.BorderRightWidth > 0)
+            {
+                return false;
+            }
+            if (style.PaddingTop > 0 || style.PaddingBottom > 0
+                || style.PaddingLeft > 0 || style.PaddingRight > 0)
+            {
+                return false;
+            }
+            if (style.BackgroundColor.A > 0)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Fragments a wrapper element around any hoistable spanners in its subtree,
+        /// emitting pre-spanner clones (with the wrapper's style), then the spanner
+        /// itself, then any remaining content as a post-spanner clone. Multiple
+        /// spanners in the same wrapper produce multiple fragments.
+        /// </summary>
+        private static void FragmentWrapperAroundSpanners(StyledElement wrapper, List<StyledNode> output)
+        {
+            var pending = new List<StyledNode>();
+            for (int i = 0; i < wrapper.Children.Count; i++)
+            {
+                var child = wrapper.Children[i];
+                if (child is StyledElement childElement)
+                {
+                    if (childElement.Style.ColumnSpan == CssColumnSpan.All)
+                    {
+                        EmitWrapperFragment(wrapper, pending, output);
+                        output.Add(childElement);
+                        continue;
+                    }
+                    if (!EstablishesNewFormattingContext(childElement.Style)
+                        && IsTrivialWrapperBox(childElement.Style)
+                        && HasHoistableSpanner(childElement))
+                    {
+                        EmitWrapperFragment(wrapper, pending, output);
+                        FragmentWrapperAroundSpanners(childElement, output);
+                        continue;
+                    }
+                }
+                pending.Add(child);
+            }
+            EmitWrapperFragment(wrapper, pending, output);
+        }
+
+        /// <summary>
+        /// Emits a fragment of the wrapper containing the pending children as a new
+        /// StyledElement sharing the wrapper's underlying HTML element and style.
+        /// Whitespace-only pending content is dropped — it would render as an empty
+        /// line otherwise, which does not match Chrome's hoisting behavior.
+        /// </summary>
+        private static void EmitWrapperFragment(StyledElement wrapper, List<StyledNode> pending,
+            List<StyledNode> output)
+        {
+            if (pending.Count == 0)
+            {
+                return;
+            }
+            if (IsWhitespaceOnlyContent(pending))
+            {
+                pending.Clear();
+                return;
+            }
+            var fragment = new StyledElement(wrapper.Element, wrapper.Style,
+                new List<StyledNode>(pending));
+            output.Add(fragment);
+            pending.Clear();
+        }
+
+        private static bool IsWhitespaceOnlyContent(List<StyledNode> nodes)
+        {
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                if (nodes[i] is StyledText textNode)
+                {
+                    if (!string.IsNullOrWhiteSpace(textNode.Text))
+                    {
+                        return false;
+                    }
+                    continue;
+                }
+                return false;
+            }
+            return true;
+        }
+
+        private static bool IsActiveRawValue(object? rawValue)
+        {
+            if (rawValue == null)
+            {
+                return false;
+            }
+            if (rawValue is CssKeywordValue keyword && keyword.Keyword == "none")
+            {
+                return false;
+            }
+            if (rawValue is string text && text == "none")
+            {
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// [CSS-MULTICOL §7.2] Per-spec list of conditions that stop a spanner from
+        /// being hoisted out of a wrapper: new formatting contexts, positioning
+        /// containing blocks, CSS containment, transforms, filters, or a nested
+        /// multicol ancestor (which becomes the spanner's new nearest multicol).
+        /// </summary>
+        private static bool EstablishesNewFormattingContext(ComputedStyle style)
+        {
+            var display = style.Display;
+            if (display == CssDisplay.InlineBlock || display == CssDisplay.Table
+                || display == CssDisplay.TableCell || display == CssDisplay.TableCaption
+                || display == CssDisplay.Flex || display == CssDisplay.InlineFlex
+                || display == CssDisplay.Grid || display == CssDisplay.InlineGrid
+                || display == CssDisplay.FlowRoot)
+            {
+                return true;
+            }
+
+            var position = style.Position;
+            if (position == CssPosition.Absolute || position == CssPosition.Fixed)
+            {
+                return true;
+            }
+
+            if (style.OverflowX != CssOverflow.Visible || style.OverflowY != CssOverflow.Visible)
+            {
+                return true;
+            }
+
+            if (IsActiveRawValue(style.GetRefValue(Css.Properties.Internal.PropertyId.Transform)))
+            {
+                return true;
+            }
+
+            if (IsActiveRawValue(style.GetRefValue(Css.Properties.Internal.PropertyId.Filter)))
+            {
+                return true;
+            }
+
+            var contain = style.Contain;
+            if (contain == CssContain.Layout || contain == CssContain.Paint
+                || contain == CssContain.Content || contain == CssContain.Strict)
+            {
+                return true;
+            }
+
+            float columnCount = style.ColumnCount;
+            float columnWidth = style.ColumnWidth;
+            if ((!float.IsNaN(columnCount) && columnCount > 1)
+                || (!float.IsNaN(columnWidth) && columnWidth > 0))
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private static LayoutBox OffsetBox(LayoutBox original, float offsetX, float offsetY)
