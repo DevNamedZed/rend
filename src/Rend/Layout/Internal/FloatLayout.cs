@@ -135,10 +135,32 @@ namespace Rend.Layout.Internal
                 floatContext.AddRightFloat(new RectF(x - floatBox.MarginLeft, y, totalWidth, totalHeight));
             }
 
-            floatBox.ContentRect = new RectF(
-                x + floatBox.BorderLeftWidth + floatBox.PaddingLeft,
-                y + floatBox.MarginTop + floatBox.BorderTopWidth + floatBox.PaddingTop,
-                contentWidth, contentHeight);
+            float finalContentX = x + floatBox.BorderLeftWidth + floatBox.PaddingLeft;
+            float finalContentY = y + floatBox.MarginTop + floatBox.BorderTopWidth + floatBox.PaddingTop;
+            float deltaX = finalContentX - floatBox.ContentRect.X;
+            float deltaY = finalContentY - floatBox.ContentRect.Y;
+            floatBox.ContentRect = new RectF(finalContentX, finalContentY, contentWidth, contentHeight);
+            ShiftDescendants(floatBox, deltaX, deltaY);
+        }
+
+        private static void ShiftDescendants(LayoutBox box, float deltaX, float deltaY)
+        {
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    box.LineBoxes[i].X += deltaX;
+                    box.LineBoxes[i].Y += deltaY;
+                }
+            }
+
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                var cr = child.ContentRect;
+                child.ContentRect = new RectF(cr.X + deltaX, cr.Y + deltaY, cr.Width, cr.Height);
+                ShiftDescendants(child, deltaX, deltaY);
+            }
         }
 
         private static float CalculateAutoHeight(LayoutBox box)

@@ -462,7 +462,10 @@ namespace Rend.Layout.Internal
                 if (childStyle.Float != CssFloat.None)
                 {
                     var floatBox = CreateLayoutBox(childElement);
-                    floatCtx.CurrentY = cursorY;
+                    // [CSS2 §9.5.1] Float's outer top must not be higher than the outer
+                    // top of any earlier block or float. Account for previous sibling's
+                    // bottom margin (float margins don't collapse, so use the full margin).
+                    floatCtx.CurrentY = cursorY + prevMarginBottom;
                     FloatLayout.PlaceFloat(floatBox, floatCtx, parent, context);
                     parent.AddChild(floatBox);
                     continue;

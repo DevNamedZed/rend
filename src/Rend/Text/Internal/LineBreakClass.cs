@@ -112,8 +112,18 @@ namespace Rend.Text.Internal
             // Spaces
             if (codePoint == 0x0020) return LineBreakClass.SP;
             if (codePoint == 0x00A0) return LineBreakClass.GL; // non-breaking space
-            if (codePoint == 0x1680 || (codePoint >= 0x2000 && codePoint <= 0x200A) || codePoint == 0x205F || codePoint == 0x3000)
+            // [UAX #14] U+2007 Figure Space and U+202F Narrow NBSP are GL (non-breaking).
+            if (codePoint == 0x2007 || codePoint == 0x202F) return LineBreakClass.GL;
+            // [UAX #14] These are technically BA (Break After) in UAX #14, but treated as SP
+            // here for CSS compatibility: CSS Text L3 §4.1.3 says all Unicode Zs space separators
+            // hang at end of line like regular spaces. The wrapping/hanging logic checks SP class.
+            if (codePoint == 0x1680 ||
+                (codePoint >= 0x2000 && codePoint <= 0x2006) ||
+                (codePoint >= 0x2008 && codePoint <= 0x200A) ||
+                codePoint == 0x205F || codePoint == 0x3000)
+            {
                 return LineBreakClass.SP;
+            }
 
             // Zero-width
             if (codePoint == 0x200B) return LineBreakClass.ZW;

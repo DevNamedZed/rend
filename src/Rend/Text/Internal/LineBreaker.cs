@@ -116,8 +116,19 @@ namespace Rend.Text.Internal
                     continue;
                 }
 
-                // Rule: Do not break before or after non-breaking space.
-                if (current == '\u00A0' || next == '\u00A0')
+                // [UAX #14 LB7] × SP: do not break before space separators.
+                // [CSS-TEXT-3 §4.1.3] break-spaces overrides LB7: every preserved
+                // space is a wrapping opportunity, including before other spaces.
+                if (!breakSpaces && IsOtherSpaceSeparator(next))
+                {
+                    result[i] = LineBreakOpportunity.Forbidden;
+                    continue;
+                }
+
+                // Rule: Do not break before or after non-breaking space (GL class).
+                if (current == '\u00A0' || next == '\u00A0' ||
+                    current == '\u2007' || next == '\u2007' ||
+                    current == '\u202F' || next == '\u202F')
                 {
                     result[i] = LineBreakOpportunity.Forbidden;
                     continue;
@@ -133,7 +144,7 @@ namespace Rend.Text.Internal
 
                 // Rule: Break after spaces.
                 if (current == ' ' || current == '\t' ||
-                    IsUnicodeSpace(current))
+                    IsOtherSpaceSeparator(current))
                 {
                     // [CSS-TEXT-3 §4.1.3] break-spaces: every preserved space is
                     // a wrapping opportunity — mark Allowed after EVERY space.
@@ -141,7 +152,7 @@ namespace Rend.Text.Internal
                     {
                         result[i] = LineBreakOpportunity.Allowed;
                     }
-                    else if (!IsUnicodeSpace(next) && next != ' ')
+                    else if (!IsOtherSpaceSeparator(next) && next != ' ')
                     {
                         // Normal: allow break after space before non-space only.
                         result[i] = LineBreakOpportunity.Allowed;
@@ -212,10 +223,11 @@ namespace Rend.Text.Internal
             return result;
         }
 
-        private static bool IsUnicodeSpace(char ch)
+        private static bool IsOtherSpaceSeparator(char ch)
         {
             return ch == '\u1680' ||
-                   (ch >= '\u2000' && ch <= '\u200A') ||
+                   (ch >= '\u2000' && ch <= '\u2006') ||
+                   (ch >= '\u2008' && ch <= '\u200A') ||
                    ch == '\u205F' ||
                    ch == '\u3000';
         }
