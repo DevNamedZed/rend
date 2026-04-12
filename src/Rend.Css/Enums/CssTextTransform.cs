@@ -6,6 +6,8 @@ namespace Rend.Css
         None,
         Uppercase,
         Lowercase,
-        Capitalize
+        Capitalize,
+        FullWidth,
+        FullSizeKana
     }
 }

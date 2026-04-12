@@ -234,10 +234,14 @@ namespace Rend.Html.Parser.Internal
         /// </summary>
         public static bool ClosesImpliedParagraph(string tag)
         {
-            // Note: <hr> is intentionally excluded here — it has its own handler
-            // in HtmlTreeBuilder.HandleInBodyStartTag that closes <p> and pops itself
-            // as a void element. Including it here would short-circuit to the generic
-            // block handler which leaves hr on the open elements stack.
+            // <spec>HTML §13.2.6.4.7 https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inbody</spec>
+            // Elements with their own start-tag handlers in HtmlTreeBuilder are intentionally
+            // excluded here so they are not short-circuited by the generic block handler:
+            //   <hr>  — void element, needs to pop itself off the stack
+            //   <li>  — must walk the stack and pop an existing li before inserting
+            //   <h1>..<h6> — must pop an existing heading if one is the current node
+            // Including them here would leave them on the open elements stack (or nest them
+            // inside an existing instance of the same element), matching the past hr bug.
             return ReferenceEquals(tag, _address) || ReferenceEquals(tag, _article) ||
                    ReferenceEquals(tag, _aside) || ReferenceEquals(tag, _blockquote) ||
                    ReferenceEquals(tag, _center) || ReferenceEquals(tag, _details) ||
@@ -247,7 +251,6 @@ namespace Rend.Html.Parser.Internal
                    ReferenceEquals(tag, _figure) || ReferenceEquals(tag, _footer) ||
                    ReferenceEquals(tag, _form) || ReferenceEquals(tag, _header) ||
                    ReferenceEquals(tag, _hgroup) ||
-                   IsHeadingElement(tag) || ReferenceEquals(tag, _li) ||
                    ReferenceEquals(tag, _listing) || ReferenceEquals(tag, _main) ||
                    ReferenceEquals(tag, _menu) || ReferenceEquals(tag, _nav) ||
                    ReferenceEquals(tag, _ol) || ReferenceEquals(tag, _p) ||

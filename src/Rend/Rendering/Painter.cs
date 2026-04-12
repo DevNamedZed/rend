@@ -656,78 +656,7 @@ namespace Rend.Rendering
 
         private static int ComputeListItemIndex(LayoutBox box)
         {
-            LayoutBox? parent = box.Parent;
-            if (parent == null)
-            {
-                return 1;
-            }
-
-            // [HTML §4.4.8] Check <ol start> and <ol reversed> attributes.
-            int startValue = 1;
-            bool reversed = false;
-            if (parent.StyledNode is StyledElement parentElem)
-            {
-                string? startAttr = parentElem.Element?.GetAttribute("start");
-                if (startAttr != null && int.TryParse(startAttr, out int sv))
-                {
-                    startValue = sv;
-                }
-                string? reversedAttr = parentElem.Element?.GetAttribute("reversed");
-                if (reversedAttr != null)
-                {
-                    reversed = true;
-                    // Default start for reversed: count of list items
-                    if (startAttr == null)
-                    {
-                        int count = 0;
-                        for (int c = 0; c < parent.Children.Count; c++)
-                        {
-                            if (parent.Children[c].BoxType == BoxType.ListItem)
-                            {
-                                count++;
-                            }
-                        }
-                        startValue = count;
-                    }
-                }
-            }
-
-            // Count list items, respecting <li value> attribute and reversed order.
-            int counter = startValue;
-            bool first = true;
-            for (int i = 0; i < parent.Children.Count; i++)
-            {
-                LayoutBox sibling = parent.Children[i];
-                if (sibling.BoxType != BoxType.ListItem)
-                {
-                    continue;
-                }
-
-                // [HTML §4.4.8] Check <li value> attribute for explicit counter set.
-                bool hasExplicitValue = false;
-                if (sibling.StyledNode is StyledElement sibElem)
-                {
-                    string? valAttr = sibElem.Element?.GetAttribute("value");
-                    if (valAttr != null && int.TryParse(valAttr, out int lv))
-                    {
-                        counter = lv;
-                        hasExplicitValue = true;
-                    }
-                }
-
-                if (!hasExplicitValue && !first)
-                {
-                    counter += reversed ? -1 : 1;
-                }
-                first = false;
-
-                if (ReferenceEquals(sibling, box))
-                {
-                    return counter;
-                }
-            }
-
-            return 1;
+            return ListItemOrdinalCalculator.Compute(box);
         }
 
         /// <summary>

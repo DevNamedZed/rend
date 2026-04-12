@@ -74,12 +74,31 @@ namespace Rend.Style
             bool scopeCounters = contain == CssContain.Style ||
                                  contain == CssContain.Content ||
                                  contain == CssContain.Strict;
-            if (scopeCounters)
+            // [CSS-LISTS-3 §2] counter-reset creates a new counter in a new scope,
+            // visible to the element and its descendants only. ol/ul/menu/dir have an
+            // implicit counter-reset: list-item in the UA stylesheet, so they always
+            // open a new scope even without author CSS.
+            bool isListContainer = IsListContainerElement(element);
+            bool isListItem = IsListItemElement(element);
+            bool pushedCounterScope = scopeCounters
+                || CounterTracker.StyleHasAnyCounterReset(computedStyle)
+                || isListContainer;
+            if (pushedCounterScope)
+            {
                 _counterTracker.PushScope();
+            }
 
             // Process CSS counters
             _counterTracker.ProcessCounterReset(computedStyle);
+            if (isListContainer)
+            {
+                ApplyImplicitListContainerReset(element, computedStyle);
+            }
             _counterTracker.ProcessCounterIncrement(computedStyle);
+            if (isListItem)
+            {
+                ApplyImplicitListItemIncrement(element, computedStyle);
+            }
             _counterTracker.ProcessCounterSet(computedStyle);
 
             var children = new List<StyledNode>();
@@ -121,9 +140,10 @@ namespace Rend.Style
                     children.Add(new StyledPseudoElement("after", content, afterStyle));
             }
 
-            // Pop counter scope for style containment
-            if (scopeCounters)
+            if (pushedCounterScope)
+            {
                 _counterTracker.PopScope();
+            }
 
             var styledElement = new StyledElement(element, computedStyle, children);
 
@@ -279,6 +299,109 @@ namespace Rend.Style
         private static Element CreateFallbackElement(Document document)
         {
             return document.CreateElement("div");
+        }
+
+        private const string ListItemCounterName = "list-item";
+
+        private static bool IsListContainerElement(Element element)
+        {
+            string tag = element.TagName;
+            return string.Equals(tag, "ol", System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(tag, "ul", System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(tag, "menu", System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(tag, "dir", System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsListItemElement(Element element)
+        {
+            return string.Equals(element.TagName, "li", System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        // [CSS-LISTS-3 §3] UA rule: ol, ul, menu, dir { counter-reset: list-item }
+        // Chrome's reversed-list initial value is count+1 (not the spec's §4.4.2 algorithm),
+        // and the <ol start> attribute maps to counter-reset: list-item (start - 1).
+        private void ApplyImplicitListContainerReset(Element element, ComputedStyle style)
+        {
+            if (CounterTracker.StyleHasCounterResetEntry(style, ListItemCounterName))
+            {
+                return;
+            }
+
+            int initialValue = 0;
+            bool isOl = string.Equals(element.TagName, "ol", System.StringComparison.OrdinalIgnoreCase);
+            if (isOl && element.GetAttribute("reversed") != null)
+            {
+                int itemCount = CountListItemChildren(element);
+                initialValue = itemCount + 1;
+            }
+            else if (isOl)
+            {
+                string? startAttribute = element.GetAttribute("start");
+                if (startAttribute != null && int.TryParse(startAttribute, out int startValue))
+                {
+                    initialValue = startValue - 1;
+                }
+            }
+
+            _counterTracker.ResetCounterInCurrentScope(ListItemCounterName, initialValue);
+        }
+
+        // [CSS-LISTS-3 §3] UA rule: li { counter-increment: list-item }
+        // Author counter-increment / counter-set / <li value=...> override the implicit increment.
+        // A reversed parent list flips the implicit direction to -1.
+        private void ApplyImplicitListItemIncrement(Element element, ComputedStyle style)
+        {
+            if (CounterTracker.StyleHasCounterIncrementEntry(style, ListItemCounterName))
+            {
+                return;
+            }
+            if (CounterTracker.StyleHasCounterSetEntry(style, ListItemCounterName))
+            {
+                return;
+            }
+
+            string? valueAttribute = element.GetAttribute("value");
+            if (valueAttribute != null && int.TryParse(valueAttribute, out int attributeValue))
+            {
+                _counterTracker.ResetCounterInCurrentScope(ListItemCounterName, attributeValue);
+                return;
+            }
+
+            int increment = IsInsideReversedListContainer(element) ? -1 : 1;
+            _counterTracker.IncrementCounterInScope(ListItemCounterName, increment);
+        }
+
+        private static int CountListItemChildren(Element element)
+        {
+            int count = 0;
+            var child = element.FirstChild;
+            while (child != null)
+            {
+                if (child is Element childElement && IsListItemElement(childElement))
+                {
+                    count++;
+                }
+                child = child.NextSibling;
+            }
+            return count;
+        }
+
+        private static bool IsInsideReversedListContainer(Element element)
+        {
+            var parent = element.Parent;
+            while (parent != null)
+            {
+                if (parent is Element parentElement)
+                {
+                    if (IsListContainerElement(parentElement))
+                    {
+                        return string.Equals(parentElement.TagName, "ol", System.StringComparison.OrdinalIgnoreCase)
+                            && parentElement.GetAttribute("reversed") != null;
+                    }
+                }
+                parent = parent.Parent;
+            }
+            return false;
         }
     }
 }

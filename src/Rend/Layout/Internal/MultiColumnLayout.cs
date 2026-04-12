@@ -17,6 +17,26 @@ namespace Rend.Layout.Internal
             var styledElement = box.StyledNode as StyledElement;
             if (styledElement == null) return;
 
+            // [CSS-BREAK-3 §5] Track multicol nesting so an inner multicol can
+            // detect that it is being fragmented by an outer fragmentation root.
+            // The captured value is the depth observed *before* this multicol was
+            // pushed onto the stack — non-zero means at least one ancestor multicol
+            // is currently fragmenting our box.
+            bool isNestedInMulticol = context.MultiColumnNestingDepth > 0;
+            context.MultiColumnNestingDepth++;
+            try
+            {
+                LayoutCore(box, styledElement, context, isNestedInMulticol);
+            }
+            finally
+            {
+                context.MultiColumnNestingDepth--;
+            }
+        }
+
+        private static void LayoutCore(LayoutBox box, StyledElement styledElement,
+            LayoutContext context, bool isNestedInMulticol)
+        {
             var style = styledElement.Style;
             float availableWidth = box.ContentRect.Width;
 
@@ -39,7 +59,7 @@ namespace Rend.Layout.Internal
             if (columnCount > 1 && HasHoistableSpanner(styledElement))
             {
                 var segmentList = BuildHoistedSegmentList(styledElement);
-                LayoutWithSpanners(box, segmentList, context, columnCount, columnWidth, columnGap);
+                LayoutWithSpanners(box, segmentList, context, columnCount, columnWidth, columnGap, isNestedInMulticol);
                 return;
             }
 
@@ -529,7 +549,8 @@ namespace Rend.Layout.Internal
         /// <see cref="BuildHoistedSegmentList"/>.
         /// </summary>
         private static void LayoutWithSpanners(LayoutBox box, List<StyledNode> segmentList,
-            LayoutContext context, int columnCount, float columnWidth, float columnGap)
+            LayoutContext context, int columnCount, float columnWidth, float columnGap,
+            bool isNestedInMulticol)
         {
             float startX = box.ContentRect.X;
             float cursorY = box.ContentRect.Y;
@@ -558,7 +579,8 @@ namespace Rend.Layout.Internal
                     {
                         float segTrailingMargin;
                         cursorY = LayoutSegmentAsColumns(box, currentSegment, context,
-                            columnCount, columnWidth, columnGap, startX, cursorY, out segTrailingMargin);
+                            columnCount, columnWidth, columnGap, startX, cursorY, out segTrailingMargin,
+                            isNestedInMulticol);
                         prevMarginBottom = segTrailingMargin;
                         currentSegment.Clear();
                     }
@@ -606,7 +628,8 @@ namespace Rend.Layout.Internal
                 cursorY += prevMarginBottom;
                 float trailingMargin;
                 cursorY = LayoutSegmentAsColumns(box, currentSegment, context,
-                    columnCount, columnWidth, columnGap, startX, cursorY, out trailingMargin);
+                    columnCount, columnWidth, columnGap, startX, cursorY, out trailingMargin,
+                    isNestedInMulticol);
             }
 
             box.ContentRect = new RectF(
@@ -616,10 +639,14 @@ namespace Rend.Layout.Internal
 
         /// <summary>
         /// Lays out a segment of children in multi-column format, returning the Y position after layout.
+        /// When <paramref name="isNestedInMulticol"/> is true the segment is inside an outer
+        /// fragmentation root and is allowed to use last-resort atomic balancing
+        /// (CSS-BREAK-3 §5.4) for content-empty single-block segments so neither inner
+        /// column is left empty at the seam between outer fragments.
         /// </summary>
         private static float LayoutSegmentAsColumns(LayoutBox parent, List<StyledNode> children,
             LayoutContext context, int columnCount, float columnWidth, float columnGap,
-            float startX, float startY, out float trailingMargin)
+            float startX, float startY, out float trailingMargin, bool isNestedInMulticol)
         {
             trailingMargin = 0;
             // Create a wrapper element with ONLY the segment children for BFC layout.
@@ -659,60 +686,116 @@ namespace Rend.Layout.Internal
                 segColChildren[i] = new List<LayoutBox>();
             }
 
-            // Position-based column filling using BFC-computed positions
-            float segContentOriginY = tempBox.ContentRect.Y;
-            int curCol = 0;
-            float segColStartY = segContentOriginY;
-            bool segColHasContent = false;
-            foreach (var child in tempBox.Children)
+            // [CSS-BREAK-3 §5.4] Last-resort atomic balance: when this segment is
+            // a single content-empty non-monolithic block and the inner multicol
+            // is being fragmented by an outer multicol, balance the block evenly
+            // across our columns by atomic-splitting it. Without this, the block
+            // sits in column 0 and column 1+ stays empty — the outer column then
+            // overflows because the inner multicol's effective capacity is half
+            // of what it should be at the seam. Chrome reaches the same end
+            // state by treating content-empty atomic blocks as having last-resort
+            // breaks per CSS-BREAK-3 §5.4.
+            bool atomicBalanced = false;
+            if (isNestedInMulticol
+                && columnCount >= 2
+                && tempBox.Children.Count == 1
+                && (tempBox.LineBoxes == null || tempBox.LineBoxes.Count == 0)
+                && IsContentEmptyAtomicNonMonolithic(tempBox.Children[0]))
             {
-                float childBottomY = child.BorderRect.Bottom;
-                float heightInCol = childBottomY - segColStartY;
+                var sole = tempBox.Children[0];
+                float blockTop = sole.BorderRect.Y;
+                float blockHeight = sole.BorderRect.Height;
+                float perColHeight = blockHeight / columnCount;
 
-                if (segColHasContent && heightInCol > targetHeight && curCol < columnCount - 1)
+                if (perColHeight > 0 && perColHeight < blockHeight)
                 {
-                    // Try splitting at line boundary for balanced columns
-                    if (child.LineBoxes != null && child.LineBoxes.Count > 1)
+                    var current = sole;
+                    bool sliceFailed = false;
+                    for (int slice = 0; slice < columnCount - 1; slice++)
                     {
-                        float contentStartY = child.ContentRect.Y;
-                        float availableForLines = segColStartY + targetHeight - contentStartY;
-                        if (availableForLines > 0)
+                        float sliceY = blockTop + perColHeight * (slice + 1);
+                        var atomicSplit = SplitAtomicBoxAtY(current, sliceY);
+                        if (!atomicSplit.IsValid)
                         {
-                            int splitAfter = -1;
-                            for (int li = 0; li < child.LineBoxes.Count; li++)
-                            {
-                                float lineBottom = child.LineBoxes[li].Y + child.LineBoxes[li].Height - contentStartY;
-                                if (lineBottom <= availableForLines)
-                                {
-                                    splitAfter = li;
-                                }
-                                else
-                                {
-                                    break;
-                                }
-                            }
+                            sliceFailed = true;
+                            break;
+                        }
+                        segColChildren[slice].Add(atomicSplit.First!);
+                        current = atomicSplit.Second!;
+                    }
+                    if (sliceFailed)
+                    {
+                        for (int c = 0; c < columnCount; c++)
+                        {
+                            segColChildren[c].Clear();
+                        }
+                    }
+                    else
+                    {
+                        segColChildren[columnCount - 1].Add(current);
+                        targetHeight = perColHeight;
+                        atomicBalanced = true;
+                    }
+                }
+            }
 
-                            if (splitAfter >= 0 && splitAfter < child.LineBoxes.Count - 1)
+            if (!atomicBalanced)
+            {
+                // Position-based column filling using BFC-computed positions
+                float segContentOriginY = tempBox.ContentRect.Y;
+                int curCol = 0;
+                float segColStartY = segContentOriginY;
+                bool segColHasContent = false;
+                foreach (var child in tempBox.Children)
+                {
+                    float childBottomY = child.BorderRect.Bottom;
+                    float heightInCol = childBottomY - segColStartY;
+
+                    if (segColHasContent && heightInCol > targetHeight && curCol < columnCount - 1)
+                    {
+                        // Try splitting at line boundary for balanced columns
+                        if (child.LineBoxes != null && child.LineBoxes.Count > 1)
+                        {
+                            float contentStartY = child.ContentRect.Y;
+                            float availableForLines = segColStartY + targetHeight - contentStartY;
+                            if (availableForLines > 0)
                             {
-                                var split = SplitBoxAtLine(child, splitAfter);
-                                if (split.IsValid)
+                                int splitAfter = -1;
+                                for (int li = 0; li < child.LineBoxes.Count; li++)
                                 {
-                                    segColChildren[curCol].Add(split.First!);
-                                    curCol++;
-                                    segColStartY = child.LineBoxes[splitAfter + 1].Y;
-                                    segColHasContent = true;
-                                    segColChildren[curCol].Add(split.Second!);
-                                    continue;
+                                    float lineBottom = child.LineBoxes[li].Y + child.LineBoxes[li].Height - contentStartY;
+                                    if (lineBottom <= availableForLines)
+                                    {
+                                        splitAfter = li;
+                                    }
+                                    else
+                                    {
+                                        break;
+                                    }
+                                }
+
+                                if (splitAfter >= 0 && splitAfter < child.LineBoxes.Count - 1)
+                                {
+                                    var split = SplitBoxAtLine(child, splitAfter);
+                                    if (split.IsValid)
+                                    {
+                                        segColChildren[curCol].Add(split.First!);
+                                        curCol++;
+                                        segColStartY = child.LineBoxes[splitAfter + 1].Y;
+                                        segColHasContent = true;
+                                        segColChildren[curCol].Add(split.Second!);
+                                        continue;
+                                    }
                                 }
                             }
                         }
+                        curCol++;
+                        segColStartY = child.BorderRect.Y;
+                        segColHasContent = false;
                     }
-                    curCol++;
-                    segColStartY = child.BorderRect.Y;
-                    segColHasContent = false;
+                    segColChildren[curCol].Add(child);
+                    segColHasContent = true;
                 }
-                segColChildren[curCol].Add(child);
-                segColHasContent = true;
             }
 
             float tallest = 0;
@@ -1637,11 +1720,61 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
+        /// [CSS-BREAK-3 §5.4] A "content-empty atomic" block — one that has no
+        /// child boxes and no line content of its own — qualifies for last-resort
+        /// atomic-balance treatment when it sits alone in an inner-multicol
+        /// segment that is being fragmented by an outer multicol. Such a block
+        /// renders only its own background/borders, so the visual result of
+        /// slicing it across columns is identical to letting it fill those
+        /// columns naturally; this lets us recover the otherwise wasted
+        /// inner-column space at the seam between outer columns. Monolithic
+        /// boxes are excluded because they refuse to be split.
+        /// <spec>CSS-BREAK-3 §5.4 https://drafts.csswg.org/css-break-3/#unforced-breaks</spec>
+        /// </summary>
+        private static bool IsContentEmptyAtomicNonMonolithic(LayoutBox box)
+        {
+            if (IsMonolithic(box))
+            {
+                return false;
+            }
+            if (box.Children != null && box.Children.Count > 0)
+            {
+                return false;
+            }
+            if (box.LineBoxes != null && box.LineBoxes.Count > 0)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
         /// Returns true when the box has a forced column break before it
         /// (<c>break-before: column</c>/<c>always</c>/<c>page</c>/left/right or
-        /// the legacy <c>page-break-before: always</c>/left/right).
+        /// the legacy <c>page-break-before: always</c>/left/right). Per
+        /// CSS-BREAK-3 §4.1.2, forced break values on the first in-flow child
+        /// propagate to the parent, so a break-before on a descendant that sits
+        /// at the start of its enclosing box becomes a break-before on that box.
+        /// <spec>CSS-BREAK-3 §4.1.2 https://drafts.csswg.org/css-break-3/#propagation-of-forced-breaks</spec>
         /// </summary>
         private static bool HasBreakBeforeForced(LayoutBox box)
+        {
+            if (HasOwnBreakBeforeForced(box))
+            {
+                return true;
+            }
+            if (box.Children != null && box.Children.Count > 0)
+            {
+                var firstChild = box.Children[0];
+                if (HasBreakBeforeForced(firstChild))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool HasOwnBreakBeforeForced(LayoutBox box)
         {
             var style = box.StyledNode?.Style;
             if (style == null)
@@ -1666,9 +1799,30 @@ namespace Rend.Layout.Internal
         /// <summary>
         /// Returns true when the box has a forced column break after it
         /// (<c>break-after: column</c>/<c>always</c>/<c>page</c>/left/right or
-        /// the legacy <c>page-break-after: always</c>/left/right).
+        /// the legacy <c>page-break-after: always</c>/left/right). Per
+        /// CSS-BREAK-3 §4.1.2, forced break values on the last in-flow child
+        /// propagate to the parent, so a break-after on a descendant that sits
+        /// at the end of its enclosing box becomes a break-after on that box.
+        /// <spec>CSS-BREAK-3 §4.1.2 https://drafts.csswg.org/css-break-3/#propagation-of-forced-breaks</spec>
         /// </summary>
         private static bool HasBreakAfterForced(LayoutBox box)
+        {
+            if (HasOwnBreakAfterForced(box))
+            {
+                return true;
+            }
+            if (box.Children != null && box.Children.Count > 0)
+            {
+                var lastChild = box.Children[box.Children.Count - 1];
+                if (HasBreakAfterForced(lastChild))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool HasOwnBreakAfterForced(LayoutBox box)
         {
             var style = box.StyledNode?.Style;
             if (style == null)

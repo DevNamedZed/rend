@@ -45,6 +45,17 @@ namespace Rend.Layout.Internal
         /// track sizes so the subgrid can inherit them.
         /// </summary>
         public ParentGridContext? ParentGridContext { get; set; }
+
+        /// <summary>
+        /// [CSS-BREAK-3 §5] Counts how deeply we are nested inside multi-column
+        /// fragmentation roots. <see cref="MultiColumnLayout"/> increments this on
+        /// entry and decrements on exit so a nested multicol can detect that it is
+        /// being fragmented by an ancestor (entry value &gt; 0) and permit
+        /// last-resort atomic balancing of content-empty blocks per
+        /// <c>CSS-BREAK-3 §5.4</c>, recovering the empty inner-column space that
+        /// would otherwise overflow the outer column at the seam.
+        /// </summary>
+        public int MultiColumnNestingDepth { get; set; }
     }
 
     /// <summary>

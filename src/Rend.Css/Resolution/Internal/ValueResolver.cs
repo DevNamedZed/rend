@@ -1264,6 +1264,8 @@ namespace Rend.Css.Resolution.Internal
                 case "uppercase": result = PropertyValue.FromKeyword((int)CssTextTransform.Uppercase); return true;
                 case "lowercase": result = PropertyValue.FromKeyword((int)CssTextTransform.Lowercase); return true;
                 case "capitalize": result = PropertyValue.FromKeyword((int)CssTextTransform.Capitalize); return true;
+                case "full-width": result = PropertyValue.FromKeyword((int)CssTextTransform.FullWidth); return true;
+                case "full-size-kana": result = PropertyValue.FromKeyword((int)CssTextTransform.FullSizeKana); return true;
                 default: return false;
             }
         }

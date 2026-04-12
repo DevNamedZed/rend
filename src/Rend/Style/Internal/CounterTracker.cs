@@ -175,6 +175,97 @@ namespace Rend.Style.Internal
                 _scopes.Pop();
         }
 
+        /// <summary>
+        /// Write a counter value into the innermost scope, regardless of whether
+        /// the counter already exists in an outer scope. Used for implicit resets
+        /// (e.g. <c>ol { counter-reset: list-item }</c>).
+        /// </summary>
+        public void ResetCounterInCurrentScope(string name, int value)
+        {
+            _scopes.Peek()[name] = value;
+        }
+
+        /// <summary>
+        /// Increment a counter in the innermost scope where it exists. Creates it
+        /// in the innermost scope with the delta as its starting value if not found.
+        /// </summary>
+        public void IncrementCounterInScope(string name, int delta)
+        {
+            foreach (var scope in _scopes)
+            {
+                if (scope.ContainsKey(name))
+                {
+                    scope[name] += delta;
+                    return;
+                }
+            }
+            _scopes.Peek()[name] = delta;
+        }
+
+        /// <summary>
+        /// Returns <c>true</c> if the element's <c>counter-reset</c> declaration
+        /// contains an entry for the given counter name.
+        /// </summary>
+        public static bool StyleHasCounterResetEntry(ComputedStyle style, string counterName)
+        {
+            return StyleHasCounterEntry(style, PropertyId.CounterReset, counterName);
+        }
+
+        /// <summary>
+        /// Returns <c>true</c> if the element's <c>counter-increment</c> declaration
+        /// contains an entry for the given counter name.
+        /// </summary>
+        public static bool StyleHasCounterIncrementEntry(ComputedStyle style, string counterName)
+        {
+            return StyleHasCounterEntry(style, PropertyId.CounterIncrement, counterName);
+        }
+
+        /// <summary>
+        /// Returns <c>true</c> if the element's <c>counter-set</c> declaration
+        /// contains an entry for the given counter name.
+        /// </summary>
+        public static bool StyleHasCounterSetEntry(ComputedStyle style, string counterName)
+        {
+            return StyleHasCounterEntry(style, PropertyId.CounterSet, counterName);
+        }
+
+        /// <summary>
+        /// Returns <c>true</c> if the element has any non-none counter-reset
+        /// entries.
+        /// </summary>
+        public static bool StyleHasAnyCounterReset(ComputedStyle style)
+        {
+            var raw = style.GetRefValue(PropertyId.CounterReset);
+            if (raw == null)
+            {
+                return false;
+            }
+            var entries = ParseCounterEntries(raw);
+            return entries != null && entries.Count > 0;
+        }
+
+        private static bool StyleHasCounterEntry(ComputedStyle style, int propertyId, string counterName)
+        {
+            var raw = style.GetRefValue(propertyId);
+            if (raw == null)
+            {
+                return false;
+            }
+            var entries = ParseCounterEntries(raw);
+            if (entries == null)
+            {
+                return false;
+            }
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (entries[i].name == counterName)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         private static string FormatValue(int value, string style)
         {
             switch (style)

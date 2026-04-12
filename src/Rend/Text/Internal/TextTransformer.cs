@@ -38,14 +38,17 @@ namespace Rend.Text.Internal
                 case CssTextTransform.Capitalize:
                     return Capitalize(text);
 
+                case CssTextTransform.FullWidth:
+                case CssTextTransform.FullSizeKana:
+
                 default:
                     return text;
             }
         }
 
         /// <summary>
-        /// Capitalizes the first letter of each word in the text.
-        /// A word boundary is detected when a whitespace character precedes a non-whitespace character.
+        /// [CSS-TEXT-3 §2.2] Capitalizes the first typographic letter unit of each word.
+        /// Non-letter characters (punctuation, symbols) do not consume the word-start state.
         /// </summary>
         private static string Capitalize(string text)
         {
@@ -61,20 +64,24 @@ namespace Rend.Text.Internal
                     sb.Append(ch);
                     atWordStart = true;
                 }
-                else if (atWordStart)
+                else if (char.IsHighSurrogate(ch) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
                 {
-                    // Check for surrogate pairs.
-                    if (char.IsHighSurrogate(ch) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+                    if (atWordStart && char.IsLetter(text, i))
                     {
-                        string pair = text.Substring(i, 2);
-                        string upper = pair.ToUpperInvariant();
+                        string upper = text.Substring(i, 2).ToUpperInvariant();
                         sb.Append(upper);
-                        i++; // Skip the low surrogate.
+                        atWordStart = false;
                     }
                     else
                     {
-                        sb.Append(char.ToUpperInvariant(ch));
+                        sb.Append(ch);
+                        sb.Append(text[i + 1]);
                     }
+                    i++;
+                }
+                else if (atWordStart && char.IsLetter(ch))
+                {
+                    sb.Append(char.ToUpperInvariant(ch));
                     atWordStart = false;
                 }
                 else
