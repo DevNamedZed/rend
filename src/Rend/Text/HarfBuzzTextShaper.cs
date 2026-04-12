@@ -93,10 +93,15 @@ namespace Rend.Text
 
             // Check for .notdef glyphs (glyph ID 0) that need font fallback.
             bool hasNotdef = false;
+            float notdefAdvance = 0;
             for (int i = 0; i < count; i++)
             {
                 if (glyphs[i].GlyphId == 0)
                 {
+                    if (!hasNotdef)
+                    {
+                        notdefAdvance = glyphs[i].XAdvance;
+                    }
                     hasNotdef = true;
                     break;
                 }
@@ -109,7 +114,7 @@ namespace Rend.Text
             // Guard with try-catch — SKFontManager may not work in all environments (e.g., WASM).
             try
             {
-                return ShapeWithFallback(glyphs, count, text, fontSize, fontData);
+                return ShapeWithFallback(glyphs, count, text, fontSize, fontData, notdefAdvance);
             }
             catch
             {
@@ -119,7 +124,7 @@ namespace Rend.Text
             }
         }
 
-        private ShapedTextRun ShapeWithFallback(ShapedGlyph[] glyphs, int count, string text, float fontSize, byte[] fontData)
+        private ShapedTextRun ShapeWithFallback(ShapedGlyph[] glyphs, int count, string text, float fontSize, byte[] fontData, float notdefAdvance)
         {
             var fontOverrides = new byte[]?[count];
             int i2 = 0;
@@ -201,10 +206,19 @@ namespace Rend.Text
                         for (int j = 0; j < fbInfos.Length; j++)
                         {
                             int idx = rangeStart + j;
+                            int ci = (int)glyphs[idx].Cluster;
+                            float advance = fbPositions[j].XAdvance / fixedPointScale;
+                            // [CSS-TEXT-3 §4.1.3] Space separators (Zs) use primary font's
+                            // advance, not fallback. Chrome shapes all chars with the
+                            // declared font; space width must match for correct wrapping.
+                            if (ci < text.Length && IsUnicodeSpaceSeparator(text[ci]))
+                            {
+                                advance = notdefAdvance;
+                            }
                             glyphs[idx] = new ShapedGlyph(
                                 glyphId: fbInfos[j].Codepoint,
                                 cluster: glyphs[idx].Cluster,
-                                xAdvance: fbPositions[j].XAdvance / fixedPointScale,
+                                xAdvance: advance,
                                 yAdvance: fbPositions[j].YAdvance / fixedPointScale,
                                 xOffset: fbPositions[j].XOffset / fixedPointScale,
                                 yOffset: fbPositions[j].YOffset / fixedPointScale
@@ -226,10 +240,16 @@ namespace Rend.Text
                         for (int j = 0; j < fbInfos.Length; j++)
                         {
                             uint cluster = (uint)(textStart + (int)fbInfos[j].Cluster);
+                            float advance = fbPositions[j].XAdvance / fixedPointScale;
+                            int ci = (int)cluster;
+                            if (ci < text.Length && IsUnicodeSpaceSeparator(text[ci]))
+                            {
+                                advance = notdefAdvance;
+                            }
                             newGlyphs[rangeStart + j] = new ShapedGlyph(
                                 glyphId: fbInfos[j].Codepoint,
                                 cluster: cluster,
-                                xAdvance: fbPositions[j].XAdvance / fixedPointScale,
+                                xAdvance: advance,
                                 yAdvance: fbPositions[j].YAdvance / fixedPointScale,
                                 xOffset: fbPositions[j].XOffset / fixedPointScale,
                                 yOffset: fbPositions[j].YOffset / fixedPointScale
@@ -387,6 +407,13 @@ namespace Rend.Text
             char c3 = script[3];
             uint tag = (uint)((c0 << 24) | (c1 << 16) | (c2 << 8) | c3);
             return (Script)tag;
+        }
+
+        private static bool IsUnicodeSpaceSeparator(char ch)
+        {
+            return ch == '\u0020' || ch == '\u00A0' || ch == '\u1680' ||
+                   (ch >= '\u2000' && ch <= '\u200A') ||
+                   ch == '\u202F' || ch == '\u205F' || ch == '\u3000';
         }
 
         public void Dispose()

@@ -645,20 +645,27 @@ namespace Rend.Rendering.Internal
                 string dir = dirKw.Keyword;
                 if (dir == "to")
                 {
-                    // "to" followed by direction keywords
+                    // [CSS-IMAGES4 §3.1] "to" followed by direction keywords; stop at "in" (color interpolation)
                     string direction = "";
                     for (int i = 1; i < fn.Arguments.Count; i++)
                     {
-                        if (fn.Arguments[i] is CssKeywordValue kw2)
+                        if (fn.Arguments[i] is CssKeywordValue kw2 && kw2.Keyword != "in")
                         {
                             direction += kw2.Keyword + " ";
                             colorStartIdx = i + 1;
                         }
-                        else break;
+                        else
+                        {
+                            break;
+                        }
                     }
                     angle = DirectionToAngle(direction.Trim(), rect.Width, rect.Height);
                 }
             }
+
+            // [CSS-IMAGES4 §3] Parse optional color interpolation method
+            TryParseColorInterpolationMethod(fn.Arguments, ref colorStartIdx,
+                out string? colorSpace, out string? hueMethod);
 
             // Compute gradient line length for resolving px stop positions
             float angleRad = angle * (float)(Math.PI / 180.0);
@@ -669,7 +676,12 @@ namespace Rend.Rendering.Internal
             var stops = ParseColorStops(fn.Arguments, colorStartIdx, gradientLineLength, _currentColor);
             if (stops == null || stops.Length < 2) return null;
 
-            return new GradientInfo(GradientType.Linear, stops) { Angle = angle };
+            return new GradientInfo(GradientType.Linear, stops)
+            {
+                Angle = angle,
+                ColorInterpolationSpace = colorSpace,
+                HueInterpolationMethod = hueMethod
+            };
         }
 
         private static GradientInfo? ParseRadialGradient(CssFunctionValue fn, RectF rect)
@@ -840,6 +852,10 @@ namespace Rend.Rendering.Internal
                 gradientRadius = Math.Max(erxAbs, eryAbs);
             }
 
+            // [CSS-IMAGES4 §3] Parse optional color interpolation method
+            TryParseColorInterpolationMethod(fn.Arguments, ref colorStartIdx,
+                out string? colorSpace, out string? hueMethod);
+
             var stops = ParseColorStops(fn.Arguments, colorStartIdx, gradientRadius, _currentColor);
             if (stops == null || stops.Length < 2) return null;
 
@@ -847,7 +863,9 @@ namespace Rend.Rendering.Internal
             {
                 Center = new Core.Values.PointF(centerX, centerY),
                 RadiusX = rx,
-                RadiusY = ry
+                RadiusY = ry,
+                ColorInterpolationSpace = colorSpace,
+                HueInterpolationMethod = hueMethod
             };
         }
 
@@ -938,13 +956,19 @@ namespace Rend.Rendering.Internal
                 }
             }
 
+            // [CSS-IMAGES4 §3] Parse optional color interpolation method
+            TryParseColorInterpolationMethod(fn.Arguments, ref colorStartIdx,
+                out string? colorSpace, out string? hueMethod);
+
             var stops = ParseColorStops(fn.Arguments, colorStartIdx, 0, _currentColor, isConic: true);
             if (stops == null || stops.Length < 2) return null;
 
             return new GradientInfo(GradientType.Conic, stops)
             {
                 Angle = fromAngle,
-                Center = new Core.Values.PointF(centerX, centerY)
+                Center = new Core.Values.PointF(centerX, centerY),
+                ColorInterpolationSpace = colorSpace,
+                HueInterpolationMethod = hueMethod
             };
         }
 
@@ -978,6 +1002,55 @@ namespace Rend.Rendering.Internal
                     return a < 0 ? a + 360f : a;
                 }
                 default: return 180;
+            }
+        }
+
+        /// <summary>
+        /// [CSS-IMAGES4 §3] Parses "in &lt;colorspace&gt; [longer|shorter|increasing|decreasing] hue".
+        /// </summary>
+        private static void TryParseColorInterpolationMethod(
+            System.Collections.Generic.IReadOnlyList<CssValue> args, ref int index,
+            out string? colorSpace, out string? hueMethod)
+        {
+            colorSpace = null;
+            hueMethod = null;
+
+            if (index >= args.Count)
+            {
+                return;
+            }
+
+            if (!(args[index] is CssKeywordValue inKw && inKw.Keyword == "in"))
+            {
+                return;
+            }
+
+            index++;
+            if (index >= args.Count || !(args[index] is CssKeywordValue spaceKw))
+            {
+                return;
+            }
+
+            colorSpace = spaceKw.Keyword;
+            index++;
+
+            if (index >= args.Count || !(args[index] is CssKeywordValue methodKw))
+            {
+                return;
+            }
+
+            string method = methodKw.Keyword;
+            if (method == "shorter" || method == "longer"
+                || method == "increasing" || method == "decreasing")
+            {
+                hueMethod = method;
+                index++;
+
+                if (index < args.Count && args[index] is CssKeywordValue hueKw
+                    && hueKw.Keyword == "hue")
+                {
+                    index++;
+                }
             }
         }
 

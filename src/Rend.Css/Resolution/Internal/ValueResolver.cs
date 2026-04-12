@@ -109,7 +109,9 @@ namespace Rend.Css.Resolution.Internal
                     if (TryResolveNumber(value, out result))
                     {
                         // [CSS-FLEXBOX §7.2/§7.3] flex-grow and flex-shrink must be non-negative.
-                        if ((prop.Id == PropertyId.FlexGrow || prop.Id == PropertyId.FlexShrink)
+                        // [CSS-TEXT-3 §5.3] tab-size must be non-negative.
+                        if ((prop.Id == PropertyId.FlexGrow || prop.Id == PropertyId.FlexShrink
+                             || prop.Id == PropertyId.TabSize)
                             && result.FloatValue < 0)
                         {
                             result = default;

@@ -38,6 +38,18 @@ namespace Rend.Rendering
         public RectF? PositioningBounds { get; set; }
 
         /// <summary>
+        /// [CSS-COLOR4 §12] Color interpolation space for gradient stops (e.g., "hsl", "lch", "oklch").
+        /// When null, defaults to sRGB (Skia native interpolation).
+        /// </summary>
+        public string? ColorInterpolationSpace { get; set; }
+
+        /// <summary>
+        /// [CSS-COLOR4 §12.1] Hue interpolation method for polar color spaces.
+        /// One of "shorter" (default), "longer", "increasing", "decreasing".
+        /// </summary>
+        public string? HueInterpolationMethod { get; set; }
+
+        /// <summary>
         /// Creates a new <see cref="GradientInfo"/> with default values.
         /// </summary>
         public GradientInfo()

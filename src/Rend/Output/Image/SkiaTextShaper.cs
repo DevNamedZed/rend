@@ -157,10 +157,15 @@ namespace Rend.Output.Image
 
                     // Check for .notdef glyphs (glyph ID 0) that need font fallback.
                     bool hasNotdef = false;
+                    float notdefAdvance = 0;
                     for (int i = 0; i < count; i++)
                     {
                         if (glyphs[i].GlyphId == 0)
                         {
+                            if (!hasNotdef)
+                            {
+                                notdefAdvance = glyphs[i].XAdvance;
+                            }
                             hasNotdef = true;
                             break;
                         }
@@ -211,10 +216,23 @@ namespace Rend.Output.Image
                         }
 
                         // Find the contiguous range of .notdef glyphs that this fallback covers.
+                        // Only group characters that the SAME fallback font can handle.
                         int rangeStart = i2;
-                        int rangeEnd = i2;
+                        int rangeEnd = i2 + 1;
                         while (rangeEnd < count && glyphs[rangeEnd].GlyphId == 0)
                         {
+                            int nextCharIdx = (int)glyphs[rangeEnd].Cluster;
+                            if (nextCharIdx < text.Length)
+                            {
+                                int nextCp = char.IsHighSurrogate(text[nextCharIdx]) && nextCharIdx + 1 < text.Length
+                                    ? char.ConvertToUtf32(text[nextCharIdx], text[nextCharIdx + 1])
+                                    : text[nextCharIdx];
+                                using var probe = SKFontManager.Default.MatchCharacter(nextCp);
+                                if (probe == null || probe.FamilyName != fallbackTypeface.FamilyName)
+                                {
+                                    break;
+                                }
+                            }
                             rangeEnd++;
                         }
 
@@ -255,10 +273,19 @@ namespace Rend.Output.Image
                             for (int j = 0; j < fbInfos.Length; j++)
                             {
                                 int idx = rangeStart + j;
+                                int ci = (int)glyphs[idx].Cluster;
+                                float advance = fbPositions[j].XAdvance / scale;
+                                // [CSS-TEXT-3 §4.1.3] Space separators (Zs) use primary font's
+                                // advance, not fallback. Chrome shapes all chars with the
+                                // declared font; space width must match for correct wrapping.
+                                if (ci < text.Length && IsUnicodeSpaceSeparator(text[ci]))
+                                {
+                                    advance = notdefAdvance;
+                                }
                                 glyphs[idx] = new ShapedGlyph(
                                     glyphId: fbInfos[j].Codepoint,
                                     cluster: glyphs[idx].Cluster,
-                                    xAdvance: fbPositions[j].XAdvance / scale,
+                                    xAdvance: advance,
                                     yAdvance: fbPositions[j].YAdvance / scale,
                                     xOffset: fbPositions[j].XOffset / scale,
                                     yOffset: fbPositions[j].YOffset / scale
@@ -281,10 +308,16 @@ namespace Rend.Output.Image
                             for (int j = 0; j < fbInfos.Length; j++)
                             {
                                 uint cluster = (uint)(textStart + (int)fbInfos[j].Cluster);
+                                float advance = fbPositions[j].XAdvance / scale;
+                                int ci = (int)cluster;
+                                if (ci < text.Length && IsUnicodeSpaceSeparator(text[ci]))
+                                {
+                                    advance = notdefAdvance;
+                                }
                                 newGlyphs[rangeStart + j] = new ShapedGlyph(
                                     glyphId: fbInfos[j].Codepoint,
                                     cluster: cluster,
-                                    xAdvance: fbPositions[j].XAdvance / scale,
+                                    xAdvance: advance,
                                     yAdvance: fbPositions[j].YAdvance / scale,
                                     xOffset: fbPositions[j].XOffset / scale,
                                     yOffset: fbPositions[j].YOffset / scale
@@ -471,6 +504,13 @@ namespace Rend.Output.Image
                 }
                 throw;
             }
+        }
+
+        private static bool IsUnicodeSpaceSeparator(char ch)
+        {
+            return ch == '\u0020' || ch == '\u00A0' || ch == '\u1680' ||
+                   (ch >= '\u2000' && ch <= '\u200A') ||
+                   ch == '\u202F' || ch == '\u205F' || ch == '\u3000';
         }
 
         public void Dispose()

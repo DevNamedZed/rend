@@ -67,7 +67,23 @@ namespace Rend
                 pdfTarget.SetFontProvider(fontProvider);
             }
 
-            // 5. Set up style resolver
+            // 5. Create or reuse text shaper (before style resolver so ch unit can use shaped advances)
+            bool ownsTextShaper = false;
+            var textShaper = _options.TextShaper;
+            if (textShaper == null)
+            {
+                textShaper = new HarfBuzzTextShaper();
+                ownsTextShaper = true;
+            }
+
+            // Wire font provider into text shaper for character-level fallback
+            // (needed in WASM where SKFontManager has no system fonts)
+            if (textShaper is Text.HarfBuzzTextShaper harfBuzzShaper)
+            {
+                harfBuzzShaper.FallbackFontProvider = fontProvider;
+            }
+
+            // 6. Set up style resolver
             var selectorMatcher = new SelectorMatcherAdapter();
             var resolverOptions = new StyleResolverOptions
             {
@@ -79,13 +95,11 @@ namespace Rend
                 PrefersColorSchemeDark = _options.PrefersColorSchemeDark,
                 PrefersReducedMotion = true,
                 MeasureCharWidth = (families, fontSize, codePoint) =>
-                    fontProvider.MeasureCharWidth(
-                        new Fonts.FontDescriptor(families),
-                        codePoint, fontSize)
+                    MeasureCharWidthShaped(fontProvider, textShaper, families, fontSize, codePoint)
             };
             var styleResolver = new StyleResolver(selectorMatcher, resolverOptions);
 
-            // 6. Build styled tree
+            // 7. Build styled tree
             progress?.Report(new RenderProgress(30, RenderStage.Styling, "Resolving styles"));
             var treeBuilder = new StyleTreeBuilder(styleResolver, fontProvider);
             var styledTree = treeBuilder.Build(document, stylesheets);
@@ -97,23 +111,8 @@ namespace Rend
             styledTree.PageStyle.MarginBottom = _options.MarginBottom;
             styledTree.PageStyle.MarginLeft = _options.MarginLeft;
 
-            // 7. Create or reuse text shaper
-            bool ownsTextShaper = false;
-            var textShaper = _options.TextShaper;
-            if (textShaper == null)
-            {
-                textShaper = new HarfBuzzTextShaper();
-                ownsTextShaper = true;
-            }
-
             try
             {
-                // Wire font provider into text shaper for character-level fallback
-                // (needed in WASM where SKFontManager has no system fonts)
-                if (textShaper is Text.HarfBuzzTextShaper harfBuzzShaper)
-                {
-                    harfBuzzShaper.FallbackFontProvider = fontProvider;
-                }
 
                 // 8. Layout
                 progress?.Report(new RenderProgress(50, RenderStage.Layout, "Computing layout"));
@@ -230,7 +229,22 @@ namespace Rend
                 pdfTarget.SetFontProvider(fontProvider);
             }
 
-            // 5. Set up style resolver
+            // 5. Create or reuse text shaper (before style resolver so ch unit can use shaped advances)
+            bool ownsTextShaperAsync = false;
+            var textShaper = _options.TextShaper;
+            if (textShaper == null)
+            {
+                textShaper = new HarfBuzzTextShaper();
+                ownsTextShaperAsync = true;
+            }
+
+            // Wire font provider into text shaper for character-level fallback
+            if (textShaper is Text.HarfBuzzTextShaper harfBuzzShaper2)
+            {
+                harfBuzzShaper2.FallbackFontProvider = fontProvider;
+            }
+
+            // 6. Set up style resolver
             var selectorMatcher = new SelectorMatcherAdapter();
             var resolverOptions = new StyleResolverOptions
             {
@@ -242,13 +256,11 @@ namespace Rend
                 PrefersColorSchemeDark = _options.PrefersColorSchemeDark,
                 PrefersReducedMotion = true,
                 MeasureCharWidth = (families, fontSize, codePoint) =>
-                    fontProvider.MeasureCharWidth(
-                        new Fonts.FontDescriptor(families),
-                        codePoint, fontSize)
+                    MeasureCharWidthShaped(fontProvider, textShaper, families, fontSize, codePoint)
             };
             var styleResolver = new StyleResolver(selectorMatcher, resolverOptions);
 
-            // 6. Build styled tree
+            // 7. Build styled tree
             progress?.Report(new RenderProgress(30, RenderStage.Styling, "Resolving styles"));
             cancellationToken.ThrowIfCancellationRequested();
             var treeBuilder = new StyleTreeBuilder(styleResolver, fontProvider);
@@ -261,22 +273,8 @@ namespace Rend
             styledTree.PageStyle.MarginBottom = _options.MarginBottom;
             styledTree.PageStyle.MarginLeft = _options.MarginLeft;
 
-            // 7. Create or reuse text shaper
-            bool ownsTextShaperAsync = false;
-            var textShaper = _options.TextShaper;
-            if (textShaper == null)
-            {
-                textShaper = new HarfBuzzTextShaper();
-                ownsTextShaperAsync = true;
-            }
-
             try
             {
-                // Wire font provider into text shaper for character-level fallback
-                if (textShaper is Text.HarfBuzzTextShaper harfBuzzShaper2)
-                {
-                    harfBuzzShaper2.FallbackFontProvider = fontProvider;
-                }
 
                 // 8. Layout
                 progress?.Report(new RenderProgress(50, RenderStage.Layout, "Computing layout"));
@@ -373,6 +371,31 @@ namespace Rend
             }
 
             return collection;
+        }
+
+        /// <summary>
+        /// [CSS-VALUES-4 §6.1] Measures the advance width of a character using the text shaper.
+        /// Chrome uses shaped advances (with hinting) for the ch unit, not raw OpenType metrics.
+        /// </summary>
+        private static float MeasureCharWidthShaped(
+            IFontProvider fontProvider, ITextShaper textShaper,
+            string[] families, float fontSize, int codePoint)
+        {
+            var descriptor = new FontDescriptor(families);
+            FontEntry? entry = fontProvider.ResolveFont(descriptor);
+            if (entry == null)
+            {
+                return fontSize * 0.5f;
+            }
+
+            string charText = char.ConvertFromUtf32(codePoint);
+            var shapedRun = textShaper.Shape(charText, entry.FontData, fontSize);
+            if (shapedRun.Glyphs.Length > 0 && shapedRun.TotalWidth > 0)
+            {
+                return shapedRun.TotalWidth;
+            }
+
+            return entry.GetCharWidth(codePoint, fontSize);
         }
 
         private static string GetFormat(IRenderTarget target)

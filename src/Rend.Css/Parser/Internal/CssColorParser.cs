@@ -347,7 +347,8 @@ namespace Rend.Css.Parser.Internal
         /// <summary>
         /// [CSS-COLOR5 §2.1] Mix two colors in the specified interpolation space.
         /// </summary>
-        private static CssColor MixInSpace(string space, CssColor c1, float p1, CssColor c2, float p2)
+        internal static CssColor MixInSpace(string space, CssColor c1, float p1, CssColor c2, float p2,
+            string? hueMethod = null)
         {
             float alpha = c1.A / 255f * p1 + c2.A / 255f * p2;
 
@@ -368,7 +369,7 @@ namespace Rend.Css.Parser.Internal
                 {
                     SrgbToLch(c1, out float l1, out float ch1, out float h1);
                     SrgbToLch(c2, out float l2, out float ch2, out float h2);
-                    float hue = InterpolateHueShorter(h1, h2, p1, p2);
+                    float hue = InterpolateHue(h1, h2, p1, p2, hueMethod);
                     return CssColor.FromLch(
                         l1 * p1 + l2 * p2,
                         ch1 * p1 + ch2 * p2,
@@ -391,7 +392,7 @@ namespace Rend.Css.Parser.Internal
                 {
                     SrgbToOklch(c1, out float l1, out float ch1, out float h1);
                     SrgbToOklch(c2, out float l2, out float ch2, out float h2);
-                    float hue = InterpolateHueShorter(h1, h2, p1, p2);
+                    float hue = InterpolateHue(h1, h2, p1, p2, hueMethod);
                     return CssColor.FromOklch(
                         l1 * p1 + l2 * p2,
                         ch1 * p1 + ch2 * p2,
@@ -403,7 +404,7 @@ namespace Rend.Css.Parser.Internal
                 {
                     SrgbToHsl(c1, out float h1, out float s1, out float l1);
                     SrgbToHsl(c2, out float h2, out float s2, out float l2);
-                    float hue = InterpolateHueShorter(h1, h2, p1, p2);
+                    float hue = InterpolateHue(h1, h2, p1, p2, hueMethod);
                     return CssColor.FromHsl(
                         hue,
                         s1 * p1 + s2 * p2,
@@ -415,7 +416,7 @@ namespace Rend.Css.Parser.Internal
                 {
                     SrgbToHwb(c1, out float h1, out float w1, out float bk1);
                     SrgbToHwb(c2, out float h2, out float w2, out float bk2);
-                    float hue = InterpolateHueShorter(h1, h2, p1, p2);
+                    float hue = InterpolateHue(h1, h2, p1, p2, hueMethod);
                     return CssColor.FromHwb(
                         hue,
                         w1 * p1 + w2 * p2,
@@ -432,7 +433,25 @@ namespace Rend.Css.Parser.Internal
         }
 
         /// <summary>
-        /// [CSS-COLOR5 §12.1] Shorter hue interpolation.
+        /// [CSS-COLOR4 §12.1] Dispatch hue interpolation by method name.
+        /// </summary>
+        private static float InterpolateHue(float h1, float h2, float p1, float p2, string? method)
+        {
+            switch (method)
+            {
+                case "longer":
+                    return InterpolateHueLonger(h1, h2, p1, p2);
+                case "increasing":
+                    return InterpolateHueIncreasing(h1, h2, p1, p2);
+                case "decreasing":
+                    return InterpolateHueDecreasing(h1, h2, p1, p2);
+                default:
+                    return InterpolateHueShorter(h1, h2, p1, p2);
+            }
+        }
+
+        /// <summary>
+        /// [CSS-COLOR4 §12.1] Shorter hue interpolation.
         /// </summary>
         private static float InterpolateHueShorter(float h1, float h2, float p1, float p2)
         {
@@ -444,6 +463,50 @@ namespace Rend.Css.Parser.Internal
             else if (diff < -180f)
             {
                 h2 += 360f;
+            }
+            float result = h1 * p1 + h2 * p2;
+            return ((result % 360f) + 360f) % 360f;
+        }
+
+        /// <summary>
+        /// [CSS-COLOR4 §12.1] Longer hue interpolation — takes the longer arc around the hue circle.
+        /// </summary>
+        private static float InterpolateHueLonger(float h1, float h2, float p1, float p2)
+        {
+            float diff = h2 - h1;
+            if (diff > 0f && diff < 180f)
+            {
+                h1 += 360f;
+            }
+            else if (diff > -180f && diff <= 0f)
+            {
+                h2 += 360f;
+            }
+            float result = h1 * p1 + h2 * p2;
+            return ((result % 360f) + 360f) % 360f;
+        }
+
+        /// <summary>
+        /// [CSS-COLOR4 §12.1] Increasing hue interpolation — hue always increases.
+        /// </summary>
+        private static float InterpolateHueIncreasing(float h1, float h2, float p1, float p2)
+        {
+            if (h2 < h1)
+            {
+                h2 += 360f;
+            }
+            float result = h1 * p1 + h2 * p2;
+            return ((result % 360f) + 360f) % 360f;
+        }
+
+        /// <summary>
+        /// [CSS-COLOR4 §12.1] Decreasing hue interpolation — hue always decreases.
+        /// </summary>
+        private static float InterpolateHueDecreasing(float h1, float h2, float p1, float p2)
+        {
+            if (h1 < h2)
+            {
+                h1 += 360f;
             }
             float result = h1 * p1 + h2 * p2;
             return ((result % 360f) + 360f) % 360f;

@@ -1080,7 +1080,7 @@ namespace Rend.Layout.Internal
             context.FloatContext = prevFloatCtx;
         }
 
-        private static LayoutBox CreateLayoutBox(StyledElement element)
+        internal static LayoutBox CreateLayoutBox(StyledElement element)
         {
             var display = element.Style.Display;
             BoxType boxType;
@@ -1161,7 +1161,11 @@ namespace Rend.Layout.Internal
                         }
                         else
                         {
+                            // [CSS2 §9.5] Scope float context to this box's content rect.
+                            var prevFloatCtx = context.FloatContext;
+                            context.FloatContext = new FloatContext(box.ContentRect.X, box.ContentRect.Width);
                             InlineFormattingContext.Layout(box, context);
+                            context.FloatContext = prevFloatCtx;
                         }
                     }
                     break;
@@ -1182,7 +1186,15 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
+                        // [CSS2 §9.5] When the container has only inline-level content
+                        // (possibly including floats), we still need a float context scoped
+                        // to this container's content rect so floated children are placed
+                        // relative to this element's edges (not the inherited outer BFC).
+                        // Mirrors the FloatContext creation in Layout() above.
+                        var prevFloatCtx = context.FloatContext;
+                        context.FloatContext = new FloatContext(box.ContentRect.X, box.ContentRect.Width);
                         InlineFormattingContext.Layout(box, context);
+                        context.FloatContext = prevFloatCtx;
                     }
                     break;
             }
@@ -1220,7 +1232,10 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < element.Children.Count; i++)
             {
                 var child = element.Children[i];
-                if (child.IsText) continue;
+                if (child.IsText)
+                {
+                    continue;
+                }
                 // [CSS2 §12.1] Pseudo-elements with block-level display count as block children.
                 if (child is StyledPseudoElement pseudoChild)
                 {
@@ -1233,11 +1248,23 @@ namespace Rend.Layout.Internal
                     continue;
                 }
                 var childElement = (StyledElement)child;
-                var display = childElement.Style.Display;
+                var childStyle = childElement.Style;
+                // [CSS2 §9.5] Floated elements are out of flow and do not affect whether
+                // the container establishes a block formatting context. Only in-flow
+                // block-level children force BFC vs IFC. Abspos children still count here
+                // because IFC has no generic abspos handling path; BFC picks them up instead.
+                if (childStyle.Float != CssFloat.None)
+                {
+                    continue;
+                }
+                var display = childStyle.Display;
                 // display:contents — look through its children
                 if (display == CssDisplay.Contents)
                 {
-                    if (HasBlockChildren(childElement)) return true;
+                    if (HasBlockChildren(childElement))
+                    {
+                        return true;
+                    }
                     continue;
                 }
                 if (display == CssDisplay.Block || display == CssDisplay.FlowRoot ||
@@ -1245,7 +1272,9 @@ namespace Rend.Layout.Internal
                     display == CssDisplay.Grid ||
                     display == CssDisplay.Table ||
                     display == CssDisplay.ListItem)
+                {
                     return true;
+                }
             }
             return false;
         }

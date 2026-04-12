@@ -366,6 +366,18 @@ namespace Rend.Layout.Internal
                         continue;
                     }
 
+                    // [CSS2 §9.5] Floated child inside an inline formatting context: the
+                    // float is placed at the containing block edge, and the current line
+                    // is shortened to make room for the float's margin box. Earlier inline
+                    // content on the current line is shifted along with the line origin.
+                    if (childElement.Style.Float != CssFloat.None && floatCtx != null)
+                    {
+                        LayoutFloatChild(childElement, context, ref cursorX, ref cursorY,
+                                         ref startX, ref containingWidth, ref currentLine,
+                                         parent, floatCtx);
+                        continue;
+                    }
+
                     if (childElement.Style.Display == CssDisplay.InlineBlock ||
                         childElement.Style.Display == CssDisplay.InlineFlex ||
                         childElement.Style.Display == CssDisplay.InlineGrid ||
@@ -767,15 +779,15 @@ namespace Rend.Layout.Internal
             text = WhitespaceCollapser.Collapse(text, style.WhiteSpace);
             if (string.IsNullOrEmpty(text)) return;
 
-            // Expand tab characters in pre/pre-wrap modes using tab-size property.
+            // [CSS-TEXT-3 §5.3] Expand tab characters in pre/pre-wrap modes using tab-size.
             if (text.IndexOf('\t') >= 0 &&
                 (style.WhiteSpace == CssWhiteSpace.Pre ||
                  style.WhiteSpace == CssWhiteSpace.PreWrap ||
                  style.WhiteSpace == CssWhiteSpace.BreakSpaces))
             {
                 int tabSize = (int)style.TabSize;
-                if (tabSize <= 0) tabSize = 8;
-                text = text.Replace("\t", new string(' ', tabSize));
+                if (tabSize < 0) { tabSize = 8; }
+                text = text.Replace("\t", tabSize > 0 ? new string(' ', tabSize) : string.Empty);
             }
 
             // Apply text-transform
@@ -1535,6 +1547,55 @@ namespace Rend.Layout.Internal
                 cursorX += wordWidth;
                 UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, lineHeight, ascent);
             }
+        }
+
+        /// <summary>
+        /// <spec>CSS2 §9.5 https://www.w3.org/TR/CSS21/visuren.html#floats</spec>
+        /// Places a floated child discovered in the middle of an inline formatting
+        /// context. The float is sized and positioned via <see cref="FloatLayout.PlaceFloat"/>,
+        /// registered with the float context, and the current line's origin is shifted
+        /// so any already-laid-out inline fragments are effectively pushed past the
+        /// float's margin box.
+        /// </summary>
+        private static void LayoutFloatChild(
+            StyledElement element, LayoutContext context,
+            ref float cursorX, ref float cursorY,
+            ref float startX, ref float containingWidth,
+            ref LineBox currentLine, LayoutBox parent,
+            FloatContext floatCtx)
+        {
+            var floatBox = BlockFormattingContext.CreateLayoutBox(element);
+            // [CSS2 §9.5.1] Rule 6: float outer top must not be higher than the top
+            // of any line-box containing earlier content. Align the float's starting
+            // Y with the current line's top.
+            floatCtx.CurrentY = currentLine.Y;
+            FloatLayout.PlaceFloat(floatBox, floatCtx, parent, context);
+            parent.AddChild(floatBox);
+
+            // Current and subsequent line boxes are shortened to make room for the
+            // float's margin box. Shifting LineBox.X moves all previously-placed
+            // fragments along with it, which matches Chrome's behavior of placing a
+            // left float at the containing block edge and flowing preceding inline
+            // content past it on the same line.
+            float newLeft = floatCtx.GetLeftEdge(currentLine.Y, 0);
+            float newRight = floatCtx.GetRightEdge(currentLine.Y, 0);
+            if (element.Style.Float == CssFloat.Left && newLeft > currentLine.X)
+            {
+                float deltaX = newLeft - currentLine.X;
+                currentLine.X = newLeft;
+                cursorX += deltaX;
+            }
+            if (newLeft > startX)
+            {
+                startX = newLeft;
+            }
+            float newWidth = newRight - startX;
+            if (newWidth < 0)
+            {
+                newWidth = 0;
+            }
+            containingWidth = newWidth;
+            currentLine.Width = newWidth;
         }
 
         private static void LayoutInlineBlock(
@@ -2395,11 +2456,14 @@ namespace Rend.Layout.Internal
                 contentWidth = Math.Max(contentWidth, fragRight);
             }
 
-            // CSS Text Module Level 3 §4.1.1: trailing whitespace "hangs" off the end
-            // of the line — its advance width is excluded from content width for alignment.
-            // [CSS-TEXT-3 §4.1.3] break-spaces: trailing spaces take up space (no hanging).
+            // [CSS-TEXT-3 §4.1.1] Trailing whitespace handling per white-space mode:
+            //   pre: whitespace preserved, no hanging — contributes to content width
+            //   break-spaces: same as pre — trailing spaces take up space
+            //   pre-wrap: trailing spaces hang beyond line box
+            //   normal/nowrap/pre-line: trailing spaces removed (already collapsed)
             float trailingWhitespaceWidth = 0;
-            bool skipTrailingHang = whiteSpace == CssWhiteSpace.BreakSpaces;
+            bool skipTrailingHang = whiteSpace == CssWhiteSpace.BreakSpaces
+                                || whiteSpace == CssWhiteSpace.Pre;
             for (int i = line.Fragments.Count - 1; i >= 0; i--)
             {
                 var frag = line.Fragments[i];

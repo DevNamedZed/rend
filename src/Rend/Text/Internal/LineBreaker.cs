@@ -174,8 +174,9 @@ namespace Rend.Text.Internal
                     continue;
                 }
 
-                // Rule: CJK ideographs can break before and after.
-                if (IsCjkIdeograph(current) || IsCjkIdeograph(next))
+                // [UAX #14 LB21a] Ideographic (ID) characters can break before and after.
+                // This covers CJK ideographs, hiragana, katakana, and other ID-class chars.
+                if (IsIdeographic(current) || IsIdeographic(next))
                 {
                     // [UAX #14 LB13] Do not break before closing punctuation, exclamation,
                     // infix separators, symbols, or non-starters.
@@ -232,11 +233,9 @@ namespace Rend.Text.Internal
                    ch == '\u3000';
         }
 
-        private static bool IsCjkIdeograph(char ch)
+        private static bool IsIdeographic(char ch)
         {
-            return (ch >= 0x3400 && ch <= 0x4DBF) ||
-                   (ch >= 0x4E00 && ch <= 0x9FFF) ||
-                   (ch >= 0xF900 && ch <= 0xFAFF);
+            return LineBreakClassifier.GetClass(ch) == LineBreakClass.ID;
         }
 
         /// <summary>

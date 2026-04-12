@@ -273,6 +273,11 @@ namespace Rend.Css.Resolution.Internal
             // the visible axis computes to auto.
             PropagateOverflow(values);
 
+            // [CSS2 §9.7] Floated elements have their display property blockified
+            // (inline → block, inline-flex → flex, etc.) so they participate in
+            // block-level layout rather than inline layout.
+            BlockifyForFloatAndOutOfFlow(values);
+
             return new ComputedStyle(values, refValues, customProperties);
         }
 
@@ -320,9 +325,29 @@ namespace Rend.Css.Resolution.Internal
         internal static CssValue SubstituteVar(CssValue value,
             Dictionary<string, CssValue>? customProperties)
         {
-            if (value is CssFunctionValue fn && fn.Name == "var")
+            if (value is CssFunctionValue fn)
             {
-                return ResolveVarFunction(fn, customProperties);
+                if (fn.Name == "var")
+                {
+                    return ResolveVarFunction(fn, customProperties);
+                }
+
+                // Walk into function arguments to substitute nested var() references
+                // (e.g., linear-gradient(... var(--x) ...) ).
+                bool anyArgChanged = false;
+                var newArgs = new List<CssValue>(fn.Arguments.Count);
+                for (int i = 0; i < fn.Arguments.Count; i++)
+                {
+                    var orig = fn.Arguments[i];
+                    var substituted = SubstituteVar(orig, customProperties);
+                    newArgs.Add(substituted);
+                    if (!ReferenceEquals(substituted, orig))
+                    {
+                        anyArgChanged = true;
+                    }
+                }
+
+                return anyArgChanged ? new CssFunctionValue(fn.Name, newArgs) : value;
             }
 
             // Walk into list values to substitute nested var() references.
@@ -547,6 +572,46 @@ namespace Rend.Css.Resolution.Internal
             else if (overflowY != CssOverflow.Visible && overflowX == CssOverflow.Visible)
             {
                 values[PropertyId.Overflow_X] = PropertyValue.FromKeyword((int)CssOverflow.Auto);
+            }
+        }
+
+        /// <summary>
+        /// <spec>CSS2 §9.7 https://www.w3.org/TR/CSS21/visuren.html#dis-pos-flo</spec>
+        /// Blockifies the computed display of floated elements: inline-level
+        /// displays become their block-level equivalents so they participate in
+        /// block formatting context layout. Out-of-flow positioned elements are
+        /// handled separately by the abspos layout path and are intentionally
+        /// not blockified here.
+        /// </summary>
+        private static void BlockifyForFloatAndOutOfFlow(PropertyValue[] values)
+        {
+            var floatValue = (CssFloat)values[PropertyId.Float].IntValue;
+            if (floatValue == CssFloat.None)
+            {
+                return;
+            }
+
+            var display = (CssDisplay)values[PropertyId.Display].IntValue;
+            var blockified = BlockifyDisplay(display);
+            if (blockified != display)
+            {
+                values[PropertyId.Display] = PropertyValue.FromKeyword((int)blockified);
+            }
+        }
+
+        private static CssDisplay BlockifyDisplay(CssDisplay display)
+        {
+            switch (display)
+            {
+                case CssDisplay.Inline:
+                case CssDisplay.InlineBlock:
+                    return CssDisplay.Block;
+                case CssDisplay.InlineFlex:
+                    return CssDisplay.Flex;
+                case CssDisplay.InlineGrid:
+                    return CssDisplay.Grid;
+                default:
+                    return display;
             }
         }
 

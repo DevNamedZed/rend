@@ -1,5 +1,4 @@
 using Xunit;
-using Xunit.Abstractions;
 
 namespace Rend.Tests.Layout
 {
@@ -9,9 +8,6 @@ namespace Rend.Tests.Layout
     /// </summary>
     public class WptFloatTests
     {
-        private readonly ITestOutputHelper _output;
-        public WptFloatTests(ITestOutputHelper output) { _output = output; }
-
         // [CSS2 §9.5.1] float: left starts at left edge
         [Fact] public void Float_Left_AtLeftEdge() {
             var r = LayoutTestHelper.Layout("<body style='margin:0'><div style='width:200px'><div id='t' style='float:left;width:80px;height:40px'></div></div></body>");
@@ -97,6 +93,27 @@ namespace Rend.Tests.Layout
         [Fact] public void FlowRoot_AvoidsSiblingFloat() {
             var r = LayoutTestHelper.Layout("<body style='margin:0'><div style='width:200px'><div style='float:left;width:80px;height:50px'></div><div id='t' style='display:flow-root'>x</div></div></body>");
             Assert.True(LayoutTestHelper.FindById(r,"t")!.ContentRect.X >= 79);
+        }
+
+        // [CSS2 §9.7] Floated inline replaced elements (embed, img, video) must
+        // have their display blockified so they stack as floats without inline
+        // whitespace contributing to their horizontal position.
+        [Fact] public void Float_ReplacedInline_StacksWithoutInlineSpacing() {
+            string html = "<!DOCTYPE html><html><head><style>" +
+                "embed { border: 1px dashed gray; padding: 1px; float: left; }" +
+                ".big { width: 48px; height: 32px; }" +
+                "</style></head><body>" +
+                "<embed id='a' class='big'>" +
+                "    <embed id='b' class='big'>" +
+                "    <embed id='c' class='big'>" +
+                "</body></html>";
+            var result = LayoutTestHelper.Layout(html);
+            var firstEmbed = LayoutTestHelper.FindById(result, "a")!;
+            var secondEmbed = LayoutTestHelper.FindById(result, "b")!;
+            var thirdEmbed = LayoutTestHelper.FindById(result, "c")!;
+            Assert.InRange(firstEmbed.BorderRect.X, 7f, 9f);
+            Assert.InRange(secondEmbed.BorderRect.X, 59f, 61f);
+            Assert.InRange(thirdEmbed.BorderRect.X, 111f, 113f);
         }
     }
 }

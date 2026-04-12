@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using Rend.Core.Values;
+using Rend.Css.Parser.Internal;
 using Rend.Rendering;
 using SkiaSharp;
 
@@ -10,13 +12,11 @@ namespace Rend.Output.Image.Internal
     /// </summary>
     internal static class SkiaGradientBuilder
     {
+        private const int InterpolationSteps = 64;
+
         /// <summary>
         /// Creates an <see cref="SKShader"/> from the given gradient info and bounding rectangle.
         /// </summary>
-        /// <param name="gradient">The gradient definition to convert.</param>
-        /// <param name="bounds">The bounding rectangle for the gradient.</param>
-        /// <param name="localMatrix">Optional transform applied to the gradient shader.</param>
-        /// <returns>An SKShader, or null if the gradient has no stops.</returns>
         internal static SKShader? CreateShader(GradientInfo gradient, RectF bounds, SKMatrix? localMatrix = null)
         {
             if (gradient.Stops.Length == 0)
@@ -24,14 +24,23 @@ namespace Rend.Output.Image.Internal
                 return null;
             }
 
-            var colors = new SKColor[gradient.Stops.Length];
-            var positions = new float[gradient.Stops.Length];
+            SKColor[] colors;
+            float[] positions;
 
-            for (int i = 0; i < gradient.Stops.Length; i++)
+            if (gradient.ColorInterpolationSpace != null && gradient.ColorInterpolationSpace != "srgb")
             {
-                GradientStop stop = gradient.Stops[i];
-                colors[i] = new SKColor(stop.Color.R, stop.Color.G, stop.Color.B, stop.Color.A);
-                positions[i] = stop.Position;
+                ExpandStopsForColorSpace(gradient, out colors, out positions);
+            }
+            else
+            {
+                colors = new SKColor[gradient.Stops.Length];
+                positions = new float[gradient.Stops.Length];
+                for (int i = 0; i < gradient.Stops.Length; i++)
+                {
+                    GradientStop stop = gradient.Stops[i];
+                    colors[i] = new SKColor(stop.Color.R, stop.Color.G, stop.Color.B, stop.Color.A);
+                    positions[i] = stop.Position;
+                }
             }
 
             // [CSS-BACKGROUNDS §2.11] When a positioning area is specified (canvas
@@ -49,6 +58,49 @@ namespace Rend.Output.Image.Internal
                 default:
                     return CreateLinearShader(gradient, bounds, colors, positions, localMatrix);
             }
+        }
+
+        /// <summary>
+        /// [CSS-COLOR4 §12] Pre-interpolate gradient stops in a non-sRGB color space.
+        /// Skia only interpolates in sRGB; we generate intermediate stops so the sRGB
+        /// segments approximate the target color-space curve.
+        /// </summary>
+        private static void ExpandStopsForColorSpace(GradientInfo gradient,
+            out SKColor[] colors, out float[] positions)
+        {
+            string space = gradient.ColorInterpolationSpace!;
+            string? hueMethod = gradient.HueInterpolationMethod;
+            var stopList = gradient.Stops;
+
+            var expandedColors = new List<SKColor>();
+            var expandedPositions = new List<float>();
+
+            expandedColors.Add(new SKColor(stopList[0].Color.R, stopList[0].Color.G,
+                stopList[0].Color.B, stopList[0].Color.A));
+            expandedPositions.Add(stopList[0].Position);
+
+            for (int i = 0; i < stopList.Length - 1; i++)
+            {
+                CssColor startColor = stopList[i].Color;
+                CssColor endColor = stopList[i + 1].Color;
+                float startPos = stopList[i].Position;
+                float endPos = stopList[i + 1].Position;
+
+                for (int step = 1; step <= InterpolationSteps; step++)
+                {
+                    float t = step / (float)InterpolationSteps;
+                    float position = startPos + (endPos - startPos) * t;
+
+                    CssColor mixed = CssColorParser.MixInSpace(space, startColor, 1f - t,
+                        endColor, t, hueMethod);
+
+                    expandedColors.Add(new SKColor(mixed.R, mixed.G, mixed.B, mixed.A));
+                    expandedPositions.Add(position);
+                }
+            }
+
+            colors = expandedColors.ToArray();
+            positions = expandedPositions.ToArray();
         }
 
         private static SKShader CreateLinearShader(GradientInfo gradient, RectF bounds,

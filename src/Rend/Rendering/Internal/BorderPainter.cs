@@ -193,8 +193,15 @@ namespace Rend.Rendering.Internal
             if (leftW > 0f && leftStyle != CssBorderStyle.None && leftStyle != CssBorderStyle.Hidden)
             {
                 CssColor color = leftColor;
-                float ot = topLeftDiag ? effectiveOuterTop : effectiveInnerTop;
-                float ob = bottomLeftDiag ? outerBottom : innerBottom;
+                // [CSS-BACKGROUNDS-3 §4.2] For stroked styles (dashed/dotted), stroke along the
+                // full outer edge length so dash distribution matches Chrome. Chrome lets
+                // adjacent same-color borders paint over the corner pixels rather than
+                // shortening the stroke to the inner corners. For trapezoid-filled styles
+                // (solid/double/groove/ridge/inset/outset), keep the corner-inset behavior
+                // so top/bottom borders own the corners.
+                bool leftStroked = leftStyle == CssBorderStyle.Dashed || leftStyle == CssBorderStyle.Dotted;
+                float ot = (topLeftDiag || leftStroked) ? effectiveOuterTop : effectiveInnerTop;
+                float ob = (bottomLeftDiag || leftStroked) ? outerBottom : innerBottom;
                 PaintSide(target, color, leftStyle, leftW,
                           outerLeft, ob, outerLeft, ot,
                           innerLeft, topLeftDiag ? effectiveInnerTop : ot, innerLeft, bottomLeftDiag ? innerBottom : ob);
@@ -204,8 +211,9 @@ namespace Rend.Rendering.Internal
             if (rightW > 0f && rightStyle != CssBorderStyle.None && rightStyle != CssBorderStyle.Hidden)
             {
                 CssColor color = rightColor;
-                float ot = topRightDiag ? effectiveOuterTop : effectiveInnerTop;
-                float ob = bottomRightDiag ? outerBottom : innerBottom;
+                bool rightStroked = rightStyle == CssBorderStyle.Dashed || rightStyle == CssBorderStyle.Dotted;
+                float ot = (topRightDiag || rightStroked) ? effectiveOuterTop : effectiveInnerTop;
+                float ob = (bottomRightDiag || rightStroked) ? outerBottom : innerBottom;
                 PaintSide(target, color, rightStyle, rightW,
                           outerRight, ot, outerRight, ob,
                           innerRight, bottomRightDiag ? innerBottom : ob, innerRight, topRightDiag ? effectiveInnerTop : ot);
