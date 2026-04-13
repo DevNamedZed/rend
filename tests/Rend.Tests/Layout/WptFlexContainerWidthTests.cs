@@ -267,12 +267,14 @@ namespace Rend.Tests.Layout
                 $"Block flex fills 350px parent (got {container.ContentRect.Width})");
         }
 
-        // [CSS-SIZING §4.1] width:min-content on row flex = largest item min-content
+        // [CSS-FLEXBOX-1 §9.9.1] min-content main size of a multi-line flex container
+        // is the largest min-content contribution among all of its flex items.
+        // Verified against Chrome 116: flex-wrap:wrap + width:min-content yields 80.
         [Fact]
         public void MinContentWidth_LargestItemMinContent()
         {
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
-                <div id='t' style='display:flex;width:min-content'>
+                <div id='t' style='display:flex;flex-wrap:wrap;width:min-content'>
                     <div style='width:80px;height:20px'></div>
                     <div style='width:60px;height:20px'></div>
                 </div></body>");
@@ -280,7 +282,7 @@ namespace Rend.Tests.Layout
             Assert.NotNull(container);
             _output.WriteLine($"width={container!.ContentRect.Width}");
             Assert.True(System.Math.Abs(container.ContentRect.Width - 80) < 2,
-                $"min-content = largest item 80 (got {container.ContentRect.Width})");
+                $"multi-line min-content = largest item 80 (got {container.ContentRect.Width})");
         }
 
         // [CSS-SIZING §4.1] width:max-content expands to widest line

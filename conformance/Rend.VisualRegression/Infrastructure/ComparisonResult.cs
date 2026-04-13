@@ -29,6 +29,16 @@ namespace Rend.VisualRegression.Infrastructure
         public int DiffPixels { get; set; }
         public int ShiftTolerantDiffPixels { get; set; }
         public int TotalPixels { get; set; }
+        /// <summary>
+        /// Largest absolute per-channel delta observed across all pixel comparisons.
+        /// </summary>
+        public int MaxChannelDiff { get; set; }
+        /// <summary>
+        /// True when the strict diff exceeded <see cref="VisualTestCase.Tolerance"/>
+        /// but the test still passed because a WPT fuzzy directive accepted the
+        /// measured difference.
+        /// </summary>
+        public bool FuzzyAccepted { get; set; }
         public string? ChromeImagePath { get; set; }
         public string? RendImagePath { get; set; }
         public string? DiffImagePath { get; set; }

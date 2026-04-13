@@ -125,6 +125,12 @@ namespace Rend.VisualRegression.Infrastructure
                     return "";
                 }
 
+                // WPT reftests may declare a per-test fuzzy tolerance via
+                // <meta name="fuzzy" content="maxDifference=A-B;totalPixels=C-D">.
+                // Parse it once here and attach to the captured test case so the
+                // comparison stage can consult it after the strict diff completes.
+                testCase.Fuzzy = FuzzyDirectiveParser.Parse(html);
+
                 html = InlineStylesheets(html, Path.GetDirectoryName(path)!);
                 html = InlineStyleBlockFontUrls(html, Path.GetDirectoryName(path)!);
                 return html;

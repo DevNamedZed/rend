@@ -246,10 +246,15 @@ namespace Rend.Tests.Layout
                 $"max-width should cap at 100 (got {item.ContentRect.Width})");
         }
 
+        // [CSS-FLEXBOX-1 §4.5] Automatic minimum size: when a flex item's main size is
+        // auto and overflow is visible, min-size = min-content contribution. The inner
+        // flex item's content is an img with width:500px,max-width:100%. During intrinsic
+        // sizing the percentage max-width resolves to auto (CSS-SIZING-3 §5.2), so the
+        // img's min-content contribution is 500px. Auto-min-size forces the flex item
+        // to 500px, overflowing the 100px outer container. Chrome 116 confirms 500x500.
         [Fact]
         public void Flex_AutoMinSize_PercentMaxWidth_Img()
         {
-            // WPT: auto-min-size-001
             var root = LayoutTestHelper.Layout(@"<body style='margin:0'>
                 <div style='display:flex;width:100px'>
                     <div style='display:flex;flex:1 1 auto'>
@@ -259,9 +264,8 @@ namespace Rend.Tests.Layout
             var img = LayoutTestHelper.FindById(root, "img");
             Assert.NotNull(img);
             _output.WriteLine($"img: {img!.ContentRect.Width}x{img.ContentRect.Height}");
-            // max-width:100% of 100px container → img should be 100px wide
-            Assert.True(img.ContentRect.Width <= 101,
-                $"max-width:100% should cap at container (got {img.ContentRect.Width})");
+            Assert.True(System.Math.Abs(img.ContentRect.Width - 500) < 2,
+                $"auto-min-size overflow: img should be 500px (got {img.ContentRect.Width})");
         }
     }
 }

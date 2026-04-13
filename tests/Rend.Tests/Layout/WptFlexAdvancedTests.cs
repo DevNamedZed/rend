@@ -391,8 +391,12 @@ namespace Rend.Tests.Layout
         // TODO: abspos table with auto width — currently gets 0px instead of shrink-to-fit
         // Pre-existing table sizing issue, not from aspect-ratio fixes
 
-        // Abspos table with negative left: shrinkAvail should not exceed containing block
-        [Fact] public void AbsposTable_NegativeLeft_WidthCapped() {
+        // [CSS-POSITION-3 §5] Abspos table with negative left: available width for the
+        // shrink-to-fit calculation is containingBlock.width - left - right. With
+        // left=-100px and right=auto (treated as 0 for intrinsic sizing), available =
+        // 100 - (-100) = 200px. Content max-content = 200px (the fixed-width inner div),
+        // so shrink-to-fit = min(available, content) = 200. Chrome 116 confirms width=200.
+        [Fact] public void AbsposTable_NegativeLeft_WidthFromContent() {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>
                 <div style='position:relative;width:100px;height:100px'>
                     <table id='t' style='position:absolute;left:-100px;height:100px;border-spacing:0'>
@@ -401,9 +405,8 @@ namespace Rend.Tests.Layout
                 </div></body>");
             var t = LayoutTestHelper.FindById(r, "t")!;
             _output.WriteLine($"abspos-table: w={t.ContentRect.Width}");
-            // shrinkAvail should be clamped to containingWidth (100px), not 100-(-100)=200
-            Assert.True(t.ContentRect.Width <= 101,
-                $"abspos table width should not exceed containing block 100px (got {t.ContentRect.Width})");
+            Assert.True(System.Math.Abs(t.ContentRect.Width - 200) < 2,
+                $"abspos table shrink-to-fit should equal content 200px (got {t.ContentRect.Width})");
         }
 
         // Float avoidance: flow-root should query float edges with actual element height

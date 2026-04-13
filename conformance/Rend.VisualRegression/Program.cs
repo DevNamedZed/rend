@@ -235,9 +235,10 @@ class Program
         int passCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Pass);
         int failCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Fail);
         int errorCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Error);
+        int fuzzyPassCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Pass && r.FuzzyAccepted);
 
         Console.WriteLine();
-        Console.WriteLine($"Results: {sortedResults.Count} tests, {passCount} passed, {failCount} failed, {errorCount} errors, avg diff {avgDiff:F4}%");
+        Console.WriteLine($"Results: {sortedResults.Count} tests, {passCount} passed ({fuzzyPassCount} fuzzy), {failCount} failed, {errorCount} errors, avg diff {avgDiff:F4}%");
         Console.WriteLine($"Duration: {totalSw.Elapsed.TotalSeconds:F1}s");
 
         if (!fastMode)
@@ -399,10 +400,17 @@ class Program
             result.ShiftTolerantDiffPercentage = cmpResult.ShiftTolerantDiffFraction * 100.0;
             result.ShiftTolerantDiffPixels = cmpResult.ShiftTolerantDiffPixels;
             result.TotalPixels = cmpResult.TotalPixels;
+            result.MaxChannelDiff = cmpResult.MaxChannelDiff;
 
-            result.Outcome = diffPercent < testCase.Tolerance
-                ? ComparisonOutcome.Pass
-                : ComparisonOutcome.Fail;
+            bool passed = diffPercent < testCase.Tolerance;
+            if (!passed && testCase.Fuzzy != null &&
+                testCase.Fuzzy.Accepts(cmpResult.StrictDiffPixels, cmpResult.MaxChannelDiff))
+            {
+                passed = true;
+                result.FuzzyAccepted = true;
+            }
+
+            result.Outcome = passed ? ComparisonOutcome.Pass : ComparisonOutcome.Fail;
 
             // Only write resource files for failing tests when not in fast mode.
             // Fast mode skips all disk I/O for maximum speed.
@@ -471,6 +479,7 @@ class Program
     private static void WriteResultsJson(List<ComparisonResult> results, string path, string runId, TimeSpan totalDuration)
     {
         int passCount = results.Count(r => r.Outcome == ComparisonOutcome.Pass);
+        int fuzzyPassCount = results.Count(r => r.Outcome == ComparisonOutcome.Pass && r.FuzzyAccepted);
         int failCount = results.Count(r => r.Outcome == ComparisonOutcome.Fail);
         int errorCount = results.Count(r => r.Outcome == ComparisonOutcome.Error);
         double avgDiff = results.Where(r => r.Outcome != ComparisonOutcome.Error)
@@ -485,6 +494,7 @@ class Program
             {
                 total = results.Count,
                 passed = passCount,
+                fuzzyPassed = fuzzyPassCount,
                 failed = failCount,
                 errors = errorCount,
                 avgDiffPercentage = Math.Round(avgDiff, 4),
@@ -496,10 +506,12 @@ class Program
                 category = r.Category,
                 tags = r.Tags,
                 outcome = r.Outcome.ToString(),
+                fuzzyAccepted = r.FuzzyAccepted,
                 diffPercentage = Math.Round(r.DiffPercentage, 4),
                 shiftTolerantDiffPercentage = Math.Round(r.ShiftTolerantDiffPercentage, 4),
                 diffPixels = r.DiffPixels,
                 shiftTolerantDiffPixels = r.ShiftTolerantDiffPixels,
+                maxChannelDiff = r.MaxChannelDiff,
                 totalPixels = r.TotalPixels,
                 durationMs = (int)r.Duration.TotalMilliseconds,
                 errorMessage = r.ErrorMessage,

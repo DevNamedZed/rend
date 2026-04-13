@@ -22,7 +22,7 @@ namespace Rend.VisualRegression.Infrastructure
 
             if (expectedBitmap == null || actualBitmap == null)
             {
-                return new CompareAndDiffResult(1.0, 1, 1.0, 1, 1, null);
+                return new CompareAndDiffResult(1.0, 1, 1.0, 1, 1, 255, null);
             }
 
             int expectedWidth = expectedBitmap.Width;
@@ -67,18 +67,32 @@ namespace Rend.VisualRegression.Infrastructure
 
                 if (allMatch)
                 {
-                    return new CompareAndDiffResult(0.0, 0, 0.0, 0, totalPixels, null);
+                    return new CompareAndDiffResult(0.0, 0, 0.0, 0, totalPixels, 0, null);
                 }
             }
 
-            // Full comparison pass: strict count + collect diff positions for shift tolerance
+            // Full comparison pass: strict count + max per-channel delta for fuzzy
             int strictDiff = 0;
+            int maxChannelDiff = 0;
 
             if (sameDimensions)
             {
                 for (int i = 0; i < totalPixels; i++)
                 {
-                    if (!ImageComparer.PixelsMatchRaw(expectedPixels[i], actualPixels[i], perChannelThreshold))
+                    uint expectedVal = expectedPixels[i];
+                    uint actualVal = actualPixels[i];
+                    if (expectedVal == actualVal)
+                    {
+                        continue;
+                    }
+
+                    int channelDelta = MaxChannelDelta(expectedVal, actualVal);
+                    if (channelDelta > maxChannelDiff)
+                    {
+                        maxChannelDiff = channelDelta;
+                    }
+
+                    if (channelDelta > perChannelThreshold)
                     {
                         strictDiff++;
                     }
@@ -94,15 +108,26 @@ namespace Rend.VisualRegression.Infrastructure
                             x >= actualWidth || y >= actualHeight)
                         {
                             strictDiff++;
+                            maxChannelDiff = 255;
+                            continue;
                         }
-                        else
+
+                        uint expectedVal = expectedPixels[y * expectedWidth + x];
+                        uint actualVal = actualPixels[y * actualWidth + x];
+                        if (expectedVal == actualVal)
                         {
-                            uint expectedVal = expectedPixels[y * expectedWidth + x];
-                            uint actualVal = actualPixels[y * actualWidth + x];
-                            if (!ImageComparer.PixelsMatchRaw(expectedVal, actualVal, perChannelThreshold))
-                            {
-                                strictDiff++;
-                            }
+                            continue;
+                        }
+
+                        int channelDelta = MaxChannelDelta(expectedVal, actualVal);
+                        if (channelDelta > maxChannelDiff)
+                        {
+                            maxChannelDiff = channelDelta;
+                        }
+
+                        if (channelDelta > perChannelThreshold)
+                        {
+                            strictDiff++;
                         }
                     }
                 }
@@ -130,7 +155,22 @@ namespace Rend.VisualRegression.Infrastructure
                     width, height, perChannelThreshold);
             }
 
-            return new CompareAndDiffResult(strictFraction, strictDiff, shiftFraction, shiftDiff, totalPixels, diffPng);
+            return new CompareAndDiffResult(strictFraction, strictDiff, shiftFraction, shiftDiff, totalPixels, maxChannelDiff, diffPng);
+        }
+
+        /// <summary>
+        /// Returns the largest absolute per-channel delta between two packed
+        /// RGBA pixels. Layout: byte 0=R, byte 1=G, byte 2=B, byte 3=A.
+        /// </summary>
+        private static int MaxChannelDelta(uint a, uint b)
+        {
+            int deltaR = Math.Abs((int)(a & 0xFF) - (int)(b & 0xFF));
+            int deltaG = Math.Abs((int)((a >> 8) & 0xFF) - (int)((b >> 8) & 0xFF));
+            int deltaB = Math.Abs((int)((a >> 16) & 0xFF) - (int)((b >> 16) & 0xFF));
+            int deltaA = Math.Abs((int)((a >> 24) & 0xFF) - (int)((b >> 24) & 0xFF));
+            int maxRG = deltaR > deltaG ? deltaR : deltaG;
+            int maxBA = deltaB > deltaA ? deltaB : deltaA;
+            return maxRG > maxBA ? maxRG : maxBA;
         }
 
         /// <summary>
@@ -223,16 +263,24 @@ namespace Rend.VisualRegression.Infrastructure
         public readonly double ShiftTolerantDiffFraction;
         public readonly int ShiftTolerantDiffPixels;
         public readonly int TotalPixels;
+        /// <summary>
+        /// Largest absolute per-channel delta observed across all pixel
+        /// comparisons (including those swallowed by a non-zero threshold).
+        /// Used to evaluate WPT fuzzy tolerance directives.
+        /// </summary>
+        public readonly int MaxChannelDiff;
         public readonly byte[]? DiffPng;
 
         public CompareAndDiffResult(double strictFraction, int strictPixels,
-            double shiftFraction, int shiftPixels, int totalPixels, byte[]? diffPng)
+            double shiftFraction, int shiftPixels, int totalPixels,
+            int maxChannelDiff, byte[]? diffPng)
         {
             StrictDiffFraction = strictFraction;
             StrictDiffPixels = strictPixels;
             ShiftTolerantDiffFraction = shiftFraction;
             ShiftTolerantDiffPixels = shiftPixels;
             TotalPixels = totalPixels;
+            MaxChannelDiff = maxChannelDiff;
             DiffPng = diffPng;
         }
     }

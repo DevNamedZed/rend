@@ -24,6 +24,13 @@ namespace Rend.Rendering.Internal
         private static readonly CssColor CheckmarkColor = new CssColor(0, 0, 0);            // black
         private static readonly CssColor ArrowColor = new CssColor(80, 80, 80);             // #505050
 
+        // [CSS2 §17.1] Broken-image placeholder. Chrome's Blink paints a 1px inset
+        // border in rgb(192,192,192) around the content rect of a replaced element
+        // when the image fails to load. See Chromium
+        // third_party/blink/renderer/core/paint/image_painter.cc
+        // (ImagePainter::PaintReplaced — broken-image placeholder).
+        private static readonly CssColor BrokenImageBorderColor = new CssColor(192, 192, 192); // silver
+
         private const float FormFontSize = 13.333f;  // Chrome default form font = 10pt = 13.333px
         private const float FormTextPadding = 1f;  // Chrome default input padding: 1px
         private const float FormFontAscent = 12f;  // Arial WinAscent: round(1854/2048 * 13.333) = 12
@@ -152,12 +159,14 @@ namespace Rend.Rendering.Internal
 
             if (imageResolver == null)
             {
+                PaintBrokenImagePlaceholder(box, target);
                 return;
             }
 
             ImageData? imageData = imageResolver(src);
             if (imageData == null)
             {
+                PaintBrokenImagePlaceholder(box, target);
                 return;
             }
 
@@ -188,6 +197,26 @@ namespace Rend.Rendering.Internal
             {
                 target.PopClip();
             }
+        }
+
+        // [CSS2 §17.1] Draw the broken-image placeholder: a 1px inset border in
+        // silver (rgb 192,192,192) around the content rect. Matches Chrome's
+        // ImagePainter::PaintReplaced behavior for a replaced element whose
+        // resource failed to load. Uses four pixel-snapped FillRect calls so
+        // the edges are sharp 1px lines regardless of fractional box position.
+        private static void PaintBrokenImagePlaceholder(LayoutBox box, IRenderTarget target)
+        {
+            RectF rect = box.ContentRect.PixelSnap();
+            if (rect.Width < 2f || rect.Height < 2f)
+            {
+                return;
+            }
+
+            BrushInfo brush = BrushInfo.Solid(BrokenImageBorderColor);
+            target.FillRect(new RectF(rect.X, rect.Y, rect.Width, 1f), brush);
+            target.FillRect(new RectF(rect.X, rect.Y + rect.Height - 1f, rect.Width, 1f), brush);
+            target.FillRect(new RectF(rect.X, rect.Y + 1f, 1f, rect.Height - 2f), brush);
+            target.FillRect(new RectF(rect.X + rect.Width - 1f, rect.Y + 1f, 1f, rect.Height - 2f), brush);
         }
 
         // ----- Form control painting methods -----
@@ -1274,12 +1303,14 @@ namespace Rend.Rendering.Internal
             return sb.ToString();
         }
 
+        /// <summary>
+        /// [HTML §4.12.5] A canvas element with no script-drawn content represents
+        /// transparent black — its bitmap is all-zero alpha. Any CSS background on
+        /// the canvas (already painted by BackgroundPainter) shows through
+        /// unmodified, so this painter intentionally draws nothing.
+        /// </summary>
         private static void PaintCanvasPlaceholder(StyledElement element, LayoutBox box, IRenderTarget target)
         {
-            RectF rect = box.ContentRect;
-
-            // Canvas without JS: transparent/white background (per spec)
-            target.FillRect(rect, BrushInfo.Solid(CssColor.White));
         }
 
         private static float ParseFloat(string? value, float defaultValue)

@@ -1708,9 +1708,13 @@ namespace Rend.Layout.Internal
                 if (element.Style.Display == CssDisplay.InlineFlex ||
                     element.Style.Display == CssDisplay.InlineGrid)
                 {
+                    // [CSS-GRID §12.1 / CSS-FLEX §9.9.1] Grid/Flex containers compute
+                    // their intrinsic size from item contributions. An empty inline-grid
+                    // correctly returns 0 from ComputeIntrinsicWidth, so use >= 0 (not > 0)
+                    // to honor that and prevent empty containers from keeping parent width.
                     float fitWidth = BlockFormattingContext.MeasureIntrinsicWidth(
                         element, SizingKeyword.FitContent, containingWidth, context);
-                    if (fitWidth > 0 && fitWidth < contentWidth)
+                    if (fitWidth >= 0 && fitWidth < contentWidth)
                     {
                         contentWidth = fitWidth;
                     }
@@ -1730,7 +1734,7 @@ namespace Rend.Layout.Internal
                     context.FloatContext = null;
                     BlockFormattingContext.LayoutChildren(measureBox, context);
                     context.FloatContext = prevFloatM;
-                    float measuredWidth = MeasureContentWidth(measureBox);
+                    float measuredWidth = MeasureContentWidth(measureBox, context, containingWidth);
                     if (measuredWidth > 0 && measuredWidth < contentWidth)
                     {
                         contentWidth = measuredWidth;
@@ -1822,9 +1826,11 @@ namespace Rend.Layout.Internal
 
             float totalHeight = contentHeight + box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth;
 
-            // Compute baseline for inline-block: use last line box baseline if available,
-            // otherwise fall back to bottom margin edge (CSS 2.1 §10.8.1)
-            float fragmentBaseline = totalHeight;
+            // [CSS2 §10.8.1] Default baseline fallback: bottom margin edge of the
+            // inline-block. This is what CSS specifies when the inline-block has no
+            // in-flow line boxes OR when overflow is not visible. Value equals the
+            // fragment's full margin-box height (totalHeight + MarginTop + MarginBottom).
+            float fragmentBaseline = totalHeight + box.MarginTop + box.MarginBottom;
             bool isReplacedForm = ReplacedElementLayout.IsFormControl(element);
             if (isReplacedForm)
             {
@@ -1865,13 +1871,35 @@ namespace Rend.Layout.Internal
             {
                 // [CSS2 §10.8.1] Inline-block baseline: last in-flow line box baseline,
                 // unless overflow is not 'visible', in which case use bottom margin edge.
+                // For atomic inline-flex / inline-grid, CSS-FLEX §8.5 / CSS-GRID §10.5
+                // specifies the FIRST in-flow item's FIRST baseline (not the last item's
+                // last line). When the first item has no inner baseline (e.g., wraps a
+                // replaced element with no line box), we intentionally return null so
+                // fragmentBaseline stays at the default margin-box bottom per CSS2 §10.8.1.
+                // The top-level FindLastLineBaseline call passes allowSelfSynthesis=false
+                // so that inline-grid/inline-flex does not self-synthesize from its item
+                // border-box bottom during the reverse walk path; recursive calls pass
+                // true so a plain inline-block containing a block-grid still propagates
+                // the grid's synthesized first baseline through block-baseline propagation.
                 var overflow = element.Style.OverflowY;
                 if (overflow == CssOverflow.Visible)
                 {
-                    float? lastLineBaseline = FindLastLineBaseline(box);
-                    if (lastLineBaseline.HasValue)
+                    var inlineDisplay = element.Style.Display;
+                    if (inlineDisplay == CssDisplay.InlineFlex || inlineDisplay == CssDisplay.InlineGrid)
                     {
-                        fragmentBaseline = lastLineBaseline.Value + box.PaddingTop + box.BorderTopWidth + box.MarginTop;
+                        float? firstItemBaseline = ComputeGridFlexFirstBaseline(box, synthesizeIfMissing: false);
+                        if (firstItemBaseline.HasValue)
+                        {
+                            fragmentBaseline = firstItemBaseline.Value + box.PaddingTop + box.BorderTopWidth + box.MarginTop;
+                        }
+                    }
+                    else
+                    {
+                        float? lastLineBaseline = FindLastLineBaseline(box, allowSelfSynthesis: false);
+                        if (lastLineBaseline.HasValue)
+                        {
+                            fragmentBaseline = lastLineBaseline.Value + box.PaddingTop + box.BorderTopWidth + box.MarginTop;
+                        }
                     }
                 }
             }
@@ -2272,11 +2300,36 @@ namespace Rend.Layout.Internal
             };
         }
 
+        /// <summary>
+        /// [CSS2 §10.8] The line-box height is max(above-baseline) + max(below-baseline)
+        /// over all baseline-aligned content, NOT max(per-fragment total-height). When a
+        /// line has both small text (ascent 16, descent 4) and a tall inline-block with
+        /// baseline at the bottom edge (ascent = height, descent = 0), the correct line
+        /// height is (block_ascent + text_descent), not max(block_height, text_height).
+        ///
+        /// We track the aggregate descent implicitly as (maxLineHeight - lineBaseline),
+        /// and on each update recompute both fields so that maxLineHeight always equals
+        /// the current aggregate ascent plus aggregate descent. Starting state from
+        /// ComputeStrut satisfies the invariant: strutLineHeight - strutBaseline equals
+        /// the font descent contribution.
+        /// </summary>
         private static void UpdateLineMetrics(ref float maxLineHeight, ref float lineBaseline,
                                                float height, float baseline)
         {
-            if (height > maxLineHeight) maxLineHeight = height;
-            if (baseline > lineBaseline) lineBaseline = baseline;
+            float currentDescent = maxLineHeight - lineBaseline;
+            if (currentDescent < 0)
+            {
+                currentDescent = 0;
+            }
+            float fragmentDescent = height - baseline;
+            if (fragmentDescent < 0)
+            {
+                fragmentDescent = 0;
+            }
+            float combinedAscent = baseline > lineBaseline ? baseline : lineBaseline;
+            float combinedDescent = fragmentDescent > currentDescent ? fragmentDescent : currentDescent;
+            lineBaseline = combinedAscent;
+            maxLineHeight = combinedAscent + combinedDescent;
         }
 
         /// <summary>
@@ -2926,30 +2979,164 @@ namespace Rend.Layout.Internal
 
         /// <summary>
         /// Find the baseline of the last line box inside a box (recursing into children).
-        /// Returns the baseline relative to the box's content rect top.
+        /// Returns the baseline relative to the box's content rect top, or null if no
+        /// in-flow line baseline could be found or synthesized.
+        /// <spec>CSS2 §10.8.1 https://www.w3.org/TR/CSS21/visudet.html#leading</spec>
         /// </summary>
-        private static float? FindLastLineBaseline(LayoutBox box)
+        /// <param name="box">The box to compute a baseline for.</param>
+        /// <param name="allowSelfSynthesis">
+        /// When true, an input box that is itself a grid or flex container will synthesize
+        /// a baseline from its first in-flow item per CSS-ALIGN-3 §9.1. When false, the
+        /// self-synthesis step is skipped and the function walks children only. Top-level
+        /// callers on atomic inlines (inline-grid/inline-flex/inline-block) pass false so
+        /// that an atomic inline wrapping a grid/flex falls back to its own margin-box
+        /// bottom per CSS2 §10.8.1 when no real line box exists; recursive calls pass true
+        /// so block-baseline propagation still reaches grid/flex children of a plain
+        /// inline-block (e.g. inline-block &gt; block-grid).
+        /// </param>
+        private static float? FindLastLineBaseline(LayoutBox box, bool allowSelfSynthesis)
         {
-            // Check the box's own line boxes first
             if (box.LineBoxes != null && box.LineBoxes.Count > 0)
             {
                 var lastLine = box.LineBoxes[box.LineBoxes.Count - 1];
                 return (lastLine.Y - box.ContentRect.Y) + lastLine.Baseline;
             }
 
-            // Recurse into last child with line boxes
+            // [CSS-ALIGN-3 §9.1, CSS-GRID §10.5, CSS-FLEX §8.5] Grid and flex containers
+            // always propagate a first baseline derived from their first in-flow item:
+            // either that item's own first baseline, or (if the item has none) a
+            // synthesized value equal to the item's border-box bottom. This propagates
+            // through block-baseline propagation to an outer inline-block so that the
+            // enclosing line box aligns at the grid item boundary rather than collapsing
+            // to the container's margin-box bottom. Gated on allowSelfSynthesis so that
+            // an atomic inline-grid/inline-flex does NOT synthesize its own baseline from
+            // its item (the atomic inline falls back to its margin-box bottom instead).
+            if (allowSelfSynthesis && IsGridOrFlexContainer(box))
+            {
+                return ComputeGridFlexFirstBaseline(box, synthesizeIfMissing: true);
+            }
+
             for (int i = box.Children.Count - 1; i >= 0; i--)
             {
-                var childBaseline = FindLastLineBaseline(box.Children[i]);
+                var child = box.Children[i];
+                if (IsOutOfFlow(child))
+                {
+                    continue;
+                }
+                var childBaseline = FindLastLineBaseline(child, allowSelfSynthesis: true);
                 if (childBaseline.HasValue)
                 {
-                    return (box.Children[i].ContentRect.Y - box.ContentRect.Y)
-                         + box.Children[i].PaddingTop + box.Children[i].BorderTopWidth
-                         + childBaseline.Value;
+                    return (child.ContentRect.Y - box.ContentRect.Y) + childBaseline.Value;
                 }
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Find the first in-flow line box baseline of a box by walking forward through
+        /// its content and returning the baseline offset relative to the box's content
+        /// rect top. If the box is itself a grid or flex container, synthesize via
+        /// ComputeGridFlexFirstBaseline per CSS-ALIGN-3 §9.1.
+        /// <spec>CSS-ALIGN-3 §9 https://drafts.csswg.org/css-align-3/#synthesize-baseline</spec>
+        /// </summary>
+        private static float? FindFirstLineBaseline(LayoutBox box)
+        {
+            if (box.LineBoxes != null && box.LineBoxes.Count > 0)
+            {
+                var firstLine = box.LineBoxes[0];
+                return (firstLine.Y - box.ContentRect.Y) + firstLine.Baseline;
+            }
+
+            if (IsGridOrFlexContainer(box))
+            {
+                return ComputeGridFlexFirstBaseline(box, synthesizeIfMissing: true);
+            }
+
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                if (IsOutOfFlow(child))
+                {
+                    continue;
+                }
+                var childBaseline = FindFirstLineBaseline(child);
+                if (childBaseline.HasValue)
+                {
+                    return (child.ContentRect.Y - box.ContentRect.Y) + childBaseline.Value;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// <spec>CSS-GRID §10.5 https://drafts.csswg.org/css-grid/#grid-baselines</spec>
+        /// <spec>CSS-FLEX §8.5 https://drafts.csswg.org/css-flexbox/#flex-baselines</spec>
+        /// Synthesize the first baseline of a grid or flex container using its first
+        /// in-flow item. If that item has its own first baseline (via forward walk to
+        /// its first line box), use it. When <paramref name="synthesizeIfMissing"/> is
+        /// true, fall back to the first item's border-box bottom per CSS-ALIGN-3 §9.1
+        /// (used during block-baseline propagation from an outer inline-block). When
+        /// false (used for atomic inline-flex/inline-grid), return null so the caller
+        /// can fall back to the atomic inline's own margin-box bottom per CSS2 §10.8.1.
+        /// Returns the baseline offset measured from the container box's content rect top.
+        /// </summary>
+        private static float? ComputeGridFlexFirstBaseline(LayoutBox containerBox, bool synthesizeIfMissing)
+        {
+            for (int i = 0; i < containerBox.Children.Count; i++)
+            {
+                var item = containerBox.Children[i];
+                if (IsOutOfFlow(item))
+                {
+                    continue;
+                }
+
+                float itemBorderBoxTopFromContainer =
+                    (item.ContentRect.Y - item.PaddingTop - item.BorderTopWidth) - containerBox.ContentRect.Y;
+
+                float? itemFirstBaseline = FindFirstLineBaseline(item);
+                if (itemFirstBaseline.HasValue)
+                {
+                    return itemBorderBoxTopFromContainer
+                         + item.BorderTopWidth + item.PaddingTop + itemFirstBaseline.Value;
+                }
+
+                if (!synthesizeIfMissing)
+                {
+                    return null;
+                }
+
+                float itemBorderBoxHeight = item.ContentRect.Height
+                    + item.PaddingTop + item.PaddingBottom
+                    + item.BorderTopWidth + item.BorderBottomWidth;
+                return itemBorderBoxTopFromContainer + itemBorderBoxHeight;
+            }
+
+            return null;
+        }
+
+        private static bool IsGridOrFlexContainer(LayoutBox box)
+        {
+            if (box.StyledNode is not StyledElement element)
+            {
+                return false;
+            }
+            var display = element.Style.Display;
+            return display == CssDisplay.Grid
+                || display == CssDisplay.InlineGrid
+                || display == CssDisplay.Flex
+                || display == CssDisplay.InlineFlex;
+        }
+
+        private static bool IsOutOfFlow(LayoutBox box)
+        {
+            if (box.StyledNode is not StyledElement element)
+            {
+                return false;
+            }
+            var position = element.Style.Position;
+            return position == CssPosition.Absolute || position == CssPosition.Fixed;
         }
 
         private static float CalculateContentHeight(LayoutBox box)
@@ -2982,20 +3169,44 @@ namespace Rend.Layout.Internal
 
         /// <summary>
         /// Measure the actual content width of a box (for shrink-to-fit inline-level boxes).
+        /// Grid and flex children are measured using their intrinsic max-content width
+        /// rather than the laid-out (stretched) width, per CSS Grid §12.1 / CSS Flex §9.9.1.
         /// </summary>
-        internal static float MeasureContentWidth(LayoutBox box)
+        internal static float MeasureContentWidth(LayoutBox box, LayoutContext context, float containingWidth)
         {
             float right = 0;
             float left = box.ContentRect.X;
             for (int i = 0; i < box.Children.Count; i++)
             {
                 var child = box.Children[i];
-                if (child.StyledNode is Style.StyledElement se &&
-                    (se.Style.Position == Css.CssPosition.Absolute || se.Style.Position == Css.CssPosition.Fixed))
+                var childStyledElement = child.StyledNode as Style.StyledElement;
+                if (childStyledElement != null &&
+                    (childStyledElement.Style.Position == Css.CssPosition.Absolute ||
+                     childStyledElement.Style.Position == Css.CssPosition.Fixed))
                 {
                     continue;
                 }
-                float childRight = child.ContentRect.X + child.ContentRect.Width
+
+                float childContentWidth = child.ContentRect.Width;
+                if (childStyledElement != null)
+                {
+                    var childDisplay = childStyledElement.Style.Display;
+                    bool isGridOrFlex = childDisplay == Css.CssDisplay.Grid
+                                     || childDisplay == Css.CssDisplay.InlineGrid
+                                     || childDisplay == Css.CssDisplay.Flex
+                                     || childDisplay == Css.CssDisplay.InlineFlex;
+                    if (isGridOrFlex && float.IsNaN(childStyledElement.Style.Width))
+                    {
+                        float intrinsic = BlockFormattingContext.MeasureIntrinsicWidth(
+                            childStyledElement, SizingKeyword.MaxContent, containingWidth, context);
+                        if (intrinsic >= 0 && intrinsic < childContentWidth)
+                        {
+                            childContentWidth = intrinsic;
+                        }
+                    }
+                }
+
+                float childRight = child.ContentRect.X + childContentWidth
                                   + child.PaddingRight + child.BorderRightWidth + child.MarginRight - left;
                 if (childRight > right) right = childRight;
             }

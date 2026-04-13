@@ -390,7 +390,19 @@ namespace Rend.Css.Tests
         {
             var ctx = new CssResolutionContext(16, 16, 800, 600);
             var builder = new ComputedStyleBuilder(ctx);
-            return builder.Build(winners, parentStyle);
+
+            // Adapt the single-winner test fixture to the production
+            // cascade shape (one CascadedProperty per property with a
+            // single candidate inside).
+            var cascaded = new Dictionary<string, CascadedProperty>(winners.Count);
+            foreach (var kvp in winners)
+            {
+                var property = new CascadedProperty();
+                property.Add(kvp.Value);
+                cascaded[kvp.Key] = property;
+            }
+
+            return builder.Build(cascaded, parentStyle);
         }
     }
 }

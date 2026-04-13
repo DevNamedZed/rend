@@ -69,27 +69,54 @@ namespace Rend.Style
             var adapter = new StylableElementAdapter(element);
             var computedStyle = _resolver.Resolve(adapter, parentStyle);
 
-            // contain: style/content/strict scopes counters to the subtree
+            // contain: style/content/strict scopes counters to the subtree.
             var contain = computedStyle.Contain;
             bool scopeCounters = contain == CssContain.Style ||
                                  contain == CssContain.Content ||
                                  contain == CssContain.Strict;
-            // [CSS-LISTS-3 §2] counter-reset creates a new counter in a new scope,
-            // visible to the element and its descendants only. ol/ul/menu/dir have an
-            // implicit counter-reset: list-item in the UA stylesheet, so they always
-            // open a new scope even without author CSS.
             bool isListContainer = IsListContainerElement(element);
             bool isListItem = IsListItemElement(element);
+
+            // [CSS-LISTS-3 §2] A counter created by counter-reset has a scope that
+            // includes the element, its descendants, and its following siblings
+            // (with their descendants). To achieve sibling visibility we write the
+            // new counter into the parent's current scope rather than pushing a new
+            // scope for this element. However, if a counter with the same name is
+            // already in scope (inherited from an ancestor or preceding sibling),
+            // this is a nested instance and must shadow the outer one only for
+            // this element and its descendants — so we push a new scope in that
+            // case so the outer counter is restored when we pop. If the reset
+            // declaration uses an unsupported function (e.g. reversed()), we
+            // preserve the old always-push semantics because our parser cannot
+            // extract the real counter name and would otherwise leak state.
+            var counterResetEntries = CounterTracker.GetCounterResetEntries(computedStyle);
+            bool hasNestedCounterReset = false;
+            if (counterResetEntries != null)
+            {
+                for (int i = 0; i < counterResetEntries.Count; i++)
+                {
+                    if (_counterTracker.IsCounterInScope(counterResetEntries[i].Name))
+                    {
+                        hasNestedCounterReset = true;
+                        break;
+                    }
+                }
+            }
+            bool counterResetUsesFunction = CounterTracker.CounterResetHasFunctionValue(computedStyle);
+
             bool pushedCounterScope = scopeCounters
-                || CounterTracker.StyleHasAnyCounterReset(computedStyle)
-                || isListContainer;
+                || isListContainer
+                || hasNestedCounterReset
+                || counterResetUsesFunction;
             if (pushedCounterScope)
             {
                 _counterTracker.PushScope();
             }
 
-            // Process CSS counters
-            _counterTracker.ProcessCounterReset(computedStyle);
+            if (counterResetEntries != null)
+            {
+                _counterTracker.ApplyCounterResetEntries(counterResetEntries);
+            }
             if (isListContainer)
             {
                 ApplyImplicitListContainerReset(element, computedStyle);

@@ -73,6 +73,43 @@ namespace Rend.Tests.Text
             Assert.Equal("hello", result);
         }
 
+        // --- Segment break transformation rules (CSS Text 3 §4.1.1 rule 1: ZWSP) ---
+
+        [Fact]
+        public void Collapse_Normal_SegmentBreakRemovedWhenPrecededByZwsp()
+        {
+            var result = WhitespaceCollapser.Collapse("a\u200B\nb", CssWhiteSpace.Normal);
+            Assert.Equal("a\u200Bb", result);
+        }
+
+        [Fact]
+        public void Collapse_Normal_SegmentBreakRemovedWhenFollowedByZwsp()
+        {
+            var result = WhitespaceCollapser.Collapse("a\n\u200Bb", CssWhiteSpace.Normal);
+            Assert.Equal("a\u200Bb", result);
+        }
+
+        [Fact]
+        public void Collapse_Normal_MultipleSegmentBreaksRemovedByZwspBefore()
+        {
+            var result = WhitespaceCollapser.Collapse("a\u200B\n\n\nb", CssWhiteSpace.Normal);
+            Assert.Equal("a\u200Bb", result);
+        }
+
+        [Fact]
+        public void Collapse_Normal_ZwspRuleOnlyAppliesToAdjacentRun()
+        {
+            var result = WhitespaceCollapser.Collapse("a\u200B\nb\nc", CssWhiteSpace.Normal);
+            Assert.Equal("a\u200Bb c", result);
+        }
+
+        [Fact]
+        public void Collapse_Normal_NonBreakWhitespaceNotAffectedByZwsp()
+        {
+            var result = WhitespaceCollapser.Collapse("a\u200B  b", CssWhiteSpace.Normal);
+            Assert.Equal("a\u200B b", result);
+        }
+
         // --- Nowrap mode (same behavior as Normal) ---
 
         [Fact]

@@ -60,10 +60,11 @@ namespace Rend.Css.Tests
         }
 
         [Fact]
-        public void MinWidth_Default_IsZero()
+        public void MinWidth_Default_IsAuto()
         {
+            // [CSS-SIZING-3 §6.2] min-width initial value is `auto` (NaN sentinel in Rend).
             var style = ResolveElement("");
-            Assert.Equal(0f, style.MinWidth);
+            Assert.True(float.IsNaN(style.MinWidth));
         }
 
         [Fact]
@@ -88,10 +89,11 @@ namespace Rend.Css.Tests
         }
 
         [Fact]
-        public void MinHeight_Default_IsZero()
+        public void MinHeight_Default_IsAuto()
         {
+            // [CSS-SIZING-3 §6.2] min-height initial value is `auto` (NaN sentinel in Rend).
             var style = ResolveElement("");
-            Assert.Equal(0f, style.MinHeight);
+            Assert.True(float.IsNaN(style.MinHeight));
         }
 
         [Fact]

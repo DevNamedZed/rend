@@ -314,20 +314,30 @@ namespace Rend.Tests.Layout
             Assert.True(box.ContentRect.Width >= 99);
         }
 
-        // [CSS-GRID-1 §7.2.4] fit-content(200px) in grid template
+        // [CSS-GRID-1 §7.2.4] fit-content(limit) clamps the track at `limit` when
+        // min-content < limit < max-content. The grid item below has min-content =
+        // 60px (widest inline-block) and max-content = 300px (5 × 60px unwrapped),
+        // so the track width must be 200px (the limit).
         [Fact]
         public void GridFitContentFunction_ClampsTrack()
         {
             var root = LayoutTestHelper.Layout(
-                "<body style='margin:0'>" +
-                "<div style='display:grid;grid-template-columns:fit-content(200px) 1fr;width:400px'>" +
-                "<div id='t' style='height:20px'><div style='width:300px;height:10px'></div></div>" +
+                "<body style='margin:0;font-size:0'>" +
+                "<div style='display:grid;grid-template-columns:fit-content(200px) 1fr;width:600px'>" +
+                "<div id='t'>" +
+                "<span style='display:inline-block;width:60px;height:20px'></span>" +
+                "<span style='display:inline-block;width:60px;height:20px'></span>" +
+                "<span style='display:inline-block;width:60px;height:20px'></span>" +
+                "<span style='display:inline-block;width:60px;height:20px'></span>" +
+                "<span style='display:inline-block;width:60px;height:20px'></span>" +
+                "</div>" +
                 "<div style='height:20px'></div>" +
                 "</div></body>");
             var box = LayoutTestHelper.FindById(root, "t");
             Assert.NotNull(box);
             _output.WriteLine($"width={box!.ContentRect.Width}");
-            Assert.True(box.ContentRect.Width <= 201);
+            Assert.True(System.Math.Abs(box.ContentRect.Width - 200) < 2,
+                $"Expected 200 (fit-content(200px) clamps when min-content < 200 < max-content), got {box.ContentRect.Width}");
         }
 
         // [CSS-GRID-1 §7.2.4] fit-content(100px) in grid with narrow content

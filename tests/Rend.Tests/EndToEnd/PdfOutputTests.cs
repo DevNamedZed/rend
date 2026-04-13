@@ -346,7 +346,8 @@ namespace Rend.Tests.EndToEnd
             Assert.Contains("S\n", content);
             Assert.Contains("1 0 0 RG", content);
             Assert.Matches(@"\d+\s+w", content);
-            Assert.Matches(@"\[[\d ]+\]\s+\d+\s+d", content);
+            // Dash pattern numbers may be decimal (SelectBestDashGap distributes evenly).
+            Assert.Matches(@"\[[\d. ]+\]\s+\d+(?:\.\d+)?\s+d", content);
         }
 
         [Fact]
@@ -809,8 +810,10 @@ namespace Rend.Tests.EndToEnd
         {
             var pdf = RenderPdf("<html><body><div style='border:2px dashed blue;width:100px;height:50px'>Box</div></body></html>");
             var content = ExtractContentStreams(pdf);
-            // Dash pattern: [dashLength gapLength] offset d
-            Assert.Matches(@"\[\d+\s+\d+\]\s+\d+\s+d", content);
+            // Dash pattern: [dashLength gapLength] offset d — numbers may be decimal
+            // because Chrome's SelectBestDashGap distributes dashes evenly along the
+            // edge, producing fractional gap lengths.
+            Assert.Matches(@"\[\d+(?:\.\d+)?\s+\d+(?:\.\d+)?\]\s+\d+(?:\.\d+)?\s+d", content);
         }
 
         [Fact]

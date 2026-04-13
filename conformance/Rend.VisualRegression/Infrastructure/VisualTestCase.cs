@@ -18,6 +18,14 @@ namespace Rend.VisualRegression.Infrastructure
         public double Tolerance { get; set; } = 0.01;
 
         /// <summary>
+        /// Optional per-test fuzzy tolerance parsed from a WPT
+        /// <c>&lt;meta name="fuzzy"&gt;</c> directive. When present, tests that
+        /// exceed <see cref="Tolerance"/> can still pass if the measured
+        /// difference fits within this tolerance's upper bounds.
+        /// </summary>
+        public FuzzyTolerance? Fuzzy { get; set; }
+
+        /// <summary>
         /// Inline HTML for YAML-defined tests. Null for file-backed tests.
         /// </summary>
         public string? InlineHtml { get; set; }

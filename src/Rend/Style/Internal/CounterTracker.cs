@@ -33,17 +33,99 @@ namespace Rend.Style.Internal
         public void ProcessCounterReset(ComputedStyle style)
         {
             var raw = style.GetRefValue(PropertyId.CounterReset);
-            if (raw == null) return;
+            if (raw == null)
+            {
+                return;
+            }
 
             var entries = ParseCounterEntries(raw);
-            if (entries == null) return;
-
-            foreach (var (name, value) in entries)
+            if (entries == null)
             {
-                // Reset in the innermost scope
-                var scope = _scopes.Peek();
-                scope[name] = value;
+                return;
             }
+
+            foreach (var entry in entries)
+            {
+                var scope = _scopes.Peek();
+                scope[entry.Name] = entry.Value;
+            }
+        }
+
+        /// <summary>
+        /// Parse the element's <c>counter-reset</c> declaration into a list of
+        /// <see cref="CounterEntry"/> instances, or <c>null</c> if the element has
+        /// no counter-reset declaration.
+        /// </summary>
+        public static IReadOnlyList<CounterEntry>? GetCounterResetEntries(ComputedStyle style)
+        {
+            var raw = style.GetRefValue(PropertyId.CounterReset);
+            if (raw == null)
+            {
+                return null;
+            }
+            return ParseCounterEntries(raw);
+        }
+
+        /// <summary>
+        /// Apply a list of pre-parsed counter-reset entries to the innermost
+        /// scope. Used by <see cref="StyleTreeBuilder"/> after it has decided
+        /// whether a new scope should be pushed for the current element.
+        /// </summary>
+        public void ApplyCounterResetEntries(IReadOnlyList<CounterEntry> entries)
+        {
+            var scope = _scopes.Peek();
+            for (int i = 0; i < entries.Count; i++)
+            {
+                scope[entries[i].Name] = entries[i].Value;
+            }
+        }
+
+        /// <summary>
+        /// Returns <c>true</c> if a counter with the given name exists in any
+        /// currently active scope (searched from innermost outward).
+        /// </summary>
+        public bool IsCounterInScope(string name)
+        {
+            foreach (var scope in _scopes)
+            {
+                if (scope.ContainsKey(name))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // [CSS-LISTS-3 §2] counter-reset accepts <counter-name> or
+        // reversed(<counter-name>). Chrome treats reversed() as a hint that
+        // only fully applies to list-item counters; outside of that context its
+        // behavior does not match the spec's sibling-visible scope semantics.
+        // When the declaration contains any function value we cannot fully
+        // interpret, callers should fall back to always pushing a new counter
+        // scope so the element has a fresh counter environment and the raw
+        // counter name does not pollute parent-scope state.
+        public static bool CounterResetHasFunctionValue(ComputedStyle style)
+        {
+            var raw = style.GetRefValue(PropertyId.CounterReset);
+            if (raw == null)
+            {
+                return false;
+            }
+            if (raw is CssFunctionValue)
+            {
+                return true;
+            }
+            if (raw is CssListValue list)
+            {
+                for (int i = 0; i < list.Values.Count; i++)
+                {
+                    if (list.Values[i] is CssFunctionValue)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         /// <summary>
@@ -53,20 +135,25 @@ namespace Rend.Style.Internal
         public void ProcessCounterIncrement(ComputedStyle style)
         {
             var raw = style.GetRefValue(PropertyId.CounterIncrement);
-            if (raw == null) return;
+            if (raw == null)
+            {
+                return;
+            }
 
             var entries = ParseCounterEntries(raw, defaultValue: 1);
-            if (entries == null) return;
-
-            foreach (var (name, value) in entries)
+            if (entries == null)
             {
-                // Find the counter in any scope (innermost first)
+                return;
+            }
+
+            foreach (var entry in entries)
+            {
                 bool found = false;
                 foreach (var scope in _scopes)
                 {
-                    if (scope.ContainsKey(name))
+                    if (scope.ContainsKey(entry.Name))
                     {
-                        scope[name] += value;
+                        scope[entry.Name] += entry.Value;
                         found = true;
                         break;
                     }
@@ -74,9 +161,8 @@ namespace Rend.Style.Internal
 
                 if (!found)
                 {
-                    // If counter doesn't exist, create it implicitly
                     var currentScope = _scopes.Peek();
-                    currentScope[name] = value;
+                    currentScope[entry.Name] = entry.Value;
                 }
             }
         }
@@ -89,20 +175,25 @@ namespace Rend.Style.Internal
         public void ProcessCounterSet(ComputedStyle style)
         {
             var raw = style.GetRefValue(PropertyId.CounterSet);
-            if (raw == null) return;
+            if (raw == null)
+            {
+                return;
+            }
 
             var entries = ParseCounterEntries(raw);
-            if (entries == null) return;
-
-            foreach (var (name, value) in entries)
+            if (entries == null)
             {
-                // Set the counter in the innermost scope that has it, or create one
+                return;
+            }
+
+            foreach (var entry in entries)
+            {
                 bool found = false;
                 foreach (var scope in _scopes)
                 {
-                    if (scope.ContainsKey(name))
+                    if (scope.ContainsKey(entry.Name))
                     {
-                        scope[name] = value;
+                        scope[entry.Name] = entry.Value;
                         found = true;
                         break;
                     }
@@ -111,7 +202,7 @@ namespace Rend.Style.Internal
                 if (!found)
                 {
                     var currentScope = _scopes.Peek();
-                    currentScope[name] = value;
+                    currentScope[entry.Name] = entry.Value;
                 }
             }
         }
@@ -229,21 +320,6 @@ namespace Rend.Style.Internal
             return StyleHasCounterEntry(style, PropertyId.CounterSet, counterName);
         }
 
-        /// <summary>
-        /// Returns <c>true</c> if the element has any non-none counter-reset
-        /// entries.
-        /// </summary>
-        public static bool StyleHasAnyCounterReset(ComputedStyle style)
-        {
-            var raw = style.GetRefValue(PropertyId.CounterReset);
-            if (raw == null)
-            {
-                return false;
-            }
-            var entries = ParseCounterEntries(raw);
-            return entries != null && entries.Count > 0;
-        }
-
         private static bool StyleHasCounterEntry(ComputedStyle style, int propertyId, string counterName)
         {
             var raw = style.GetRefValue(propertyId);
@@ -258,7 +334,7 @@ namespace Rend.Style.Internal
             }
             for (int i = 0; i < entries.Count; i++)
             {
-                if (entries[i].name == counterName)
+                if (entries[i].Name == counterName)
                 {
                     return true;
                 }
@@ -309,16 +385,18 @@ namespace Rend.Style.Internal
         /// Parses counter entries from a CSS value (e.g., "section 0" or "section chapter 3").
         /// Returns null for "none" keyword.
         /// </summary>
-        private static List<(string name, int value)>? ParseCounterEntries(object raw, int defaultValue = 0)
+        private static List<CounterEntry>? ParseCounterEntries(object raw, int defaultValue = 0)
         {
             if (raw is CssKeywordValue kw && kw.Keyword == "none")
+            {
                 return null;
+            }
 
-            var entries = new List<(string name, int value)>();
+            var entries = new List<CounterEntry>();
 
             if (raw is CssKeywordValue nameKw)
             {
-                entries.Add((nameKw.Keyword, defaultValue));
+                entries.Add(new CounterEntry(nameKw.Keyword, defaultValue));
                 return entries;
             }
 
@@ -329,14 +407,21 @@ namespace Rend.Style.Internal
                 {
                     string? name = null;
                     if (list.Values[i] is CssKeywordValue k)
+                    {
                         name = k.Keyword;
+                    }
                     else
+                    {
                         name = list.Values[i].ToString();
+                    }
 
-                    if (name == null || name == "none") { i++; continue; }
+                    if (name == null || name == "none")
+                    {
+                        i++;
+                        continue;
+                    }
 
                     int val = defaultValue;
-                    // Check if next token is a number
                     if (i + 1 < list.Values.Count && list.Values[i + 1] is CssNumberValue num)
                     {
                         val = (int)num.Value;
@@ -347,15 +432,16 @@ namespace Rend.Style.Internal
                         i++;
                     }
 
-                    entries.Add((name, val));
+                    entries.Add(new CounterEntry(name, val));
                 }
                 return entries;
             }
 
-            // Single ident
             string? singleName = raw.ToString();
             if (singleName != null && singleName != "none")
-                entries.Add((singleName, defaultValue));
+            {
+                entries.Add(new CounterEntry(singleName, defaultValue));
+            }
 
             return entries.Count > 0 ? entries : null;
         }

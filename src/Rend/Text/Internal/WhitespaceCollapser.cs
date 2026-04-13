@@ -44,45 +44,93 @@ namespace Rend.Text.Internal
 
         /// <summary>
         /// Collapses any run of collapsible whitespace characters to a single
-        /// space. Matches Chrome/Blink behavior for <c>white-space: normal</c>
-        /// and <c>nowrap</c>: segment breaks (newlines) are always converted to
-        /// a space, regardless of adjacent character properties.
+        /// space, applying the segment-break transformation rules used by
+        /// Chrome/Blink for <c>white-space: normal</c> and <c>nowrap</c>.
         /// </summary>
         /// <spec>CSS-TEXT-3 §4.1.1 https://drafts.csswg.org/css-text-3/#line-break-transform</spec>
         /// <remarks>
-        /// The CSS Text 3 spec prescribes removing segment breaks when both
-        /// adjacent non-whitespace characters are East Asian Fullwidth, Wide, or
-        /// Halfwidth (and neither is Hangul). Chrome does not implement that
-        /// rule — it always converts segment breaks to spaces — and the WPT
-        /// reftests therefore fail in Chrome as well. Our goal is Chrome parity,
-        /// so we match the implemented behavior rather than the spec text.
+        /// The CSS Text 3 spec defines three ordered rules for each collapsible
+        /// segment break:
+        /// <list type="number">
+        /// <item>If the character immediately before or after the segment break
+        /// is U+200B ZERO WIDTH SPACE, the break is removed.</item>
+        /// <item>Otherwise, if both neighbors are East Asian Wide/Fullwidth/
+        /// Halfwidth (not Ambiguous) and neither is Hangul, the break is
+        /// removed.</item>
+        /// <item>Otherwise, the break is converted to a single space.</item>
+        /// </list>
+        /// Chrome implements rule 1 but skips rule 2 — so the WPT reftests that
+        /// assert the EAW-only case fail in Chrome as well. We match Chrome:
+        /// rules 1 and 3 are honored, rule 2 is intentionally not applied.
         /// </remarks>
         private static string CollapseAll(string text)
         {
             var sb = new StringBuilder(text.Length);
             bool lastWasSpace = false;
 
-            for (int i = 0; i < text.Length; i++)
+            int index = 0;
+            while (index < text.Length)
             {
-                char ch = text[i];
+                char ch = text[index];
 
-                if (IsCollapsibleWhitespace(ch))
-                {
-                    if (!lastWasSpace)
-                    {
-                        sb.Append(' ');
-                        lastWasSpace = true;
-                    }
-                }
-                else
+                if (!IsCollapsibleWhitespace(ch))
                 {
                     sb.Append(ch);
                     lastWasSpace = false;
+                    index++;
+                    continue;
+                }
+
+                bool runContainsSegmentBreak = false;
+                while (index < text.Length && IsCollapsibleWhitespace(text[index]))
+                {
+                    if (text[index] == '\n' || text[index] == '\r')
+                    {
+                        runContainsSegmentBreak = true;
+                    }
+                    index++;
+                }
+
+                bool removeForZwspRule = runContainsSegmentBreak
+                    && IsZeroWidthSpaceAdjacent(sb, text, index);
+
+                if (removeForZwspRule)
+                {
+                    continue;
+                }
+
+                if (!lastWasSpace)
+                {
+                    sb.Append(' ');
+                    lastWasSpace = true;
                 }
             }
 
             return sb.ToString();
         }
+
+        /// <summary>
+        /// Returns true when a collapsible-whitespace run is immediately
+        /// preceded or followed by U+200B ZERO WIDTH SPACE. Spaces and tabs
+        /// adjacent to the segment break are treated as part of the run and
+        /// never as the "immediate" neighbor.
+        /// </summary>
+        private static bool IsZeroWidthSpaceAdjacent(StringBuilder before, string text, int afterIndex)
+        {
+            if (before.Length > 0 && before[before.Length - 1] == ZeroWidthSpace)
+            {
+                return true;
+            }
+
+            if (afterIndex < text.Length && text[afterIndex] == ZeroWidthSpace)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private const char ZeroWidthSpace = '\u200B';
 
         /// <summary>
         /// Collapses consecutive spaces and tabs to a single space, but preserves newlines.

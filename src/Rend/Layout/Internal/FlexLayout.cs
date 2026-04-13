@@ -22,12 +22,24 @@ namespace Rend.Layout.Internal
             float containerWidth = parent.ContentRect.Width;
             float containerHeight = parent.ContentRect.Height;
 
+            // [CSS-FLEXBOX §9.4] An explicitly specified height (including 0) is a
+            // definite main size for column flex containers. Track this separately so
+            // height:0 is not confused with auto height (which falls back to 10000).
+            bool hasDefiniteHeight = !float.IsNaN(style.Height)
+                && !float.IsNegativeInfinity(style.Height)
+                && !DeferredPercent.IsEncoded(style.Height)
+                && !SizingKeyword.IsSizingKeyword(style.Height);
+
             // Container height may not be resolved yet (BFC sets it to 0 before LayoutChildren).
             // Resolve from explicit CSS height so column main-size and cross-axis alignment work.
             if (float.IsNaN(containerHeight) || containerHeight <= 0)
             {
                 float explicitH = DimensionResolver.ResolveHeight(style, float.NaN, parent);
-                if (!float.IsNaN(explicitH) && explicitH > 0)
+                if (hasDefiniteHeight && !float.IsNaN(explicitH) && explicitH >= 0)
+                {
+                    containerHeight = explicitH;
+                }
+                else if (!float.IsNaN(explicitH) && explicitH > 0)
                 {
                     containerHeight = explicitH;
                 }
@@ -92,7 +104,11 @@ namespace Rend.Layout.Internal
 
             float mainSize = isColumn ? containerHeight : containerWidth;
             bool isAutoMainSize = false;
-            if (float.IsNaN(mainSize) || mainSize <= 0)
+            // [CSS-FLEXBOX §9.4] For column flex with an explicit height (even 0),
+            // the main size is definite. Only treat as auto when no explicit height
+            // is set and containerHeight has not been resolved by the parent.
+            bool definiteMain = isColumn ? hasDefiniteHeight : true;
+            if (float.IsNaN(mainSize) || (mainSize < 0) || (mainSize == 0 && !definiteMain))
             {
                 mainSize = isColumn ? 10000f : containerWidth;
                 if (isColumn) { isAutoMainSize = true; }
@@ -324,47 +340,49 @@ namespace Rend.Layout.Internal
                     if (minMain <= 0 && item.Style.OverflowY == CssOverflow.Visible
                         && float.IsNaN(item.Style.MinHeight))
                     {
-                        // [CSS-FLEXBOX §4.5] When the container has definite height
-                        // and the item has a definite height, the specified size suggestion
-                        // will clamp the result. If the item's height would make auto min 0
-                        // (because content-size ≤ specified-size), we can skip measurement.
-                        // But when the container has auto height OR the item has no definite
-                        // height, we must measure content.
+                        // [CSS-FLEXBOX §4.5] Auto min-height is min(content size, specified size).
+                        // We must measure the content when:
+                        //   - container is auto-sized (content may exceed BaseSize),
+                        //   - item has no definite height (content is the specified size),
+                        //   - container has definite-zero height (flex-basis 0 items rely on
+                        //     min-height to resolve nested content — see WPT
+                        //     flex-minimum-height-flex-items-017).
                         bool shouldMeasure = isAutoMainSize
                             || float.IsNaN(item.Style.Height)
-                            || item.Style.Height <= 0;
+                            || item.Style.Height <= 0
+                            || mainSize == 0;
                         if (shouldMeasure)
                         {
-                        float contentMin = ComputeContentMinHeight(item, containerWidth, context);
+                            float contentMin = ComputeContentMinHeight(item, containerWidth, context);
 
-                        // [CSS-FLEXBOX §4.5] Clamp content size suggestion by max-height
-                        float itemMaxH = item.Style.MaxHeight;
-                        if (DeferredPercent.IsEncoded(itemMaxH))
-                        {
-                            itemMaxH = DeferredPercent.Resolve(itemMaxH, containerHeight);
-                        }
-                        if (!float.IsNaN(itemMaxH) && itemMaxH >= 0 && contentMin > itemMaxH)
-                        {
-                            contentMin = itemMaxH;
-                        }
+                            // [CSS-FLEXBOX §4.5] Clamp content size suggestion by max-height
+                            float itemMaxH = item.Style.MaxHeight;
+                            if (DeferredPercent.IsEncoded(itemMaxH))
+                            {
+                                itemMaxH = DeferredPercent.Resolve(itemMaxH, containerHeight);
+                            }
+                            if (!float.IsNaN(itemMaxH) && itemMaxH >= 0 && contentMin > itemMaxH)
+                            {
+                                contentMin = itemMaxH;
+                            }
 
-                        // [CSS-FLEXBOX §4.5] Specified size suggestion = computed height
-                        // (not flex-basis) if definite. auto min = min(content, specified).
-                        float specHeight = item.Style.Height;
-                        if (DeferredPercent.IsEncoded(specHeight))
-                        {
-                            specHeight = DeferredPercent.Resolve(specHeight, containerHeight);
-                        }
-                        if (!float.IsNaN(specHeight) && specHeight >= 0)
-                        {
-                            contentMin = Math.Min(contentMin, specHeight);
-                        }
+                            // [CSS-FLEXBOX §4.5] Specified size suggestion = computed height
+                            // (not flex-basis) if definite. auto min = min(content, specified).
+                            float specHeight = item.Style.Height;
+                            if (DeferredPercent.IsEncoded(specHeight))
+                            {
+                                specHeight = DeferredPercent.Resolve(specHeight, containerHeight);
+                            }
+                            if (!float.IsNaN(specHeight) && specHeight >= 0)
+                            {
+                                contentMin = Math.Min(contentMin, specHeight);
+                            }
 
-                        if (contentMin > minMain)
-                        {
-                            minMain = contentMin;
-                            item.AutoMinMain = contentMin;
-                        }
+                            if (contentMin > minMain)
+                            {
+                                minMain = contentMin;
+                                item.AutoMinMain = contentMin;
+                            }
                         }
                     }
                 }
@@ -644,11 +662,20 @@ namespace Rend.Layout.Internal
                             }
                         }
 
-                        // CSS Sizing 4: if width is auto and aspect-ratio is set,
-                        // derive width from the resolved main size (height).
+                        // [CSS-SIZING-4 §5.1] If width is auto and an aspect-ratio is
+                        // available, derive width from the resolved main size (height).
+                        // Fall back to the replaced element's intrinsic ratio (SVG
+                        // viewBox, img width/height attrs) when no CSS aspect-ratio
+                        // is declared.
                         if (float.IsNaN(item.Style.Width) && contentMain > 0)
                         {
                             float aspectRatio = DimensionResolver.GetAspectRatio(item.Style);
+                            if (aspectRatio <= 0
+                                && item.Box.StyledNode is StyledElement aspectColElement
+                                && ReplacedElementLayout.IsReplaced(aspectColElement))
+                            {
+                                aspectRatio = ReplacedElementLayout.GetIntrinsicRatio(aspectColElement);
+                            }
                             if (aspectRatio > 0)
                             {
                                 float arWidth = contentMain * aspectRatio;
@@ -707,10 +734,19 @@ namespace Rend.Layout.Internal
                         box.ContentRect = new RectF(0, 0, contentMain, 0);
                         float specHeight = DimensionResolver.ResolveHeight(item.Style, containerHeight, box);
                         // [CSS-SIZING-4 §5.1] If height resolves to 0 (unset = auto) and
-                        // aspect-ratio is set, derive height from the main size.
+                        // an aspect-ratio is available, derive height from the main size.
+                        // Fall back to the replaced element's intrinsic ratio (SVG
+                        // viewBox, img width/height attrs) when no CSS aspect-ratio is
+                        // declared.
                         if ((float.IsNaN(specHeight) || specHeight <= 0) && contentMain > 0)
                         {
                             float itemAspectRatio = DimensionResolver.GetAspectRatio(item.Style);
+                            if (itemAspectRatio <= 0
+                                && item.Box.StyledNode is StyledElement aspectRowElement
+                                && ReplacedElementLayout.IsReplaced(aspectRowElement))
+                            {
+                                itemAspectRatio = ReplacedElementLayout.GetIntrinsicRatio(aspectRowElement);
+                            }
                             if (itemAspectRatio > 0)
                             {
                                 if (item.Style.BoxSizing == CssBoxSizing.BorderBox)
@@ -884,9 +920,18 @@ namespace Rend.Layout.Internal
                     }
                     else if (item.Style != null && float.IsNaN(item.Style.Height))
                     {
-                        // [CSS-SIZING-4 §5.1] If aspect-ratio already resolved a definite
-                        // cross size, keep it — don't override with content-based height.
-                        if (DimensionResolver.GetAspectRatio(item.Style) <= 0 || contentCross <= 0)
+                        // [CSS-SIZING-4 §5.1] If an aspect-ratio (CSS or intrinsic
+                        // from a replaced element's viewBox/HTML attributes) already
+                        // resolved a definite cross size, keep it — don't override
+                        // with content-based height.
+                        bool hasRatioForCross = DimensionResolver.GetAspectRatio(item.Style) > 0;
+                        if (!hasRatioForCross
+                            && box.StyledNode is StyledElement crossRatioElement
+                            && ReplacedElementLayout.IsReplaced(crossRatioElement))
+                        {
+                            hasRatioForCross = ReplacedElementLayout.GetIntrinsicRatio(crossRatioElement) > 0;
+                        }
+                        if (!hasRatioForCross || contentCross <= 0)
                         {
                             contentCross = CalculateAutoHeight(box);
                             // Replaced elements (form controls, images) have intrinsic cross size
@@ -952,8 +997,11 @@ namespace Rend.Layout.Internal
             }
 
             // [CSS-FLEXBOX §9.4] flex-wrap: wrap-reverse swaps cross-start/end.
-            // For single-line containers, shift items to the cross-end.
-            if (style.FlexWrap == CssFlexWrap.WrapReverse)
+            // For single-line containers, shift items to the cross-end so the
+            // single line sits at the swapped cross-start. For multi-line containers
+            // the earlier lines.Reverse() + ApplyAlignContent already positioned
+            // lines correctly — applying the shift here would double-apply it.
+            if (style.FlexWrap == CssFlexWrap.WrapReverse && lines.Count == 1)
             {
                 float containerCross = isColumn ? containerWidth : containerHeight;
                 if (!float.IsNaN(containerCross) && containerCross > 0)
@@ -962,7 +1010,10 @@ namespace Rend.Layout.Internal
                     for (int li = 0; li < lines.Count; li++)
                     {
                         totalCrossUsed += lines[li].CrossSize;
-                        if (li < lines.Count - 1) { totalCrossUsed += crossGap; }
+                        if (li < lines.Count - 1)
+                        {
+                            totalCrossUsed += crossGap;
+                        }
                     }
                     float shift = containerCross - totalCrossUsed;
                     if (shift > 0.5f)
@@ -1641,10 +1692,72 @@ namespace Rend.Layout.Internal
                         if (float.TryParse(widthAttr, out float aw)) { intrW = aw; }
                         if (float.TryParse(heightAttr, out float ah)) { intrH = ah; }
                     }
-                    // [CSS-IMAGES-3 §2.2] SVG with viewBox but no width/height:
-                    // has intrinsic RATIO but no intrinsic dimensions.
-                    // Don't set intrinsic W/H from viewBox — let ResolveDimensions
-                    // handle it through the ratio.
+
+                    // [CSS-IMAGES-3 §6] If the SVG/img has one intrinsic dimension plus
+                    // a natural aspect ratio (viewBox or explicit aspect-ratio), derive
+                    // the missing dimension from the ratio. Used by WPT tests such as
+                    // flex-aspect-ratio-img-column-013 where an SVG declares
+                    // height="50px" + viewBox but no width — the flex base size must
+                    // reflect the ratio-derived width, not 0.
+                    float intrinsicRatio = ReplacedElementLayout.GetIntrinsicRatio(element);
+                    if (intrinsicRatio > 0)
+                    {
+                        if (intrW <= 0 && intrH > 0)
+                        {
+                            intrW = intrH * intrinsicRatio;
+                        }
+                        else if (intrH <= 0 && intrW > 0)
+                        {
+                            intrH = intrW / intrinsicRatio;
+                        }
+
+                        // [CSS-SIZING-4 §5.1] Transferred min/max size constraints.
+                        // When a replaced element has an aspect ratio, max-width/
+                        // max-height on one axis transfers through the ratio to the
+                        // other axis. Applied to intrinsic sizes so the flex base
+                        // size honors CSS constraints for both axes proportionally.
+                        float directMaxW = style.MaxWidth;
+                        float directMaxH = style.MaxHeight;
+                        bool hasDirectMaxW = !float.IsNaN(directMaxW) && directMaxW >= 0
+                            && !DeferredPercent.IsEncoded(directMaxW)
+                            && !SizingKeyword.IsSizingKeyword(directMaxW);
+                        bool hasDirectMaxH = !float.IsNaN(directMaxH) && directMaxH >= 0
+                            && !DeferredPercent.IsEncoded(directMaxH)
+                            && !SizingKeyword.IsSizingKeyword(directMaxH);
+                        if (hasDirectMaxW)
+                        {
+                            if (intrW > directMaxW) { intrW = directMaxW; }
+                            float transferredMaxH = directMaxW / intrinsicRatio;
+                            if (intrH > transferredMaxH) { intrH = transferredMaxH; }
+                        }
+                        if (hasDirectMaxH)
+                        {
+                            if (intrH > directMaxH) { intrH = directMaxH; }
+                            float transferredMaxW = directMaxH * intrinsicRatio;
+                            if (intrW > transferredMaxW) { intrW = transferredMaxW; }
+                        }
+
+                        float directMinW = style.MinWidth;
+                        float directMinH = style.MinHeight;
+                        bool hasDirectMinW = !float.IsNaN(directMinW) && directMinW > 0
+                            && !DeferredPercent.IsEncoded(directMinW)
+                            && !SizingKeyword.IsSizingKeyword(directMinW);
+                        bool hasDirectMinH = !float.IsNaN(directMinH) && directMinH > 0
+                            && !DeferredPercent.IsEncoded(directMinH)
+                            && !SizingKeyword.IsSizingKeyword(directMinH);
+                        if (hasDirectMinW)
+                        {
+                            if (intrW < directMinW) { intrW = directMinW; }
+                            float transferredMinH = directMinW / intrinsicRatio;
+                            if (intrH < transferredMinH) { intrH = transferredMinH; }
+                        }
+                        if (hasDirectMinH)
+                        {
+                            if (intrH < directMinH) { intrH = directMinH; }
+                            float transferredMinW = directMinH * intrinsicRatio;
+                            if (intrW < transferredMinW) { intrW = transferredMinW; }
+                        }
+                    }
                 }
                 return isColumn ? intrH : intrW;
             }

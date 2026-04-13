@@ -108,5 +108,32 @@ namespace Rend.Tests.Layout
             Assert.True(System.Math.Abs(a.ContentRect.Width - 50) < 2,
                 $"auto-fill 50px columns (got {a.ContentRect.Width})");
         }
+
+        // [CSS-SIZING-3 §5.2.2] Percentage heights on grid items resolve against
+        // the grid area size. When the row is auto-sized and the inline-grid has
+        // no definite container height, the row must first be sized by content
+        // contributions from sibling items; only then can the percent-height item
+        // resolve against the now-definite row size.
+        [Fact]
+        public void Grid_PercentHeight_AutoRow_ResolvesAgainstContentSizedRow()
+        {
+            var root = LayoutTestHelper.Layout(@"
+                <body style='margin:0'>
+                <div style='display:inline-grid;grid-template:auto/50px 50px;'>
+                    <div id='pct' style='width:100%;height:100%;background:green'></div>
+                    <div id='fixed' style='height:100px;background:green'><br></div>
+                </div></body>");
+            var percentItem = LayoutTestHelper.FindById(root, "pct");
+            var fixedItem = LayoutTestHelper.FindById(root, "fixed");
+            Assert.NotNull(percentItem);
+            Assert.NotNull(fixedItem);
+            _output.WriteLine($"pct: {percentItem!.ContentRect.Width}x{percentItem.ContentRect.Height}");
+            _output.WriteLine($"fixed: {fixedItem!.ContentRect.Width}x{fixedItem.ContentRect.Height}");
+            // Row is sized by fixed item to 100px; percent item should fill 100x50
+            Assert.True(System.Math.Abs(percentItem.ContentRect.Height - 100) < 2,
+                $"Expected percent item height 100 (row sized by sibling), got {percentItem.ContentRect.Height}");
+            Assert.True(System.Math.Abs(percentItem.ContentRect.Width - 50) < 2,
+                $"Expected percent item width 50 (column track), got {percentItem.ContentRect.Width}");
+        }
     }
 }

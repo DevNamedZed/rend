@@ -547,9 +547,25 @@ namespace Rend.Layout.Internal
                     contentWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, childBox, parentContentHeight);
                 }
 
-                // [CSS-SIZING §5.2] Apply min-width/max-width constraints
+                // [CSS-SIZING §5.2] Apply min-width/max-width constraints.
+                // [CSS-UI §3.2] When box-sizing: border-box, min-width/max-width
+                // apply to the border box, so subtract horizontal padding+border
+                // before clamping the content width.
                 float cwMinW = DimensionResolver.ResolvePercentWidth(childStyle.MinWidth, containingWidth);
                 float cwMaxW = DimensionResolver.ResolvePercentWidth(childStyle.MaxWidth, containingWidth);
+                if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
+                {
+                    float horizontalExtra = childBox.PaddingLeft + childBox.PaddingRight
+                                          + childBox.BorderLeftWidth + childBox.BorderRightWidth;
+                    if (!float.IsNaN(cwMinW) && cwMinW >= 0)
+                    {
+                        cwMinW = Math.Max(0, cwMinW - horizontalExtra);
+                    }
+                    if (!float.IsNaN(cwMaxW) && cwMaxW >= 0)
+                    {
+                        cwMaxW = Math.Max(0, cwMaxW - horizontalExtra);
+                    }
+                }
                 if (!float.IsNaN(cwMaxW) && cwMaxW >= 0 && contentWidth > cwMaxW)
                 {
                     contentWidth = cwMaxW;

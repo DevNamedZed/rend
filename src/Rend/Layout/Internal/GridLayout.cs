@@ -21,18 +21,29 @@ namespace Rend.Layout.Internal
             var style = styledElement.Style;
             float containerWidth = parent.ContentRect.Width;
             float containerHeight = parent.ContentRect.Height;
+            // [CSS-SIZING-3 §5.2] "Definite" height means a height resolved without
+            // reference to content. Only definite heights drive row-track stretching
+            // and align-content free-space distribution. Max-height on an auto-height
+            // container is an upper bound, not a definite height.
+            bool containerHeightIsDefinite = !float.IsNaN(containerHeight) && containerHeight > 0;
             // Container height may not be resolved yet (BFC sets it to 0 before LayoutChildren).
             // Resolve from explicit CSS height so fr row tracks work correctly.
-            if (float.IsNaN(containerHeight) || containerHeight <= 0)
+            if (!containerHeightIsDefinite)
             {
                 float explicitH = DimensionResolver.ResolveHeight(style, float.NaN, parent);
                 if (!float.IsNaN(explicitH) && explicitH > 0)
+                {
                     containerHeight = explicitH;
+                    containerHeightIsDefinite = true;
+                }
             }
-            if (float.IsNaN(containerHeight) || containerHeight <= 0)
+            if (!containerHeightIsDefinite)
             {
                 // [CSS-SIZING §5.2] When height is auto, use max-height as an upper bound
                 // for percentage resolution on abspos children (e.g., height: 100%).
+                // This is NOT a definite container height — the container still
+                // auto-sizes from its row tracks — so `containerHeightIsDefinite`
+                // stays false and stretching/align-content logic below is skipped.
                 float maxH = style.MaxHeight;
                 if (!float.IsNaN(maxH) && maxH > 0)
                 {
@@ -814,15 +825,18 @@ namespace Rend.Layout.Internal
             // For subgridded axes, use the inherited tracks directly and do not run BuildTrackSizes
             // which would redistribute implicit space. The subgrid columns/rows are fixed from the parent.
             float[] colWidths;
+            bool[] isImplicitAutoCol;
             if (isSubgridCols && subgridColTracks != null && subgridColTracks.Length >= finalCols)
             {
                 colWidths = new float[finalCols];
                 Array.Copy(subgridColTracks, colWidths, finalCols);
+                isImplicitAutoCol = new bool[finalCols];
             }
             else
             {
                 colWidths = BuildTrackSizes(autoFitColTracks, finalCols, containerWidth,
-                    colGap, style.GetRefValue(PropertyId.GridAutoColumns), containerWidth);
+                    colGap, style.GetRefValue(PropertyId.GridAutoColumns), containerWidth,
+                    out isImplicitAutoCol);
             }
             float[] rowHeights = new float[finalRows];
 
@@ -868,8 +882,47 @@ namespace Rend.Layout.Internal
 
                     bool isMinContent = colWidths[item.ColStart] == -1;
                     float keyword = isMinContent ? SizingKeyword.MinContent : SizingKeyword.MaxContent;
-                    float measured = BlockFormattingContext.MeasureIntrinsicWidth(
-                        item.StyledElement, keyword, containerWidth, context);
+
+                    // [CSS-GRID-1 §11.5.1] Intrinsic size contributions: for the max-content
+                    // contribution, if the item has a definite used inline-size that resolves
+                    // against the grid container's inline size, use that resolved size instead
+                    // of the item's content-based max-content. This preserves the behaviour of
+                    // 'width: 100%' items (common for items wrapping text inside fixed-width
+                    // grids) — they should contribute 100% of the container, not the entire
+                    // natural max-content width of the text they contain. The result is still
+                    // floored by min-content below.
+                    float measured;
+                    float itemStyleWidth = item.StyledElement.Style.Width;
+                    float resolvedItemWidth = float.NaN;
+                    if (!isMinContent
+                        && !float.IsNaN(itemStyleWidth)
+                        && !SizingKeyword.IsSizingKeyword(itemStyleWidth))
+                    {
+                        if (DeferredPercent.IsEncoded(itemStyleWidth))
+                        {
+                            resolvedItemWidth = DeferredPercent.Resolve(itemStyleWidth, containerWidth);
+                        }
+                        else if (itemStyleWidth >= 0)
+                        {
+                            resolvedItemWidth = itemStyleWidth;
+                        }
+                    }
+                    if (!float.IsNaN(resolvedItemWidth) && resolvedItemWidth >= 0)
+                    {
+                        measured = resolvedItemWidth;
+                        // Floor by min-content so nothing shrinks below an unbreakable content piece.
+                        float minContent = BlockFormattingContext.MeasureIntrinsicWidth(
+                            item.StyledElement, SizingKeyword.MinContent, containerWidth, context);
+                        if (minContent > measured)
+                        {
+                            measured = minContent;
+                        }
+                    }
+                    else
+                    {
+                        measured = BlockFormattingContext.MeasureIntrinsicWidth(
+                            item.StyledElement, keyword, containerWidth, context);
+                    }
                     // Add horizontal box model spacing
                     var tempBox = new LayoutBox(item.StyledElement, BoxType.Block);
                     BoxModelCalculator.ApplyBoxModel(tempBox, item.StyledElement.Style, containerWidth);
@@ -882,10 +935,15 @@ namespace Rend.Layout.Internal
                         intrinsicWidths[item.ColStart] = measured;
                     }
 
-                    // [CSS-GRID §7.2.4.1] fit-content needs min-content as auto minimum floor
+                    // [CSS-GRID §7.2.4.1] fit-content needs min-content as auto minimum floor.
+                    // [CSS-GRID-1 §11.4] Implicit auto tracks also need min-content as the
+                    // base size so the §11.4 maximize step can cap their growth without
+                    // shrinking past the unbreakable piece of content.
                     bool isFitContent = colWidths[item.ColStart] <= -2.5f
                                      && colWidths[item.ColStart] > -3.5f;
-                    if (isFitContent && !isMinContent)
+                    bool needsMinContentFloor = (isFitContent || isImplicitAutoCol[item.ColStart])
+                                             && !isMinContent;
+                    if (needsMinContentFloor)
                     {
                         float minMeasured = BlockFormattingContext.MeasureIntrinsicWidth(
                             item.StyledElement, SizingKeyword.MinContent, containerWidth, context);
@@ -912,6 +970,58 @@ namespace Rend.Layout.Internal
                                 Math.Min(measured, fitContentColLimits[c]));
                         }
                         colWidths[c] = measured;
+                    }
+                }
+
+                // [CSS-GRID-1 §11.4 Maximize Tracks] Implicit auto tracks default to
+                // minmax(min-content, max-content). The base size is min-content and
+                // the growth limit is max-content. When the sum of max-content sizes
+                // exceeds the container's available inline space, cap each implicit
+                // auto track so the total fits, but never shrink past min-content —
+                // an unbreakable piece of content still has to appear.
+                // https://drafts.csswg.org/css-grid-1/#algo-grow-tracks
+                if (containerWidth > 0 && finalCols > 0)
+                {
+                    int implicitTrackCount = 0;
+                    float nonImplicitTrackSum = 0;
+                    for (int c = 0; c < finalCols; c++)
+                    {
+                        if (isImplicitAutoCol[c])
+                        {
+                            implicitTrackCount++;
+                        }
+                        else
+                        {
+                            nonImplicitTrackSum += colWidths[c];
+                        }
+                    }
+                    if (implicitTrackCount > 0)
+                    {
+                        float gapSpace = finalCols > 1 ? (finalCols - 1) * colGap : 0;
+                        float availableForImplicit = containerWidth - nonImplicitTrackSum - gapSpace;
+                        float currentImplicitSum = 0;
+                        for (int c = 0; c < finalCols; c++)
+                        {
+                            if (isImplicitAutoCol[c])
+                            {
+                                currentImplicitSum += colWidths[c];
+                            }
+                        }
+                        if (currentImplicitSum > availableForImplicit && availableForImplicit > 0)
+                        {
+                            float perTrackCap = availableForImplicit / implicitTrackCount;
+                            for (int c = 0; c < finalCols; c++)
+                            {
+                                if (!isImplicitAutoCol[c]) { continue; }
+                                float minFloor = minContentWidths[c];
+                                float capped = Math.Min(colWidths[c], perTrackCap);
+                                if (capped < minFloor)
+                                {
+                                    capped = minFloor;
+                                }
+                                colWidths[c] = capped;
+                            }
+                        }
                     }
                 }
 
@@ -1031,6 +1141,54 @@ namespace Rend.Layout.Internal
                 }
             }
 
+            // [CSS-GRID-1 §11.8] Stretch auto tracks: when the grid container has a
+            // definite inline size larger than the sum of the content-sized implicit
+            // auto tracks, distribute the remaining free space equally among those
+            // tracks so they fill the container. Only fires when justify-content is
+            // 'normal' (which behaves as 'stretch' for grid per CSS-ALIGN-3 §6.1)
+            // or explicit 'stretch'. Explicit start/end/center/space-* values leave
+            // the tracks at their content-based sizes and instead position them
+            // via justify-content-offset below. The parser maps both unset and the
+            // 'normal' keyword to CssJustifyContent.FlexStart, so that sentinel is
+            // what we treat as the grid default here.
+            {
+                var jcForStretch = style.JustifyContent;
+                bool stretchByDefault = jcForStretch == CssJustifyContent.FlexStart
+                                      || jcForStretch == CssJustifyContent.Stretch;
+                if (stretchByDefault)
+                {
+                    int stretchableCount = 0;
+                    for (int c = 0; c < finalCols; c++)
+                    {
+                        if (isImplicitAutoCol[c])
+                        {
+                            stretchableCount++;
+                        }
+                    }
+                    if (stretchableCount > 0)
+                    {
+                        float usedWidth = 0;
+                        for (int c = 0; c < finalCols; c++)
+                        {
+                            usedWidth += colWidths[c];
+                        }
+                        float gapSpace = finalCols > 1 ? (finalCols - 1) * colGap : 0;
+                        float freeSpace = containerWidth - usedWidth - gapSpace;
+                        if (freeSpace > 0)
+                        {
+                            float stretchPerTrack = freeSpace / stretchableCount;
+                            for (int c = 0; c < finalCols; c++)
+                            {
+                                if (isImplicitAutoCol[c])
+                                {
+                                    colWidths[c] += stretchPerTrack;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // First pass: layout each item to determine content size and row heights
             for (int i = 0; i < items.Count; i++)
             {
@@ -1106,6 +1264,65 @@ namespace Rend.Layout.Internal
                                 {
                                     contentWidth = itemMaxH * itemArRatio;
                                 }
+                            }
+                        }
+                        else if (widthAutoForGrid && heightAutoForGrid && itemAr > 0)
+                        {
+                            // [CSS-GRID §6.4] Grid items with aspect-ratio and both axes
+                            // auto stretch to fill the track's inline dimension by default.
+                            // The stretched track width takes precedence over the
+                            // max-height→max-width transfer that ResolveWidth would apply
+                            // (CSS Sizing 4 §5.2.1: stretched auto sizes are not clamped
+                            // by transferred max-* sizes from the other axis in Chrome).
+                            //
+                            // This branch only runs when height is also auto; if height is
+                            // explicit, ResolveWidth's aspect-ratio transfer path already
+                            // returns the correct preferred size (height × ratio), so we
+                            // must fall through to ResolveWidth in that case.
+                            CssAlignItems justifySelfInline = item.StyledElement.Style.JustifySelf;
+                            if (justifySelfInline == CssAlignItems.Normal || (int)justifySelfInline > (int)CssAlignItems.Normal)
+                            {
+                                justifySelfInline = style.JustifyItems;
+                            }
+                            bool gridItemIsStretched = IsStretch(justifySelfInline);
+                            if (gridItemIsStretched)
+                            {
+                                contentWidth = cellWidth - item.Box.PaddingLeft - item.Box.PaddingRight
+                                               - item.Box.BorderLeftWidth - item.Box.BorderRightWidth
+                                               - item.Box.MarginLeft - item.Box.MarginRight;
+                            }
+                            else
+                            {
+                                contentWidth = DimensionResolver.ResolveWidth(item.StyledElement.Style, cellWidth, item.Box);
+                            }
+                        }
+                        else if (widthAutoForGrid)
+                        {
+                            // [CSS-GRID §11.1] [CSS-ALIGN-3 §9.3] A grid item's
+                            // automatic inline size fills its track only when the
+                            // effective justify-self is stretch (or normal).
+                            // Otherwise the item is sized to its max-content
+                            // contribution, clamped to the available track width.
+                            // Baseline falls back to start when the item does not
+                            // participate in a shared baseline context, so it also
+                            // uses intrinsic sizing here.
+                            CssAlignItems effectiveJustifySelf = item.StyledElement.Style.JustifySelf;
+                            if (effectiveJustifySelf == CssAlignItems.Normal || (int)effectiveJustifySelf > (int)CssAlignItems.Normal)
+                            {
+                                effectiveJustifySelf = style.JustifyItems;
+                            }
+                            if (IsStretch(effectiveJustifySelf))
+                            {
+                                contentWidth = DimensionResolver.ResolveWidth(item.StyledElement.Style, cellWidth, item.Box);
+                            }
+                            else
+                            {
+                                float availableWidth = cellWidth - item.Box.PaddingLeft - item.Box.PaddingRight
+                                                       - item.Box.BorderLeftWidth - item.Box.BorderRightWidth
+                                                       - item.Box.MarginLeft - item.Box.MarginRight;
+                                float maxContentWidth = BlockFormattingContext.MeasureIntrinsicWidth(
+                                    item.StyledElement, SizingKeyword.MaxContent, cellWidth, context);
+                                contentWidth = Math.Min(maxContentWidth, Math.Max(0, availableWidth));
                             }
                         }
                         else
@@ -1416,8 +1633,9 @@ namespace Rend.Layout.Internal
             // Distribute extra container height to row tracks when the grid has
             // an explicit height and align-content is stretch (default) or normal.
             // For other align-content values (center, end, etc.), the tracks keep their
-            // natural size and are offset instead.
-            if (containerHeight > 0 && finalRows > 0)
+            // natural size and are offset instead. Only definite container heights
+            // trigger stretching — max-height fallback (auto-height container) must not.
+            if (containerHeightIsDefinite && finalRows > 0)
             {
                 var alignContent = style.AlignContent;
                 bool stretchRows = alignContent == CssAlignItems.Stretch
@@ -1512,6 +1730,68 @@ namespace Rend.Layout.Internal
             CssAlignItems containerAlignItems = style.AlignItems;
             CssAlignItems containerJustifyItems = style.JustifyItems;
 
+            // [CSS-SIZING-3 §5.2.2] Percent heights on grid items resolve against
+            // the grid area size. The first-pass item layout used explicitRowTracks
+            // as a pre-estimate, but auto rows in an inline-grid with no definite
+            // container height still report 0 at that point. Now that rowHeights[]
+            // reflects sibling content contributions, re-resolve any unresolved
+            // percent heights and re-layout the inner tree so descendants see the
+            // final definite block size.
+            for (int i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item.StyledElement == null)
+                {
+                    continue;
+                }
+                if (!DeferredPercent.IsEncoded(item.StyledElement.Style.Height))
+                {
+                    continue;
+                }
+
+                float spanRowHeight = 0;
+                for (int r = item.RowStart; r < item.RowStart + item.RowSpan && r < finalRows; r++)
+                {
+                    spanRowHeight += rowHeights[r];
+                }
+                if (item.RowSpan > 1)
+                {
+                    spanRowHeight += (item.RowSpan - 1) * rowGap;
+                }
+                if (spanRowHeight <= 0)
+                {
+                    continue;
+                }
+
+                float cbHeight = spanRowHeight
+                    - item.Box.PaddingTop - item.Box.PaddingBottom
+                    - item.Box.BorderTopWidth - item.Box.BorderBottomWidth;
+                if (cbHeight < 0)
+                {
+                    cbHeight = 0;
+                }
+
+                float resolvedHeight = DimensionResolver.ResolveHeight(
+                    item.StyledElement.Style, cbHeight, item.Box);
+                if (float.IsNaN(resolvedHeight))
+                {
+                    continue;
+                }
+                if (Math.Abs(resolvedHeight - item.ContentHeight) < 0.01f)
+                {
+                    continue;
+                }
+
+                item.ContentHeight = resolvedHeight;
+                item.Box.ContentRect = new RectF(0, 0, item.ContentWidth, resolvedHeight);
+                item.Box.ClearChildren();
+                item.Box.LineBoxes = null;
+                var savedFloatCtx = context.FloatContext;
+                context.FloatContext = new FloatContext(0, item.ContentWidth);
+                BlockFormattingContext.LayoutChildren(item.Box, context);
+                context.FloatContext = savedFloatCtx;
+            }
+
             // Update item box dimensions to final resolved sizes before baseline
             // computation. First-pass layout leaves ContentRect at auto height;
             // the resolved contentWidth/contentHeight may differ (explicit CSS height).
@@ -1554,6 +1834,13 @@ namespace Rend.Layout.Internal
 
                         CssAlignItems itemAlign = ResolveItemBlockAlignment(item, containerAlignItems);
                         if (itemAlign != CssAlignItems.Baseline) { continue; }
+
+                        // [CSS-ALIGN-3 §9.3] Replaced elements have no usable
+                        // baseline — they fall back to start alignment instead of
+                        // joining the baseline-sharing group. Skipping them here
+                        // keeps them from pulling rowMaxBaselines up to their
+                        // bottom edge and over-growing the row.
+                        if (HasSynthesizedBaselineOnly(item)) { continue; }
 
                         float baseline = GetItemBaseline(item.Box) + item.Box.MarginTop;
                         float outerHeight = item.ContentHeight
@@ -1646,9 +1933,11 @@ namespace Rend.Layout.Internal
             }
 
             // Compute align-content offset and gap adjustment (vertical track alignment)
+            // Only runs when the container has a definite block size — max-height
+            // fallback doesn't create free space for alignment distribution.
             float alignContentOffset = 0;
             float effectiveRowGap = rowGap;
-            if (containerHeight > 0)
+            if (containerHeightIsDefinite)
             {
                 // [CSS-GRID §7.2.3.1] Count non-collapsed rows for gap calculation.
                 float totalRowH = 0;
@@ -1833,16 +2122,25 @@ namespace Rend.Layout.Internal
 
                 // [CSS-GRID §10.1] Apply block (vertical) alignment offset.
                 // Baseline-aligned items use per-row baseline group offset.
+                // [CSS-ALIGN-3 §9.3] Replaced elements have only synthesized
+                // baselines and fall back to start alignment instead of joining
+                // the baseline group.
                 float yOffset;
-                if (alignBlock == CssAlignItems.Baseline && rowMaxBaselines != null
-                    && item.RowStart >= 0 && item.RowStart < finalRows && item.RowSpan == 1)
+                bool useBaselineAlignment = alignBlock == CssAlignItems.Baseline
+                    && rowMaxBaselines != null
+                    && item.RowStart >= 0 && item.RowStart < finalRows
+                    && item.RowSpan == 1
+                    && !HasSynthesizedBaselineOnly(item);
+                if (useBaselineAlignment)
                 {
                     float itemBaselineFromCell = GetItemBaseline(item.Box) + item.Box.MarginTop;
-                    yOffset = rowMaxBaselines[item.RowStart] - itemBaselineFromCell;
+                    yOffset = rowMaxBaselines![item.RowStart] - itemBaselineFromCell;
                 }
                 else
                 {
-                    yOffset = AlignOffset(alignBlock, spanHeight,
+                    CssAlignItems effectiveBlock = alignBlock == CssAlignItems.Baseline
+                        ? CssAlignItems.Start : alignBlock;
+                    yOffset = AlignOffset(effectiveBlock, spanHeight,
                         finalHeight + item.Box.PaddingTop + item.Box.PaddingBottom
                         + item.Box.BorderTopWidth + item.Box.BorderBottomWidth
                         + item.Box.MarginTop + item.Box.MarginBottom);
@@ -2407,48 +2705,60 @@ namespace Rend.Layout.Internal
             return new RectF(areaX, areaY, areaWidth, areaHeight);
         }
 
+        // Build the initial track size array, filling in explicit tracks then padding
+        // any remaining implicit tracks using grid-auto-columns/grid-auto-rows (if set)
+        // or the auto default (max-content sentinel with stretch-to-fill) otherwise.
+        // The isImplicitAuto out parameter marks the tracks that came from the auto
+        // default branch so the caller can stretch them to absorb free space after
+        // the intrinsic sizing pass resolves their base sizes from item max-content.
+        // [CSS-GRID-1 §7.2.3] https://drafts.csswg.org/css-grid-1/#auto-tracks
+        // [CSS-GRID-1 §11.8] https://drafts.csswg.org/css-grid-1/#algo-stretch
         private static float[] BuildTrackSizes(float[]? explicitTracks, int count, float containerSize,
-            float gap, object? autoTrackRaw, float defaultSize)
+            float gap, object? autoTrackRaw, float defaultSize, out bool[] isImplicitAuto)
         {
             var sizes = new float[count];
+            isImplicitAuto = new bool[count];
 
-            // Apply explicit tracks
             if (explicitTracks != null)
             {
                 for (int i = 0; i < Math.Min(explicitTracks.Length, count); i++)
+                {
                     sizes[i] = explicitTracks[i];
+                }
             }
 
-            // Determine auto track size
             float autoSize = 0;
             if (autoTrackRaw != null)
             {
                 var autoTracks = ResolveTrackList(autoTrackRaw, containerSize);
                 if (autoTracks != null && autoTracks.Length > 0)
+                {
                     autoSize = autoTracks[0];
+                }
             }
 
-            // Fill remaining (implicit) tracks
             int explicitCount = explicitTracks?.Length ?? 0;
             if (explicitCount < count)
             {
                 if (autoSize > 0)
                 {
                     for (int i = explicitCount; i < count; i++)
+                    {
                         sizes[i] = autoSize;
+                    }
                 }
                 else
                 {
-                    // Distribute remaining space equally among implicit tracks
-                    float usedWidth = 0;
-                    for (int i = 0; i < explicitCount; i++)
-                        usedWidth += sizes[i];
-                    float gapSpace = (count - 1) * gap;
-                    float remaining = Math.Max(0, containerSize - usedWidth - gapSpace);
-                    int implicitCount = count - explicitCount;
-                    float implicitSize = remaining / implicitCount;
+                    // [CSS-GRID-1 §7.2.3] Default implicit track sizing = auto, which
+                    // behaves as minmax(min-content, max-content). Emit the max-content
+                    // sentinel (-2) so the item-measurement pass at BuildAllTracks time
+                    // sizes each track to its contents. The post-intrinsic stretch pass
+                    // then absorbs any remaining free space per §11.7.
                     for (int i = explicitCount; i < count; i++)
-                        sizes[i] = implicitSize;
+                    {
+                        sizes[i] = -2;
+                        isImplicitAuto[i] = true;
+                    }
                 }
             }
 
@@ -3466,8 +3776,9 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
-        /// [CSS-GRID §10.1] Get the first baseline of a grid item from its first line box,
-        /// or fall back to its bottom border edge.
+        /// [CSS-ALIGN-3 §9.1] Get the first baseline of a grid item from its first
+        /// line box. Falls back to the bottom edge of the item's content area if no
+        /// line boxes are found (synthesized baseline).
         /// </summary>
         private static float GetItemBaseline(LayoutBox box)
         {
@@ -3488,6 +3799,22 @@ namespace Rend.Layout.Internal
             }
 
             return box.ContentRect.Height + box.PaddingTop + box.BorderTopWidth;
+        }
+
+        /// <summary>
+        /// [CSS-ALIGN-3 §9.3] Returns true if this grid item has only a synthesized
+        /// baseline and should fall back to start alignment instead of joining the
+        /// baseline-sharing group. Replaced elements (canvas, img, video, form
+        /// controls, etc.) never synthesize a usable baseline — Chrome treats them
+        /// as "has no baseline" and falls them back to start alignment.
+        /// </summary>
+        private static bool HasSynthesizedBaselineOnly(GridItem item)
+        {
+            if (item.StyledElement == null)
+            {
+                return false;
+            }
+            return ReplacedElementLayout.IsReplaced(item.StyledElement);
         }
 
         /// <summary>
@@ -3815,12 +4142,25 @@ namespace Rend.Layout.Internal
                 var child = children[i];
                 if (child.IsText)
                 {
+                    // [CSS-GRID §6] Text directly inside a grid container is wrapped in
+                    // an anonymous grid item. For intrinsic sizing we wrap it in a
+                    // synthesized StyledElement so its text contribution is measured.
                     var textNode = (StyledText)child;
                     if (string.IsNullOrWhiteSpace(textNode.Text))
                     {
                         continue;
                     }
-                    items.Add(new GridItem { OriginalIndex = items.Count });
+                    var anonTextStyle = CloneStyleAsBlock(element.Style);
+                    var anonTextDoc = element.Element.OwnerDocument;
+                    var anonTextElement = anonTextDoc!.CreateElement("div");
+                    var anonTextChildren = new List<StyledNode> { new StyledText(textNode.Text, anonTextStyle) };
+                    var anonTextStyled = new StyledElement(anonTextElement, anonTextStyle, anonTextChildren);
+                    items.Add(new GridItem
+                    {
+                        StyledElement = anonTextStyled,
+                        Box = new LayoutBox(anonTextStyled, BoxType.Block),
+                        OriginalIndex = items.Count
+                    });
                     continue;
                 }
                 if (child is StyledPseudoElement)

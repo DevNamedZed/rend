@@ -77,6 +77,14 @@ namespace Rend.Layout.Internal
                 {
                     return iw / ih;
                 }
+                // [CSS-IMAGES-3 §6] SVG inside a data: URI carries its ratio in
+                // the root <svg> element's width/height or viewBox. Use that
+                // when no HTML width/height attributes override it.
+                float svgRatio = GetSvgDataUriRatio(element);
+                if (svgRatio > 0)
+                {
+                    return svgRatio;
+                }
             }
             // CSS aspect-ratio property
             float cssRatio = DimensionResolver.GetAspectRatio(element.Style);
@@ -288,6 +296,26 @@ namespace Rend.Layout.Internal
                 return false;
             }
 
+            // [CSS-IMAGES-3 §6] SVG in data: URI — read width/height from the root
+            // <svg> element. Callers treat the output pair as "per-axis intrinsic
+            // size, 0 if none". When the SVG declares only one dimension the other
+            // is reported as 0 and callers derive it from the intrinsic ratio
+            // exposed by GetIntrinsicRatio. The ratio-only case (neither width nor
+            // height declared, viewBox present) is reported via the ratio helper
+            // and intentionally returns false here so callers that rely on
+            // "partial intrinsic" semantics see the zero-zero case and fall back
+            // to the default sizing algorithm on their own.
+            if (src.StartsWith("data:image/svg", StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryExtractSvgRootSize(src, out float svgW, out float svgH, out _, out _))
+                {
+                    width = svgW > 0 ? svgW : 0;
+                    height = svgH > 0 ? svgH : 0;
+                    return width > 0 || height > 0;
+                }
+                return false;
+            }
+
             // Find the base64 data portion
             int commaIdx = src.IndexOf(',');
             if (commaIdx < 0 || commaIdx >= src.Length - 1)
@@ -375,6 +403,237 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
+        /// Returns the aspect ratio encoded by an SVG <c>data:</c> URI on an img
+        /// element, or 0 if the element is not an img, the src is not an SVG
+        /// data URI, or the SVG exposes no usable ratio. Prefers explicit
+        /// width/height lengths; falls back to the viewBox ratio.
+        /// </summary>
+        public static float GetSvgDataUriRatio(StyledElement element)
+        {
+            if (element.TagName != "img")
+            {
+                return 0f;
+            }
+            string? src = element.GetAttribute("src");
+            if (src == null || !src.StartsWith("data:image/svg", StringComparison.OrdinalIgnoreCase))
+            {
+                return 0f;
+            }
+            if (!TryExtractSvgRootSize(src, out float svgW, out float svgH, out float vbW, out float vbH))
+            {
+                return 0f;
+            }
+            if (svgW > 0 && svgH > 0)
+            {
+                return svgW / svgH;
+            }
+            if (vbW > 0 && vbH > 0)
+            {
+                return vbW / vbH;
+            }
+            return 0f;
+        }
+
+        /// <summary>
+        /// Parses the root <c>&lt;svg&gt;</c> tag of an SVG <c>data:</c> URI and
+        /// extracts width, height (from explicit length attributes) and viewBox
+        /// dimensions. Percentage and unitless-with-unsupported-unit values for
+        /// width/height are reported as 0, because per CSS they do not establish
+        /// an intrinsic size.
+        /// <spec>CSS-IMAGES-3 §6 https://drafts.csswg.org/css-images-3/#sizing</spec>
+        /// </summary>
+        private static bool TryExtractSvgRootSize(string src, out float width, out float height,
+                                                    out float viewBoxWidth, out float viewBoxHeight)
+        {
+            width = 0;
+            height = 0;
+            viewBoxWidth = 0;
+            viewBoxHeight = 0;
+
+            int commaIdx = src.IndexOf(',');
+            if (commaIdx < 0 || commaIdx >= src.Length - 1)
+            {
+                return false;
+            }
+
+            string mediaPart = src.Substring(5, commaIdx - 5); // after "data:"
+            string payload = src.Substring(commaIdx + 1);
+            string svgText;
+            if (mediaPart.IndexOf(";base64", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                try
+                {
+                    byte[] bytes = Convert.FromBase64String(payload);
+                    svgText = System.Text.Encoding.UTF8.GetString(bytes);
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                svgText = Uri.UnescapeDataString(payload);
+            }
+
+            int svgStart = svgText.IndexOf("<svg", StringComparison.OrdinalIgnoreCase);
+            if (svgStart < 0)
+            {
+                return false;
+            }
+            int svgEnd = svgText.IndexOf('>', svgStart);
+            if (svgEnd < 0)
+            {
+                return false;
+            }
+            string rootTag = svgText.Substring(svgStart, svgEnd - svgStart);
+
+            width = ParseSvgLengthAttribute(rootTag, "width");
+            height = ParseSvgLengthAttribute(rootTag, "height");
+
+            string? viewBoxValue = GetAttributeValue(rootTag, "viewBox");
+            if (viewBoxValue != null)
+            {
+                string[] parts = viewBoxValue.Split(new[] { ' ', ',', '\t', '\n', '\r' },
+                                                     StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 4
+                    && float.TryParse(parts[2], System.Globalization.NumberStyles.Float,
+                                       System.Globalization.CultureInfo.InvariantCulture, out float vbW)
+                    && float.TryParse(parts[3], System.Globalization.NumberStyles.Float,
+                                       System.Globalization.CultureInfo.InvariantCulture, out float vbH))
+                {
+                    viewBoxWidth = vbW;
+                    viewBoxHeight = vbH;
+                }
+            }
+
+            return width > 0 || height > 0 || (viewBoxWidth > 0 && viewBoxHeight > 0);
+        }
+
+        private static float ParseSvgLengthAttribute(string rootTag, string attributeName)
+        {
+            string? rawValue = GetAttributeValue(rootTag, attributeName);
+            if (rawValue == null)
+            {
+                return 0f;
+            }
+            string trimmed = rawValue.Trim();
+            if (trimmed.Length == 0 || trimmed.EndsWith("%", StringComparison.Ordinal))
+            {
+                return 0f;
+            }
+            int end = 0;
+            while (end < trimmed.Length)
+            {
+                char c = trimmed[end];
+                if (char.IsDigit(c) || c == '.' || c == '-' || c == '+' || c == 'e' || c == 'E')
+                {
+                    end++;
+                    continue;
+                }
+                break;
+            }
+            if (end == 0)
+            {
+                return 0f;
+            }
+            string numberPart = trimmed.Substring(0, end);
+            if (!float.TryParse(numberPart, System.Globalization.NumberStyles.Float,
+                                 System.Globalization.CultureInfo.InvariantCulture, out float value))
+            {
+                return 0f;
+            }
+            string unit = trimmed.Substring(end).Trim();
+            if (unit.Length == 0 || unit.Equals("px", StringComparison.OrdinalIgnoreCase))
+            {
+                return value;
+            }
+            // SVG absolute length units: 1pt = 1.333px, 1pc = 16px, 1mm = 3.7795px,
+            // 1cm = 37.795px, 1in = 96px. Percentages and relative units yield no
+            // intrinsic size for replaced-element sizing.
+            if (unit.Equals("pt", StringComparison.OrdinalIgnoreCase)) { return value * 1.3333333f; }
+            if (unit.Equals("pc", StringComparison.OrdinalIgnoreCase)) { return value * 16f; }
+            if (unit.Equals("mm", StringComparison.OrdinalIgnoreCase)) { return value * 3.7795276f; }
+            if (unit.Equals("cm", StringComparison.OrdinalIgnoreCase)) { return value * 37.795277f; }
+            if (unit.Equals("in", StringComparison.OrdinalIgnoreCase)) { return value * 96f; }
+            return 0f;
+        }
+
+        private static string? GetAttributeValue(string rootTag, string attributeName)
+        {
+            int searchIdx = 0;
+            while (searchIdx < rootTag.Length)
+            {
+                int attrIdx = rootTag.IndexOf(attributeName, searchIdx, StringComparison.OrdinalIgnoreCase);
+                if (attrIdx < 0)
+                {
+                    return null;
+                }
+                // Attribute name must be preceded by whitespace or '<svg' prefix end
+                // so that substrings inside other attributes are not matched.
+                if (attrIdx > 0)
+                {
+                    char prev = rootTag[attrIdx - 1];
+                    if (prev != ' ' && prev != '\t' && prev != '\n' && prev != '\r')
+                    {
+                        searchIdx = attrIdx + attributeName.Length;
+                        continue;
+                    }
+                }
+                int afterName = attrIdx + attributeName.Length;
+                // Skip whitespace and '='
+                while (afterName < rootTag.Length && (rootTag[afterName] == ' '
+                                                      || rootTag[afterName] == '\t'
+                                                      || rootTag[afterName] == '\n'
+                                                      || rootTag[afterName] == '\r'))
+                {
+                    afterName++;
+                }
+                if (afterName >= rootTag.Length || rootTag[afterName] != '=')
+                {
+                    searchIdx = attrIdx + attributeName.Length;
+                    continue;
+                }
+                afterName++;
+                while (afterName < rootTag.Length && (rootTag[afterName] == ' '
+                                                      || rootTag[afterName] == '\t'
+                                                      || rootTag[afterName] == '\n'
+                                                      || rootTag[afterName] == '\r'))
+                {
+                    afterName++;
+                }
+                if (afterName >= rootTag.Length)
+                {
+                    return null;
+                }
+                char quote = rootTag[afterName];
+                if (quote != '"' && quote != '\'')
+                {
+                    // Unquoted attribute — read until whitespace or end.
+                    int unquotedEnd = afterName;
+                    while (unquotedEnd < rootTag.Length
+                           && rootTag[unquotedEnd] != ' '
+                           && rootTag[unquotedEnd] != '\t'
+                           && rootTag[unquotedEnd] != '\n'
+                           && rootTag[unquotedEnd] != '\r'
+                           && rootTag[unquotedEnd] != '>')
+                    {
+                        unquotedEnd++;
+                    }
+                    return rootTag.Substring(afterName, unquotedEnd - afterName);
+                }
+                int valueStart = afterName + 1;
+                int valueEnd = rootTag.IndexOf(quote, valueStart);
+                if (valueEnd < 0)
+                {
+                    return null;
+                }
+                return rootTag.Substring(valueStart, valueEnd - valueStart);
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Resolve the content dimensions for a replaced element.
         /// </summary>
         public static void ResolveDimensions(LayoutBox box, ComputedStyle style,
@@ -382,10 +641,30 @@ namespace Rend.Layout.Internal
         {
             float width = style.Width;
             float height = style.Height;
-            // [CSS-SIZING-4 §5.1] CSS aspect-ratio overrides intrinsic ratio.
+            // [CSS-SIZING-4 §5.1] CSS aspect-ratio overrides intrinsic ratio. When no CSS
+            // aspect-ratio is set we fall back to the element's intrinsic ratio (img dims,
+            // SVG viewBox). When neither is available — broken images that report 0×0 with
+            // no explicit ratio — the element has no aspect ratio and constraints on one
+            // axis must NOT transfer to the other axis. Chrome's
+            // LayoutReplaced::ComputeReplacedLogicalWidth follows the same rule.
             float cssRatio = DimensionResolver.GetAspectRatio(style);
-            float ratio = cssRatio > 0 ? cssRatio
-                : (intrinsicHeight > 0 ? intrinsicWidth / intrinsicHeight : 1f);
+            float ratio;
+            if (cssRatio > 0)
+            {
+                ratio = cssRatio;
+            }
+            else if (intrinsicWidth > 0 && intrinsicHeight > 0)
+            {
+                ratio = intrinsicWidth / intrinsicHeight;
+            }
+            else if (box.StyledNode is StyledElement ratioElement)
+            {
+                ratio = GetIntrinsicRatio(ratioElement);
+            }
+            else
+            {
+                ratio = 0;
+            }
 
             // Form controls (input, select, textarea, meter, progress) do NOT have an
             // intrinsic aspect ratio. When one dimension is specified and the other is
@@ -432,19 +711,49 @@ namespace Rend.Layout.Internal
 
             if (float.IsNaN(width) && float.IsNaN(height))
             {
-                // Use intrinsic dimensions
+                // Use intrinsic dimensions. [CSS-IMAGES-3 §6] When only one
+                // intrinsic dimension is known and a natural ratio is available
+                // (e.g. SVG with width-only + viewBox), derive the missing side
+                // from that ratio before the min/max constraints apply.
                 width = intrinsicWidth;
                 height = intrinsicHeight;
+                if (ratio > 0 && !isFormControl)
+                {
+                    if (width <= 0 && height > 0)
+                    {
+                        width = height * ratio;
+                    }
+                    else if (height <= 0 && width > 0)
+                    {
+                        height = width / ratio;
+                    }
+                }
             }
             else if (float.IsNaN(width))
             {
-                // Height specified, derive width from ratio (images) or use intrinsic (form controls)
-                width = isFormControl ? intrinsicWidth : height * ratio;
+                // Height specified, derive width from ratio (images) or use intrinsic
+                // (form controls / replaced elements with no ratio).
+                if (isFormControl || ratio <= 0)
+                {
+                    width = intrinsicWidth;
+                }
+                else
+                {
+                    width = height * ratio;
+                }
             }
             else if (float.IsNaN(height))
             {
-                // Width specified, derive height from ratio (images) or use intrinsic (form controls)
-                height = isFormControl ? intrinsicHeight : (ratio > 0 ? width / ratio : width);
+                // Width specified, derive height from ratio (images) or use intrinsic
+                // (form controls / replaced elements with no ratio).
+                if (isFormControl || ratio <= 0)
+                {
+                    height = intrinsicHeight;
+                }
+                else
+                {
+                    height = width / ratio;
+                }
             }
 
             // Apply min/max constraints — resolve percentage values first
@@ -511,33 +820,62 @@ namespace Rend.Layout.Internal
             // through aspect-ratio when the other axis was auto or sizing-keyword.
             bool heightIsAuto = float.IsNaN(style.Height) || SizingKeyword.IsSizingKeyword(style.Height);
             bool widthIsAuto = float.IsNaN(style.Width) || SizingKeyword.IsSizingKeyword(style.Width);
+            // [CSS2 §10.4] When a constraint on one axis causes the other axis to
+            // be re-derived through the aspect ratio, the re-derived value must
+            // itself be clamped to its own min/max range. Without this final clamp,
+            // a min-height transfer can push width past max-width (or vice versa).
             if (!float.IsNaN(maxW) && maxW > 0 && width > maxW)
             {
                 width = maxW;
-                if (heightIsAuto && !isFormControl)
-                    height = ratio > 0 ? width / ratio : width;
+                if (heightIsAuto && !isFormControl && ratio > 0)
+                {
+                    height = width / ratio;
+                    height = ClampToRange(height, minH, maxH);
+                }
             }
             if (!float.IsNaN(minW) && width < minW)
             {
                 width = minW;
-                if (heightIsAuto && !isFormControl)
-                    height = ratio > 0 ? width / ratio : width;
+                if (heightIsAuto && !isFormControl && ratio > 0)
+                {
+                    height = width / ratio;
+                    height = ClampToRange(height, minH, maxH);
+                }
             }
             if (!float.IsNaN(maxH) && maxH > 0 && height > maxH)
             {
                 height = maxH;
-                if (widthIsAuto && !isFormControl)
+                if (widthIsAuto && !isFormControl && ratio > 0)
+                {
                     width = height * ratio;
+                    width = ClampToRange(width, minW, maxW);
+                }
             }
             if (!float.IsNaN(minH) && height < minH)
             {
                 height = minH;
-                if (widthIsAuto && !isFormControl)
+                if (widthIsAuto && !isFormControl && ratio > 0)
+                {
                     width = height * ratio;
+                    width = ClampToRange(width, minW, maxW);
+                }
             }
 
             box.ContentRect = new Core.Values.RectF(box.ContentRect.X, box.ContentRect.Y,
                                                       Math.Max(0, width), Math.Max(0, height));
+        }
+
+        private static float ClampToRange(float value, float min, float max)
+        {
+            if (!float.IsNaN(max) && max > 0 && value > max)
+            {
+                value = max;
+            }
+            if (!float.IsNaN(min) && value < min)
+            {
+                value = min;
+            }
+            return value;
         }
     }
 }

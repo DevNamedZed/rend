@@ -36,9 +36,18 @@ namespace Rend.Css.Resolution.Internal
         }
 
         /// <summary>
-        /// Build a ComputedStyle from the winning declarations and parent style.
+        /// Build a ComputedStyle from the cascaded declarations and parent style.
         /// </summary>
-        public ComputedStyle Build(Dictionary<string, CascadedDeclaration> winners,
+        /// <remarks>
+        /// Per <see href="https://drafts.csswg.org/css-cascade/#cascade-sort">CSS
+        /// Cascade 4 §8.3</see>, the cascade for each property is an ordered list
+        /// of candidate declarations. When a candidate fails validation (e.g.
+        /// <c>min()</c> with a bare unitless zero in a length context), the
+        /// next-highest-priority candidate is used instead. This method walks each
+        /// <see cref="CascadedProperty"/>'s candidates in priority order and uses
+        /// the first one whose value resolves successfully.
+        /// </remarks>
+        public ComputedStyle Build(Dictionary<string, CascadedProperty> cascaded,
             ComputedStyle? parentStyle)
         {
             var values = new PropertyValue[PropertyId.Count];
@@ -47,64 +56,36 @@ namespace Rend.Css.Resolution.Internal
             var parentValues = parentStyle?.GetValues();
             var parentRefValues = parentStyle?.GetRefValues();
 
-            // 1. Collect custom properties (--*) from winners and inherit from parent.
-            var customProperties = CollectCustomProperties(winners, parentStyle);
+            // 1. Collect custom properties (--*) from the cascade and inherit from parent.
+            var customProperties = CollectCustomProperties(cascaded, parentStyle);
 
             // 2. Resolve font-size FIRST using parent font-size (CSS spec: em in font-size
             //    is relative to parent's font-size). Then use the element's own computed
             //    font-size for resolving em units in all other properties.
             var resolvedCtx = _ctx; // _ctx.FontSize == parentFontSize
-            if (winners.TryGetValue("font-size", out var fontSizeDecl))
+            if (cascaded.TryGetValue("font-size", out var fontSizeCandidates))
             {
                 var fsProp = PropertyRegistry.GetByName("font-size");
                 if (fsProp != null)
                 {
-                    var fsValue = fontSizeDecl.Declaration.Value;
-                    bool fsDone = false;
-
-                    if (InheritanceResolver.IsInherit(fsValue))
+                    // Walk cascade candidates in priority order; first valid wins.
+                    for (int candidateIndex = 0; candidateIndex < fontSizeCandidates.Declarations.Count; candidateIndex++)
                     {
-                        if (parentValues != null) { values[fsProp.Id] = parentValues[fsProp.Id]; refValues[fsProp.Id] = parentRefValues![fsProp.Id]; }
-                        else { values[fsProp.Id] = InitialValues.Get(fsProp.Id); refValues[fsProp.Id] = InitialValues.GetRef(fsProp.Id); }
-                        fsDone = true;
-                    }
-                    else if (InheritanceResolver.IsInitial(fsValue))
-                    {
-                        values[fsProp.Id] = InitialValues.Get(fsProp.Id);
-                        refValues[fsProp.Id] = InitialValues.GetRef(fsProp.Id);
-                        fsDone = true;
-                    }
-                    else if (InheritanceResolver.IsUnset(fsValue) || InheritanceResolver.IsRevert(fsValue))
-                    {
-                        if (fsProp.Inherited && parentValues != null) { values[fsProp.Id] = parentValues[fsProp.Id]; refValues[fsProp.Id] = parentRefValues![fsProp.Id]; }
-                        else { values[fsProp.Id] = InitialValues.Get(fsProp.Id); refValues[fsProp.Id] = InitialValues.GetRef(fsProp.Id); }
-                        fsDone = true;
-                    }
-                    else
-                    {
-                        var fsSub = SubstituteVar(fsValue, customProperties);
-                        if (fsSub is GuaranteedInvalidValue) fsSub = new CssNumberValue(0);
-                        if (ValueResolver.TryResolve(fsSub, fsProp, _ctx, out var fsPv, out var fsRef))
+                        var fsValue = fontSizeCandidates.Declarations[candidateIndex].Declaration.Value;
+                        if (TryApplyFontSizeCandidate(fsValue, fsProp, customProperties,
+                            parentValues, parentRefValues, values, refValues))
                         {
-                            if (!fsPv.IsSet && fsRef != null) fsPv.IsSet = true;
-                            values[fsProp.Id] = fsPv;
-                            refValues[fsProp.Id] = fsRef;
-                            fsDone = true;
-                        }
-                    }
-
-                    // Update context with element's own font-size for em resolution
-                    if (fsDone)
-                    {
-                        float elementFontSize = values[fsProp.Id].FloatValue;
-                        if (elementFontSize > 0 && elementFontSize != _ctx.FontSize)
-                        {
-                            resolvedCtx = new CssResolutionContext(
-                                elementFontSize,
-                                _ctx.RootFontSize,
-                                _ctx.ViewportWidth,
-                                _ctx.ViewportHeight,
-                                _ctx.PercentBase);
+                            float elementFontSize = values[fsProp.Id].FloatValue;
+                            if (elementFontSize > 0 && elementFontSize != _ctx.FontSize)
+                            {
+                                resolvedCtx = new CssResolutionContext(
+                                    elementFontSize,
+                                    _ctx.RootFontSize,
+                                    _ctx.ViewportWidth,
+                                    _ctx.ViewportHeight,
+                                    _ctx.PercentBase);
+                            }
+                            break;
                         }
                     }
                 }
@@ -112,17 +93,28 @@ namespace Rend.Css.Resolution.Internal
 
             // 2b. [CSS-VALUES-4 §6.1] Resolve font-family early so ch unit can use
             //     the actual "0" glyph advance width instead of the 0.5em approximation.
-            if (_measureCharWidth != null && winners.TryGetValue("font-family", out var fontFamilyDecl))
+            if (_measureCharWidth != null && cascaded.TryGetValue("font-family", out var fontFamilyCandidates))
             {
                 var ffProp = PropertyRegistry.GetByName("font-family");
                 if (ffProp != null)
                 {
-                    var ffValue = fontFamilyDecl.Declaration.Value;
-                    var ffSub = SubstituteVar(ffValue, customProperties);
-                    if (!(ffSub is GuaranteedInvalidValue)
-                        && ValueResolver.TryResolve(ffSub, ffProp, resolvedCtx, out var ffPv, out var ffRef))
+                    // Walk cascade candidates in priority order; first valid wins.
+                    for (int candidateIndex = 0; candidateIndex < fontFamilyCandidates.Declarations.Count; candidateIndex++)
                     {
-                        if (!ffPv.IsSet && ffRef != null) { ffPv.IsSet = true; }
+                        var ffValue = fontFamilyCandidates.Declarations[candidateIndex].Declaration.Value;
+                        var ffSub = SubstituteVar(ffValue, customProperties);
+                        if (ffSub is GuaranteedInvalidValue)
+                        {
+                            continue;
+                        }
+                        if (!ValueResolver.TryResolve(ffSub, ffProp, resolvedCtx, out var ffPv, out var ffRef))
+                        {
+                            continue;
+                        }
+                        if (!ffPv.IsSet && ffRef != null)
+                        {
+                            ffPv.IsSet = true;
+                        }
                         values[ffProp.Id] = ffPv;
                         refValues[ffProp.Id] = ffRef;
                         if (ffRef is string[] fontFamilies)
@@ -139,12 +131,15 @@ namespace Rend.Css.Resolution.Internal
                                     chWidth);
                             }
                         }
+                        break;
                     }
                 }
             }
 
-            // 3. Apply winning declarations (all properties except font-size and font-family).
-            foreach (var kvp in winners)
+            // 3. Apply cascaded declarations (all properties except font-size and font-family).
+            //    For each property, walk candidates in priority order and use the first
+            //    one that resolves successfully (CSS Cascade 4 §8.3 invalid-drop rule).
+            foreach (var kvp in cascaded)
             {
                 // Skip custom properties (already collected).
                 if (kvp.Key.StartsWith("--"))
@@ -165,97 +160,16 @@ namespace Rend.Css.Resolution.Internal
                     continue;
                 }
 
-                var value = kvp.Value.Declaration.Value;
-
-                // Substitute var() references before resolving.
-                var resolvedValue = SubstituteVar(value, customProperties);
-                if (resolvedValue is GuaranteedInvalidValue)
-                {
-                    resolvedValue = new CssNumberValue(0);
-                }
-
                 var prop = PropertyRegistry.GetByName(kvp.Key);
-                if (prop == null)
+                var candidates = kvp.Value.Declarations;
+                for (int candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)
                 {
-                    // Property not in registry — likely a shorthand with var() that was
-                    // kept unexpanded (CSS Variables spec §3: pending-substitution values).
-                    // Now that var() is resolved, expand the shorthand and apply longhands.
-                    var longhands = new List<CssDeclaration>();
-                    if (CssShorthandExpander.TryExpand(kvp.Key, resolvedValue,
-                        kvp.Value.Declaration.Important, longhands))
+                    var candidate = candidates[candidateIndex];
+                    if (TryApplyCandidate(kvp.Key, prop, candidate, customProperties,
+                        resolvedCtx, parentValues, parentRefValues, values, refValues))
                     {
-                        foreach (var lh in longhands)
-                        {
-                            var lhProp = PropertyRegistry.GetByName(lh.Property);
-                            if (lhProp == null)
-                            {
-                                continue;
-                            }
-
-                            if (ValueResolver.TryResolve(lh.Value, lhProp, resolvedCtx,
-                                out var lhPv, out var lhRef))
-                            {
-                                if (!lhPv.IsSet && lhRef != null)
-                                {
-                                    lhPv.IsSet = true;
-                                }
-                                values[lhProp.Id] = lhPv;
-                                refValues[lhProp.Id] = lhRef;
-                            }
-                        }
+                        break;
                     }
-                    continue;
-                }
-
-                // Handle inherit/initial/unset keywords
-                if (InheritanceResolver.IsInherit(resolvedValue))
-                {
-                    if (parentValues != null)
-                    {
-                        values[prop.Id] = parentValues[prop.Id];
-                        refValues[prop.Id] = parentRefValues![prop.Id];
-                    }
-                    else
-                    {
-                        values[prop.Id] = InitialValues.Get(prop.Id);
-                        refValues[prop.Id] = InitialValues.GetRef(prop.Id);
-                    }
-                    continue;
-                }
-
-                if (InheritanceResolver.IsInitial(resolvedValue))
-                {
-                    values[prop.Id] = InitialValues.Get(prop.Id);
-                    refValues[prop.Id] = InitialValues.GetRef(prop.Id);
-                    continue;
-                }
-
-                if (InheritanceResolver.IsUnset(resolvedValue) || InheritanceResolver.IsRevert(resolvedValue))
-                {
-                    if (prop.Inherited && parentValues != null)
-                    {
-                        values[prop.Id] = parentValues[prop.Id];
-                        refValues[prop.Id] = parentRefValues![prop.Id];
-                    }
-                    else
-                    {
-                        values[prop.Id] = InitialValues.Get(prop.Id);
-                        refValues[prop.Id] = InitialValues.GetRef(prop.Id);
-                    }
-                    continue;
-                }
-
-                // Resolve the value using element's own font-size for em units
-                if (ValueResolver.TryResolve(resolvedValue, prop, resolvedCtx, out var pv, out var refVal))
-                {
-                    // For String/Raw types, TryResolve sets refVal but not pv.IsSet.
-                    // Mark IsSet so the inheritance resolver knows a value was declared.
-                    if (!pv.IsSet && refVal != null)
-                    {
-                        pv.IsSet = true;
-                    }
-                    values[prop.Id] = pv;
-                    refValues[prop.Id] = refVal;
                 }
             }
 
@@ -282,11 +196,11 @@ namespace Rend.Css.Resolution.Internal
         }
 
         /// <summary>
-        /// Collects custom properties from winners and inherits from parent.
+        /// Collects custom properties from the cascade and inherits from parent.
         /// Custom properties (--*) always inherit per CSS spec.
         /// </summary>
         private static Dictionary<string, CssValue>? CollectCustomProperties(
-            Dictionary<string, CascadedDeclaration> winners,
+            Dictionary<string, CascadedProperty> cascaded,
             ComputedStyle? parentStyle)
         {
             Dictionary<string, CssValue>? result = null;
@@ -303,7 +217,7 @@ namespace Rend.Css.Resolution.Internal
             }
 
             // Override with this element's custom properties.
-            foreach (var kvp in winners)
+            foreach (var kvp in cascaded)
             {
                 if (kvp.Key.StartsWith("--"))
                 {
@@ -311,11 +225,194 @@ namespace Rend.Css.Resolution.Internal
                     {
                         result = new Dictionary<string, CssValue>();
                     }
-                    result[kvp.Key] = kvp.Value.Declaration.Value;
+                    result[kvp.Key] = kvp.Value.Primary.Declaration.Value;
                 }
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Attempts to apply a single cascade candidate for a property.
+        /// Returns true if the candidate was successfully applied to
+        /// <paramref name="values"/> / <paramref name="refValues"/>, or false if
+        /// the declaration is invalid and the caller should try the next candidate.
+        /// </summary>
+        /// <remarks>
+        /// Per <see href="https://drafts.csswg.org/css-cascade/#cascade-sort">CSS
+        /// Cascade 4 §8.3</see>, an invalid declaration is dropped and the
+        /// next-highest-priority candidate is used instead. CSS-wide keywords
+        /// (<c>inherit</c>, <c>initial</c>, <c>unset</c>, <c>revert</c>) are
+        /// always valid and therefore always succeed.
+        /// </remarks>
+        private bool TryApplyCandidate(string propertyName, PropertyDescriptor? prop,
+            CascadedDeclaration candidate, Dictionary<string, CssValue>? customProperties,
+            CssResolutionContext resolvedCtx, PropertyValue[]? parentValues,
+            object?[]? parentRefValues, PropertyValue[] values, object?[] refValues)
+        {
+            var value = candidate.Declaration.Value;
+
+            // Substitute var() references before resolving.
+            var resolvedValue = SubstituteVar(value, customProperties);
+            if (resolvedValue is GuaranteedInvalidValue)
+            {
+                resolvedValue = new CssNumberValue(0);
+            }
+
+            if (prop == null)
+            {
+                // Property not in registry — likely a shorthand with var() that was
+                // kept unexpanded (CSS Variables spec §3: pending-substitution values).
+                // Now that var() is resolved, expand the shorthand and apply longhands.
+                var longhands = new List<CssDeclaration>();
+                if (!CssShorthandExpander.TryExpand(propertyName, resolvedValue,
+                    candidate.Declaration.Important, longhands))
+                {
+                    return false;
+                }
+
+                bool anyApplied = false;
+                foreach (var lh in longhands)
+                {
+                    var lhProp = PropertyRegistry.GetByName(lh.Property);
+                    if (lhProp == null)
+                    {
+                        continue;
+                    }
+
+                    if (ValueResolver.TryResolve(lh.Value, lhProp, resolvedCtx,
+                        out var lhPv, out var lhRef))
+                    {
+                        if (!lhPv.IsSet && lhRef != null)
+                        {
+                            lhPv.IsSet = true;
+                        }
+                        values[lhProp.Id] = lhPv;
+                        refValues[lhProp.Id] = lhRef;
+                        anyApplied = true;
+                    }
+                }
+                return anyApplied;
+            }
+
+            // CSS-wide keywords always succeed.
+            if (InheritanceResolver.IsInherit(resolvedValue))
+            {
+                if (parentValues != null)
+                {
+                    values[prop.Id] = parentValues[prop.Id];
+                    refValues[prop.Id] = parentRefValues![prop.Id];
+                }
+                else
+                {
+                    values[prop.Id] = InitialValues.Get(prop.Id);
+                    refValues[prop.Id] = InitialValues.GetRef(prop.Id);
+                }
+                return true;
+            }
+
+            if (InheritanceResolver.IsInitial(resolvedValue))
+            {
+                values[prop.Id] = InitialValues.Get(prop.Id);
+                refValues[prop.Id] = InitialValues.GetRef(prop.Id);
+                return true;
+            }
+
+            if (InheritanceResolver.IsUnset(resolvedValue) || InheritanceResolver.IsRevert(resolvedValue))
+            {
+                if (prop.Inherited && parentValues != null)
+                {
+                    values[prop.Id] = parentValues[prop.Id];
+                    refValues[prop.Id] = parentRefValues![prop.Id];
+                }
+                else
+                {
+                    values[prop.Id] = InitialValues.Get(prop.Id);
+                    refValues[prop.Id] = InitialValues.GetRef(prop.Id);
+                }
+                return true;
+            }
+
+            // Resolve the value using element's own font-size for em units.
+            if (!ValueResolver.TryResolve(resolvedValue, prop, resolvedCtx, out var pv, out var refVal))
+            {
+                return false;
+            }
+
+            // For String/Raw types, TryResolve sets refVal but not pv.IsSet.
+            // Mark IsSet so the inheritance resolver knows a value was declared.
+            if (!pv.IsSet && refVal != null)
+            {
+                pv.IsSet = true;
+            }
+            values[prop.Id] = pv;
+            refValues[prop.Id] = refVal;
+            return true;
+        }
+
+        /// <summary>
+        /// Attempts to apply a single font-size cascade candidate. The context
+        /// passed here is the <em>parent</em> font-size context (CSS spec: em
+        /// in <c>font-size</c> resolves against the parent's computed font-size).
+        /// </summary>
+        private bool TryApplyFontSizeCandidate(CssValue fsValue, PropertyDescriptor fsProp,
+            Dictionary<string, CssValue>? customProperties, PropertyValue[]? parentValues,
+            object?[]? parentRefValues, PropertyValue[] values, object?[] refValues)
+        {
+            if (InheritanceResolver.IsInherit(fsValue))
+            {
+                if (parentValues != null)
+                {
+                    values[fsProp.Id] = parentValues[fsProp.Id];
+                    refValues[fsProp.Id] = parentRefValues![fsProp.Id];
+                }
+                else
+                {
+                    values[fsProp.Id] = InitialValues.Get(fsProp.Id);
+                    refValues[fsProp.Id] = InitialValues.GetRef(fsProp.Id);
+                }
+                return true;
+            }
+
+            if (InheritanceResolver.IsInitial(fsValue))
+            {
+                values[fsProp.Id] = InitialValues.Get(fsProp.Id);
+                refValues[fsProp.Id] = InitialValues.GetRef(fsProp.Id);
+                return true;
+            }
+
+            if (InheritanceResolver.IsUnset(fsValue) || InheritanceResolver.IsRevert(fsValue))
+            {
+                if (fsProp.Inherited && parentValues != null)
+                {
+                    values[fsProp.Id] = parentValues[fsProp.Id];
+                    refValues[fsProp.Id] = parentRefValues![fsProp.Id];
+                }
+                else
+                {
+                    values[fsProp.Id] = InitialValues.Get(fsProp.Id);
+                    refValues[fsProp.Id] = InitialValues.GetRef(fsProp.Id);
+                }
+                return true;
+            }
+
+            var fsSub = SubstituteVar(fsValue, customProperties);
+            if (fsSub is GuaranteedInvalidValue)
+            {
+                fsSub = new CssNumberValue(0);
+            }
+            if (!ValueResolver.TryResolve(fsSub, fsProp, _ctx, out var fsPv, out var fsRef))
+            {
+                return false;
+            }
+
+            if (!fsPv.IsSet && fsRef != null)
+            {
+                fsPv.IsSet = true;
+            }
+            values[fsProp.Id] = fsPv;
+            refValues[fsProp.Id] = fsRef;
+            return true;
         }
 
         /// <summary>
