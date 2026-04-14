@@ -30,6 +30,13 @@ namespace Rend.Layout.Internal
                 && !DeferredPercent.IsEncoded(style.Height)
                 && !SizingKeyword.IsSizingKeyword(style.Height);
 
+            // [CSS-SIZING-3 §6.3] Definite inline size on the flex container is
+            // required for replaced-element stretch-fit (bare SVG) to apply.
+            bool hasDefiniteWidth = !float.IsNaN(style.Width)
+                && !float.IsNegativeInfinity(style.Width)
+                && !DeferredPercent.IsEncoded(style.Width)
+                && !SizingKeyword.IsSizingKeyword(style.Width);
+
             // Container height may not be resolved yet (BFC sets it to 0 before LayoutChildren).
             // Resolve from explicit CSS height so column main-size and cross-axis alignment work.
             if (float.IsNaN(containerHeight) || containerHeight <= 0)
@@ -79,6 +86,13 @@ namespace Rend.Layout.Internal
             bool isReverse = style.FlexDirection == CssFlexDirection.RowReverse ||
                              style.FlexDirection == CssFlexDirection.ColumnReverse;
             bool isWrap = style.FlexWrap != CssFlexWrap.Nowrap;
+            // [CSS-SIZING-3 §6.3] Stretch-fit for bare SVG flex items keys off the
+            // container's INLINE (width) axis regardless of flex-direction. Chrome's
+            // LayoutReplaced::ComputeDefaultIntrinsicSize applies the default intrinsic
+            // size rule only when the containing block has a definite inline size —
+            // inline is always width (horizontal WM), whether flex-direction is row
+            // or column.
+            bool containerInlineDefinite = hasDefiniteWidth;
 
             // [CSS-FLEXBOX §9.4] For ROW flex, min-height provides a definite cross size
             // floor so stretch and percentage resolution work. Only for cross axis (height
@@ -209,7 +223,7 @@ namespace Rend.Layout.Internal
                     var pseudoBox = new LayoutBox(pseudoStyled, BoxType.Block);
                     BoxModelCalculator.ApplyBoxModel(pseudoBox, pseudoStyle, containerWidth);
 
-                    float pseudoBaseSize = ResolveFlexBasis(pseudoStyle, isColumn, containerWidth, containerHeight, pseudoBox, pseudoStyled, context, isAutoMainSize);
+                    float pseudoBaseSize = ResolveFlexBasis(pseudoStyle, isColumn, containerWidth, containerHeight, pseudoBox, pseudoStyled, context, isAutoMainSize, containerInlineDefinite, style.AlignItems);
                     items.Add(new FlexItem
                     {
                         Box = pseudoBox,
@@ -298,7 +312,7 @@ namespace Rend.Layout.Internal
                 var box = new LayoutBox(childElement, BoxType.Block);
                 BoxModelCalculator.ApplyBoxModel(box, childElement.Style, containerWidth);
 
-                float baseSize = ResolveFlexBasis(childElement.Style, isColumn, containerWidth, containerHeight, box, childElement, context, isAutoMainSize);
+                float baseSize = ResolveFlexBasis(childElement.Style, isColumn, containerWidth, containerHeight, box, childElement, context, isAutoMainSize, containerInlineDefinite, style.AlignItems);
                 items.Add(new FlexItem
                 {
                     Box = box,
@@ -1170,7 +1184,9 @@ namespace Rend.Layout.Internal
                         var ce = orderedChildren[ci];
 
                         float itemHeight = ResolveFlexBasis(ce.Style, true, containingWidth, containerHeight,
-                            new LayoutBox(ce, BoxType.Block), ce, context);
+                            new LayoutBox(ce, BoxType.Block), ce, context,
+                            containerInlineDefinite: false,
+                            parentAlignItems: style.AlignItems);
                         float itemWidth = MeasureFlexItemIntrinsicWidth(ce, true, false, containingWidth, context);
 
                         if (colItemIndex > 0 && usedHeight + itemHeight > containerHeight)
@@ -1408,7 +1424,9 @@ namespace Rend.Layout.Internal
 
         private static float ResolveFlexBasis(ComputedStyle style, bool isColumn, float containerWidth,
             float containerHeight, LayoutBox box, StyledElement element, LayoutContext context,
-            bool isAutoMainSize = false)
+            bool isAutoMainSize = false,
+            bool containerInlineDefinite = true,
+            CssAlignItems parentAlignItems = CssAlignItems.Stretch)
         {
             float basis = style.FlexBasis;
             if (!float.IsNaN(basis) && basis >= 0)
@@ -1582,6 +1600,14 @@ namespace Rend.Layout.Internal
             // but cross dimension is definite and aspect-ratio is set, derive main size
             // from cross dimension and ratio.
             float arRatio = DimensionResolver.GetAspectRatio(style);
+            // [CSS-SIZING-4 §5.1] When the element has no CSS aspect-ratio but is a
+            // replaced element with an intrinsic aspect ratio (SVG viewBox, img
+            // width/height attrs), fall back to the intrinsic ratio so the
+            // cross-axis transfer below can derive the main size.
+            if (arRatio <= 0 && element != null && ReplacedElementLayout.IsReplaced(element))
+            {
+                arRatio = ReplacedElementLayout.GetIntrinsicRatio(element);
+            }
             if (arRatio > 0)
             {
                 if (isColumn)
@@ -1590,23 +1616,44 @@ namespace Rend.Layout.Internal
                     float crossWidth = DimensionResolver.ResolveWidth(style, containerWidth, box);
 
                     // [CSS-FLEXBOX §9.2 step E] When cross-axis (width) is auto with
-                    // aspect-ratio, measure max-content width from content, then
-                    // apply min-width/max-width constraints.
+                    // aspect-ratio, measure max-content width from content.
                     if (float.IsNaN(crossWidth) && element != null)
                     {
                         crossWidth = BlockFormattingContext.MeasureIntrinsicWidth(
                             element, SizingKeyword.MaxContent, containerWidth, context);
-                        float minW = style.MinWidth;
-                        if (!float.IsNaN(minW) && minW > 0 && !DeferredPercent.IsEncoded(minW)
-                            && !SizingKeyword.IsSizingKeyword(minW))
+                    }
+
+                    // [CSS-SIZING-4 §5.1] Clamp the cross size contribution by the item's
+                    // min/max cross constraints before transferring through the aspect ratio.
+                    if (!float.IsNaN(crossWidth) && crossWidth > 0)
+                    {
+                        float crossMaxW = style.MaxWidth;
+                        float crossMinW = style.MinWidth;
+                        bool hasCrossMaxW = !float.IsNaN(crossMaxW) && crossMaxW >= 0
+                            && !DeferredPercent.IsEncoded(crossMaxW)
+                            && !SizingKeyword.IsSizingKeyword(crossMaxW);
+                        bool hasCrossMinW = !float.IsNaN(crossMinW) && crossMinW > 0
+                            && !DeferredPercent.IsEncoded(crossMinW)
+                            && !SizingKeyword.IsSizingKeyword(crossMinW);
+                        if (hasCrossMaxW && style.BoxSizing == CssBoxSizing.BorderBox)
                         {
-                            if (crossWidth < minW) { crossWidth = minW; }
+                            crossMaxW -= box.PaddingLeft + box.PaddingRight
+                                + box.BorderLeftWidth + box.BorderRightWidth;
+                            if (crossMaxW < 0) { crossMaxW = 0; }
                         }
-                        float maxW = style.MaxWidth;
-                        if (!float.IsNaN(maxW) && maxW >= 0 && !DeferredPercent.IsEncoded(maxW)
-                            && !SizingKeyword.IsSizingKeyword(maxW))
+                        if (hasCrossMinW && style.BoxSizing == CssBoxSizing.BorderBox)
                         {
-                            if (crossWidth > maxW) { crossWidth = maxW; }
+                            crossMinW -= box.PaddingLeft + box.PaddingRight
+                                + box.BorderLeftWidth + box.BorderRightWidth;
+                            if (crossMinW < 0) { crossMinW = 0; }
+                        }
+                        if (hasCrossMaxW && crossWidth > crossMaxW)
+                        {
+                            crossWidth = crossMaxW;
+                        }
+                        if (hasCrossMinW && crossWidth < crossMinW)
+                        {
+                            crossWidth = crossMinW;
                         }
                     }
 
@@ -1636,13 +1683,15 @@ namespace Rend.Layout.Internal
                     // a definite cross size for aspect-ratio purposes.
                     if (float.IsNaN(crossHeight) && !float.IsNaN(containerHeight) && containerHeight > 0)
                     {
-                        // [CSS-FLEXBOX §9.2] align-self: auto (255) inherits parent's align-items.
-                        // Default align-items is stretch, so auto also means stretch.
-                        // [CSS-FLEXBOX §8.1] Auto margins on cross axis prevent stretching.
+                        // [CSS-FLEXBOX §9.2] align-self: auto (255) resolves to the parent
+                        // flex container's align-items. Only actually stretches when the
+                        // effective alignment is Stretch — parents with align-items:flex-start,
+                        // flex-end, center, or baseline don't stretch their items, so an item
+                        // with auto cross size stays indefinite in those cases.
+                        // [CSS-FLEXBOX §8.1] Auto margins on cross axis also prevent stretching.
                         var alignSelf = style.AlignSelf;
-                        bool willStretch = alignSelf == CssAlignItems.Stretch
-                            || (int)alignSelf == 0
-                            || (int)alignSelf == 255;
+                        var effectiveAlign = (int)alignSelf == 255 ? parentAlignItems : alignSelf;
+                        bool willStretch = effectiveAlign == CssAlignItems.Stretch;
                         bool hasAutoCrossMargin = float.IsNaN(style.MarginTop) || float.IsNaN(style.MarginBottom);
                         if (willStretch && !hasAutoCrossMargin)
                         {
@@ -1650,6 +1699,44 @@ namespace Rend.Layout.Internal
                                 - box.PaddingTop - box.PaddingBottom
                                 - box.BorderTopWidth - box.BorderBottomWidth
                                 - box.MarginTop - box.MarginBottom;
+                        }
+                    }
+
+                    // [CSS-SIZING-4 §5.1] Clamp the cross size contribution by the item's
+                    // min/max cross constraints before transferring through the aspect ratio.
+                    // Without this, stretching a bare <svg> into a tall container (e.g.,
+                    // height: 200px) and then transferring yields a main size wider than
+                    // the transferred max-height allows. Chrome's FlexItem::FlexBaseSize
+                    // applies constraints before ratio transfer.
+                    if (!float.IsNaN(crossHeight) && crossHeight > 0)
+                    {
+                        float crossMaxH = style.MaxHeight;
+                        float crossMinH = style.MinHeight;
+                        bool hasCrossMaxH = !float.IsNaN(crossMaxH) && crossMaxH >= 0
+                            && !DeferredPercent.IsEncoded(crossMaxH)
+                            && !SizingKeyword.IsSizingKeyword(crossMaxH);
+                        bool hasCrossMinH = !float.IsNaN(crossMinH) && crossMinH > 0
+                            && !DeferredPercent.IsEncoded(crossMinH)
+                            && !SizingKeyword.IsSizingKeyword(crossMinH);
+                        if (hasCrossMaxH && style.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            crossMaxH -= box.PaddingTop + box.PaddingBottom
+                                + box.BorderTopWidth + box.BorderBottomWidth;
+                            if (crossMaxH < 0) { crossMaxH = 0; }
+                        }
+                        if (hasCrossMinH && style.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            crossMinH -= box.PaddingTop + box.PaddingBottom
+                                + box.BorderTopWidth + box.BorderBottomWidth;
+                            if (crossMinH < 0) { crossMinH = 0; }
+                        }
+                        if (hasCrossMaxH && crossHeight > crossMaxH)
+                        {
+                            crossHeight = crossMaxH;
+                        }
+                        if (hasCrossMinH && crossHeight < crossMinH)
+                        {
+                            crossHeight = crossMinH;
                         }
                     }
 
@@ -1700,6 +1787,31 @@ namespace Rend.Layout.Internal
                     // height="50px" + viewBox but no width — the flex base size must
                     // reflect the ratio-derived width, not 0.
                     float intrinsicRatio = ReplacedElementLayout.GetIntrinsicRatio(element);
+
+                    // [CSS-SIZING-3 §6.3] Bare <svg> with a viewBox ratio but no
+                    // intrinsic width/height (no attributes, no data URI): the
+                    // max-content inline size is the stretch-fit of the available
+                    // inline space, and the block size is derived via the ratio.
+                    // Chrome's LayoutReplaced::ComputeDefaultIntrinsicSize applies
+                    // this rule only when the containing block has a definite
+                    // inline (width) size. Chrome uses inline axis regardless of
+                    // flex-direction, so a column flex container with a definite width
+                    // still gives its bare SVG child a stretch-fit intrinsic width.
+                    if (element.TagName == "svg" && intrW <= 0 && intrH <= 0
+                        && intrinsicRatio > 0
+                        && containerInlineDefinite)
+                    {
+                        float availableInline = containerWidth
+                            - box.MarginLeft - box.MarginRight
+                            - box.PaddingLeft - box.PaddingRight
+                            - box.BorderLeftWidth - box.BorderRightWidth;
+                        if (availableInline > 0)
+                        {
+                            intrW = availableInline;
+                            intrH = availableInline / intrinsicRatio;
+                        }
+                    }
+
                     if (intrinsicRatio > 0)
                     {
                         if (intrW <= 0 && intrH > 0)

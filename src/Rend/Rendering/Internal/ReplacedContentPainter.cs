@@ -1157,7 +1157,12 @@ namespace Rend.Rendering.Internal
         {
             RectF rect = box.ContentRect;
 
-            // Try to render poster image
+            // [HTML §4.8.9] The video element's content area shows the current
+            // frame or, if no frame is available, the poster frame. When neither
+            // can be painted (no src, poster unresolved, headless harness), the
+            // content area is left transparent — Chrome Puppeteer renders empty
+            // video boxes the same way, so matching that behavior requires
+            // painting only the poster (if resolved) and nothing otherwise.
             string? poster = element.GetAttribute("poster");
             if (poster != null && imageResolver != null)
             {
@@ -1168,28 +1173,7 @@ namespace Rend.Rendering.Internal
                     var (posX, posY) = ParseObjectPosition(element.Style);
                     RectF destRect = ComputeObjectFitRect(rect, posterImage.Width, posterImage.Height, objectFit, posX, posY);
                     target.DrawImage(posterImage, destRect.PixelSnap());
-                    return;
                 }
-            }
-
-            // Fallback: gray placeholder with play button triangle
-            var bgColor = new CssColor(40, 40, 40);
-            target.FillRect(rect, BrushInfo.Solid(bgColor));
-
-            // Draw play triangle in center
-            float triSize = Math.Min(rect.Width, rect.Height) * 0.3f;
-            if (triSize > 5f)
-            {
-                float cx = rect.X + rect.Width * 0.5f;
-                float cy = rect.Y + rect.Height * 0.5f;
-
-                var path = new PathData();
-                path.MoveTo(cx - triSize * 0.4f, cy - triSize * 0.5f);
-                path.LineTo(cx + triSize * 0.5f, cy);
-                path.LineTo(cx - triSize * 0.4f, cy + triSize * 0.5f);
-                path.Close();
-
-                target.FillPath(path, BrushInfo.Solid(new CssColor(200, 200, 200)));
             }
         }
 

@@ -332,8 +332,32 @@ namespace Rend.Layout.Internal
                     // Handle <br> as a forced line break
                     if (childElement.TagName == "br")
                     {
+                        var brClear = childElement.Style.Clear;
                         StartNewLine(parent, ref cursorX, ref cursorY, ref startX, ref containingWidth,
                                      ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, context);
+                        // [CSS2 §9.5.2] A <br> with `clear` forces the new line origin
+                        // down past any floats on the cleared side. Chrome (and Gecko)
+                        // treat `br { clear: both }` in an inline formatting context as
+                        // equivalent to inserting a cleared line-break element.
+                        if (brClear != CssClear.None && floatCtx != null)
+                        {
+                            float clearY = floatCtx.GetClearY(brClear);
+                            if (clearY > cursorY)
+                            {
+                                cursorY = clearY;
+                                float baseX = parent.ContentRect.X;
+                                float baseWidth = parent.ContentRect.Width;
+                                float leftEdge = floatCtx.GetLeftEdge(cursorY, 0);
+                                float rightEdge = floatCtx.GetRightEdge(cursorY, 0);
+                                startX = Math.Max(baseX, leftEdge);
+                                float rightLimit = baseX + baseWidth;
+                                containingWidth = Math.Min(rightEdge, rightLimit) - startX;
+                                currentLine.X = startX;
+                                currentLine.Y = cursorY;
+                                currentLine.Width = containingWidth;
+                                cursorX = startX;
+                            }
+                        }
                         continue;
                     }
 
@@ -2113,8 +2137,30 @@ namespace Rend.Layout.Internal
                     // Handle <br> as forced line break inside inline elements
                     if (childEl.TagName == "br")
                     {
+                        var brClear = childEl.Style.Clear;
                         StartNewLine(parent, ref cursorX, ref cursorY, ref startX, ref containingWidth,
                                      ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, context);
+                        // [CSS2 §9.5.2] br-with-clear inside nested inline elements
+                        var nestedFloatCtx = context.FloatContext;
+                        if (brClear != CssClear.None && nestedFloatCtx != null)
+                        {
+                            float clearY = nestedFloatCtx.GetClearY(brClear);
+                            if (clearY > cursorY)
+                            {
+                                cursorY = clearY;
+                                float baseX = parent.ContentRect.X;
+                                float baseWidth = parent.ContentRect.Width;
+                                float leftEdge = nestedFloatCtx.GetLeftEdge(cursorY, 0);
+                                float rightEdge = nestedFloatCtx.GetRightEdge(cursorY, 0);
+                                startX = Math.Max(baseX, leftEdge);
+                                float rightLimit = baseX + baseWidth;
+                                containingWidth = Math.Min(rightEdge, rightLimit) - startX;
+                                currentLine.X = startX;
+                                currentLine.Y = cursorY;
+                                currentLine.Width = containingWidth;
+                                cursorX = startX;
+                            }
+                        }
                         continue;
                     }
 

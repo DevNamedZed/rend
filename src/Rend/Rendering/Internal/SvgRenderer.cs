@@ -16,6 +16,16 @@ namespace Rend.Rendering.Internal
     internal static class SvgRenderer
     {
         [ThreadStatic] private static Element? _currentSvgRoot;
+        [ThreadStatic] private static float _currentViewportWidth;
+        [ThreadStatic] private static float _currentViewportHeight;
+
+        /// <spec>SVG 1.1 §7.10 https://www.w3.org/TR/SVG11/coords.html#Units</spec>
+        private enum SvgLengthAxis
+        {
+            Horizontal,
+            Vertical,
+            Diagonal
+        }
         /// <summary>
         /// Render an SVG element into the given target at the specified content rect.
         /// </summary>
@@ -43,11 +53,26 @@ namespace Rend.Rendering.Internal
                             Matrix3x2.CreateTranslation(contentRect.X - vbX * scaleX, contentRect.Y - vbY * scaleY);
             target.SetTransform(transform);
 
-            // Store SVG root for url(#id) lookups
-            _currentSvgRoot = svgElement;
+            // Save prior thread-static context so nested renders restore cleanly.
+            Element? previousSvgRoot = _currentSvgRoot;
+            float previousViewportWidth = _currentViewportWidth;
+            float previousViewportHeight = _currentViewportHeight;
 
-            // Traverse children (pass styled tree for CSS property lookup)
-            RenderChildren(svgElement, target, styledSvg);
+            _currentSvgRoot = svgElement;
+            _currentViewportWidth = vbW;
+            _currentViewportHeight = vbH;
+
+            try
+            {
+                // Traverse children (pass styled tree for CSS property lookup)
+                RenderChildren(svgElement, target, styledSvg);
+            }
+            finally
+            {
+                _currentSvgRoot = previousSvgRoot;
+                _currentViewportWidth = previousViewportWidth;
+                _currentViewportHeight = previousViewportHeight;
+            }
 
             target.PopClip();
             target.Restore();
@@ -333,12 +358,12 @@ namespace Rend.Rendering.Internal
             BrushInfo fillBrush, CssColor stroke, float strokeWidth,
             bool hasFill, bool hasStroke, float strokeOpacity)
         {
-            float x = ParseAttrFloat(elem, "x", 0);
-            float y = ParseAttrFloat(elem, "y", 0);
-            float w = ParseAttrFloat(elem, "width", 0);
-            float h = ParseAttrFloat(elem, "height", 0);
-            float rx = ParseAttrFloat(elem, "rx", 0);
-            float ry = ParseAttrFloat(elem, "ry", 0);
+            float x = ParseAttrLength(elem, "x", SvgLengthAxis.Horizontal, 0);
+            float y = ParseAttrLength(elem, "y", SvgLengthAxis.Vertical, 0);
+            float w = ParseAttrLength(elem, "width", SvgLengthAxis.Horizontal, 0);
+            float h = ParseAttrLength(elem, "height", SvgLengthAxis.Vertical, 0);
+            float rx = ParseAttrLength(elem, "rx", SvgLengthAxis.Horizontal, 0);
+            float ry = ParseAttrLength(elem, "ry", SvgLengthAxis.Vertical, 0);
             if (w <= 0 || h <= 0) return;
 
             if (rx > 0 && ry == 0) { ry = rx; }
@@ -375,9 +400,9 @@ namespace Rend.Rendering.Internal
             BrushInfo fillBrush, CssColor stroke, float strokeWidth,
             bool hasFill, bool hasStroke, float strokeOpacity)
         {
-            float cx = ParseAttrFloat(elem, "cx", 0);
-            float cy = ParseAttrFloat(elem, "cy", 0);
-            float r = ParseAttrFloat(elem, "r", 0);
+            float cx = ParseAttrLength(elem, "cx", SvgLengthAxis.Horizontal, 0);
+            float cy = ParseAttrLength(elem, "cy", SvgLengthAxis.Vertical, 0);
+            float r = ParseAttrLength(elem, "r", SvgLengthAxis.Diagonal, 0);
             if (r <= 0) return;
 
             var path = BuildEllipsePath(cx, cy, r, r);
@@ -389,10 +414,10 @@ namespace Rend.Rendering.Internal
             BrushInfo fillBrush, CssColor stroke, float strokeWidth,
             bool hasFill, bool hasStroke, float strokeOpacity)
         {
-            float cx = ParseAttrFloat(elem, "cx", 0);
-            float cy = ParseAttrFloat(elem, "cy", 0);
-            float rx = ParseAttrFloat(elem, "rx", 0);
-            float ry = ParseAttrFloat(elem, "ry", 0);
+            float cx = ParseAttrLength(elem, "cx", SvgLengthAxis.Horizontal, 0);
+            float cy = ParseAttrLength(elem, "cy", SvgLengthAxis.Vertical, 0);
+            float rx = ParseAttrLength(elem, "rx", SvgLengthAxis.Horizontal, 0);
+            float ry = ParseAttrLength(elem, "ry", SvgLengthAxis.Vertical, 0);
             if (rx <= 0 || ry <= 0) return;
 
             var path = BuildEllipsePath(cx, cy, rx, ry);
@@ -404,10 +429,10 @@ namespace Rend.Rendering.Internal
             CssColor stroke, float strokeWidth, bool hasStroke, float strokeOpacity)
         {
             if (!hasStroke) return;
-            float x1 = ParseAttrFloat(elem, "x1", 0);
-            float y1 = ParseAttrFloat(elem, "y1", 0);
-            float x2 = ParseAttrFloat(elem, "x2", 0);
-            float y2 = ParseAttrFloat(elem, "y2", 0);
+            float x1 = ParseAttrLength(elem, "x1", SvgLengthAxis.Horizontal, 0);
+            float y1 = ParseAttrLength(elem, "y1", SvgLengthAxis.Vertical, 0);
+            float x2 = ParseAttrLength(elem, "x2", SvgLengthAxis.Horizontal, 0);
+            float y2 = ParseAttrLength(elem, "y2", SvgLengthAxis.Vertical, 0);
 
             var path = new PathData();
             path.MoveTo(x1, y1);
@@ -442,8 +467,8 @@ namespace Rend.Rendering.Internal
         private static void RenderText(Element elem, IRenderTarget target,
             CssColor fill, float fillOpacity)
         {
-            float x = ParseAttrFloat(elem, "x", 0);
-            float y = ParseAttrFloat(elem, "y", 0);
+            float x = ParseAttrLength(elem, "x", SvgLengthAxis.Horizontal, 0);
+            float y = ParseAttrLength(elem, "y", SvgLengthAxis.Vertical, 0);
             float fontSize = ParseAttrFloat(elem, "font-size", 16f);
             string? fontFamily = elem.GetAttribute("font-family");
             string? fontWeightAttr = elem.GetAttribute("font-weight");
@@ -492,8 +517,8 @@ namespace Rend.Rendering.Internal
             if (href == null || !href.StartsWith("#")) return;
 
             string id = href.Substring(1);
-            float x = ParseAttrFloat(elem, "x", 0);
-            float y = ParseAttrFloat(elem, "y", 0);
+            float x = ParseAttrLength(elem, "x", SvgLengthAxis.Horizontal, 0);
+            float y = ParseAttrLength(elem, "y", SvgLengthAxis.Vertical, 0);
 
             // Walk up to find the root SVG, then search for the referenced element
             var root = FindRoot(elem);
@@ -636,6 +661,64 @@ namespace Rend.Rendering.Internal
             }
 
             return defaultValue;
+        }
+
+        /// <summary>
+        /// Parse a geometric SVG attribute that accepts length or percentage.
+        /// Percentages resolve against the current SVG viewport width, height,
+        /// or normalized diagonal according to the axis of the attribute.
+        /// </summary>
+        /// <spec>SVG 1.1 §7.10 https://www.w3.org/TR/SVG11/coords.html#Units</spec>
+        private static float ParseAttrLength(Element elem, string name, SvgLengthAxis axis, float defaultValue)
+        {
+            string? val = elem.GetAttribute(name);
+            if (val == null)
+            {
+                return defaultValue;
+            }
+
+            string trimmed = val.Trim();
+            if (trimmed.Length > 1 && trimmed[trimmed.Length - 1] == '%')
+            {
+                string numberPart = trimmed.Substring(0, trimmed.Length - 1);
+                if (!TryParseFloat(numberPart, out float percent))
+                {
+                    return defaultValue;
+                }
+
+                float basis = ResolveViewportBasis(axis);
+                return percent / 100f * basis;
+            }
+
+            if (TryParseSvgLength(trimmed, out float result))
+            {
+                return result;
+            }
+
+            return defaultValue;
+        }
+
+        /// <summary>
+        /// Return the viewport basis used to resolve a percentage length along
+        /// the given axis. Diagonal percentages use the normalized viewport
+        /// diagonal sqrt(vbW^2 + vbH^2) / sqrt(2).
+        /// </summary>
+        /// <spec>SVG 1.1 §7.10 https://www.w3.org/TR/SVG11/coords.html#Units</spec>
+        private static float ResolveViewportBasis(SvgLengthAxis axis)
+        {
+            if (axis == SvgLengthAxis.Horizontal)
+            {
+                return _currentViewportWidth;
+            }
+            if (axis == SvgLengthAxis.Vertical)
+            {
+                return _currentViewportHeight;
+            }
+
+            float viewportWidth = _currentViewportWidth;
+            float viewportHeight = _currentViewportHeight;
+            double diagonal = Math.Sqrt(viewportWidth * viewportWidth + viewportHeight * viewportHeight);
+            return (float)(diagonal / Math.Sqrt(2d));
         }
 
         private static bool TryParseFloat(string s, out float result)
