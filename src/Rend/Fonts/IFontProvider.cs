@@ -26,6 +26,13 @@ namespace Rend.Fonts
         void RegisterFont(byte[] fontData, string? familyNameOverride = null);
 
         /// <summary>
+        /// Registers raw font data using descriptor metadata from a CSS <c>@font-face</c> rule.
+        /// The descriptor's explicit family/weight/style/stretch override the font file's
+        /// intrinsic OpenType metadata for font-matching purposes, per CSS Fonts 4 §5.1.2.
+        /// </summary>
+        void RegisterFontFace(byte[] fontData, FontFaceDescriptor descriptor);
+
+        /// <summary>
         /// Scans a directory for font files and registers all found fonts.
         /// </summary>
         void RegisterFontDirectory(string directoryPath);

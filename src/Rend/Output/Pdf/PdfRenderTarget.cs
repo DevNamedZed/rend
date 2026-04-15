@@ -572,6 +572,21 @@ namespace Rend.Output.Pdf
         }
 
         /// <inheritdoc />
+        public (float Ascent, float Descent) GetFontMetrics(byte[] fontData, float fontSize)
+        {
+            if (fontData == null)
+            {
+                throw new ArgumentNullException(nameof(fontData));
+            }
+            var parsed = new Rend.Fonts.Internal.OpenTypeFontData(fontData);
+            var metrics = parsed.BuildMetrics();
+            float scale = metrics.UnitsPerEm > 0 ? fontSize / metrics.UnitsPerEm : 0f;
+            float ascent = (float)Math.Round(metrics.Ascent * scale, MidpointRounding.AwayFromZero);
+            float descent = (float)Math.Round(-metrics.Descent * scale, MidpointRounding.AwayFromZero);
+            return (ascent, descent);
+        }
+
+        /// <inheritdoc />
         public float GetNormalLineHeight(FontDescriptor font, float fontSize)
         {
             // Match the inline layout's "normal" line-height: ascent + descent

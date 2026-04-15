@@ -86,7 +86,10 @@ namespace Rend.Fonts
         /// <inheritdoc />
         public void RegisterFont(byte[] fontData, string? familyNameOverride = null)
         {
-            if (fontData == null) throw new ArgumentNullException(nameof(fontData));
+            if (fontData == null)
+            {
+                throw new ArgumentNullException(nameof(fontData));
+            }
 
             // Handle TTC (TrueType Collection) files.
             if (FontFileDetector.Detect(fontData) == FontFileFormat.TrueTypeCollection)
@@ -95,29 +98,48 @@ namespace Rend.Fonts
                 return;
             }
 
-            // Detect format and decompress if needed.
             byte[] sfntData = EnsureSfnt(fontData);
-
-            OpenTypeFontData parsed;
-            try
-            {
-                parsed = new OpenTypeFontData(sfntData);
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException("Failed to parse font data: " + ex.Message, ex);
-            }
+            OpenTypeFontData parsed = ParseOpenType(sfntData);
 
             string familyName = familyNameOverride ?? parsed.FamilyName;
             if (string.IsNullOrEmpty(familyName))
+            {
                 familyName = "Unknown";
+            }
 
             CssFontStyle style = parsed.IsItalic ? CssFontStyle.Italic : CssFontStyle.Normal;
             float weight = parsed.Weight > 0 ? parsed.Weight : 400f;
 
             var descriptor = new FontDescriptor(familyName, weight, style);
-            FontMetricsInfo metrics = parsed.BuildMetrics();
+            AddEntry(sfntData, parsed, descriptor, familyName);
+        }
 
+        /// <inheritdoc />
+        public void RegisterFontFace(byte[] fontData, FontFaceDescriptor descriptor)
+        {
+            FontEntry entry = DocumentFontFaceBuilder.Build(fontData, descriptor);
+            lock (_lock)
+            {
+                _entries.Add(entry);
+                _resolveCache.Clear();
+            }
+        }
+
+        private static OpenTypeFontData ParseOpenType(byte[] sfntData)
+        {
+            try
+            {
+                return new OpenTypeFontData(sfntData);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("Failed to parse font data: " + ex.Message, ex);
+            }
+        }
+
+        private void AddEntry(byte[] sfntData, OpenTypeFontData parsed, FontDescriptor descriptor, string familyName)
+        {
+            FontMetricsInfo metrics = parsed.BuildMetrics();
             var entry = new FontEntry(descriptor, sfntData, metrics, familyName, null, parsed);
 
             lock (_lock)

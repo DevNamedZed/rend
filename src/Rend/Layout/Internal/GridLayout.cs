@@ -19,8 +19,23 @@ namespace Rend.Layout.Internal
             if (styledElement == null) return;
 
             var style = styledElement.Style;
-            float containerWidth = parent.ContentRect.Width;
-            float containerHeight = parent.ContentRect.Height;
+
+            // [CSS-WRITING-MODES-3 §6.2] In vertical writing modes the inline axis is
+            // physically vertical and the block axis is physically horizontal. Grid's
+            // internal arithmetic is written as if the inline axis were "width" and the
+            // block axis were "height"; by swapping the physical width/height into those
+            // locals on entry we let every subsequent computation stay in logical
+            // (inline, block) coordinates without rewriting the track-sizing math.
+            CssWritingMode writingMode = style.WritingMode;
+            bool isVerticalWM = writingMode == CssWritingMode.VerticalRl
+                                || writingMode == CssWritingMode.VerticalLr;
+            float containerPhysicalWidth = parent.ContentRect.Width;
+            float containerPhysicalHeight = parent.ContentRect.Height;
+            float containerPhysicalX = parent.ContentRect.X;
+            float containerPhysicalY = parent.ContentRect.Y;
+
+            float containerWidth = isVerticalWM ? containerPhysicalHeight : containerPhysicalWidth;
+            float containerHeight = isVerticalWM ? containerPhysicalWidth : containerPhysicalHeight;
             // [CSS-SIZING-3 §5.2] "Definite" height means a height resolved without
             // reference to content. Only definite heights drive row-track stretching
             // and align-content free-space distribution. Max-height on an auto-height
@@ -295,8 +310,13 @@ namespace Rend.Layout.Internal
             if (items.Count == 0 && absposGridItems.Count == 0)
             {
                 // [CSS-GRID §12.4] Even with no items, explicit tracks define the grid
-                // container's intrinsic height. Compute and set it so BFC/IFC can use it.
-                if (parent.ContentRect.Height <= 0)
+                // container's intrinsic block size. Compute and set it so BFC/IFC can use it.
+                // In vertical writing mode the block axis is physically horizontal so the
+                // computed total goes into physical width, not height.
+                bool emptyHasNoBlockExtent = isVerticalWM
+                    ? containerPhysicalWidth <= 0
+                    : containerPhysicalHeight <= 0;
+                if (emptyHasNoBlockExtent)
                 {
                     var earlyRowTracks = ResolveTrackList(rowRaw, containerHeight, rowGap, rowLineNames);
                     if (earlyRowTracks != null)
@@ -312,8 +332,16 @@ namespace Rend.Layout.Internal
                         }
                         if (totalEmptyRowH > 0)
                         {
-                            parent.ContentRect = new RectF(parent.ContentRect.X, parent.ContentRect.Y,
-                                parent.ContentRect.Width, totalEmptyRowH);
+                            if (isVerticalWM)
+                            {
+                                parent.ContentRect = new RectF(containerPhysicalX, containerPhysicalY,
+                                    totalEmptyRowH, containerPhysicalHeight);
+                            }
+                            else
+                            {
+                                parent.ContentRect = new RectF(containerPhysicalX, containerPhysicalY,
+                                    containerPhysicalWidth, totalEmptyRowH);
+                            }
                         }
                     }
                 }
@@ -1356,7 +1384,18 @@ namespace Rend.Layout.Internal
                             if (preHeight < 0) { preHeight = 0; }
                         }
                     }
-                    item.Box.ContentRect = new RectF(0, 0, contentWidth, preHeight);
+                    // [CSS-WRITING-MODES-3 §6.2] In vertical writing mode the inline axis is
+                    // physically vertical so the child BFC must read its inline size from
+                    // the box's physical Height. Swap the (logical inline, logical block)
+                    // values into (physical W=block, physical H=inline) before laying out.
+                    if (isVerticalWM)
+                    {
+                        item.Box.ContentRect = new RectF(0, 0, preHeight, contentWidth);
+                    }
+                    else
+                    {
+                        item.Box.ContentRect = new RectF(0, 0, contentWidth, preHeight);
+                    }
 
                     // Set parent reference before layout so margin collapsing
                     // can detect that this box is a grid item (establishes BFC).
@@ -1803,10 +1842,15 @@ namespace Rend.Layout.Internal
             // [CSS-GRID §10.1] Compute per-row baseline groups for baseline alignment.
             // Items with align-self:baseline in the same row share a baseline group.
             // The row height may grow to accommodate baseline-shifted items.
+            // [CSS-WRITING-MODES-3] Skipped in vertical writing mode: the per-axis
+            // baseline math here uses physical top/bottom margins and a Y baseline
+            // returned by GetItemBaseline, which are not meaningful for items shaped
+            // sideways. Vertical-WM baseline groups need a separate implementation.
             float[]? rowMaxBaselines = null;
             {
-                bool hasBaselineAlignment = containerAlignItems == CssAlignItems.Baseline;
-                if (!hasBaselineAlignment)
+                bool hasBaselineAlignment = !isVerticalWM
+                    && containerAlignItems == CssAlignItems.Baseline;
+                if (!hasBaselineAlignment && !isVerticalWM)
                 {
                     for (int i = 0; i < items.Count; i++)
                     {
@@ -1983,7 +2027,10 @@ namespace Rend.Layout.Internal
             {
                 var item = items[i];
 
-                float x = parent.ContentRect.X + justifyContentOffset;
+                // Logical inline-axis cumulative start of the cell within the container's
+                // content box (no physical origin baked in — that is added at the final
+                // logical→physical mapping below).
+                float x = justifyContentOffset;
                 for (int c = 0; c < item.ColStart && c < finalCols; c++)
                 {
                     x += colWidths[c];
@@ -1995,7 +2042,9 @@ namespace Rend.Layout.Internal
                     }
                 }
 
-                float y = parent.ContentRect.Y + alignContentOffset;
+                // Logical block-axis cumulative start of the cell within the container's
+                // content box.
+                float y = alignContentOffset;
                 for (int r = 0; r < item.RowStart && r < finalRows; r++)
                 {
                     y += rowHeights[r];
@@ -2040,13 +2089,24 @@ namespace Rend.Layout.Internal
                 float finalWidth = item.ContentWidth;
                 float finalHeight = item.ContentHeight;
 
-                // Calculate total item outer size (content + padding + border + margin)
-                float outerWidth = finalWidth + item.Box.PaddingLeft + item.Box.PaddingRight
-                    + item.Box.BorderLeftWidth + item.Box.BorderRightWidth
-                    + item.Box.MarginLeft + item.Box.MarginRight;
-                float outerHeight = finalHeight + item.Box.PaddingTop + item.Box.PaddingBottom
-                    + item.Box.BorderTopWidth + item.Box.BorderBottomWidth
-                    + item.Box.MarginTop + item.Box.MarginBottom;
+                // [CSS-WRITING-MODES-3 §6.2] Compute outer (margin-box) size on each logical
+                // axis using the writing-mode-aware accessors. In horizontal-tb the inline
+                // axis is physically X (left/right margin/border/padding), in vertical-lr/rl
+                // it is physically Y (top/bottom margin/border/padding).
+                float outerInlineExtra = LogicalPaddingInlineStart(item.Box, writingMode)
+                    + LogicalPaddingInlineEnd(item.Box, writingMode)
+                    + LogicalBorderInlineStart(item.Box, writingMode)
+                    + LogicalBorderInlineEnd(item.Box, writingMode)
+                    + LogicalMarginInlineStart(item.Box, writingMode)
+                    + LogicalMarginInlineEnd(item.Box, writingMode);
+                float outerBlockExtra = LogicalPaddingBlockStart(item.Box, writingMode)
+                    + LogicalPaddingBlockEnd(item.Box, writingMode)
+                    + LogicalBorderBlockStart(item.Box, writingMode)
+                    + LogicalBorderBlockEnd(item.Box, writingMode)
+                    + LogicalMarginBlockStart(item.Box, writingMode)
+                    + LogicalMarginBlockEnd(item.Box, writingMode);
+                float outerWidth = finalWidth + outerInlineExtra;
+                float outerHeight = finalHeight + outerBlockExtra;
 
                 // Resolve alignment: item's self overrides container default
                 CssAlignItems alignBlock = containerAlignItems;
@@ -2064,86 +2124,61 @@ namespace Rend.Layout.Internal
                 }
 
                 // [CSS-GRID §10.3] Auto margins absorb free space, overriding alignment.
+                // The auto check operates on the LOGICAL inline-start/end and block-start/end
+                // sides so `margin-inline-start: auto` works regardless of writing mode.
                 if (item.StyledElement != null)
                 {
-                    var itemStyle = item.StyledElement.Style;
-                    bool autoML = float.IsNaN(itemStyle.MarginLeft);
-                    bool autoMR = float.IsNaN(itemStyle.MarginRight);
-                    if (autoML || autoMR)
-                    {
-                        float freeH = spanWidth - outerWidth;
-                        if (freeH > 0)
-                        {
-                            if (autoML && autoMR)
-                            {
-                                item.Box.MarginLeft = freeH / 2;
-                                item.Box.MarginRight = freeH / 2;
-                            }
-                            else if (autoML)
-                            {
-                                item.Box.MarginLeft = freeH;
-                            }
-                            else
-                            {
-                                item.Box.MarginRight = freeH;
-                            }
-                        }
-                    }
-
-                    bool autoMT = float.IsNaN(itemStyle.MarginTop);
-                    bool autoMB = float.IsNaN(itemStyle.MarginBottom);
-                    if (autoMT || autoMB)
-                    {
-                        float freeV = spanHeight - outerHeight;
-                        if (freeV > 0)
-                        {
-                            if (autoMT && autoMB)
-                            {
-                                item.Box.MarginTop = freeV / 2;
-                                item.Box.MarginBottom = freeV / 2;
-                            }
-                            else if (autoMT)
-                            {
-                                item.Box.MarginTop = freeV;
-                            }
-                            else
-                            {
-                                item.Box.MarginBottom = freeV;
-                            }
-                        }
-                    }
+                    ResolveAutoMargins(item.Box, item.StyledElement.Style, writingMode,
+                        spanWidth - outerWidth, spanHeight - outerHeight);
+                    // Recompute outer extras: auto-margin resolution may have written values
+                    // into previously-NaN sides, changing the inline/block outer sizes.
+                    outerInlineExtra = LogicalPaddingInlineStart(item.Box, writingMode)
+                        + LogicalPaddingInlineEnd(item.Box, writingMode)
+                        + LogicalBorderInlineStart(item.Box, writingMode)
+                        + LogicalBorderInlineEnd(item.Box, writingMode)
+                        + LogicalMarginInlineStart(item.Box, writingMode)
+                        + LogicalMarginInlineEnd(item.Box, writingMode);
+                    outerBlockExtra = LogicalPaddingBlockStart(item.Box, writingMode)
+                        + LogicalPaddingBlockEnd(item.Box, writingMode)
+                        + LogicalBorderBlockStart(item.Box, writingMode)
+                        + LogicalBorderBlockEnd(item.Box, writingMode)
+                        + LogicalMarginBlockStart(item.Box, writingMode)
+                        + LogicalMarginBlockEnd(item.Box, writingMode);
+                    outerWidth = finalWidth + outerInlineExtra;
+                    outerHeight = finalHeight + outerBlockExtra;
                 }
 
-                // Apply inline (horizontal) alignment offset
-                float xOffset = AlignOffset(alignInline, spanWidth,
-                    finalWidth + item.Box.PaddingLeft + item.Box.PaddingRight
-                    + item.Box.BorderLeftWidth + item.Box.BorderRightWidth
-                    + item.Box.MarginLeft + item.Box.MarginRight);
+                // Apply inline-axis alignment offset (justify-self / justify-items)
+                float xOffset = AlignOffset(alignInline, spanWidth, outerWidth);
 
-                // [CSS-GRID §10.1] Apply block (vertical) alignment offset.
+                // [CSS-GRID §10.1] Apply block-axis alignment offset (align-self / align-items).
                 // Baseline-aligned items use per-row baseline group offset.
                 // [CSS-ALIGN-3 §9.3] Replaced elements have only synthesized
                 // baselines and fall back to start alignment instead of joining
                 // the baseline group.
+                // [CSS-WRITING-MODES-3] In vertical writing modes the block-axis baseline
+                // is conceptually a vertical line through glyphs, not a horizontal one;
+                // the row-baseline group computed via GetItemBaseline (a physical Y) is
+                // not meaningful here. Fall back to start until vertical-WM baseline
+                // groups are implemented.
                 float yOffset;
                 bool useBaselineAlignment = alignBlock == CssAlignItems.Baseline
                     && rowMaxBaselines != null
                     && item.RowStart >= 0 && item.RowStart < finalRows
                     && item.RowSpan == 1
-                    && !HasSynthesizedBaselineOnly(item);
+                    && !HasSynthesizedBaselineOnly(item)
+                    && !isVerticalWM;
                 if (useBaselineAlignment)
                 {
-                    float itemBaselineFromCell = GetItemBaseline(item.Box) + item.Box.MarginTop;
+                    float itemBaselineFromCell = GetItemBaseline(item.Box)
+                        + LogicalMarginBlockStart(item.Box, writingMode);
                     yOffset = rowMaxBaselines![item.RowStart] - itemBaselineFromCell;
                 }
                 else
                 {
                     CssAlignItems effectiveBlock = alignBlock == CssAlignItems.Baseline
                         ? CssAlignItems.Start : alignBlock;
-                    yOffset = AlignOffset(effectiveBlock, spanHeight,
-                        finalHeight + item.Box.PaddingTop + item.Box.PaddingBottom
-                        + item.Box.BorderTopWidth + item.Box.BorderBottomWidth
-                        + item.Box.MarginTop + item.Box.MarginBottom);
+                    yOffset = AlignOffset(effectiveBlock, spanHeight, outerHeight);
                 }
 
                 // Stretch: expand content to fill cell (default grid behavior)
@@ -2255,13 +2290,27 @@ namespace Rend.Layout.Internal
                     }
                 }
 
-                float newX = x + xOffset + item.Box.MarginLeft + item.Box.BorderLeftWidth + item.Box.PaddingLeft;
-                float newY = y + yOffset + item.Box.MarginTop + item.Box.BorderTopWidth + item.Box.PaddingTop;
+                // Compute logical content-box origin: cell-start + alignment offset + the
+                // start-side margin/border/padding on each axis. Stays in logical space until
+                // the LogicalToPhysicalRect mapping below.
+                float inlineContentStart = x + xOffset
+                    + LogicalMarginInlineStart(item.Box, writingMode)
+                    + LogicalBorderInlineStart(item.Box, writingMode)
+                    + LogicalPaddingInlineStart(item.Box, writingMode);
+                float blockContentStart = y + yOffset
+                    + LogicalMarginBlockStart(item.Box, writingMode)
+                    + LogicalBorderBlockStart(item.Box, writingMode)
+                    + LogicalPaddingBlockStart(item.Box, writingMode);
+
+                RectF physicalContentRect = LogicalToPhysicalRect(
+                    inlineContentStart, blockContentStart, finalWidth, finalHeight,
+                    writingMode,
+                    containerPhysicalX, containerPhysicalY, containerPhysicalWidth);
 
                 // Offset all descendants (children + line boxes) from first-pass (0,0)
-                // to the actual grid cell position.
-                float dx = newX - item.Box.ContentRect.X;
-                float dy = newY - item.Box.ContentRect.Y;
+                // to the actual grid cell physical position.
+                float dx = physicalContentRect.X - item.Box.ContentRect.X;
+                float dy = physicalContentRect.Y - item.Box.ContentRect.Y;
                 if (dx != 0 || dy != 0)
                 {
                     for (int ci = 0; ci < item.Box.Children.Count; ci++)
@@ -2276,14 +2325,19 @@ namespace Rend.Layout.Internal
                     }
                 }
 
-                item.Box.ContentRect = new RectF(newX, newY, finalWidth, finalHeight);
+                item.Box.ContentRect = physicalContentRect;
 
                 parent.AddChild(item.Box);
             }
 
-            // [CSS-GRID §12.4] Set grid container auto height from row tracks so
+            // [CSS-GRID §12.4] Set grid container auto block-size from row tracks so
             // BFC can use it (instead of CalculateAutoHeight which misses tracks).
-            if (parent.ContentRect.Height <= 0)
+            // In vertical writing mode the block axis is physically horizontal, so the
+            // accumulated track total goes into physical width, not height.
+            bool needsBlockExtent = isVerticalWM
+                ? containerPhysicalWidth <= 0
+                : parent.ContentRect.Height <= 0;
+            if (needsBlockExtent)
             {
                 float totalRowHeight = 0;
                 for (int r = 0; r < finalRows; r++)
@@ -2294,8 +2348,16 @@ namespace Rend.Layout.Internal
                         totalRowHeight += effectiveRowGap;
                     }
                 }
-                parent.ContentRect = new RectF(parent.ContentRect.X, parent.ContentRect.Y,
-                    parent.ContentRect.Width, totalRowHeight);
+                if (isVerticalWM)
+                {
+                    parent.ContentRect = new RectF(containerPhysicalX, containerPhysicalY,
+                        totalRowHeight, parent.ContentRect.Height);
+                }
+                else
+                {
+                    parent.ContentRect = new RectF(parent.ContentRect.X, parent.ContentRect.Y,
+                        parent.ContentRect.Width, totalRowHeight);
+                }
             }
 
             // [CSS-GRID §9] Position abspos items with grid placement within their
@@ -3851,6 +3913,206 @@ namespace Rend.Layout.Internal
             }
         }
 
+        // [CSS-WRITING-MODES-3 §6.2] Logical box-model side accessors. Grid arithmetic is
+        // expressed in logical (inline / block) coordinates so it can stay agnostic to the
+        // container's writing mode. Each of these maps a logical side onto the physical
+        // margin/border/padding side that holds its value in the current writing mode.
+        // horizontal-tb: inline-start = left,  block-start = top
+        // vertical-lr:   inline-start = top,   block-start = left
+        // vertical-rl:   inline-start = top,   block-start = right (block axis grows left)
+
+        private static float LogicalMarginInlineStart(LayoutBox box, CssWritingMode wm)
+        {
+            return wm == CssWritingMode.HorizontalTb ? box.MarginLeft : box.MarginTop;
+        }
+
+        private static float LogicalMarginInlineEnd(LayoutBox box, CssWritingMode wm)
+        {
+            return wm == CssWritingMode.HorizontalTb ? box.MarginRight : box.MarginBottom;
+        }
+
+        private static float LogicalMarginBlockStart(LayoutBox box, CssWritingMode wm)
+        {
+            if (wm == CssWritingMode.HorizontalTb) { return box.MarginTop; }
+            if (wm == CssWritingMode.VerticalLr) { return box.MarginLeft; }
+            return box.MarginRight;
+        }
+
+        private static float LogicalMarginBlockEnd(LayoutBox box, CssWritingMode wm)
+        {
+            if (wm == CssWritingMode.HorizontalTb) { return box.MarginBottom; }
+            if (wm == CssWritingMode.VerticalLr) { return box.MarginRight; }
+            return box.MarginLeft;
+        }
+
+        private static float LogicalBorderInlineStart(LayoutBox box, CssWritingMode wm)
+        {
+            return wm == CssWritingMode.HorizontalTb ? box.BorderLeftWidth : box.BorderTopWidth;
+        }
+
+        private static float LogicalBorderInlineEnd(LayoutBox box, CssWritingMode wm)
+        {
+            return wm == CssWritingMode.HorizontalTb ? box.BorderRightWidth : box.BorderBottomWidth;
+        }
+
+        private static float LogicalBorderBlockStart(LayoutBox box, CssWritingMode wm)
+        {
+            if (wm == CssWritingMode.HorizontalTb) { return box.BorderTopWidth; }
+            if (wm == CssWritingMode.VerticalLr) { return box.BorderLeftWidth; }
+            return box.BorderRightWidth;
+        }
+
+        private static float LogicalBorderBlockEnd(LayoutBox box, CssWritingMode wm)
+        {
+            if (wm == CssWritingMode.HorizontalTb) { return box.BorderBottomWidth; }
+            if (wm == CssWritingMode.VerticalLr) { return box.BorderRightWidth; }
+            return box.BorderLeftWidth;
+        }
+
+        private static float LogicalPaddingInlineStart(LayoutBox box, CssWritingMode wm)
+        {
+            return wm == CssWritingMode.HorizontalTb ? box.PaddingLeft : box.PaddingTop;
+        }
+
+        private static float LogicalPaddingInlineEnd(LayoutBox box, CssWritingMode wm)
+        {
+            return wm == CssWritingMode.HorizontalTb ? box.PaddingRight : box.PaddingBottom;
+        }
+
+        private static float LogicalPaddingBlockStart(LayoutBox box, CssWritingMode wm)
+        {
+            if (wm == CssWritingMode.HorizontalTb) { return box.PaddingTop; }
+            if (wm == CssWritingMode.VerticalLr) { return box.PaddingLeft; }
+            return box.PaddingRight;
+        }
+
+        private static float LogicalPaddingBlockEnd(LayoutBox box, CssWritingMode wm)
+        {
+            if (wm == CssWritingMode.HorizontalTb) { return box.PaddingBottom; }
+            if (wm == CssWritingMode.VerticalLr) { return box.PaddingRight; }
+            return box.PaddingLeft;
+        }
+
+        // [CSS-GRID §10.3] Resolve auto margins on a grid item. Auto margins on a logical
+        // axis absorb any free space along that axis, overriding alignment. The check uses
+        // the LOGICAL inline-start/end and block-start/end so `margin-inline-start: auto`
+        // works regardless of the container's writing mode.
+        private static void ResolveAutoMargins(LayoutBox box, ComputedStyle itemStyle,
+            CssWritingMode wm, float freeInline, float freeBlock)
+        {
+            bool autoInlineStart = wm == CssWritingMode.HorizontalTb
+                ? float.IsNaN(itemStyle.MarginLeft) : float.IsNaN(itemStyle.MarginTop);
+            bool autoInlineEnd = wm == CssWritingMode.HorizontalTb
+                ? float.IsNaN(itemStyle.MarginRight) : float.IsNaN(itemStyle.MarginBottom);
+            if ((autoInlineStart || autoInlineEnd) && freeInline > 0)
+            {
+                if (autoInlineStart && autoInlineEnd)
+                {
+                    SetLogicalMarginInlineStart(box, wm, freeInline / 2f);
+                    SetLogicalMarginInlineEnd(box, wm, freeInline / 2f);
+                }
+                else if (autoInlineStart)
+                {
+                    SetLogicalMarginInlineStart(box, wm, freeInline);
+                }
+                else
+                {
+                    SetLogicalMarginInlineEnd(box, wm, freeInline);
+                }
+            }
+
+            bool autoBlockStart;
+            bool autoBlockEnd;
+            if (wm == CssWritingMode.HorizontalTb)
+            {
+                autoBlockStart = float.IsNaN(itemStyle.MarginTop);
+                autoBlockEnd = float.IsNaN(itemStyle.MarginBottom);
+            }
+            else if (wm == CssWritingMode.VerticalLr)
+            {
+                autoBlockStart = float.IsNaN(itemStyle.MarginLeft);
+                autoBlockEnd = float.IsNaN(itemStyle.MarginRight);
+            }
+            else
+            {
+                autoBlockStart = float.IsNaN(itemStyle.MarginRight);
+                autoBlockEnd = float.IsNaN(itemStyle.MarginLeft);
+            }
+            if ((autoBlockStart || autoBlockEnd) && freeBlock > 0)
+            {
+                if (autoBlockStart && autoBlockEnd)
+                {
+                    SetLogicalMarginBlockStart(box, wm, freeBlock / 2f);
+                    SetLogicalMarginBlockEnd(box, wm, freeBlock / 2f);
+                }
+                else if (autoBlockStart)
+                {
+                    SetLogicalMarginBlockStart(box, wm, freeBlock);
+                }
+                else
+                {
+                    SetLogicalMarginBlockEnd(box, wm, freeBlock);
+                }
+            }
+        }
+
+        private static void SetLogicalMarginInlineStart(LayoutBox box, CssWritingMode wm, float value)
+        {
+            if (wm == CssWritingMode.HorizontalTb) { box.MarginLeft = value; }
+            else { box.MarginTop = value; }
+        }
+
+        private static void SetLogicalMarginInlineEnd(LayoutBox box, CssWritingMode wm, float value)
+        {
+            if (wm == CssWritingMode.HorizontalTb) { box.MarginRight = value; }
+            else { box.MarginBottom = value; }
+        }
+
+        private static void SetLogicalMarginBlockStart(LayoutBox box, CssWritingMode wm, float value)
+        {
+            if (wm == CssWritingMode.HorizontalTb) { box.MarginTop = value; return; }
+            if (wm == CssWritingMode.VerticalLr) { box.MarginLeft = value; return; }
+            box.MarginRight = value;
+        }
+
+        private static void SetLogicalMarginBlockEnd(LayoutBox box, CssWritingMode wm, float value)
+        {
+            if (wm == CssWritingMode.HorizontalTb) { box.MarginBottom = value; return; }
+            if (wm == CssWritingMode.VerticalLr) { box.MarginRight = value; return; }
+            box.MarginLeft = value;
+        }
+
+        // [CSS-WRITING-MODES-3 §7.1] Maps a logical rect (inline-start, block-start,
+        // inline-size, block-size) within a container's content box origin into the
+        // physical RectF that drawing/hit-testing actually use. The container's physical
+        // origin and physical width are needed because vertical-rl flips the block axis
+        // along physical X.
+        private static RectF LogicalToPhysicalRect(
+            float inlineStart, float blockStart, float inlineSize, float blockSize,
+            CssWritingMode wm,
+            float containerPhysicalX, float containerPhysicalY, float containerPhysicalWidth)
+        {
+            if (wm == CssWritingMode.HorizontalTb)
+            {
+                return new RectF(
+                    containerPhysicalX + inlineStart,
+                    containerPhysicalY + blockStart,
+                    inlineSize, blockSize);
+            }
+            if (wm == CssWritingMode.VerticalLr)
+            {
+                return new RectF(
+                    containerPhysicalX + blockStart,
+                    containerPhysicalY + inlineStart,
+                    blockSize, inlineSize);
+            }
+            // VerticalRl: block axis grows from physical right edge toward left.
+            return new RectF(
+                containerPhysicalX + containerPhysicalWidth - blockStart - blockSize,
+                containerPhysicalY + inlineStart,
+                blockSize, inlineSize);
+        }
+
         private static bool IsStretch(CssAlignItems align)
         {
             return align == CssAlignItems.Stretch || align == CssAlignItems.Normal;
@@ -4041,17 +4303,35 @@ namespace Rend.Layout.Internal
 
         /// <summary>
         /// [CSS-GRID §12.1] Compute intrinsic width for a grid container.
-        /// Collects grid items, parses grid-template-columns, places items,
-        /// then sums per-column contributions:
+        /// For horizontal-tb grids this sums column (inline axis) tracks; for
+        /// vertical-lr/vertical-rl grids it sums row (block axis) tracks, because
+        /// the physical width of a vertical-WM grid is its block size, not its
+        /// inline size.
+        ///
+        /// Per-track sizing rules:
         ///   - Explicit pixel/percent tracks: declared size
-        ///   - Auto tracks: max-content width of items in that column
+        ///   - Auto tracks: max-content contribution of items in that track
         ///   - fr tracks: 0 contribution (flexible, not intrinsic)
         ///   - auto-fill/auto-fit: 1 repetition for intrinsic sizing
         /// </summary>
         internal static float ComputeIntrinsicWidth(
-            StyledElement element, float keyword, float containingWidth, LayoutContext context)
+            StyledElement element, float keyword, float containingWidth, LayoutContext context,
+            bool forceColumnAxis = false)
         {
             var style = element.Style;
+            // [CSS-WRITING-MODES-3 §6.2] For vertical writing modes the grid's
+            // physical width is the block axis size (sum of row tracks), not the
+            // inline axis size (sum of column tracks). Placement still uses
+            // logical column/row semantics from the CSS properties; only the
+            // final per-track sum switches axis.
+            //
+            // <paramref name="forceColumnAxis"/> bypasses this writing-mode fork
+            // and always walks the column-axis (inline) path. Used by
+            // FloatLayout to pre-compute the inline size (physical Height) of a
+            // vertical-WM floated grid so Layout receives a definite inline
+            // size on entry instead of the default zero.
+            bool sizeBlockAxis = !forceColumnAxis && BlockFormattingContext.IsVerticalWritingMode(style);
+
             float colGap = style.ColumnGap;
             if (DeferredPercent.IsEncoded(colGap))
             {
@@ -4418,6 +4698,18 @@ namespace Rend.Layout.Internal
 
             int finalCols = maxCol;
 
+            if (sizeBlockAxis)
+            {
+                // [CSS-WRITING-MODES-3 §6.2] For vertical writing modes, the
+                // grid's physical width equals its block size — the sum of row
+                // tracks, not column tracks. Placement above used CSS-logical
+                // col/row semantics unchanged; here we compute the per-row
+                // primary-axis sum using the same sizing algorithm but walking
+                // the row axis instead of the column axis.
+                return ComputeRowAxisPrimarySum(
+                    style, items, maxRow, keyword, containingWidth, context);
+            }
+
             // Resolve grid-auto-columns for implicit tracks
             float autoColumnSize = 0;
             object? autoColRaw = style.GetRefValue(PropertyId.GridAutoColumns);
@@ -4555,6 +4847,217 @@ namespace Rend.Layout.Internal
             }
 
             return SumTrackWidthsAndGaps(columnWidths, colGap);
+        }
+
+        /// <summary>
+        /// [CSS-WRITING-MODES-3 §6.2] Computes the row-axis primary-track sum for
+        /// a vertical writing-mode grid container. This is the grid's physical
+        /// width (= block size) for vertical-lr / vertical-rl. Mirrors the
+        /// column-axis path in <see cref="ComputeIntrinsicWidth"/> but walks
+        /// rows, reads <see cref="PropertyId.GridTemplateRows"/> /
+        /// <see cref="PropertyId.GridAutoRows"/>, and uses
+        /// <see cref="ComputedStyle.RowGap"/>.
+        ///
+        /// Each row's block size is the max physical-X extent of its items —
+        /// <see cref="MeasureGridItemOuterWidth"/> returns the physical X
+        /// dimension, which for a vertical-WM grid item is its block size.
+        /// </summary>
+        private static float ComputeRowAxisPrimarySum(
+            ComputedStyle style,
+            List<GridItem> items,
+            int maxRow,
+            float keyword,
+            float containingWidth,
+            LayoutContext context)
+        {
+            float rowGap = style.RowGap;
+            if (DeferredPercent.IsEncoded(rowGap))
+            {
+                rowGap = 0;
+            }
+            if (float.IsNaN(rowGap) || rowGap < 0)
+            {
+                rowGap = 0;
+            }
+
+            var rowRaw = style.GetRefValue(PropertyId.GridTemplateRows);
+            var flatRowValues = new List<object>();
+            if (rowRaw != null && !IsSubgrid(rowRaw))
+            {
+                if (rowRaw is CssKeywordValue rowKw
+                    && (rowKw.Keyword == "none" || rowKw.Keyword == "auto"))
+                {
+                    // No explicit rows
+                }
+                else if (rowRaw is CssListValue rowList)
+                {
+                    for (int i = 0; i < rowList.Values.Count; i++)
+                    {
+                        FlattenTrackValueForIntrinsic(rowList.Values[i], flatRowValues, containingWidth);
+                    }
+                }
+                else
+                {
+                    FlattenTrackValueForIntrinsic(rowRaw, flatRowValues, containingWidth);
+                }
+            }
+
+            int explicitRows = flatRowValues.Count;
+            var rowTrackSizes = new float[explicitRows];
+            for (int i = 0; i < explicitRows; i++)
+            {
+                var trackVal = flatRowValues[i];
+                if (trackVal is CssKeywordValue autoKw && autoKw.Keyword == "auto")
+                {
+                    rowTrackSizes[i] = -2;
+                    continue;
+                }
+
+                var parsed = ParseTrackValue(trackVal, containingWidth);
+                if (parsed.isFr)
+                {
+                    float minFloor = GetMinmaxFloorForIntrinsic(trackVal, containingWidth);
+                    if (minFloor > 0)
+                    {
+                        rowTrackSizes[i] = minFloor;
+                    }
+                    else
+                    {
+                        rowTrackSizes[i] = -2;
+                    }
+                }
+                else if (parsed.value < 0)
+                {
+                    rowTrackSizes[i] = parsed.value;
+                }
+                else
+                {
+                    rowTrackSizes[i] = parsed.value;
+                }
+            }
+
+            float autoRowSize = 0;
+            object? autoRowRaw = style.GetRefValue(PropertyId.GridAutoRows);
+            if (autoRowRaw != null)
+            {
+                var autoRowTracks = ResolveTrackList(autoRowRaw, containingWidth);
+                if (autoRowTracks != null && autoRowTracks.Length > 0 && autoRowTracks[0] > 0)
+                {
+                    autoRowSize = autoRowTracks[0];
+                }
+            }
+
+            var rowWidths = new float[maxRow];
+            for (int r = 0; r < maxRow; r++)
+            {
+                if (r < rowTrackSizes.Length)
+                {
+                    rowWidths[r] = rowTrackSizes[r];
+                }
+                else if (autoRowSize > 0)
+                {
+                    rowWidths[r] = autoRowSize;
+                }
+                else
+                {
+                    rowWidths[r] = -2;
+                }
+            }
+
+            float[]? fitContentLimits = ExtractFitContentLimits(rowRaw, maxRow, containingWidth, rowGap);
+
+            bool isMinContent = keyword == SizingKeyword.MinContent;
+            var measuredWidths = new float[maxRow];
+            var minContentWidths = new float[maxRow];
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item.RowStart < 0 || item.RowStart >= maxRow)
+                {
+                    continue;
+                }
+                if (item.RowSpan != 1)
+                {
+                    continue;
+                }
+                if (rowWidths[item.RowStart] >= 0)
+                {
+                    continue;
+                }
+
+                float itemOuterWidth = MeasureGridItemOuterWidth(item, isMinContent, containingWidth, context);
+                if (itemOuterWidth > measuredWidths[item.RowStart])
+                {
+                    measuredWidths[item.RowStart] = itemOuterWidth;
+                }
+
+                bool isFitContent = rowWidths[item.RowStart] <= -2.5f
+                                 && rowWidths[item.RowStart] > -3.5f;
+                if (isFitContent && !isMinContent)
+                {
+                    float minWidth = MeasureGridItemOuterWidth(item, true, containingWidth, context);
+                    if (minWidth > minContentWidths[item.RowStart])
+                    {
+                        minContentWidths[item.RowStart] = minWidth;
+                    }
+                }
+            }
+
+            for (int r = 0; r < maxRow; r++)
+            {
+                if (rowWidths[r] >= 0)
+                {
+                    continue;
+                }
+                if (rowWidths[r] <= -999f)
+                {
+                    rowWidths[r] = 0;
+                    continue;
+                }
+                float measured = measuredWidths[r];
+                if (rowWidths[r] <= -2.5f && rowWidths[r] > -3.5f
+                    && fitContentLimits != null && r < fitContentLimits.Length
+                    && fitContentLimits[r] >= 0)
+                {
+                    measured = Math.Max(minContentWidths[r],
+                        Math.Min(measured, fitContentLimits[r]));
+                }
+                rowWidths[r] = measured;
+            }
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item.RowSpan <= 1 || item.RowStart < 0)
+                {
+                    continue;
+                }
+
+                float itemOuterWidth = MeasureGridItemOuterWidth(item, isMinContent, containingWidth, context);
+                float existingWidth = 0;
+                int spannedCount = 0;
+                for (int r = item.RowStart; r < item.RowStart + item.RowSpan && r < maxRow; r++)
+                {
+                    existingWidth += rowWidths[r];
+                    spannedCount++;
+                }
+                if (spannedCount > 1)
+                {
+                    existingWidth += (spannedCount - 1) * rowGap;
+                }
+                if (itemOuterWidth > existingWidth && spannedCount > 0)
+                {
+                    float extra = itemOuterWidth - existingWidth;
+                    float perRow = extra / spannedCount;
+                    for (int r = item.RowStart; r < item.RowStart + item.RowSpan && r < maxRow; r++)
+                    {
+                        rowWidths[r] += perRow;
+                    }
+                }
+            }
+
+            return SumTrackWidthsAndGaps(rowWidths, rowGap);
         }
 
         /// <summary>

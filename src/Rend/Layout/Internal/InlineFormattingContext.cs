@@ -2396,7 +2396,8 @@ namespace Rend.Layout.Internal
             var style = se.Style;
             float fontSize = style.FontSize;
             float lh = style.LineHeight;
-            float ascent = fontSize * 0.8f;
+            float fontAscent = fontSize * 0.8f;
+            float fontDescent = fontSize * 0.2f;
             bool isNormal = float.IsNaN(lh) || lh == 0;
 
             if (lh < 0)
@@ -2415,7 +2416,8 @@ namespace Rend.Layout.Internal
                     style.FontWeight,
                     style.FontStyle,
                     FontDescriptor.StretchToPercentage(style.FontStretch));
-                ascent = textMeasurer.GetAscent(fd, fontSize);
+                fontAscent = textMeasurer.GetAscent(fd, fontSize);
+                fontDescent = textMeasurer.GetDescent(fd, fontSize);
                 if (isNormal)
                 {
                     float metricsLH = textMeasurer.GetNormalLineHeight(fd, fontSize);
@@ -2424,13 +2426,45 @@ namespace Rend.Layout.Internal
                         lh = metricsLH;
                     }
                 }
-                float descent = textMeasurer.GetDescent(fd, fontSize);
-                float contentArea = ascent + descent;
-                ascent += (lh - contentArea) / 2f;
             }
 
+            float contentArea = fontAscent + fontDescent;
             strutLineHeight = lh;
-            strutBaseline = ascent;
+            strutBaseline = fontAscent + (lh - contentArea) / 2f;
+
+            ApplyEmphasisMarkStripToStrut(style, fontSize, fontAscent, fontDescent,
+                ref strutLineHeight, ref strutBaseline);
+        }
+
+        /// <summary>
+        /// [CSS-TEXT-DECOR-3 §3.5.3] Emphasis marks project onto the line into a
+        /// virtual strip joined to the upper or lower edge of the content area,
+        /// effectively increasing the strut's ascent or descent values. The strip
+        /// only grows the line box when the existing line-height can't absorb the
+        /// strip into its half-leading; otherwise the strip is contained within
+        /// the existing line box and no change is needed.
+        /// </summary>
+        /// <spec>CSS-TEXT-DECOR-3 §3.5.3 https://drafts.csswg.org/css-text-decor-3/#text-emphasis-style-property</spec>
+        private static void ApplyEmphasisMarkStripToStrut(
+            ComputedStyle style, float fontSize, float fontAscent, float fontDescent,
+            ref float strutLineHeight, ref float strutBaseline)
+        {
+            if (TextEmphasisResolver.ResolveEmphasisMark(style) == null)
+            {
+                return;
+            }
+
+            float markStripHeight = fontSize * 0.5f;
+            bool positionOver = TextEmphasisResolver.ResolveEmphasisPositionOver(style);
+            float expandedContentArea = fontAscent + fontDescent + markStripHeight;
+
+            if (strutLineHeight >= expandedContentArea)
+            {
+                return;
+            }
+
+            strutLineHeight = expandedContentArea;
+            strutBaseline = positionOver ? (markStripHeight + fontAscent) : fontAscent;
         }
 
         private static void FinalizeLineBox(LineBox line, float height, float baseline, CssTextAlign textAlign,

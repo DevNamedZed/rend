@@ -159,6 +159,14 @@ namespace Rend.Rendering
         (float Ascent, float Descent) GetFontMetrics(FontDescriptor font, float fontSize);
 
         /// <summary>
+        /// [CSS-FONTS §4] Returns font ascent and descent in pixels for a font identified by
+        /// raw OpenType/TrueType bytes. Used when positioning text effects (emphasis marks,
+        /// underlines) against a per-glyph fallback font carried by
+        /// <see cref="ShapedTextRun.GlyphFontOverrides"/> rather than the cascade-resolved font.
+        /// </summary>
+        (float Ascent, float Descent) GetFontMetrics(byte[] fontData, float fontSize);
+
+        /// <summary>
         /// Returns the font's "normal" line height in pixels (ascent + descent + lineGap).
         /// This matches what the inline layout uses for <c>line-height: normal</c>.
         /// Returns NaN if the font cannot be resolved.

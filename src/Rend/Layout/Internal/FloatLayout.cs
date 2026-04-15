@@ -88,11 +88,38 @@ namespace Rend.Layout.Internal
                              + floatBox.BorderLeftWidth + floatBox.BorderRightWidth
                              + floatBox.MarginLeft + floatBox.MarginRight;
 
-            // Layout contents to get height.
+            // [CSS-WRITING-MODES-3 §6.2] A vertical-WM grid float's physical height
+            // is its logical inline size = column-tracks sum. GridLayout reads this
+            // inline size from parent.ContentRect.Height on entry; if we leave it at
+            // 0 the grid lays out into a zero-size inline axis and content-alignment
+            // / stretch / percent resolution all collapse. Pre-compute the inline
+            // size from the column-axis track sum and seed floatBox.ContentRect with
+            // it so Layout gets a definite inline size.
+            float inlineExtentForVerticalWMGrid = 0;
+            bool isVerticalWMGrid =
+                (style.Display == CssDisplay.Grid || style.Display == CssDisplay.InlineGrid)
+                && BlockFormattingContext.IsVerticalWritingMode(style)
+                && floatBox.StyledNode is StyledElement;
+            if (isVerticalWMGrid)
+            {
+                var verticalWMGridElement = (StyledElement)floatBox.StyledNode!;
+                float explicitInlineSize = DimensionResolver.ResolveHeight(style, float.NaN, floatBox);
+                if (!float.IsNaN(explicitInlineSize) && explicitInlineSize >= 0)
+                {
+                    inlineExtentForVerticalWMGrid = explicitInlineSize;
+                }
+                else
+                {
+                    inlineExtentForVerticalWMGrid = GridLayout.ComputeIntrinsicWidth(
+                        verticalWMGridElement, SizingKeyword.MaxContent, containingWidth, context,
+                        forceColumnAxis: true);
+                }
+            }
+            floatBox.ContentRect = new RectF(0, 0, contentWidth, inlineExtentForVerticalWMGrid);
+
             // [CSS2 §9.5] For flex/grid/table floats, dispatch to the correct formatting
             // context. For plain blocks, use BFC.Layout which handles mixed content,
             // anonymous blocks, and margin collapsing correctly.
-            floatBox.ContentRect = new RectF(0, 0, contentWidth, 0);
             if (style.Display == CssDisplay.Flex || style.Display == CssDisplay.InlineFlex
                 || style.Display == CssDisplay.Grid || style.Display == CssDisplay.InlineGrid
                 || style.Display == CssDisplay.Table)
@@ -107,7 +134,20 @@ namespace Rend.Layout.Internal
             float contentHeight = DimensionResolver.ResolveHeight(style, float.NaN, floatBox);
             if (float.IsNaN(contentHeight))
             {
-                contentHeight = CalculateAutoHeight(floatBox);
+                if (isVerticalWMGrid && inlineExtentForVerticalWMGrid > 0)
+                {
+                    // [CSS-WRITING-MODES-3 §6.2] The physical height of a vertical-WM
+                    // grid is its logical inline size, fixed by the column-tracks sum.
+                    // Content that overflows a column track does not expand the grid.
+                    // CalculateAutoHeight (max child bottom) is content-driven and
+                    // undershoots when items are shorter than their column; use the
+                    // column-tracks sum computed above instead.
+                    contentHeight = inlineExtentForVerticalWMGrid;
+                }
+                else
+                {
+                    contentHeight = CalculateAutoHeight(floatBox);
+                }
             }
 
             // [CSS2 §10.7] Apply min-height/max-height

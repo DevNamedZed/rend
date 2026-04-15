@@ -57,9 +57,13 @@ namespace Rend
                 stylesheets[i] = resourceCtx.ResolveImports(stylesheets[i]);
             }
 
-            // 4. Set up font provider
+            // 4. Set up font provider — wrap the caller's provider in a per-render
+            // DocumentFontProvider so @font-face rules are scoped to this document
+            // and do not leak into subsequent renders that share the same parent.
+            // [CSS-FONTS-4 §5.1.2] document-declared @font-face shadows system fonts.
             progress?.Report(new RenderProgress(20, RenderStage.Styling, "Resolving fonts"));
-            var fontProvider = _options.FontProvider ?? DefaultFontProvider.Value;
+            var baseFontProvider = _options.FontProvider ?? DefaultFontProvider.Value;
+            IFontProvider fontProvider = new Fonts.Internal.DocumentFontProvider(baseFontProvider);
 
             // Wire font provider into PDF render target for font embedding
             if (target is Output.Pdf.PdfRenderTarget pdfTarget)
@@ -219,9 +223,13 @@ namespace Rend
                 stylesheets[i] = await resourceCtx.ResolveImportsAsync(stylesheets[i], cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 
-            // 4. Set up font provider
+            // 4. Set up font provider — wrap the caller's provider in a per-render
+            // DocumentFontProvider so @font-face rules are scoped to this document
+            // and do not leak into subsequent renders that share the same parent.
+            // [CSS-FONTS-4 §5.1.2] document-declared @font-face shadows system fonts.
             progress?.Report(new RenderProgress(20, RenderStage.Styling, "Resolving fonts"));
-            var fontProvider = _options.FontProvider ?? DefaultFontProvider.Value;
+            var baseFontProvider = _options.FontProvider ?? DefaultFontProvider.Value;
+            IFontProvider fontProvider = new Fonts.Internal.DocumentFontProvider(baseFontProvider);
 
             // Wire font provider into PDF render target for font embedding
             if (target is Output.Pdf.PdfRenderTarget pdfTarget)

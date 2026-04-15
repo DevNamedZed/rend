@@ -1130,6 +1130,22 @@ namespace Rend.Output.Image
         public (float Ascent, float Descent) GetFontMetrics(FontDescriptor font, float fontSize)
         {
             SKTypeface typeface = _fontMapper.GetOrCreate(font, null);
+            return GetFontMetricsFromTypeface(typeface, fontSize);
+        }
+
+        /// <inheritdoc />
+        public (float Ascent, float Descent) GetFontMetrics(byte[] fontData, float fontSize)
+        {
+            if (fontData == null)
+            {
+                throw new ArgumentNullException(nameof(fontData));
+            }
+            SKTypeface typeface = _fontMapper.GetOrCreateTypeface(fontData);
+            return GetFontMetricsFromTypeface(typeface, fontSize);
+        }
+
+        private static (float Ascent, float Descent) GetFontMetricsFromTypeface(SKTypeface typeface, float fontSize)
+        {
             using var skFont = new SKFont(typeface, fontSize);
             var m = skFont.Metrics;
             return ((float)Math.Round(-m.Ascent, MidpointRounding.AwayFromZero),
