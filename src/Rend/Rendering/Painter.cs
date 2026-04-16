@@ -5,6 +5,7 @@ using Rend.Css;
 using Rend.Css.Properties.Internal;
 using Rend.Html;
 using Rend.Layout;
+using Rend.Layout.Internal;
 using Rend.Rendering.Internal;
 using Rend.Style;
 

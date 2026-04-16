@@ -84,34 +84,16 @@ namespace Rend.Layout.Internal
             if (!float.IsNaN(textIndent) && textIndent != 0)
                 cursorX += textIndent;
 
-            // list-style-position: inside — reserve space on the first line for the marker
+            // [CSS-LISTS-3 §3] list-style-position: inside — reserve space on the
+            // first line for the ::marker. Chrome uses the measured width of the
+            // marker text (including its trailing separator space), not a fixed
+            // font-size multiple, so the reserve must be computed by rendering the
+            // marker string with the item's own font and measuring its advance.
             if (parent.BoxType == BoxType.ListItem &&
                 styledElement.Style.ListStylePosition == CssListStylePosition.Inside &&
                 styledElement.Style.ListStyleType != CssListStyleType.None)
             {
-                float markerReserve;
-                var lstType = styledElement.Style.ListStyleType;
-                bool isSummary = styledElement.TagName == "summary";
-                if (isSummary)
-                {
-                    markerReserve = styledElement.Style.FontSize * 1.1f;
-                }
-                else
-                {
-                    // Chrome's ::marker content for bullets: "• " (bullet + space).
-                    // The reserve width must match Chrome's ::marker inline box width.
-                    if (lstType == CssListStyleType.Disc ||
-                        lstType == CssListStyleType.Circle ||
-                        lstType == CssListStyleType.Square)
-                    {
-                        markerReserve = styledElement.Style.FontSize * 1.375f;
-                    }
-                    else
-                    {
-                        markerReserve = styledElement.Style.FontSize * 1.2f;
-                    }
-                }
-                cursorX += markerReserve;
+                cursorX += ComputeInsideMarkerReserveWidth(parent, styledElement, context);
             }
 
             for (int i = 0; i < styledElement.Children.Count; i++)
@@ -2382,6 +2364,73 @@ namespace Rend.Layout.Internal
         /// CSS 2.1 §10.8.1: Compute the strut (invisible inline box with parent's font/line-height)
         /// that establishes the minimum line-box height.
         /// </summary>
+        /// <summary>
+        /// [CSS-LISTS-3 §3] Computes the leading reserve width on the first line
+        /// of a list item whose <c>list-style-position</c> is <c>inside</c>.
+        /// For text-valued counter styles (decimal, alpha, roman, etc.), the
+        /// reserve is the advance width of the marker string (including its
+        /// trailing separator space) measured in the item's own font. For the
+        /// symbolic CSS 2.1 counter styles — <c>disc</c>, <c>circle</c>,
+        /// <c>square</c> — [css-counter-styles-3 §6.1] explicitly allows UAs
+        /// to render the glyph at a size that deviates from the font, and
+        /// Chrome paints those bullets as geometric shapes (not as U+2022 /
+        /// U+25E6 / U+25AA text) with a reserved inline box of ~1.375em. The
+        /// Rend painter draws the same fallback characters inside that larger
+        /// reserve so the visible gap between bullet and content matches
+        /// Chrome's path-drawn markers. For <c>&lt;summary&gt;</c> elements,
+        /// Chrome paints a disclosure triangle path whose intrinsic width is
+        /// ~1.1em.
+        /// </summary>
+        private static float ComputeInsideMarkerReserveWidth(
+            LayoutBox parent, StyledElement styledElement, LayoutContext context)
+        {
+            var style = styledElement.Style;
+            float fontSize = style.FontSize;
+
+            if (styledElement.TagName == "summary")
+            {
+                return fontSize * 1.1f;
+            }
+
+            CssListStyleType listType = style.ListStyleType;
+            if (IsSymbolicMarker(listType))
+            {
+                return fontSize * 1.375f;
+            }
+
+            int ordinal = ListItemOrdinalCalculator.ComputeAtLayoutTime(parent);
+            string? markerText = ListMarkerTextBuilder.BuildMarkerText(listType, ordinal);
+            if (markerText == null || context.TextMeasurer == null)
+            {
+                return fontSize * 1.2f;
+            }
+
+            var markerFont = new FontDescriptor(
+                style.FontFamilies,
+                style.FontWeight,
+                style.FontStyle,
+                FontDescriptor.StretchToPercentage(style.FontStretch));
+            float measured = context.TextMeasurer.MeasureWidth(markerText, markerFont, fontSize);
+            if (measured <= 0)
+            {
+                return fontSize * 1.2f;
+            }
+            return measured;
+        }
+
+        /// <summary>
+        /// Returns true for CSS 2.1 symbolic marker types whose glyph rendering
+        /// is allowed to deviate from the element's font per
+        /// [css-counter-styles-3 §6.1 simple symbolic]. Chrome draws these as
+        /// path shapes, so their inline reserve is not the text-glyph advance.
+        /// </summary>
+        private static bool IsSymbolicMarker(CssListStyleType listType)
+        {
+            return listType == CssListStyleType.Disc
+                || listType == CssListStyleType.Circle
+                || listType == CssListStyleType.Square;
+        }
+
         private static void ComputeStrut(LayoutBox parent, TextMeasurer? textMeasurer,
             out float strutLineHeight, out float strutBaseline)
         {

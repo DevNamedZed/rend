@@ -473,6 +473,12 @@ namespace Rend.Layout.Internal
 
                 var childBox = CreateLayoutBox(childElement);
 
+                // Wire up the parent pointer before LayoutChildren runs so that
+                // inner layout passes (e.g. list-item marker reserve computation
+                // in InlineFormattingContext) can walk back to the container.
+                // parent.AddChild later re-assigns this to the same value.
+                childBox.Parent = parent;
+
                 // Apply box model
                 BoxModelCalculator.ApplyBoxModel(childBox, childStyle, containingWidth);
 

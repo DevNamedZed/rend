@@ -1839,18 +1839,31 @@ namespace Rend.Layout.Internal
                 items[i].Box.ContentRect = new RectF(0, 0, items[i].ContentWidth, items[i].ContentHeight);
             }
 
-            // [CSS-GRID §10.1] Compute per-row baseline groups for baseline alignment.
-            // Items with align-self:baseline in the same row share a baseline group.
-            // The row height may grow to accommodate baseline-shifted items.
-            // [CSS-WRITING-MODES-3] Skipped in vertical writing mode: the per-axis
-            // baseline math here uses physical top/bottom margins and a Y baseline
-            // returned by GetItemBaseline, which are not meaningful for items shaped
-            // sideways. Vertical-WM baseline groups need a separate implementation.
-            float[]? rowMaxBaselines = null;
+            // [CSS-GRID §10.1] [CSS-ALIGN-3 §9.4.4] Compute per-row baseline sharing
+            // groups for baseline alignment. Items with align-self:baseline in the
+            // same row share a baseline group.
+            //
+            // A row may contain up to two groups:
+            // - "Start" group: items whose block-flow direction matches the grid's
+            //   (parallel-same and horizontal-tb grids' orthogonal items). These
+            //   align to a common baseline anchored at the row's block-start edge.
+            // - "End" group: items with the opposite block-flow direction of the
+            //   grid (vertical-lr item in vertical-rl grid, or vice versa). These
+            //   align to a common baseline anchored at the row's block-end edge.
+            //
+            // The row's block-axis size is grown to fit the larger of the two
+            // group extents; the groups are independent and may overlap in the
+            // middle of the row when the row is oversized.
+            //
+            // [CSS-WRITING-MODES-3 §6.2] The block-axis extent per-item is collected
+            // via the logical block-side accessors so the same loop handles
+            // horizontal-tb, vertical-lr and vertical-rl grids without physical
+            // top/bottom assumptions leaking in.
+            float[]? rowMaxBaselineStart = null;
+            float[]? rowMaxBaselineEnd = null;
             {
-                bool hasBaselineAlignment = !isVerticalWM
-                    && containerAlignItems == CssAlignItems.Baseline;
-                if (!hasBaselineAlignment && !isVerticalWM)
+                bool hasBaselineAlignment = containerAlignItems == CssAlignItems.Baseline;
+                if (!hasBaselineAlignment)
                 {
                     for (int i = 0; i < items.Count; i++)
                     {
@@ -1866,8 +1879,10 @@ namespace Rend.Layout.Internal
 
                 if (hasBaselineAlignment)
                 {
-                    rowMaxBaselines = new float[finalRows];
-                    float[] rowMaxDescents = new float[finalRows];
+                    rowMaxBaselineStart = new float[finalRows];
+                    float[] rowMaxDescentStart = new float[finalRows];
+                    rowMaxBaselineEnd = new float[finalRows];
+                    float[] rowMaxAscentEnd = new float[finalRows];
 
                     for (int i = 0; i < items.Count; i++)
                     {
@@ -1879,36 +1894,132 @@ namespace Rend.Layout.Internal
                         CssAlignItems itemAlign = ResolveItemBlockAlignment(item, containerAlignItems);
                         if (itemAlign != CssAlignItems.Baseline) { continue; }
 
-                        // [CSS-ALIGN-3 §9.3] Replaced elements have no usable
-                        // baseline — they fall back to start alignment instead of
-                        // joining the baseline-sharing group. Skipping them here
-                        // keeps them from pulling rowMaxBaselines up to their
-                        // bottom edge and over-growing the row.
-                        if (HasSynthesizedBaselineOnly(item)) { continue; }
-
-                        float baseline = GetItemBaseline(item.Box) + item.Box.MarginTop;
-                        float outerHeight = item.ContentHeight
-                            + item.Box.PaddingTop + item.Box.PaddingBottom
-                            + item.Box.BorderTopWidth + item.Box.BorderBottomWidth
-                            + item.Box.MarginTop + item.Box.MarginBottom;
-                        float descent = outerHeight - baseline;
-
-                        if (baseline > rowMaxBaselines[row])
+                        // [CSS-ALIGN-3 §9.3] Replaced elements and orthogonal items
+                        // in a vertical-WM grid do not join the row sharing group
+                        // (they fall back to start alignment); orthogonal items
+                        // in a horizontal-tb grid still join via Scope 1b border-end
+                        // synthesis, matching Chrome's inline-block emulation.
+                        if (!ItemParticipatesInRowBaselineSharingGroup(item, writingMode))
                         {
-                            rowMaxBaselines[row] = baseline;
+                            continue;
                         }
-                        if (descent > rowMaxDescents[row])
+
+                        float baseline = ComputeItemFirstBaselineInBlockAxis(item, writingMode);
+                        float outerBlockSize = ComputeItemOuterBlockSize(item, writingMode);
+
+                        if (IsItemOppositeBlockDirection(item, writingMode))
                         {
-                            rowMaxDescents[row] = descent;
+                            // [CSS-ALIGN-3 §9.4.4] Opposing-direction items anchor
+                            // their (projected) first baseline against the row's
+                            // block-end edge. `baselineFromEnd` is the distance
+                            // from the item's margin-box block-end to its baseline;
+                            // `baseline` (from block-start) becomes the "ascent"
+                            // contribution for sizing the end-anchored group.
+                            float baselineFromEnd = outerBlockSize - baseline;
+                            if (baselineFromEnd > rowMaxBaselineEnd[row])
+                            {
+                                rowMaxBaselineEnd[row] = baselineFromEnd;
+                            }
+                            if (baseline > rowMaxAscentEnd[row])
+                            {
+                                rowMaxAscentEnd[row] = baseline;
+                            }
+                        }
+                        else
+                        {
+                            float descent = outerBlockSize - baseline;
+                            if (baseline > rowMaxBaselineStart[row])
+                            {
+                                rowMaxBaselineStart[row] = baseline;
+                            }
+                            if (descent > rowMaxDescentStart[row])
+                            {
+                                rowMaxDescentStart[row] = descent;
+                            }
                         }
                     }
 
                     for (int r = 0; r < finalRows; r++)
                     {
-                        float needed = rowMaxBaselines[r] + rowMaxDescents[r];
+                        float neededStart = rowMaxBaselineStart[r] + rowMaxDescentStart[r];
+                        float neededEnd = rowMaxBaselineEnd[r] + rowMaxAscentEnd[r];
+                        float needed = Math.Max(neededStart, neededEnd);
                         if (needed > rowHeights[r])
                         {
                             rowHeights[r] = needed;
+                        }
+                    }
+                }
+            }
+
+            // [CSS-GRID §10.1] [CSS-ALIGN-3 §9.3] Compute per-column baseline groups for
+            // inline-axis baseline alignment (justify-self / justify-items: baseline).
+            // Items with justify-self:baseline in the same column share a baseline group
+            // anchored to a common X position; the column width may grow to accommodate
+            // baseline-shifted items. Parallel items (same writing mode as the grid)
+            // synthesize at the inline-start edge, so only orthogonal items participate
+            // in a non-degenerate way; the math still runs uniformly to let the track
+            // grow when an orthogonal item's descent pushes past the end of its column.
+            float[]? colMaxBaselines = null;
+            {
+                bool hasColumnBaselineAlignment = !isVerticalWM
+                    && containerJustifyItems == CssAlignItems.Baseline;
+                if (!hasColumnBaselineAlignment && !isVerticalWM)
+                {
+                    for (int i = 0; i < items.Count; i++)
+                    {
+                        var styledEl = items[i].StyledElement;
+                        if (styledEl != null
+                            && styledEl.Style.JustifySelf == CssAlignItems.Baseline)
+                        {
+                            hasColumnBaselineAlignment = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (hasColumnBaselineAlignment)
+                {
+                    colMaxBaselines = new float[finalCols];
+                    float[] colMaxDescents = new float[finalCols];
+
+                    for (int i = 0; i < items.Count; i++)
+                    {
+                        var item = items[i];
+                        if (item.ColSpan != 1) { continue; }
+                        int col = item.ColStart;
+                        if (col < 0 || col >= finalCols) { continue; }
+
+                        CssAlignItems itemJustify = ResolveItemInlineAlignment(item, containerJustifyItems);
+                        if (itemJustify != CssAlignItems.Baseline) { continue; }
+
+                        // [CSS-ALIGN-3 §9.3] Replaced elements fall back to start,
+                        // matching the row-baseline treatment above.
+                        if (HasSynthesizedBaselineOnly(item)) { continue; }
+
+                        float baseline = ComputeItemBaselineFromMarginLeft(item, isVerticalWM);
+                        float outerWidth = item.ContentWidth
+                            + item.Box.PaddingLeft + item.Box.PaddingRight
+                            + item.Box.BorderLeftWidth + item.Box.BorderRightWidth
+                            + item.Box.MarginLeft + item.Box.MarginRight;
+                        float descent = outerWidth - baseline;
+
+                        if (baseline > colMaxBaselines[col])
+                        {
+                            colMaxBaselines[col] = baseline;
+                        }
+                        if (descent > colMaxDescents[col])
+                        {
+                            colMaxDescents[col] = descent;
+                        }
+                    }
+
+                    for (int c = 0; c < finalCols; c++)
+                    {
+                        float needed = colMaxBaselines[c] + colMaxDescents[c];
+                        if (needed > colWidths[c])
+                        {
+                            colWidths[c] = needed;
                         }
                     }
                 }
@@ -2148,31 +2259,56 @@ namespace Rend.Layout.Internal
                     outerHeight = finalHeight + outerBlockExtra;
                 }
 
-                // Apply inline-axis alignment offset (justify-self / justify-items)
-                float xOffset = AlignOffset(alignInline, spanWidth, outerWidth);
+                // [CSS-GRID §10.1] Apply inline-axis alignment offset (justify-self / justify-items).
+                // Baseline-aligned items use the per-column baseline group offset computed
+                // above; others fall back to the positional alignment via AlignOffset.
+                // [CSS-ALIGN-3 §9.3] Replaced elements fall back to start alignment.
+                float xOffset;
+                bool useColBaselineAlignment = alignInline == CssAlignItems.Baseline
+                    && colMaxBaselines != null
+                    && item.ColStart >= 0 && item.ColStart < finalCols
+                    && item.ColSpan == 1
+                    && !HasSynthesizedBaselineOnly(item)
+                    && !isVerticalWM;
+                if (useColBaselineAlignment)
+                {
+                    float itemBaselineFromCell = ComputeItemBaselineFromMarginLeft(item, isVerticalWM);
+                    xOffset = colMaxBaselines![item.ColStart] - itemBaselineFromCell;
+                }
+                else
+                {
+                    CssAlignItems effectiveInline = alignInline == CssAlignItems.Baseline
+                        ? CssAlignItems.Start : alignInline;
+                    xOffset = AlignOffset(effectiveInline, spanWidth, outerWidth);
+                }
 
                 // [CSS-GRID §10.1] Apply block-axis alignment offset (align-self / align-items).
                 // Baseline-aligned items use per-row baseline group offset.
-                // [CSS-ALIGN-3 §9.3] Replaced elements have only synthesized
-                // baselines and fall back to start alignment instead of joining
-                // the baseline group.
-                // [CSS-WRITING-MODES-3] In vertical writing modes the block-axis baseline
-                // is conceptually a vertical line through glyphs, not a horizontal one;
-                // the row-baseline group computed via GetItemBaseline (a physical Y) is
-                // not meaningful here. Fall back to start until vertical-WM baseline
-                // groups are implemented.
+                // [CSS-ALIGN-3 §9.3] Replaced elements and orthogonal items in
+                // vertical-WM grids fall back to start alignment instead of joining
+                // the row sharing group (see ItemParticipatesInRowBaselineSharingGroup).
+                // [CSS-ALIGN-3 §9.4.4] Items with block-flow opposite to the grid's
+                // join the end-anchored group: their yOffset is measured back from
+                // the row's block-end edge.
                 float yOffset;
                 bool useBaselineAlignment = alignBlock == CssAlignItems.Baseline
-                    && rowMaxBaselines != null
+                    && rowMaxBaselineStart != null
                     && item.RowStart >= 0 && item.RowStart < finalRows
                     && item.RowSpan == 1
-                    && !HasSynthesizedBaselineOnly(item)
-                    && !isVerticalWM;
+                    && ItemParticipatesInRowBaselineSharingGroup(item, writingMode);
                 if (useBaselineAlignment)
                 {
-                    float itemBaselineFromCell = GetItemBaseline(item.Box)
-                        + LogicalMarginBlockStart(item.Box, writingMode);
-                    yOffset = rowMaxBaselines![item.RowStart] - itemBaselineFromCell;
+                    float itemBaselineFromCell = ComputeItemFirstBaselineInBlockAxis(item, writingMode);
+                    if (IsItemOppositeBlockDirection(item, writingMode))
+                    {
+                        yOffset = spanHeight
+                            - rowMaxBaselineEnd![item.RowStart]
+                            - itemBaselineFromCell;
+                    }
+                    else
+                    {
+                        yOffset = rowMaxBaselineStart![item.RowStart] - itemBaselineFromCell;
+                    }
                 }
                 else
                 {
@@ -3880,6 +4016,245 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
+        /// [CSS-WRITING-MODES-3 §7.1] Returns true when the grid item's writing
+        /// mode is orthogonal to the grid container's writing mode. An orthogonal
+        /// item has no natural first baseline along the sharing-group axis, so
+        /// per [CSS-ALIGN-3 §9.1] its alignment baseline is synthesized from the
+        /// end edge of its border box on the group's alignment axis.
+        /// </summary>
+        private static bool IsItemOrthogonalToGrid(GridItem item, bool gridIsVerticalWritingMode)
+        {
+            if (item.StyledElement == null)
+            {
+                return false;
+            }
+            bool itemIsVerticalWritingMode = BlockFormattingContext.IsVerticalWritingMode(
+                item.StyledElement.Style);
+            return itemIsVerticalWritingMode != gridIsVerticalWritingMode;
+        }
+
+        /// <summary>
+        /// [CSS-ALIGN-3 §9.3] Decides whether a grid item participates in the
+        /// row-like Baseline Sharing Group — i.e. whether its first baseline in
+        /// the grid's block axis should be collected and used to shift the item.
+        ///
+        /// Cases:
+        /// - Replaced elements (canvas, img, form controls): never participate;
+        ///   they fall back to start alignment instead of being pulled to the
+        ///   bottom margin edge of the sharing group.
+        /// - Parallel items (same writing-mode horizontality as the grid): always
+        ///   participate via their real text baseline or their box-model-start
+        ///   synthesis.
+        /// - Orthogonal items in a horizontal-tb grid: participate via border-end
+        ///   synthesis, matching Chrome's `inline-block + margin-bottom:0`
+        ///   emulation used by the horiz-002/003 WPT reference files.
+        /// - Orthogonal items in a vertical-lr/rl grid: do NOT participate. The
+        ///   vertical-lr/rl-003 WPT reference files emulate the expected
+        ///   rendering with `float: left` rather than `inline-block`, which is
+        ///   out-of-flow and pins items at the grid's block-start edge. Pulling
+        ///   them into the sharing group here would drag smaller items toward
+        ///   the block-end edge of the row, which is what the pre-fix Scope 3
+        ///   code did and what produced the lr-003 regression.
+        /// </summary>
+        private static bool ItemParticipatesInRowBaselineSharingGroup(
+            GridItem item, CssWritingMode writingMode)
+        {
+            if (HasSynthesizedBaselineOnly(item))
+            {
+                return false;
+            }
+            bool gridIsVerticalWritingMode = writingMode == CssWritingMode.VerticalLr
+                || writingMode == CssWritingMode.VerticalRl;
+            if (gridIsVerticalWritingMode
+                && IsItemOrthogonalToGrid(item, gridIsVerticalWritingMode))
+            {
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// [CSS-ALIGN-3 §9.4.4] Returns true when a grid item's block-flow
+        /// direction is the exact reverse of the grid container's along the
+        /// same physical axis. Only vertical-lr ↔ vertical-rl pairs qualify —
+        /// horizontal-tb never has an opposing counterpart because it is the
+        /// only horizontal block-flow mode supported.
+        ///
+        /// Opposing-direction items form a second ("last") baseline sharing
+        /// group anchored at the row's block-end edge, separate from the
+        /// start-anchored group used for same-direction items.
+        /// </summary>
+        private static bool IsItemOppositeBlockDirection(GridItem item, CssWritingMode gridWm)
+        {
+            if (item.StyledElement == null)
+            {
+                return false;
+            }
+            CssWritingMode itemWm = item.StyledElement.Style.WritingMode;
+            if (gridWm == CssWritingMode.VerticalLr && itemWm == CssWritingMode.VerticalRl)
+            {
+                return true;
+            }
+            if (gridWm == CssWritingMode.VerticalRl && itemWm == CssWritingMode.VerticalLr)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// [CSS-WRITING-MODES-3 §6.2] Compute a grid item's outer (margin-box)
+        /// extent along the grid container's block axis.
+        ///
+        /// GridItem stores its sizes in LOGICAL terms: ContentWidth is the
+        /// logical inline-axis extent and ContentHeight is the logical
+        /// block-axis extent, regardless of the grid's writing mode. The
+        /// grid's first-pass layout places the logical-block track value in
+        /// ContentHeight for both horizontal-tb and vertical-lr/rl grids,
+        /// so the block-axis outer size always uses ContentHeight plus the
+        /// block-side margin/border/padding via the logical accessors.
+        /// </summary>
+        private static float ComputeItemOuterBlockSize(GridItem item, CssWritingMode writingMode)
+        {
+            return item.ContentHeight
+                 + LogicalPaddingBlockStart(item.Box, writingMode)
+                 + LogicalPaddingBlockEnd(item.Box, writingMode)
+                 + LogicalBorderBlockStart(item.Box, writingMode)
+                 + LogicalBorderBlockEnd(item.Box, writingMode)
+                 + LogicalMarginBlockStart(item.Box, writingMode)
+                 + LogicalMarginBlockEnd(item.Box, writingMode);
+        }
+
+        /// <summary>
+        /// [CSS-ALIGN-3 §9.1] Compute a grid item's first-baseline offset measured
+        /// from the block-start edge of its margin box, for participation in a
+        /// row-like (block-axis) baseline sharing group.
+        ///
+        /// Four shapes are handled:
+        /// - Parallel item in a horizontal-tb grid: returns the item's inner text
+        ///   baseline via GetItemBaseline, offset by MarginTop to move from the
+        ///   item's border box into its margin box.
+        /// - Parallel item in a vertical-lr/rl grid: [CSS-WRITING-MODES-3 §5.1.1]
+        ///   text-orientation:mixed rotates Latin glyphs 90° CW, placing their
+        ///   alphabetic baseline at `descent` distance from the content block-start
+        ///   edge (not `ascent`). Rend's IFC falls through to horizontal layout,
+        ///   so the first horizontal line box's `Height - Baseline` (descent)
+        ///   gives the correct block-axis baseline offset for the rotated glyph.
+        /// - Orthogonal item in either grid writing mode: has no natural first
+        ///   baseline along the sharing-group axis. Per §9.1 it is synthesized
+        ///   from the block-end edge of the border box, matching Chrome's
+        ///   `inline-block + margin-bottom:0` emulation used by the WPT reference
+        ///   files (grid-self-baseline-horiz-002-ref.html etc.).
+        /// </summary>
+        private static float ComputeItemFirstBaselineInBlockAxis(GridItem item, CssWritingMode writingMode)
+        {
+            bool gridIsVerticalWritingMode = writingMode == CssWritingMode.VerticalLr
+                || writingMode == CssWritingMode.VerticalRl;
+
+            if (IsItemOrthogonalToGrid(item, gridIsVerticalWritingMode))
+            {
+                return LogicalMarginBlockStart(item.Box, writingMode)
+                     + LogicalBorderBlockStart(item.Box, writingMode)
+                     + LogicalPaddingBlockStart(item.Box, writingMode)
+                     + item.ContentHeight
+                     + LogicalPaddingBlockEnd(item.Box, writingMode)
+                     + LogicalBorderBlockEnd(item.Box, writingMode);
+            }
+
+            if (!gridIsVerticalWritingMode)
+            {
+                return GetItemBaseline(item.Box) + item.Box.MarginTop;
+            }
+
+            float blockStartToContent = LogicalMarginBlockStart(item.Box, writingMode)
+                + LogicalBorderBlockStart(item.Box, writingMode)
+                + LogicalPaddingBlockStart(item.Box, writingMode);
+            var firstLine = FindFirstHorizontalLineBox(item.Box);
+            if (firstLine != null && firstLine.Height > 0)
+            {
+                float rotatedBaselineDistance = firstLine.Height - firstLine.Baseline;
+                if (rotatedBaselineDistance < 0)
+                {
+                    rotatedBaselineDistance = 0;
+                }
+                return blockStartToContent + rotatedBaselineDistance;
+            }
+            return blockStartToContent
+                 + item.ContentHeight
+                 + LogicalPaddingBlockEnd(item.Box, writingMode)
+                 + LogicalBorderBlockEnd(item.Box, writingMode);
+        }
+
+        /// <summary>
+        /// [CSS-ALIGN-3 §9.1] Compute a grid item's first-baseline offset measured
+        /// from the inline-start edge (left in horizontal-tb) of its margin box,
+        /// for participation in a column-like baseline sharing group.
+        /// Parallel items (same writing mode as grid) have no natural baseline
+        /// along the column axis; per §9.1 their alignment-baseline is synthesized
+        /// from the inline-start edge of the margin box (returns 0).
+        /// Orthogonal items (vertical-WM in a horizontal-tb grid) would normally
+        /// use the first-line ascent projected into the parent coordinate space.
+        /// Because Rend's inline formatting context currently falls through to
+        /// horizontal layout for vertical-WM containers (see
+        /// InlineFormattingContext.Layout), the first line of an orthogonal item
+        /// is horizontal, not vertical — so there is no real line-box X coordinate
+        /// to read. The synthetic baseline X for a sideways-rotated glyph is the
+        /// descent of the horizontal first line (= line.Height - line.Baseline),
+        /// which equals `lineWidth - ascent` in the conceptual rotated layout.
+        /// </summary>
+        private static float ComputeItemBaselineFromMarginLeft(GridItem item, bool gridIsVerticalWritingMode)
+        {
+            if (gridIsVerticalWritingMode)
+            {
+                return 0;
+            }
+            var itemBox = item.Box;
+            if (!IsItemOrthogonalToGrid(item, gridIsVerticalWritingMode))
+            {
+                return 0;
+            }
+            var firstLine = FindFirstHorizontalLineBox(itemBox);
+            if (firstLine != null && firstLine.Height > 0)
+            {
+                float descent = firstLine.Height - firstLine.Baseline;
+                if (descent < 0)
+                {
+                    descent = 0;
+                }
+                return itemBox.MarginLeft + itemBox.BorderLeftWidth + itemBox.PaddingLeft + descent;
+            }
+            return itemBox.MarginLeft + itemBox.BorderLeftWidth + itemBox.PaddingLeft;
+        }
+
+        /// <summary>
+        /// Recursively walk a LayoutBox subtree and return the first horizontal
+        /// line box found. Used by ComputeItemBaselineFromMarginLeft to source
+        /// metrics for the synthesized column-axis baseline of an orthogonal item.
+        /// </summary>
+        private static LineBox? FindFirstHorizontalLineBox(LayoutBox box)
+        {
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    if (!box.LineBoxes[i].IsVertical)
+                    {
+                        return box.LineBoxes[i];
+                    }
+                }
+            }
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var fromChild = FindFirstHorizontalLineBox(box.Children[i]);
+                if (fromChild != null)
+                {
+                    return fromChild;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
         /// [CSS-GRID §10.1] Resolve the effective block-axis alignment for a grid item,
         /// considering align-self override vs container align-items default.
         /// </summary>
@@ -3893,6 +4268,24 @@ namespace Rend.Layout.Internal
             if (selfAlign != CssAlignItems.Normal && (int)selfAlign <= (int)CssAlignItems.Normal)
             {
                 return selfAlign;
+            }
+            return containerDefault;
+        }
+
+        /// <summary>
+        /// [CSS-GRID §10.1] Resolve the effective inline-axis alignment for a grid
+        /// item, considering justify-self override vs container justify-items default.
+        /// </summary>
+        private static CssAlignItems ResolveItemInlineAlignment(GridItem item, CssAlignItems containerDefault)
+        {
+            if (item.StyledElement == null)
+            {
+                return containerDefault;
+            }
+            var selfJustify = item.StyledElement.Style.JustifySelf;
+            if (selfJustify != CssAlignItems.Normal && (int)selfJustify <= (int)CssAlignItems.Normal)
+            {
+                return selfJustify;
             }
             return containerDefault;
         }

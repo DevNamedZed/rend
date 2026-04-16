@@ -1,10 +1,10 @@
 using System;
-using System.Globalization;
 using Rend.Core.Values;
 using Rend.Css;
 using Rend.Css.Properties.Internal;
 using Rend.Fonts;
 using Rend.Layout;
+using Rend.Layout.Internal;
 using Rend.Style;
 
 namespace Rend.Rendering.Internal
@@ -90,17 +90,11 @@ namespace Rend.Rendering.Internal
             else
                 pixelLineHeight = rawLh; // Already in pixels
 
-            // Chrome renders ALL markers as text via ::marker pseudo-element.
-            // Marker content includes a trailing space that creates the visual gap.
-            string? markerText;
-            if (listType == CssListStyleType.Disc)
-                markerText = "\u2022 ";    // • BULLET + space
-            else if (listType == CssListStyleType.Circle)
-                markerText = "\u25E6 ";    // ◦ WHITE BULLET + space
-            else if (listType == CssListStyleType.Square)
-                markerText = "\u25AA ";    // ▪ BLACK SMALL SQUARE + space
-            else
-                markerText = GetMarkerText(listType, itemIndex);
+            // [CSS-LISTS-3 §3] Chrome renders every marker — including the disc,
+            // circle, and square bullets — as text via the ::marker pseudo-element.
+            // The marker string always ends with a trailing space that forms the
+            // visual gap between the marker and the content.
+            string? markerText = ListMarkerTextBuilder.BuildMarkerText(listType, itemIndex);
 
             if (markerText != null)
             {
@@ -235,85 +229,6 @@ namespace Rend.Rendering.Internal
                 float x = contentRect.X - textWidth;
                 target.DrawText(text, x, y, textStyle);
             }
-        }
-
-        private static string? GetMarkerText(CssListStyleType listType, int index)
-        {
-            switch (listType)
-            {
-                case CssListStyleType.Decimal:
-                    return index.ToString(CultureInfo.InvariantCulture) + ". ";
-
-                case CssListStyleType.DecimalLeadingZero:
-                    return index.ToString("D2", CultureInfo.InvariantCulture) + ". ";
-
-                case CssListStyleType.LowerAlpha:
-                case CssListStyleType.LowerLatin:
-                    return ToAlpha(index, lowercase: true) + ". ";
-
-                case CssListStyleType.UpperAlpha:
-                case CssListStyleType.UpperLatin:
-                    return ToAlpha(index, lowercase: false) + ". ";
-
-                case CssListStyleType.LowerRoman:
-                    return ToRoman(index).ToLowerInvariant() + ". ";
-
-                case CssListStyleType.UpperRoman:
-                    return ToRoman(index) + ". ";
-
-                default:
-                    return null;
-            }
-        }
-
-        private static string ToAlpha(int index, bool lowercase)
-        {
-            if (index <= 0)
-            {
-                return index.ToString(CultureInfo.InvariantCulture);
-            }
-
-            // Convert 1-based index to a-z, aa-az, etc.
-            char[] buffer = new char[8];
-            int pos = buffer.Length;
-            int val = index - 1;
-
-            do
-            {
-                pos--;
-                int remainder = val % 26;
-                buffer[pos] = (char)((lowercase ? 'a' : 'A') + remainder);
-                val = val / 26 - 1;
-            }
-            while (val >= 0 && pos > 0);
-
-            return new string(buffer, pos, buffer.Length - pos);
-        }
-
-        private static string ToRoman(int number)
-        {
-            if (number <= 0 || number > 3999)
-            {
-                return number.ToString(CultureInfo.InvariantCulture);
-            }
-
-            // Standard roman numeral conversion.
-            int[] values = { 1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1 };
-            string[] numerals = { "M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I" };
-
-            var result = new System.Text.StringBuilder(15);
-            int remaining = number;
-
-            for (int i = 0; i < values.Length; i++)
-            {
-                while (remaining >= values[i])
-                {
-                    result.Append(numerals[i]);
-                    remaining -= values[i];
-                }
-            }
-
-            return result.ToString();
         }
 
         /// <summary>

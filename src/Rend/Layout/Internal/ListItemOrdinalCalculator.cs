@@ -1,9 +1,8 @@
 using Rend.Css;
 using Rend.Css.Properties.Internal;
-using Rend.Layout;
 using Rend.Style;
 
-namespace Rend.Rendering.Internal
+namespace Rend.Layout.Internal
 {
     /// <summary>
     /// Computes the list-item counter ordinal for a list-item box, honoring
@@ -44,6 +43,74 @@ namespace Rend.Rendering.Internal
             }
 
             return counter;
+        }
+
+        /// <summary>
+        /// Computes the list-item ordinal during layout, when the current
+        /// item has not yet been added to its parent's LayoutBox.Children
+        /// list. Callable from inside layout contexts that need the marker
+        /// text before the item's laid-out siblings are complete.
+        /// </summary>
+        public static int ComputeAtLayoutTime(LayoutBox itemBox)
+        {
+            LayoutBox? parent = itemBox.Parent;
+            if (parent == null)
+            {
+                return 1;
+            }
+
+            ListContainerInfo containerInfo = ReadContainerInfo(parent);
+            int counter = ComputeInitialCounterForLayoutTime(parent, containerInfo);
+
+            for (int i = 0; i < parent.Children.Count; i++)
+            {
+                LayoutBox sibling = parent.Children[i];
+                if (sibling.BoxType != BoxType.ListItem)
+                {
+                    continue;
+                }
+
+                counter = ApplyItemCounterChanges(counter, sibling, containerInfo);
+            }
+
+            counter = ApplyItemCounterChanges(counter, itemBox, containerInfo);
+            return counter;
+        }
+
+        private static int ComputeInitialCounterForLayoutTime(LayoutBox parent, ListContainerInfo containerInfo)
+        {
+            if (containerInfo.HasStart)
+            {
+                return containerInfo.StartValue - containerInfo.DefaultIncrement;
+            }
+            if (containerInfo.IsReversed)
+            {
+                // At layout time not all list-item siblings are present in
+                // parent.Children. Fall back to the styled tree to determine
+                // the total item count used by Chrome's reversed logic.
+                int itemCount = CountListItemsInStyledTree(parent);
+                return itemCount + 1;
+            }
+            return 0;
+        }
+
+        private static int CountListItemsInStyledTree(LayoutBox parent)
+        {
+            if (parent.StyledNode is not StyledElement parentStyled)
+            {
+                return 0;
+            }
+
+            int count = 0;
+            for (int i = 0; i < parentStyled.Children.Count; i++)
+            {
+                if (parentStyled.Children[i] is StyledElement child
+                    && child.Style.Display == CssDisplay.ListItem)
+                {
+                    count++;
+                }
+            }
+            return count;
         }
 
         private static int ComputeInitialCounter(LayoutBox parent, ListContainerInfo containerInfo)
