@@ -109,11 +109,16 @@ namespace Rend.Layout.Internal
 
                 if (child.IsText)
                 {
-                    // Text in block context: create anonymous block box with inline formatting
-                    // CSS 2.1 §9.2.1.1: When a block container has both block-level and inline-level
-                    // content, anonymous block boxes are created to wrap the inline content.
+                    // [CSS2 §9.2.1.1] Text among block-level siblings is wrapped in an
+                    // anonymous block that runs InlineFormattingContext. Consecutive
+                    // inline-level siblings (inline pseudo-elements, inline/inline-block
+                    // elements) are absorbed into the same anonymous block so they share
+                    // a line box, matching Chrome's anonymous block coalescing.
                     var textNode = (StyledText)child;
-                    if (string.IsNullOrWhiteSpace(textNode.Text)) continue;
+                    if (string.IsNullOrWhiteSpace(textNode.Text))
+                    {
+                        continue;
+                    }
 
                     if (vertical)
                     {
@@ -124,9 +129,12 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
-                        // Account for previous sibling's margin-bottom before anonymous block
+                        var inlineRun = new List<StyledNode>();
+                        inlineRun.Add(textNode);
+                        CollectAdjacentInlineRun(effectiveChildren, ref i, inlineRun);
+
                         float textAnonY = cursorY + MarginCollapsing.Collapse(prevMarginBottom, 0);
-                        var anonBox = CreateAnonymousBlockForText(textNode, styledElement, parent, textAnonY, containingWidth, context);
+                        var anonBox = CreateAnonymousBlockForInlineRun(inlineRun, styledElement, parent, textAnonY, containingWidth, context);
                         parent.AddChild(anonBox);
                         cursorY = anonBox.ContentRect.Y + anonBox.ContentRect.Height;
                     }
@@ -172,10 +180,11 @@ namespace Rend.Layout.Internal
                         continue;
                     }
 
-                    // Inline pseudo-element: render as inline text
-                    var pseudoText = new StyledText(pseudo.Content, pseudo.Style);
+                    // Inline pseudo-element: render as inline text, coalescing with
+                    // any consecutive inline siblings into one anonymous block.
                     if (vertical)
                     {
+                        var pseudoText = new StyledText(pseudo.Content, pseudo.Style);
                         var inlineBox = CreateInlineBox(pseudoText, context, containingWidth, cursorY, vertical);
                         inlineBox.ContentRect = new RectF(cursorX, parent.ContentRect.Y, 0, containingWidth);
                         parent.AddChild(inlineBox);
@@ -183,7 +192,12 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
-                        var anonBox = CreateAnonymousBlockForText(pseudoText, styledElement, parent, cursorY, containingWidth, context);
+                        var inlineRun = new List<StyledNode>();
+                        inlineRun.Add(pseudo);
+                        CollectAdjacentInlineRun(effectiveChildren, ref i, inlineRun);
+
+                        float pseudoAnonY = cursorY + MarginCollapsing.Collapse(prevMarginBottom, 0);
+                        var anonBox = CreateAnonymousBlockForInlineRun(inlineRun, styledElement, parent, pseudoAnonY, containingWidth, context);
                         parent.AddChild(anonBox);
                         cursorY = anonBox.ContentRect.Y + anonBox.ContentRect.Height;
                     }
@@ -198,46 +212,25 @@ namespace Rend.Layout.Internal
                 // Skip display:none
                 if (childStyle.Display == CssDisplay.None) continue;
 
-                // CSS 2.1 §9.2.1.1: Non-replaced inline-block/inline-flex/inline-grid elements
-                // among block-level siblings must be wrapped in anonymous block boxes so they
-                // can be laid out side-by-side via InlineFormattingContext.
-                // Replaced elements (form controls, images) are excluded — they have explicit
-                // CSS width/height and need to stay in the BFC for correct sizing.
-                if (!vertical && !ReplacedElementLayout.IsReplaced(childElement) &&
-                    (childStyle.Display == CssDisplay.InlineBlock ||
-                     childStyle.Display == CssDisplay.InlineFlex ||
-                     childStyle.Display == CssDisplay.InlineGrid) &&
+                // [CSS2 §9.2.1.1] Inline-level elements among block-level siblings must
+                // be wrapped in anonymous block boxes so they can be laid out via
+                // InlineFormattingContext. This covers inline-block/flex/grid directly,
+                // and plain display:inline elements that became BFC children via
+                // display:contents flattening (but only when those inline elements
+                // contain no block-level descendants — an inline span with block
+                // children needs the block layout path for HTML5 IB-split semantics).
+                // Inline-level replaced elements (e.g. inline-block &lt;input&gt;, &lt;img&gt;)
+                // participate in the inline run just like non-replaced inline content.
+                if (!vertical &&
+                    ShouldWrapInlineElementInAnonBlock(childElement) &&
                     childStyle.Position != CssPosition.Absolute &&
                     childStyle.Position != CssPosition.Fixed &&
                     childStyle.Float == CssFloat.None)
                 {
                     var inlineRun = new List<StyledNode>();
                     inlineRun.Add(childElement);
-                    while (i + 1 < effectiveChildren.Count)
-                    {
-                        var next = effectiveChildren[i + 1];
-                        if (next.IsText || next is StyledPseudoElement)
-                        {
-                            inlineRun.Add(next);
-                            i++;
-                        }
-                        else if (next is StyledElement nextElem &&
-                                 !ReplacedElementLayout.IsReplaced(nextElem) &&
-                                 (nextElem.Style.Display == CssDisplay.InlineBlock ||
-                                  nextElem.Style.Display == CssDisplay.InlineFlex ||
-                                  nextElem.Style.Display == CssDisplay.InlineGrid) &&
-                                 nextElem.Style.Position != CssPosition.Absolute &&
-                                 nextElem.Style.Position != CssPosition.Fixed &&
-                                 nextElem.Style.Float == CssFloat.None &&
-                                 nextElem.Style.Display != CssDisplay.None)
-                        {
-                            inlineRun.Add(next);
-                            i++;
-                        }
-                        else break;
-                    }
+                    CollectAdjacentInlineRun(effectiveChildren, ref i, inlineRun);
 
-                    // Account for previous sibling's margin-bottom before anonymous block
                     float inlineAnonY = cursorY + MarginCollapsing.Collapse(prevMarginBottom, 0);
                     var anonBox = CreateAnonymousBlockForInlineRun(inlineRun, styledElement, parent, inlineAnonY, containingWidth, context);
                     parent.AddChild(anonBox);
@@ -481,6 +474,20 @@ namespace Rend.Layout.Internal
 
                 // Apply box model
                 BoxModelCalculator.ApplyBoxModel(childBox, childStyle, containingWidth);
+
+                // [CSS 2.1 §17.6.2] In collapsed-border mode the table element's
+                // border participates in the collapse algorithm and does not inset
+                // the content area or get painted separately. Zero the border widths
+                // on the box so ContentRect positioning and BorderPainter skip them;
+                // the style object retains the originals for CollapseBorders.
+                if (childStyle.Display == CssDisplay.Table
+                    && childStyle.BorderCollapse == CssBorderCollapse.Collapse)
+                {
+                    childBox.BorderTopWidth = 0;
+                    childBox.BorderRightWidth = 0;
+                    childBox.BorderBottomWidth = 0;
+                    childBox.BorderLeftWidth = 0;
+                }
 
                 // Resolve content width
                 float contentWidth;
@@ -1392,33 +1399,6 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
-        /// Creates an anonymous block box for a text node in a block formatting context
-        /// with mixed block/inline content. Runs InlineFormattingContext to produce proper
-        /// line boxes that get painted correctly.
-        /// </summary>
-        private static LayoutBox CreateAnonymousBlockForText(StyledText textNode, StyledElement parentStyled,
-            LayoutBox parent, float cursorY, float containingWidth, LayoutContext context)
-        {
-            // Clone style with display:block to prevent recursion if parent has display:flex/grid
-            var blockStyle = CloneStyleAsBlock(parentStyled.Style);
-            var doc = parentStyled.Element.OwnerDocument;
-            var anonElement = doc!.CreateElement("div");
-            var anonChildren = new List<StyledNode> { new StyledText(textNode.Text, blockStyle) };
-            var anonStyled = new StyledElement(anonElement, blockStyle, anonChildren);
-
-            var box = new LayoutBox(anonStyled, BoxType.Block);
-            box.ContentRect = new RectF(parent.ContentRect.X, cursorY, containingWidth, 0);
-
-            InlineFormattingContext.Layout(box, context);
-
-            // Calculate auto height from line boxes
-            float height = CalculateAutoHeight(box);
-            box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y, box.ContentRect.Width, height);
-
-            return box;
-        }
-
-        /// <summary>
         /// Returns true if a CSS display value is an inline-level block container
         /// (inline-block, inline-flex, inline-grid). These need anonymous block wrapping
         /// when they appear among block-level siblings so they get shrink-to-fit sizing
@@ -1430,6 +1410,87 @@ namespace Rend.Layout.Internal
             return display == CssDisplay.InlineBlock ||
                    display == CssDisplay.InlineFlex ||
                    display == CssDisplay.InlineGrid;
+        }
+
+        /// <summary>
+        /// [CSS2 §9.2.1.1] Returns true if an element that appears among block-level
+        /// siblings in a block formatting context should be wrapped in an anonymous
+        /// block and laid out via InlineFormattingContext. Covers:
+        /// (a) inline-block, inline-flex, inline-grid (always wrap — shrink-to-fit),
+        /// including inline-level replaced form controls like &lt;input&gt;;
+        /// (b) plain display:inline non-replaced elements with no block-level DOM
+        /// descendants (typical case is display:contents flattening bringing an
+        /// inline span to a BFC). Inline elements that contain block-level
+        /// descendants need the block layout path so HTML5 IB-split semantics can
+        /// run recursively. Replaced elements with the UA default display:inline
+        /// (e.g. &lt;svg&gt;) are excluded from the wrapping path so their intrinsic
+        /// sizing (attribute-based width/height, viewBox aspect ratio) is handled
+        /// by the block-layout replaced element code instead of IFC.
+        /// </summary>
+        private static bool ShouldWrapInlineElementInAnonBlock(StyledElement element)
+        {
+            var display = element.Style.Display;
+            if (IsInlineLevelBlockDisplay(display))
+            {
+                return true;
+            }
+            if (display != CssDisplay.Inline)
+            {
+                return false;
+            }
+            if (ReplacedElementLayout.IsReplaced(element))
+            {
+                return false;
+            }
+            return !HasBlockChildren(element);
+        }
+
+        /// <summary>
+        /// [CSS2 §9.2.1.1] Starting after the item already at <paramref name="index"/>,
+        /// walks forward and adds each consecutive inline-level sibling (text nodes,
+        /// inline pseudo-elements, non-replaced inline-level elements) to
+        /// <paramref name="run"/>. Advances <paramref name="index"/> past every item
+        /// absorbed. Block-level, floated, out-of-flow, or inline elements with
+        /// block-level descendants terminate the run. The caller is responsible for
+        /// seeding <paramref name="run"/> with the item at the starting index.
+        /// </summary>
+        private static void CollectAdjacentInlineRun(IReadOnlyList<StyledNode> effectiveChildren,
+            ref int index, List<StyledNode> run)
+        {
+            while (index + 1 < effectiveChildren.Count)
+            {
+                var next = effectiveChildren[index + 1];
+                if (next.IsText)
+                {
+                    run.Add(next);
+                    index++;
+                    continue;
+                }
+                if (next is StyledPseudoElement nextPseudo)
+                {
+                    var pd = nextPseudo.Style.Display;
+                    if (pd == CssDisplay.Block || pd == CssDisplay.Flex || pd == CssDisplay.InlineFlex
+                        || pd == CssDisplay.Grid || pd == CssDisplay.InlineGrid || pd == CssDisplay.Table)
+                    {
+                        break;
+                    }
+                    run.Add(next);
+                    index++;
+                    continue;
+                }
+                if (next is StyledElement nextElement &&
+                    ShouldWrapInlineElementInAnonBlock(nextElement) &&
+                    nextElement.Style.Position != CssPosition.Absolute &&
+                    nextElement.Style.Position != CssPosition.Fixed &&
+                    nextElement.Style.Float == CssFloat.None &&
+                    nextElement.Style.Display != CssDisplay.None)
+                {
+                    run.Add(next);
+                    index++;
+                    continue;
+                }
+                break;
+            }
         }
 
         /// <summary>

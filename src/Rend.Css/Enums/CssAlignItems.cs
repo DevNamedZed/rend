@@ -8,6 +8,7 @@ namespace Rend.Css
         FlexEnd,
         Center,
         Baseline,
+        LastBaseline,
         Start,
         End,
         SpaceBetween,

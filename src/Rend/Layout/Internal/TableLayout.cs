@@ -332,6 +332,7 @@ namespace Rend.Layout.Internal
             if (collapsed)
             {
                 CollapseBorders(rowBoxes, numRows, numCols, occupied2, cellColumns, tableCtx,
+                    style,
                     out collapseOuterTop, out collapseOuterBottom,
                     out collapseOuterLeft, out collapseOuterRight);
 
@@ -603,7 +604,7 @@ namespace Rend.Layout.Internal
 
         private static void CollapseBorders(LayoutBox[] rowBoxes, int numRows, int numCols,
             bool[,] occupied, Dictionary<LayoutBox, int> cellColumns,
-            TableContext tableCtx,
+            TableContext tableCtx, ComputedStyle tableStyle,
             out float outerHalfTop, out float outerHalfBottom,
             out float outerHalfLeft, out float outerHalfRight)
         {
@@ -809,37 +810,101 @@ namespace Rend.Layout.Internal
                 }
             }
 
-            // Collapse outer edges: per CSS 2.1 §17.6.2, the outer border of the table
-            // participates in the collapse as well. For layout purposes, the outer cells
-            // get half the collapsed border width on their outer edges.
-            // Use a visited set to avoid halving the same cell multiple times (colspan/rowspan).
+            // [CSS 2.1 §17.6.2] Collapse outer edges: the TABLE element's border
+            // participates at the outer edges. Compare each outer cell's border with
+            // the table's border; widest wins. Cells get half the winning width.
+            float tableBorderTop = tableStyle.BorderTopStyle != CssBorderStyle.None
+                ? tableStyle.BorderTopWidth : 0;
+            float tableBorderBottom = tableStyle.BorderBottomStyle != CssBorderStyle.None
+                ? tableStyle.BorderBottomWidth : 0;
+            float tableBorderLeft = tableStyle.BorderLeftStyle != CssBorderStyle.None
+                ? tableStyle.BorderLeftWidth : 0;
+            float tableBorderRight = tableStyle.BorderRightStyle != CssBorderStyle.None
+                ? tableStyle.BorderRightWidth : 0;
+
             var visited = new HashSet<LayoutBox>();
             // Top row outer edge
             for (int c = 0; c < numCols; c++)
             {
                 var cell = cellGrid[0, c];
-                if (cell != null && visited.Add(cell)) cell.BorderTopWidth /= 2f;
+                if (cell != null && visited.Add(cell))
+                {
+                    var cellStyle = cell.StyledNode?.Style;
+                    float cellBorder = cell.BorderTopWidth;
+                    float winningWidth = GetCollapsedBorderWidth(
+                        cellBorder, cellStyle?.BorderTopStyle ?? CssBorderStyle.None,
+                        tableBorderTop, tableStyle.BorderTopStyle);
+                    cell.BorderTopWidth = winningWidth / 2f;
+                    bool cellWins = BorderWins(
+                        cellBorder, cellStyle?.BorderTopStyle ?? CssBorderStyle.None,
+                        tableBorderTop, tableStyle.BorderTopStyle);
+                    cell.CollapsedBorderTopColor = cellWins
+                        ? (cellStyle?.BorderTopColor ?? CssColor.Black)
+                        : tableStyle.BorderTopColor;
+                }
             }
             visited.Clear();
             // Bottom row outer edge
             for (int c = 0; c < numCols; c++)
             {
                 var cell = cellGrid[numRows - 1, c];
-                if (cell != null && visited.Add(cell)) cell.BorderBottomWidth /= 2f;
+                if (cell != null && visited.Add(cell))
+                {
+                    var cellStyle = cell.StyledNode?.Style;
+                    float cellBorder = cell.BorderBottomWidth;
+                    float winningWidth = GetCollapsedBorderWidth(
+                        cellBorder, cellStyle?.BorderBottomStyle ?? CssBorderStyle.None,
+                        tableBorderBottom, tableStyle.BorderBottomStyle);
+                    cell.BorderBottomWidth = winningWidth / 2f;
+                    bool cellWins = BorderWins(
+                        cellBorder, cellStyle?.BorderBottomStyle ?? CssBorderStyle.None,
+                        tableBorderBottom, tableStyle.BorderBottomStyle);
+                    cell.CollapsedBorderBottomColor = cellWins
+                        ? (cellStyle?.BorderBottomColor ?? CssColor.Black)
+                        : tableStyle.BorderBottomColor;
+                }
             }
             visited.Clear();
             // Left column outer edge
             for (int r = 0; r < numRows; r++)
             {
                 var cell = cellGrid[r, 0];
-                if (cell != null && visited.Add(cell)) cell.BorderLeftWidth /= 2f;
+                if (cell != null && visited.Add(cell))
+                {
+                    var cellStyle = cell.StyledNode?.Style;
+                    float cellBorder = cell.BorderLeftWidth;
+                    float winningWidth = GetCollapsedBorderWidth(
+                        cellBorder, cellStyle?.BorderLeftStyle ?? CssBorderStyle.None,
+                        tableBorderLeft, tableStyle.BorderLeftStyle);
+                    cell.BorderLeftWidth = winningWidth / 2f;
+                    bool cellWins = BorderWins(
+                        cellBorder, cellStyle?.BorderLeftStyle ?? CssBorderStyle.None,
+                        tableBorderLeft, tableStyle.BorderLeftStyle);
+                    cell.CollapsedBorderLeftColor = cellWins
+                        ? (cellStyle?.BorderLeftColor ?? CssColor.Black)
+                        : tableStyle.BorderLeftColor;
+                }
             }
             visited.Clear();
             // Right column outer edge
             for (int r = 0; r < numRows; r++)
             {
                 var cell = cellGrid[r, numCols - 1];
-                if (cell != null && visited.Add(cell)) cell.BorderRightWidth /= 2f;
+                if (cell != null && visited.Add(cell))
+                {
+                    var cellStyle = cell.StyledNode?.Style;
+                    float cellBorder = cell.BorderRightWidth;
+                    float winningWidth = GetCollapsedBorderWidth(
+                        cellBorder, cellStyle?.BorderRightStyle ?? CssBorderStyle.None,
+                        tableBorderRight, tableStyle.BorderRightStyle);
+                    cell.BorderRightWidth = winningWidth / 2f;
+                    bool cellWins = BorderWins(
+                        cellBorder, cellStyle?.BorderRightStyle ?? CssBorderStyle.None,
+                        tableBorderRight, tableStyle.BorderRightStyle);
+                    cell.CollapsedBorderRightColor = cellWins
+                        ? (cellStyle?.BorderRightColor ?? CssColor.Black)
+                        : tableStyle.BorderRightColor;
+                }
             }
 
             // Compute the outer half of each table edge (the portion extending outside cells).

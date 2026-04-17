@@ -187,6 +187,20 @@ namespace Rend.Css.Resolution.Internal
                         result = PropertyValue.FromKeyword((int)flags);
                         return true;
                     }
+                    // [CSS-ALIGN-3 §4.2] "last baseline" two-keyword value for
+                    // align-items/align-self/justify-items/justify-self/align-content.
+                    if (value is CssListValue alignList && alignList.Separator == ' '
+                        && alignList.Values.Count == 2
+                        && IsAlignmentProperty(prop.Id))
+                    {
+                        if (alignList.Values[0] is CssKeywordValue firstKw
+                            && alignList.Values[1] is CssKeywordValue secondKw
+                            && firstKw.Keyword == "last" && secondKw.Keyword == "baseline")
+                        {
+                            result = PropertyValue.FromKeyword((int)CssAlignItems.LastBaseline);
+                            return true;
+                        }
+                    }
                     return TryResolveKeyword(value, prop.Id, out result);
 
                 case PropertyValueType.String:
@@ -245,6 +259,13 @@ namespace Rend.Css.Resolution.Internal
                 return true;
             }
             return false;
+        }
+
+        private static bool IsAlignmentProperty(int id)
+        {
+            return id == PropertyId.AlignItems || id == PropertyId.AlignSelf
+                || id == PropertyId.AlignContent || id == PropertyId.JustifyItems
+                || id == PropertyId.JustifySelf;
         }
 
         private static bool IsBorderRadiusProperty(int id)

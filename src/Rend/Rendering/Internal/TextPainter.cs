@@ -279,8 +279,19 @@ namespace Rend.Rendering.Internal
             var metrics = target.GetDecorationMetrics(fontDesc, fontSize);
 
             // Use text-decoration-thickness if set, otherwise use font's underline thickness.
+            // [CSS-TEXT-DECOR-4 §3.4] Floor explicit thickness to an integer pixel count,
+            // clamped to a minimum of 1 device pixel. Matches Blink's
+            // TextDecorationInfo::ResolvedUnderlineThickness: max(1, floor(thickness)).
             float thickness = style.TextDecorationThickness;
-            float strokeWidth = thickness > 0 ? thickness : metrics.UnderlineThickness;
+            float strokeWidth;
+            if (thickness > 0f)
+            {
+                strokeWidth = Math.Max(1f, (float)Math.Floor(thickness));
+            }
+            else
+            {
+                strokeWidth = metrics.UnderlineThickness;
+            }
 
             // Build pen based on text-decoration-style.
             // [CSS-TEXT-DECOR-4 §3] Dash/dot phase is relative to line box start so
@@ -301,6 +312,7 @@ namespace Rend.Rendering.Internal
             // Chrome paints solid text decorations as pixel-snapped filled rectangles,
             // not stroked lines. Use FillRect for solid style to match.
             bool useFillRect = decoStyle == CssTextDecorationStyle.Solid;
+            bool useDottedCircles = decoStyle == CssTextDecorationStyle.Dotted;
 
             // Chrome computes decoration positions relative to the pixel-snapped baseline Y
             // (same Floor as glyph rendering), not the raw fragment top + baseline.
@@ -316,23 +328,23 @@ namespace Rend.Rendering.Internal
             {
                 float underlineY = ComputeUnderlineY(style, fragment, baselineY,
                     halfLeading, underlineOffset, metrics);
-                PaintDecorationLine(target, pen, useFillRect, decoColor, strokeWidth,
-                    startX, endX, underlineY);
+                PaintDecorationLine(target, pen, useFillRect, useDottedCircles, decoColor,
+                    strokeWidth, lineX, startX, endX, underlineY);
             }
 
             if ((decoration & CssTextDecorationLine.Overline) != 0)
             {
                 float fontAscent = fragment.Baseline - halfLeading;
                 float overlineY = baselineY - fontAscent;
-                PaintDecorationLine(target, pen, useFillRect, decoColor, strokeWidth,
-                    startX, endX, overlineY);
+                PaintDecorationLine(target, pen, useFillRect, useDottedCircles, decoColor,
+                    strokeWidth, lineX, startX, endX, overlineY);
             }
 
             if ((decoration & CssTextDecorationLine.LineThrough) != 0)
             {
                 float strikeY = baselineY + metrics.StrikeoutPosition;
-                PaintDecorationLine(target, pen, useFillRect, decoColor, strokeWidth,
-                    startX, endX, strikeY);
+                PaintDecorationLine(target, pen, useFillRect, useDottedCircles, decoColor,
+                    strokeWidth, lineX, startX, endX, strikeY);
             }
 
             // For "wavy" or "double" style, draw a second offset line for each active decoration.
@@ -416,10 +428,13 @@ namespace Rend.Rendering.Internal
         }
 
         /// <summary>
-        /// Paints a single decoration line, using FillRect for solid or StrokePath for other styles.
+        /// Paints a single decoration line, using FillRect for solid, a row of
+        /// filled circles for dotted, or StrokePath with a dash pattern for
+        /// other styles.
         /// </summary>
         private static void PaintDecorationLine(IRenderTarget target, PenInfo pen, bool useFillRect,
-            CssColor color, float strokeWidth, float startX, float endX, float lineY)
+            bool useDottedCircles, CssColor color, float strokeWidth, float lineBoxOriginX,
+            float startX, float endX, float lineY)
         {
             if (useFillRect)
             {
@@ -427,11 +442,48 @@ namespace Rend.Rendering.Internal
                 float snappedH = Math.Max(1f, (float)Math.Round(strokeWidth));
                 target.FillRect(new RectF(startX, snappedY, endX - startX, snappedH),
                     BrushInfo.Solid(color));
+                return;
             }
-            else
+            if (useDottedCircles)
             {
-                DrawLine(target, pen, startX, lineY, endX, lineY);
+                PaintDottedCircles(target, color, strokeWidth, lineBoxOriginX, startX, endX, lineY);
+                return;
             }
+            DrawLine(target, pen, startX, lineY, endX, lineY);
+        }
+
+        /// <summary>
+        /// Paints text-decoration-style:dotted as a row of filled circles.
+        /// Chrome (Blink DecorationLinePainter::PaintDottedUnderline) uses
+        /// dot diameter = thickness, pitch = 2 × thickness. Dot centres are
+        /// anchored to the line-box origin so the pattern stays continuous
+        /// across bidi / inline-fragment boundaries.
+        /// </summary>
+        private static void PaintDottedCircles(IRenderTarget target, CssColor color,
+            float strokeWidth, float lineBoxOriginX, float startX, float endX, float lineY)
+        {
+            int diameter = Math.Max(1, (int)Math.Round(strokeWidth));
+            float radius = diameter / 2f;
+            int pitch = 2 * diameter;
+            float centerY = (float)Math.Floor(lineY) + radius;
+
+            int firstIndex = (int)Math.Ceiling((startX - lineBoxOriginX - radius) / pitch);
+            if (firstIndex < 0)
+            {
+                firstIndex = 0;
+            }
+
+            var path = new PathData();
+            for (int index = firstIndex; ; index++)
+            {
+                float centerX = lineBoxOriginX + index * pitch + radius;
+                if (centerX - radius >= endX)
+                {
+                    break;
+                }
+                path.AddEllipse(centerX, centerY, radius, radius);
+            }
+            target.FillPath(path, BrushInfo.Solid(color));
         }
 
         private static void DrawLine(IRenderTarget target, PenInfo pen, float x1, float y1, float x2, float y2)

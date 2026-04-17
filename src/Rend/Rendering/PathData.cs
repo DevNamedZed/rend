@@ -116,6 +116,34 @@ namespace Rend.Rendering
         }
 
         /// <summary>
+        /// Adds an ellipse centered at (<paramref name="centerX"/>,
+        /// <paramref name="centerY"/>) with radii
+        /// (<paramref name="radiusX"/>, <paramref name="radiusY"/>) to the path
+        /// as a closed sub-path, approximated by four cubic Bézier curves.
+        /// </summary>
+        public void AddEllipse(float centerX, float centerY, float radiusX, float radiusY)
+        {
+            const float kappa = 0.5522847498f;
+            float controlX = radiusX * kappa;
+            float controlY = radiusY * kappa;
+
+            MoveTo(centerX + radiusX, centerY);
+            CubicBezierTo(centerX + radiusX, centerY + controlY,
+                          centerX + controlX, centerY + radiusY,
+                          centerX, centerY + radiusY);
+            CubicBezierTo(centerX - controlX, centerY + radiusY,
+                          centerX - radiusX, centerY + controlY,
+                          centerX - radiusX, centerY);
+            CubicBezierTo(centerX - radiusX, centerY - controlY,
+                          centerX - controlX, centerY - radiusY,
+                          centerX, centerY - radiusY);
+            CubicBezierTo(centerX + controlX, centerY - radiusY,
+                          centerX + radiusX, centerY - controlY,
+                          centerX + radiusX, centerY);
+            Close();
+        }
+
+        /// <summary>
         /// Adds a rounded rectangle to the path as a closed sub-path,
         /// using cubic bezier curves for each corner.
         /// </summary>

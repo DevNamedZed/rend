@@ -266,7 +266,8 @@ namespace Rend.Layout.Internal
                             {
                                 absStaticY += absFreeV / 2f;
                             }
-                            else if (absAlignSelf == CssAlignItems.End || absAlignSelf == CssAlignItems.FlexEnd)
+                            else if (absAlignSelf == CssAlignItems.End || absAlignSelf == CssAlignItems.FlexEnd
+                                     || absAlignSelf == CssAlignItems.LastBaseline)
                             {
                                 absStaticY += absFreeV;
                             }
@@ -284,7 +285,8 @@ namespace Rend.Layout.Internal
                             {
                                 absStaticX += absFreeH / 2f;
                             }
-                            else if (absJustifySelf == CssAlignItems.End || absJustifySelf == CssAlignItems.FlexEnd)
+                            else if (absJustifySelf == CssAlignItems.End || absJustifySelf == CssAlignItems.FlexEnd
+                                     || absJustifySelf == CssAlignItems.LastBaseline)
                             {
                                 absStaticX += absFreeH;
                             }
@@ -2646,7 +2648,8 @@ namespace Rend.Layout.Internal
                     {
                         staticX += freeH / 2f;
                     }
-                    else if (justifySelf == CssAlignItems.End || justifySelf == CssAlignItems.FlexEnd)
+                    else if (justifySelf == CssAlignItems.End || justifySelf == CssAlignItems.FlexEnd
+                             || justifySelf == CssAlignItems.LastBaseline)
                     {
                         staticX += freeH;
                     }
@@ -2665,7 +2668,7 @@ namespace Rend.Layout.Internal
                         staticY += freeV / 2f;
                     }
                     else if (alignSelf == CssAlignItems.End || alignSelf == CssAlignItems.FlexEnd
-                             )
+                             || alignSelf == CssAlignItems.LastBaseline)
                     {
                         staticY += freeV;
                     }
@@ -3968,7 +3971,8 @@ namespace Rend.Layout.Internal
                 case CssAlignItems.FlexEnd: return space;
                 case CssAlignItems.Start:
                 case CssAlignItems.FlexStart:
-                case CssAlignItems.Baseline: return 0;
+                case CssAlignItems.Baseline:
+                case CssAlignItems.LastBaseline: return 0;
                 default: return 0; // Stretch, Normal → 0 offset (stretch handled separately)
             }
         }

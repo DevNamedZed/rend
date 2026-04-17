@@ -211,7 +211,7 @@ fieldset {
     border: 2px groove;
 }
 
-legend { padding-left: 2px; padding-right: 2px; }
+legend { display: block; padding-left: 2px; padding-right: 2px; }
 
 /* Dialog */
 dialog {

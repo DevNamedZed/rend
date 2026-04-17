@@ -2026,6 +2026,7 @@ namespace Rend.Layout.Internal
                         crossOffset = 0;
                         break;
                     case CssAlignItems.Baseline:
+                    case CssAlignItems.LastBaseline:
                         crossOffset = GetBaselineOffset(box, line, isColumn);
                         break;
                     case CssAlignItems.FlexEnd:

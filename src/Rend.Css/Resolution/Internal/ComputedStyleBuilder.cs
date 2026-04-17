@@ -136,6 +136,13 @@ namespace Rend.Css.Resolution.Internal
                 }
             }
 
+            // NOTE: [CSS-WRITING-MODES-4 §7.3.1] In vertical writing modes with
+            //     text-orientation: upright, ch should = fontSize (upright glyphs advance 1em).
+            //     Deferred: enabling this causes regressions because text-orientation: upright
+            //     text layout is not yet implemented. The correct ch value diverges from the
+            //     incorrect (horizontal) text layout, making diffs worse. Re-enable when
+            //     upright text layout is implemented.
+
             // 3. Apply cascaded declarations (all properties except font-size and font-family).
             //    For each property, walk candidates in priority order and use the first
             //    one that resolves successfully (CSS Cascade 4 §8.3 invalid-drop rule).
@@ -710,6 +717,73 @@ namespace Rend.Css.Resolution.Internal
                 default:
                     return display;
             }
+        }
+
+        /// <summary>
+        /// [CSS-WRITING-MODES-4 §7.3.1] Peeks at the cascade (or parent) to
+        /// determine whether this element uses a vertical writing mode with
+        /// upright text orientation. Used early (before step 3) so the ch unit
+        /// can resolve to the vertical advance (1em) instead of the horizontal
+        /// advance of "0".
+        /// </summary>
+        private static bool IsVerticalUprightFromCascade(
+            Dictionary<string, CascadedProperty> cascaded,
+            ComputedStyle? parentStyle)
+        {
+            var writingMode = CssWritingMode.HorizontalTb;
+            if (cascaded.TryGetValue("writing-mode", out var wmCandidates))
+            {
+                foreach (var candidate in wmCandidates.Declarations)
+                {
+                    if (candidate.Declaration.Value is CssKeywordValue wmKw)
+                    {
+                        if (wmKw.Keyword == "vertical-rl")
+                        {
+                            writingMode = CssWritingMode.VerticalRl;
+                        }
+                        else if (wmKw.Keyword == "vertical-lr")
+                        {
+                            writingMode = CssWritingMode.VerticalLr;
+                        }
+                        break;
+                    }
+                }
+            }
+            else if (parentStyle != null)
+            {
+                writingMode = parentStyle.WritingMode;
+            }
+
+            if (writingMode == CssWritingMode.HorizontalTb)
+            {
+                return false;
+            }
+
+            var textOrientation = CssTextOrientation.Mixed;
+            if (cascaded.TryGetValue("text-orientation", out var toCandidates))
+            {
+                foreach (var candidate in toCandidates.Declarations)
+                {
+                    if (candidate.Declaration.Value is CssKeywordValue toKw)
+                    {
+                        if (toKw.Keyword == "upright")
+                        {
+                            textOrientation = CssTextOrientation.Upright;
+                        }
+                        else if (toKw.Keyword == "sideways")
+                        {
+                            textOrientation = CssTextOrientation.Sideways;
+                        }
+                        break;
+                    }
+                }
+            }
+            else if (parentStyle != null)
+            {
+                textOrientation = parentStyle.TextOrientation;
+            }
+
+            return textOrientation == CssTextOrientation.Upright;
         }
 
     }
