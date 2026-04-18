@@ -115,6 +115,15 @@ namespace Rend.Rendering
         void DrawImage(ImageData image, RectF destRect);
 
         /// <summary>
+        /// [CSS-BACKGROUNDS-3 §5.3] Draws a sub-region of a source image into a
+        /// destination rectangle. Used for border-image 9-slice rendering.
+        /// </summary>
+        /// <param name="image">The image data containing the source.</param>
+        /// <param name="sourceRect">The source rectangle in image pixel coordinates.</param>
+        /// <param name="destRect">The destination rectangle in layout coordinates.</param>
+        void DrawImageRegion(ImageData image, RectF sourceRect, RectF destRect);
+
+        /// <summary>
         /// Draws a tiled (repeating) image within the specified fill area.
         /// Uses shader-based tiling for seamless tile boundaries.
         /// </summary>

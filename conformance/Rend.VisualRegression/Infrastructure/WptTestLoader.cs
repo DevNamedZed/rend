@@ -253,6 +253,11 @@ namespace Rend.VisualRegression.Infrastructure
                     case ".otf": mimeType = "font/otf"; break;
                     case ".woff": mimeType = "font/woff"; break;
                     case ".woff2": mimeType = "font/woff2"; break;
+                    case ".png": mimeType = "image/png"; break;
+                    case ".jpg":
+                    case ".jpeg": mimeType = "image/jpeg"; break;
+                    case ".gif": mimeType = "image/gif"; break;
+                    case ".webp": mimeType = "image/webp"; break;
                     default:
                         return match.Value;
                 }

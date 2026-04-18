@@ -350,6 +350,43 @@ namespace Rend.Output.Pdf
         }
 
         /// <inheritdoc />
+        public void DrawImageRegion(ImageData image, RectF sourceRect, RectF destRect)
+        {
+            if (sourceRect.Width <= 0 || sourceRect.Height <= 0
+                || destRect.Width <= 0 || destRect.Height <= 0)
+            {
+                return;
+            }
+
+            // PDF doesn't support source-rect drawing natively.
+            // Clip to dest rect, then scale/position the full image so the source
+            // region maps to the dest rect.
+            EnsurePage();
+            var content = _currentPage!.Content;
+            PdfImage pdfImage = _imageCache.GetOrAdd(image.Data, image.Format, _doc);
+
+            content.SaveState();
+
+            // Clip to destination
+            content.Rectangle(destRect.X, destRect.Y, destRect.Width, destRect.Height);
+            content.Clip();
+            content.EndPath();
+
+            float scaleX = destRect.Width / sourceRect.Width;
+            float scaleY = destRect.Height / sourceRect.Height;
+            float fullWidth = image.Width * scaleX;
+            float fullHeight = image.Height * scaleY;
+            float offsetX = destRect.X - sourceRect.X * scaleX;
+            float offsetY = destRect.Y - sourceRect.Y * scaleY;
+
+            content.DrawImage(pdfImage,
+                fullWidth, 0f, 0f, -fullHeight,
+                offsetX, offsetY + fullHeight);
+
+            content.RestoreState();
+        }
+
+        /// <inheritdoc />
         public void DrawTiledImage(ImageData image, RectF fillArea,
             float tileWidth, float tileHeight, float originX, float originY)
         {

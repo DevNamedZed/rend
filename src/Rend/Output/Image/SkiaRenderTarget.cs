@@ -739,6 +739,38 @@ namespace Rend.Output.Image
         }
 
         /// <inheritdoc />
+        public void DrawImageRegion(ImageData image, RectF sourceRect, RectF destRect)
+        {
+            EnsureCanvas();
+
+            using (var skData = SKData.CreateCopy(image.Data))
+            using (var skImage = SKImage.FromEncodedData(skData))
+            {
+                if (skImage != null)
+                {
+                    var paint = _paintPool.Rent();
+                    try
+                    {
+                        paint.IsAntialias = !_pixelatedRendering;
+                        paint.Color = new SKColor(255, 255, 255, (byte)Math.Round(_currentOpacity * 255, MidpointRounding.AwayFromZero));
+
+                        // [CSS-BACKGROUNDS-3 §5.3] Use nearest-neighbor for border-image
+                        // 9-slice regions. Bilinear filtering bleeds pixels from outside
+                        // the source sub-rect boundary, corrupting thin (1px) slices.
+                        var sampling = new SKSamplingOptions(SKFilterMode.Nearest);
+                        var src = new SKRect(sourceRect.X, sourceRect.Y,
+                            sourceRect.X + sourceRect.Width, sourceRect.Y + sourceRect.Height);
+                        _currentCanvas!.DrawImage(skImage, src, ToSKRect(destRect), sampling, paint);
+                    }
+                    finally
+                    {
+                        _paintPool.Return(paint);
+                    }
+                }
+            }
+        }
+
+        /// <inheritdoc />
         public void DrawTiledImage(ImageData image, RectF fillArea,
             float tileWidth, float tileHeight, float originX, float originY)
         {

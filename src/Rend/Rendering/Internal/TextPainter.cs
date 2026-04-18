@@ -313,6 +313,7 @@ namespace Rend.Rendering.Internal
             // not stroked lines. Use FillRect for solid style to match.
             bool useFillRect = decoStyle == CssTextDecorationStyle.Solid;
             bool useDottedCircles = decoStyle == CssTextDecorationStyle.Dotted;
+            bool useWavy = decoStyle == CssTextDecorationStyle.Wavy;
 
             // Chrome computes decoration positions relative to the pixel-snapped baseline Y
             // (same Floor as glyph rendering), not the raw fragment top + baseline.
@@ -328,27 +329,27 @@ namespace Rend.Rendering.Internal
             {
                 float underlineY = ComputeUnderlineY(style, fragment, baselineY,
                     halfLeading, underlineOffset, metrics);
-                PaintDecorationLine(target, pen, useFillRect, useDottedCircles, decoColor,
-                    strokeWidth, lineX, startX, endX, underlineY);
+                PaintDecorationLine(target, pen, useFillRect, useDottedCircles, useWavy,
+                    decoColor, strokeWidth, lineX, startX, endX, underlineY);
             }
 
             if ((decoration & CssTextDecorationLine.Overline) != 0)
             {
                 float fontAscent = fragment.Baseline - halfLeading;
                 float overlineY = baselineY - fontAscent;
-                PaintDecorationLine(target, pen, useFillRect, useDottedCircles, decoColor,
-                    strokeWidth, lineX, startX, endX, overlineY);
+                PaintDecorationLine(target, pen, useFillRect, useDottedCircles, useWavy,
+                    decoColor, strokeWidth, lineX, startX, endX, overlineY);
             }
 
             if ((decoration & CssTextDecorationLine.LineThrough) != 0)
             {
                 float strikeY = baselineY + metrics.StrikeoutPosition;
-                PaintDecorationLine(target, pen, useFillRect, useDottedCircles, decoColor,
-                    strokeWidth, lineX, startX, endX, strikeY);
+                PaintDecorationLine(target, pen, useFillRect, useDottedCircles, useWavy,
+                    decoColor, strokeWidth, lineX, startX, endX, strikeY);
             }
 
-            // For "wavy" or "double" style, draw a second offset line for each active decoration.
-            if (decoStyle == CssTextDecorationStyle.Wavy || decoStyle == CssTextDecorationStyle.Double)
+            // [CSS-TEXT-DECOR-4 §3] Double style draws a second offset line.
+            if (decoStyle == CssTextDecorationStyle.Double)
             {
                 float offset = strokeWidth * 2f;
 
@@ -363,10 +364,7 @@ namespace Rend.Rendering.Internal
                 {
                     float fontAscent = fragment.Baseline - halfLeading;
                     float overlineY = baselineY - fontAscent;
-                    float secondY = decoStyle == CssTextDecorationStyle.Double
-                        ? overlineY - offset
-                        : overlineY + offset;
-                    DrawLine(target, pen, startX, secondY, endX, secondY);
+                    DrawLine(target, pen, startX, overlineY - offset, endX, overlineY - offset);
                 }
 
                 if ((decoration & CssTextDecorationLine.LineThrough) != 0)
@@ -429,12 +427,12 @@ namespace Rend.Rendering.Internal
 
         /// <summary>
         /// Paints a single decoration line, using FillRect for solid, a row of
-        /// filled circles for dotted, or StrokePath with a dash pattern for
-        /// other styles.
+        /// filled circles for dotted, a sine wave for wavy, or StrokePath with
+        /// a dash pattern for other styles.
         /// </summary>
         private static void PaintDecorationLine(IRenderTarget target, PenInfo pen, bool useFillRect,
-            bool useDottedCircles, CssColor color, float strokeWidth, float lineBoxOriginX,
-            float startX, float endX, float lineY)
+            bool useDottedCircles, bool useWavy, CssColor color, float strokeWidth,
+            float lineBoxOriginX, float startX, float endX, float lineY)
         {
             if (useFillRect)
             {
@@ -447,6 +445,11 @@ namespace Rend.Rendering.Internal
             if (useDottedCircles)
             {
                 PaintDottedCircles(target, color, strokeWidth, lineBoxOriginX, startX, endX, lineY);
+                return;
+            }
+            if (useWavy)
+            {
+                PaintWavyLine(target, color, strokeWidth, lineBoxOriginX, startX, endX, lineY);
                 return;
             }
             DrawLine(target, pen, startX, lineY, endX, lineY);
@@ -484,6 +487,60 @@ namespace Rend.Rendering.Internal
                 path.AddEllipse(centerX, centerY, radius, radius);
             }
             target.FillPath(path, BrushInfo.Solid(color));
+        }
+
+        /// <summary>
+        /// Paints text-decoration-style:wavy as a sine-wave stroke.
+        /// [CSS-TEXT-DECOR-4 §3] Chrome (Blink DecoratingTextPainter) builds a
+        /// cubic-bezier wave path: each wavelength is one cubic with two
+        /// diamond-shaped control points above and below the centerline.
+        /// The wave is anchored to the line-box origin so the pattern stays
+        /// continuous across inline fragments.
+        /// </summary>
+        private static void PaintWavyLine(IRenderTarget target, CssColor color,
+            float strokeWidth, float lineBoxOriginX, float startX, float endX, float lineY)
+        {
+            // [CSS-TEXT-DECOR-4 §3] Blink MakeWave: wavelength and
+            // control-point distance scale with resolved thickness.
+            // Chrome uses std::round (half away from zero).
+            float clampedThickness = Math.Max(1f, strokeWidth);
+            float wavelength = 1f + 2f * (float)Math.Round(
+                2f * clampedThickness + 0.5f, MidpointRounding.AwayFromZero);
+            float controlPointDistance = 0.5f + (float)Math.Round(
+                3f * clampedThickness + 0.5f, MidpointRounding.AwayFromZero);
+
+            // Centerline Y: pixel-snapped with half-pixel offset matching
+            // Chrome's WavyPath start at y=0.5.
+            float centerY = (float)Math.Floor(lineY) + 0.5f;
+
+            // Compute the first wave index at or before startX, anchored to
+            // lineBoxOriginX so fragments share a continuous wave.
+            int firstIndex = (int)Math.Floor((startX - lineBoxOriginX) / wavelength) - 1;
+            int lastIndex = (int)Math.Ceiling((endX - lineBoxOriginX) / wavelength);
+
+            var path = new PathData();
+            float waveStartX = lineBoxOriginX + firstIndex * wavelength;
+            path.MoveTo(waveStartX, centerY);
+
+            for (int index = firstIndex; index <= lastIndex; index++)
+            {
+                float segStartX = lineBoxOriginX + index * wavelength;
+                float segEndX = segStartX + wavelength;
+                float controlX = segStartX + wavelength * 0.5f;
+
+                // Alternate control points above/below centerline.
+                // C# modulo can return negative for negative indices,
+                // so use Math.Abs to get a stable even/odd check.
+                bool even = (Math.Abs(index) % 2) == 0;
+                float cpSign = even ? 1f : -1f;
+                float cp1Y = centerY + cpSign * controlPointDistance;
+                float cp2Y = centerY - cpSign * controlPointDistance;
+
+                path.CubicBezierTo(controlX, cp1Y, controlX, cp2Y, segEndX, centerY);
+            }
+
+            var pen = new PenInfo(color, clampedThickness);
+            target.StrokePath(path, pen);
         }
 
         private static void DrawLine(IRenderTarget target, PenInfo pen, float x1, float y1, float x2, float y2)

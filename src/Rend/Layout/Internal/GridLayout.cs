@@ -874,6 +874,10 @@ namespace Rend.Layout.Internal
             // fit-content(limit) = minmax(auto, min(max-content, limit))
             float[]? fitContentColLimits = ExtractFitContentLimits(colRaw, finalCols, containerWidth, colGap);
 
+            // [CSS-GRID §6.5] Extract explicit minmax floors for minmax(Npx, auto) tracks.
+            // These override min-content flooring in the Maximize Tracks pass.
+            float[]? minmaxColFloors = ExtractMinmaxFloors(colRaw, finalCols, containerWidth, colGap);
+
             // Resolve intrinsic (min-content / max-content / fit-content) column tracks by measuring items.
             // Sentinel values: -1 = min-content, -2 = max-content, -3 = fit-content.
             bool hasIntrinsicCols = false;
@@ -969,10 +973,15 @@ namespace Rend.Layout.Internal
                     // [CSS-GRID-1 §11.4] Implicit auto tracks also need min-content as the
                     // base size so the §11.4 maximize step can cap their growth without
                     // shrinking past the unbreakable piece of content.
+                    // [CSS-GRID §6.5] Skip for tracks with explicit minmax floor (e.g. minmax(0, auto))
+                    // — those use the explicit min instead of min-content.
                     bool isFitContent = colWidths[item.ColStart] <= -2.5f
                                      && colWidths[item.ColStart] > -3.5f;
+                    bool hasExplicitMinmaxFloor = minmaxColFloors != null
+                                               && item.ColStart < minmaxColFloors.Length
+                                               && minmaxColFloors[item.ColStart] >= 0;
                     bool needsMinContentFloor = (isFitContent || isImplicitAutoCol[item.ColStart])
-                                             && !isMinContent;
+                                             && !isMinContent && !hasExplicitMinmaxFloor;
                     if (needsMinContentFloor)
                     {
                         float minMeasured = BlockFormattingContext.MeasureIntrinsicWidth(
@@ -1043,7 +1052,12 @@ namespace Rend.Layout.Internal
                             for (int c = 0; c < finalCols; c++)
                             {
                                 if (!isImplicitAutoCol[c]) { continue; }
-                                float minFloor = minContentWidths[c];
+                                // [CSS-GRID §6.5] Use explicit minmax floor if present,
+                                // otherwise use min-content as the floor.
+                                float minFloor = (minmaxColFloors != null && c < minmaxColFloors.Length
+                                                  && minmaxColFloors[c] >= 0)
+                                    ? minmaxColFloors[c]
+                                    : minContentWidths[c];
                                 float capped = Math.Min(colWidths[c], perTrackCap);
                                 if (capped < minFloor)
                                 {
@@ -1555,6 +1569,8 @@ namespace Rend.Layout.Internal
             // [CSS-GRID §7.2.4.1] Extract fit-content row limits early for auto minimum save.
             float[]? fitContentRowLimits = ExtractFitContentLimits(
                 rowRaw, finalRows, containerHeight, rowGap);
+            // [CSS-GRID §6.5] Extract explicit minmax floors for row tracks.
+            float[]? minmaxRowFloors = ExtractMinmaxFloors(rowRaw, finalRows, containerHeight, rowGap);
             // Save auto minimum (non-spanning content heights) for fit-content floor.
             // Must be saved BEFORE spanning distribution inflates row heights.
             float[]? autoMinRowHeights = null;
@@ -1635,6 +1651,47 @@ namespace Rend.Layout.Internal
                     if (explicitRowTracks[r] > rowHeights[r])
                     {
                         rowHeights[r] = explicitRowTracks[r];
+                    }
+                }
+            }
+
+            // [CSS-GRID §11.4] Maximize row tracks: when the grid container has a
+            // definite block size and intrinsic row tracks exceed it, cap them.
+            if (containerHeight > 0)
+            {
+                float totalRowHeight = 0;
+                int intrinsicRowCount = 0;
+                for (int r = 0; r < finalRows; r++)
+                {
+                    totalRowHeight += rowHeights[r];
+                    if (explicitRowTracks != null && r < explicitRowTracks.Length
+                        && explicitRowTracks[r] < 0)
+                    {
+                        intrinsicRowCount++;
+                    }
+                }
+                float rowGapSpace = finalRows > 1 ? (finalRows - 1) * rowGap : 0;
+                if (intrinsicRowCount > 0 && totalRowHeight > containerHeight - rowGapSpace)
+                {
+                    float available = containerHeight - rowGapSpace;
+                    float perTrackCap = available / intrinsicRowCount;
+                    for (int r = 0; r < finalRows; r++)
+                    {
+                        if (explicitRowTracks == null || r >= explicitRowTracks.Length
+                            || explicitRowTracks[r] >= 0)
+                        {
+                            continue;
+                        }
+                        float minFloor = (minmaxRowFloors != null && r < minmaxRowFloors.Length
+                                          && minmaxRowFloors[r] >= 0)
+                            ? minmaxRowFloors[r]
+                            : 0;
+                        float capped = Math.Min(rowHeights[r], perTrackCap);
+                        if (capped < minFloor)
+                        {
+                            capped = minFloor;
+                        }
+                        rowHeights[r] = capped;
                     }
                 }
             }
@@ -1863,15 +1920,19 @@ namespace Rend.Layout.Internal
             // top/bottom assumptions leaking in.
             float[]? rowMaxBaselineStart = null;
             float[]? rowMaxBaselineEnd = null;
+            float[]? rowMaxLastBaselineEnd = null;
+            float[]? rowMaxLastBaselineStart = null;
             {
-                bool hasBaselineAlignment = containerAlignItems == CssAlignItems.Baseline;
+                bool hasBaselineAlignment = containerAlignItems == CssAlignItems.Baseline
+                    || containerAlignItems == CssAlignItems.LastBaseline;
                 if (!hasBaselineAlignment)
                 {
                     for (int i = 0; i < items.Count; i++)
                     {
                         var styledEl = items[i].StyledElement;
                         if (styledEl != null
-                            && styledEl.Style.AlignSelf == CssAlignItems.Baseline)
+                            && (styledEl.Style.AlignSelf == CssAlignItems.Baseline
+                                || styledEl.Style.AlignSelf == CssAlignItems.LastBaseline))
                         {
                             hasBaselineAlignment = true;
                             break;
@@ -1881,10 +1942,19 @@ namespace Rend.Layout.Internal
 
                 if (hasBaselineAlignment)
                 {
+                    // [CSS-ALIGN-3 §9.3] First-baseline sharing group:
+                    // items anchor their first baselines at the row's block-start edge.
                     rowMaxBaselineStart = new float[finalRows];
                     float[] rowMaxDescentStart = new float[finalRows];
                     rowMaxBaselineEnd = new float[finalRows];
                     float[] rowMaxAscentEnd = new float[finalRows];
+
+                    // [CSS-ALIGN-3 §9.3] Last-baseline sharing group:
+                    // items anchor their last baselines at the row's block-end edge.
+                    rowMaxLastBaselineEnd = new float[finalRows];
+                    float[] rowMaxLastAscentEnd = new float[finalRows];
+                    rowMaxLastBaselineStart = new float[finalRows];
+                    float[] rowMaxLastDescentStart = new float[finalRows];
 
                     for (int i = 0; i < items.Count; i++)
                     {
@@ -1894,58 +1964,91 @@ namespace Rend.Layout.Internal
                         if (row < 0 || row >= finalRows) { continue; }
 
                         CssAlignItems itemAlign = ResolveItemBlockAlignment(item, containerAlignItems);
-                        if (itemAlign != CssAlignItems.Baseline) { continue; }
 
-                        // [CSS-ALIGN-3 §9.3] Replaced elements and orthogonal items
-                        // in a vertical-WM grid do not join the row sharing group
-                        // (they fall back to start alignment); orthogonal items
-                        // in a horizontal-tb grid still join via Scope 1b border-end
-                        // synthesis, matching Chrome's inline-block emulation.
+                        if (itemAlign != CssAlignItems.Baseline
+                            && itemAlign != CssAlignItems.LastBaseline)
+                        {
+                            continue;
+                        }
+
                         if (!ItemParticipatesInRowBaselineSharingGroup(item, writingMode))
                         {
                             continue;
                         }
 
-                        float baseline = ComputeItemFirstBaselineInBlockAxis(item, writingMode);
                         float outerBlockSize = ComputeItemOuterBlockSize(item, writingMode);
 
-                        if (IsItemOppositeBlockDirection(item, writingMode))
+                        if (itemAlign == CssAlignItems.Baseline)
                         {
-                            // [CSS-ALIGN-3 §9.4.4] Opposing-direction items anchor
-                            // their (projected) first baseline against the row's
-                            // block-end edge. `baselineFromEnd` is the distance
-                            // from the item's margin-box block-end to its baseline;
-                            // `baseline` (from block-start) becomes the "ascent"
-                            // contribution for sizing the end-anchored group.
-                            float baselineFromEnd = outerBlockSize - baseline;
-                            if (baselineFromEnd > rowMaxBaselineEnd[row])
+                            float baseline = ComputeItemFirstBaselineInBlockAxis(item, writingMode);
+
+                            if (IsItemOppositeBlockDirection(item, writingMode))
                             {
-                                rowMaxBaselineEnd[row] = baselineFromEnd;
+                                float baselineFromEnd = outerBlockSize - baseline;
+                                if (baselineFromEnd > rowMaxBaselineEnd[row])
+                                {
+                                    rowMaxBaselineEnd[row] = baselineFromEnd;
+                                }
+                                if (baseline > rowMaxAscentEnd[row])
+                                {
+                                    rowMaxAscentEnd[row] = baseline;
+                                }
                             }
-                            if (baseline > rowMaxAscentEnd[row])
+                            else
                             {
-                                rowMaxAscentEnd[row] = baseline;
+                                float descent = outerBlockSize - baseline;
+                                if (baseline > rowMaxBaselineStart[row])
+                                {
+                                    rowMaxBaselineStart[row] = baseline;
+                                }
+                                if (descent > rowMaxDescentStart[row])
+                                {
+                                    rowMaxDescentStart[row] = descent;
+                                }
                             }
                         }
                         else
                         {
-                            float descent = outerBlockSize - baseline;
-                            if (baseline > rowMaxBaselineStart[row])
+                            // [CSS-ALIGN-3 §9.3] Last-baseline items anchor
+                            // their last baselines at the row's block-end edge.
+                            float lastBaseline = ComputeItemLastBaselineInBlockAxis(item, writingMode);
+                            float lastBaselineFromEnd = outerBlockSize - lastBaseline;
+
+                            if (IsItemOppositeBlockDirection(item, writingMode))
                             {
-                                rowMaxBaselineStart[row] = baseline;
+                                if (lastBaseline > rowMaxLastBaselineStart[row])
+                                {
+                                    rowMaxLastBaselineStart[row] = lastBaseline;
+                                }
+                                float descent = outerBlockSize - lastBaseline;
+                                if (descent > rowMaxLastDescentStart[row])
+                                {
+                                    rowMaxLastDescentStart[row] = descent;
+                                }
                             }
-                            if (descent > rowMaxDescentStart[row])
+                            else
                             {
-                                rowMaxDescentStart[row] = descent;
+                                if (lastBaselineFromEnd > rowMaxLastBaselineEnd[row])
+                                {
+                                    rowMaxLastBaselineEnd[row] = lastBaselineFromEnd;
+                                }
+                                if (lastBaseline > rowMaxLastAscentEnd[row])
+                                {
+                                    rowMaxLastAscentEnd[row] = lastBaseline;
+                                }
                             }
                         }
                     }
 
                     for (int r = 0; r < finalRows; r++)
                     {
-                        float neededStart = rowMaxBaselineStart[r] + rowMaxDescentStart[r];
-                        float neededEnd = rowMaxBaselineEnd[r] + rowMaxAscentEnd[r];
-                        float needed = Math.Max(neededStart, neededEnd);
+                        float neededFirstStart = rowMaxBaselineStart[r] + rowMaxDescentStart[r];
+                        float neededFirstEnd = rowMaxBaselineEnd[r] + rowMaxAscentEnd[r];
+                        float neededLastEnd = rowMaxLastBaselineEnd[r] + rowMaxLastAscentEnd[r];
+                        float neededLastStart = rowMaxLastBaselineStart[r] + rowMaxLastDescentStart[r];
+                        float needed = Math.Max(
+                            Math.Max(neededFirstStart, neededFirstEnd),
+                            Math.Max(neededLastEnd, neededLastStart));
                         if (needed > rowHeights[r])
                         {
                             rowHeights[r] = needed;
@@ -2293,12 +2396,17 @@ namespace Rend.Layout.Internal
                 // join the end-anchored group: their yOffset is measured back from
                 // the row's block-end edge.
                 float yOffset;
-                bool useBaselineAlignment = alignBlock == CssAlignItems.Baseline
+                bool useFirstBaseline = alignBlock == CssAlignItems.Baseline
                     && rowMaxBaselineStart != null
                     && item.RowStart >= 0 && item.RowStart < finalRows
                     && item.RowSpan == 1
                     && ItemParticipatesInRowBaselineSharingGroup(item, writingMode);
-                if (useBaselineAlignment)
+                bool useLastBaseline = alignBlock == CssAlignItems.LastBaseline
+                    && rowMaxLastBaselineEnd != null
+                    && item.RowStart >= 0 && item.RowStart < finalRows
+                    && item.RowSpan == 1
+                    && ItemParticipatesInRowBaselineSharingGroup(item, writingMode);
+                if (useFirstBaseline)
                 {
                     float itemBaselineFromCell = ComputeItemFirstBaselineInBlockAxis(item, writingMode);
                     if (IsItemOppositeBlockDirection(item, writingMode))
@@ -2312,10 +2420,34 @@ namespace Rend.Layout.Internal
                         yOffset = rowMaxBaselineStart![item.RowStart] - itemBaselineFromCell;
                     }
                 }
+                else if (useLastBaseline)
+                {
+                    // [CSS-ALIGN-3 §9.3] Last-baseline items anchor their last
+                    // baselines at the row's block-end edge.
+                    float itemLastBaseline = ComputeItemLastBaselineInBlockAxis(item, writingMode);
+                    float lastBaselineFromEnd = outerHeight - itemLastBaseline;
+                    if (IsItemOppositeBlockDirection(item, writingMode))
+                    {
+                        yOffset = rowMaxLastBaselineStart![item.RowStart] - itemLastBaseline;
+                    }
+                    else
+                    {
+                        yOffset = spanHeight
+                            - rowMaxLastBaselineEnd![item.RowStart]
+                            - lastBaselineFromEnd;
+                    }
+                }
                 else
                 {
-                    CssAlignItems effectiveBlock = alignBlock == CssAlignItems.Baseline
-                        ? CssAlignItems.Start : alignBlock;
+                    CssAlignItems effectiveBlock = alignBlock;
+                    if (effectiveBlock == CssAlignItems.Baseline)
+                    {
+                        effectiveBlock = CssAlignItems.Start;
+                    }
+                    else if (effectiveBlock == CssAlignItems.LastBaseline)
+                    {
+                        effectiveBlock = CssAlignItems.End;
+                    }
                     yOffset = AlignOffset(effectiveBlock, spanHeight, outerHeight);
                 }
 
@@ -2353,6 +2485,20 @@ namespace Rend.Layout.Internal
                     else if (IsStretch(alignBlock) && outerHeight < spanHeight && heightIsAuto)
                     {
                         finalHeight = spanHeight - (outerHeight - finalHeight);
+                    }
+                }
+
+                // [CSS-GRID §6.5] When the track has an explicit minmax floor
+                // (e.g. minmax(0, auto)) and the content exceeds the track size,
+                // clamp the item's height to the track span so it doesn't overflow.
+                if (heightIsAuto && finalHeight > spanHeight
+                    && minmaxRowFloors != null && item.RowStart < minmaxRowFloors.Length
+                    && minmaxRowFloors[item.RowStart] >= 0)
+                {
+                    finalHeight = spanHeight - (outerHeight - finalHeight);
+                    if (finalHeight < 0)
+                    {
+                        finalHeight = 0;
                     }
                 }
 
@@ -2925,6 +3071,12 @@ namespace Rend.Layout.Internal
                 for (int i = 0; i < Math.Min(explicitTracks.Length, count); i++)
                 {
                     sizes[i] = explicitTracks[i];
+                    // [CSS-GRID §11.8] Explicit auto tracks (max-content sentinel -2)
+                    // participate in the stretch and maximize passes just like implicit auto.
+                    if (explicitTracks[i] >= -2.5f && explicitTracks[i] < -1.5f)
+                    {
+                        isImplicitAuto[i] = true;
+                    }
                 }
             }
 
@@ -3729,7 +3881,7 @@ namespace Rend.Layout.Internal
             if (val is CssKeywordValue kwVal)
             {
                 if (kwVal.Keyword == "auto")
-                    return (1, true); // [CSS-GRID §7.2.1] auto acts like minmax(auto, auto) ≈ 1fr
+                    return (-2, false); // [CSS-GRID §7.2.1] auto = minmax(auto, auto); max = max-content
                 if (kwVal.Keyword == "min-content")
                     return (-1, false); // sentinel: resolved by content measurement
                 if (kwVal.Keyword == "max-content")
@@ -3752,6 +3904,12 @@ namespace Rend.Layout.Internal
                     // clamped by the max. Use the max value as track size.
                     // Full iterative min-size-auto resolution not yet implemented.
                     if (minVal.isFr)
+                    {
+                        return (maxVal.value, false);
+                    }
+                    // [CSS-GRID §7.2.1] If max is intrinsic (auto/min-content/max-content),
+                    // preserve the sentinel so the intrinsic measurement pass can size it.
+                    if (maxVal.value < 0)
                     {
                         return (maxVal.value, false);
                     }
@@ -3839,6 +3997,62 @@ namespace Rend.Layout.Internal
                 }
             }
             return limits;
+        }
+
+        /// <summary>
+        /// Extracts explicit minimum values from minmax(Npx, auto/max-content/min-content)
+        /// track definitions. Returns a float array indexed by track position, with the
+        /// explicit min for minmax tracks with intrinsic max, and -1 for others.
+        /// Returns null if no such tracks exist.
+        /// </summary>
+        private static float[]? ExtractMinmaxFloors(
+            object? raw, int trackCount, float containerSize, float gap)
+        {
+            if (raw == null)
+            {
+                return null;
+            }
+
+            var flatValues = new List<object>();
+            if (raw is CssListValue list)
+            {
+                for (int i = 0; i < list.Values.Count; i++)
+                {
+                    FlattenTrackValue(list.Values[i], flatValues, containerSize, gap);
+                }
+            }
+            else
+            {
+                FlattenTrackValue(raw, flatValues, containerSize, gap);
+            }
+
+            float[]? floors = null;
+            for (int i = 0; i < Math.Min(flatValues.Count, trackCount); i++)
+            {
+                if (flatValues[i] is CssFunctionValue fn
+                    && fn.Name == "minmax" && fn.Arguments.Count >= 2)
+                {
+                    var maxVal = ParseTrackValue(fn.Arguments[fn.Arguments.Count - 1], containerSize);
+                    // [CSS-GRID §6.5] Only apply when max is intrinsic (auto/min-content/max-content)
+                    if (maxVal.value < 0 && !maxVal.isFr)
+                    {
+                        var minVal = ParseTrackValue(fn.Arguments[0], containerSize);
+                        if (minVal.value >= 0 && !minVal.isFr)
+                        {
+                            if (floors == null)
+                            {
+                                floors = new float[trackCount];
+                                for (int j = 0; j < trackCount; j++)
+                                {
+                                    floors[j] = -1f;
+                                }
+                            }
+                            floors[i] = minVal.value;
+                        }
+                    }
+                }
+            }
+            return floors;
         }
 
         /// <summary>
@@ -4190,6 +4404,80 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
+        /// [CSS-ALIGN-3 §9.1] Get the last baseline of a grid item from its last
+        /// in-flow line box. Falls back to the bottom edge of the item's content
+        /// area if no line boxes are found (synthesized baseline).
+        /// </summary>
+        private static float GetItemLastBaseline(LayoutBox box)
+        {
+            if (box.LineBoxes != null && box.LineBoxes.Count > 0)
+            {
+                var lastLine = box.LineBoxes[box.LineBoxes.Count - 1];
+                return lastLine.Baseline + (lastLine.Y - box.ContentRect.Y)
+                     + box.PaddingTop + box.BorderTopWidth;
+            }
+
+            for (int i = box.Children.Count - 1; i >= 0; i--)
+            {
+                var child = box.Children[i];
+                if (child.LineBoxes != null && child.LineBoxes.Count > 0)
+                {
+                    var lastLine = child.LineBoxes[child.LineBoxes.Count - 1];
+                    return lastLine.Baseline + (lastLine.Y - box.ContentRect.Y)
+                         + box.PaddingTop + box.BorderTopWidth;
+                }
+            }
+
+            return box.ContentRect.Height + box.PaddingTop + box.BorderTopWidth;
+        }
+
+        /// <summary>
+        /// [CSS-ALIGN-3 §9.1] Compute a grid item's last-baseline offset measured
+        /// from the block-start edge of its margin box, for participation in a
+        /// row-like (block-axis) last-baseline sharing group.
+        /// Mirrors ComputeItemFirstBaselineInBlockAxis but uses the last line box.
+        /// </summary>
+        private static float ComputeItemLastBaselineInBlockAxis(GridItem item, CssWritingMode writingMode)
+        {
+            bool gridIsVerticalWritingMode = writingMode == CssWritingMode.VerticalLr
+                || writingMode == CssWritingMode.VerticalRl;
+
+            if (IsItemOrthogonalToGrid(item, gridIsVerticalWritingMode))
+            {
+                // [CSS-ALIGN-3 §9.1] Orthogonal item: synthesize from block-end edge
+                return LogicalMarginBlockStart(item.Box, writingMode)
+                     + LogicalBorderBlockStart(item.Box, writingMode)
+                     + LogicalPaddingBlockStart(item.Box, writingMode)
+                     + item.ContentHeight
+                     + LogicalPaddingBlockEnd(item.Box, writingMode)
+                     + LogicalBorderBlockEnd(item.Box, writingMode);
+            }
+
+            if (!gridIsVerticalWritingMode)
+            {
+                return GetItemLastBaseline(item.Box) + item.Box.MarginTop;
+            }
+
+            float blockStartToContent = LogicalMarginBlockStart(item.Box, writingMode)
+                + LogicalBorderBlockStart(item.Box, writingMode)
+                + LogicalPaddingBlockStart(item.Box, writingMode);
+            var lastLine = FindLastHorizontalLineBox(item.Box);
+            if (lastLine != null && lastLine.Height > 0)
+            {
+                float rotatedBaselineDistance = lastLine.Height - lastLine.Baseline;
+                if (rotatedBaselineDistance < 0)
+                {
+                    rotatedBaselineDistance = 0;
+                }
+                return blockStartToContent + rotatedBaselineDistance;
+            }
+            return blockStartToContent
+                 + item.ContentHeight
+                 + LogicalPaddingBlockEnd(item.Box, writingMode)
+                 + LogicalBorderBlockEnd(item.Box, writingMode);
+        }
+
+        /// <summary>
         /// [CSS-ALIGN-3 §9.1] Compute a grid item's first-baseline offset measured
         /// from the inline-start edge (left in horizontal-tb) of its margin box,
         /// for participation in a column-like baseline sharing group.
@@ -4253,6 +4541,33 @@ namespace Rend.Layout.Internal
                 if (fromChild != null)
                 {
                     return fromChild;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Recursively walk a LayoutBox subtree and return the last horizontal
+        /// line box found. Used for last-baseline computation in vertical-WM grids.
+        /// </summary>
+        private static LineBox? FindLastHorizontalLineBox(LayoutBox box)
+        {
+            for (int i = box.Children.Count - 1; i >= 0; i--)
+            {
+                var fromChild = FindLastHorizontalLineBox(box.Children[i]);
+                if (fromChild != null)
+                {
+                    return fromChild;
+                }
+            }
+            if (box.LineBoxes != null)
+            {
+                for (int i = box.LineBoxes.Count - 1; i >= 0; i--)
+                {
+                    if (!box.LineBoxes[i].IsVertical)
+                    {
+                        return box.LineBoxes[i];
+                    }
                 }
             }
             return null;

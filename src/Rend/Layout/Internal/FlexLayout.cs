@@ -1615,17 +1615,27 @@ namespace Rend.Layout.Internal
                     // Column: main=height, cross=width. If width is definite, height = width / ratio.
                     float crossWidth = DimensionResolver.ResolveWidth(style, containerWidth, box);
 
-                    // [CSS-FLEXBOX §9.2 step E] When cross-axis (width) is auto with
-                    // aspect-ratio, measure max-content width from content.
-                    if (float.IsNaN(crossWidth) && element != null)
+                    // [CSS-FLEXBOX §9.2 step E] When cross-axis (width) is auto and
+                    // the item won't be stretched, ResolveWidth returns the fill-available
+                    // width which is wrong for non-stretch items. Measure max-content
+                    // width instead per CSS Sizing 4 §5.1.
+                    if (float.IsNaN(style.Width) && element != null)
                     {
-                        crossWidth = BlockFormattingContext.MeasureIntrinsicWidth(
-                            element, SizingKeyword.MaxContent, containerWidth, context);
+                        var alignSelf = style.AlignSelf;
+                        var effectiveAlign = (int)alignSelf == 255 ? parentAlignItems : alignSelf;
+                        bool willStretch = effectiveAlign == CssAlignItems.Stretch
+                            && !float.IsNaN(style.MarginLeft) && !float.IsNaN(style.MarginRight);
+                        if (!willStretch)
+                        {
+                            crossWidth = BlockFormattingContext.MeasureIntrinsicWidth(
+                                element, SizingKeyword.MaxContent, containerWidth, context);
+                        }
                     }
 
                     // [CSS-SIZING-4 §5.1] Clamp the cross size contribution by the item's
                     // min/max cross constraints before transferring through the aspect ratio.
-                    if (!float.IsNaN(crossWidth) && crossWidth > 0)
+                    // Use >= 0 (not > 0) so min-width can elevate a zero max-content measurement.
+                    if (!float.IsNaN(crossWidth) && crossWidth >= 0)
                     {
                         float crossMaxW = style.MaxWidth;
                         float crossMinW = style.MinWidth;
@@ -1708,7 +1718,8 @@ namespace Rend.Layout.Internal
                     // height: 200px) and then transferring yields a main size wider than
                     // the transferred max-height allows. Chrome's FlexItem::FlexBaseSize
                     // applies constraints before ratio transfer.
-                    if (!float.IsNaN(crossHeight) && crossHeight > 0)
+                    // Use >= 0 (not > 0) so min-height can elevate a zero measurement.
+                    if (!float.IsNaN(crossHeight) && crossHeight >= 0)
                     {
                         float crossMaxH = style.MaxHeight;
                         float crossMinH = style.MinHeight;

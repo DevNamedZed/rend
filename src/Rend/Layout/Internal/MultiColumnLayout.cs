@@ -557,6 +557,18 @@ namespace Rend.Layout.Internal
             float availableWidth = box.ContentRect.Width;
             float prevMarginBottom = 0;
 
+            // [CSS-MULTICOL §7.1] The multicol container's definite height is the
+            // containing block height for percentage resolution of all direct children
+            // (both column content and spanners).
+            float containerHeight = box.ContentRect.Height;
+            if (float.IsNaN(containerHeight) || containerHeight <= 0)
+            {
+                var parentStyle = (box.StyledNode as StyledElement)?.Style;
+                if (parentStyle != null && !float.IsNaN(parentStyle.Height) && parentStyle.Height > 0)
+                {
+                    containerHeight = parentStyle.Height;
+                }
+            }
             var currentSegment = new List<StyledNode>();
 
             for (int i = 0; i < segmentList.Count; i++)
@@ -577,10 +589,19 @@ namespace Rend.Layout.Internal
                     // Layout the accumulated segment as multi-column
                     if (currentSegment.Count > 0)
                     {
+                        // [CSS-MULTICOL §7.1] Constrain segment column height to remaining
+                        // available space in a fixed-height multicol container.
+                        float remainingHeight = float.NaN;
+                        if (!float.IsNaN(containerHeight) && containerHeight > 0)
+                        {
+                            remainingHeight = containerHeight - (cursorY - box.ContentRect.Y);
+                            if (remainingHeight < 0) { remainingHeight = 0; }
+                        }
+
                         float segTrailingMargin;
                         cursorY = LayoutSegmentAsColumns(box, currentSegment, context,
                             columnCount, columnWidth, columnGap, startX, cursorY, out segTrailingMargin,
-                            isNestedInMulticol);
+                            isNestedInMulticol, remainingHeight);
                         prevMarginBottom = segTrailingMargin;
                         currentSegment.Clear();
                     }
@@ -605,7 +626,7 @@ namespace Rend.Layout.Internal
                             InlineFormattingContext.Layout(spanBox, context);
                     }
 
-                    float spanHeight = DimensionResolver.ResolveHeight(spanEl.Style, float.NaN, spanBox);
+                    float spanHeight = DimensionResolver.ResolveHeight(spanEl.Style, containerHeight, spanBox);
                     if (float.IsNaN(spanHeight))
                     {
                         spanHeight = CalculateContentHeight(spanBox);
@@ -626,10 +647,17 @@ namespace Rend.Layout.Internal
             if (currentSegment.Count > 0)
             {
                 cursorY += prevMarginBottom;
+                float remainingHeight = float.NaN;
+                if (!float.IsNaN(containerHeight) && containerHeight > 0)
+                {
+                    remainingHeight = containerHeight - (cursorY - box.ContentRect.Y);
+                    if (remainingHeight < 0) { remainingHeight = 0; }
+                }
+
                 float trailingMargin;
                 cursorY = LayoutSegmentAsColumns(box, currentSegment, context,
                     columnCount, columnWidth, columnGap, startX, cursorY, out trailingMargin,
-                    isNestedInMulticol);
+                    isNestedInMulticol, remainingHeight);
             }
 
             box.ContentRect = new RectF(
@@ -646,7 +674,8 @@ namespace Rend.Layout.Internal
         /// </summary>
         private static float LayoutSegmentAsColumns(LayoutBox parent, List<StyledNode> children,
             LayoutContext context, int columnCount, float columnWidth, float columnGap,
-            float startX, float startY, out float trailingMargin, bool isNestedInMulticol)
+            float startX, float startY, out float trailingMargin, bool isNestedInMulticol,
+            float maxColumnHeight = float.NaN)
         {
             trailingMargin = 0;
             // Create a wrapper element with ONLY the segment children for BFC layout.
@@ -677,6 +706,14 @@ namespace Rend.Layout.Internal
             if (targetHeight < 1)
             {
                 targetHeight = totalHeight;
+            }
+
+            // [CSS-MULTICOL §7.1] In a fixed-height multicol with spanners, constrain
+            // the column height to the remaining available space. Overflow content
+            // spills into additional (virtual) columns.
+            if (!float.IsNaN(maxColumnHeight) && maxColumnHeight >= 0 && targetHeight > maxColumnHeight)
+            {
+                targetHeight = Math.Max(1, maxColumnHeight);
             }
 
             // Sequential content-aware fragmentation with line-level splitting
@@ -753,7 +790,7 @@ namespace Rend.Layout.Internal
 
                     if (segColHasContent && heightInCol > targetHeight && curCol < columnCount - 1)
                     {
-                        // Try splitting at line boundary for balanced columns
+                        // [CSS-BREAK-3 §5.1] Try line-level splitting
                         if (child.LineBoxes != null && child.LineBoxes.Count > 1)
                         {
                             float contentStartY = child.ContentRect.Y;
@@ -789,9 +826,32 @@ namespace Rend.Layout.Internal
                                 }
                             }
                         }
+
                         curCol++;
                         segColStartY = child.BorderRect.Y;
                         segColHasContent = false;
+                    }
+                    // [CSS-BREAK-3 §5.4] Non-monolithic block that overflows
+                    // the column as the first (and only) child — split it
+                    // atomically so the binary-search balanced height works.
+                    // Only for blocks that can't be line-split (fixed-height
+                    // blocks with 0-1 line boxes). Blocks with multiple lines
+                    // are left unsplit in the first column (matching Chrome).
+                    else if (!segColHasContent && heightInCol > targetHeight
+                        && curCol < columnCount - 1 && !IsMonolithic(child)
+                        && (child.LineBoxes == null || child.LineBoxes.Count <= 1))
+                    {
+                        float splitY = segColStartY + targetHeight;
+                        BoxSplit blockSplit = SplitAtomicBoxAtY(child, splitY);
+                        if (blockSplit.IsValid)
+                        {
+                            segColChildren[curCol].Add(blockSplit.First!);
+                            curCol++;
+                            segColStartY = splitY;
+                            segColHasContent = true;
+                            segColChildren[curCol].Add(blockSplit.Second!);
+                            continue;
+                        }
                     }
                     segColChildren[curCol].Add(child);
                     segColHasContent = true;
@@ -909,13 +969,15 @@ namespace Rend.Layout.Internal
             float minHeight = 0;
             foreach (var group in groups)
             {
-                bool splittable = group.Children.Count == 1
+                bool lineSplittable = group.Children.Count == 1
                     && !HasBreakInsideAvoid(group.Children[0])
                     && group.Children[0].LineBoxes != null
                     && group.Children[0].LineBoxes!.Count > 1;
 
-                if (splittable)
+                if (lineSplittable)
                 {
+                    // [CSS-BREAK-3 §5.1] Block with multiple lines: minimum is
+                    // the tallest single line plus top box-model overhead.
                     var child = group.Children[0];
                     float topOverhead = child.PaddingTop + child.BorderTopWidth + child.MarginTop;
                     foreach (var line in child.LineBoxes!)
@@ -926,6 +988,23 @@ namespace Rend.Layout.Internal
                             minHeight = lineHeight;
                         }
                         topOverhead = 0;
+                    }
+                }
+                else if (group.Children.Count == 1 && !IsMonolithic(group.Children[0]))
+                {
+                    // [CSS-BREAK-3 §5.4] Non-monolithic block that can be
+                    // fragmented at the column boundary. Minimum is just the
+                    // box-model overhead — the content itself can be split.
+                    var child = group.Children[0];
+                    float overhead = child.PaddingTop + child.BorderTopWidth + child.MarginTop
+                                   + child.PaddingBottom + child.BorderBottomWidth + child.MarginBottom;
+                    if (overhead < 1)
+                    {
+                        overhead = 1;
+                    }
+                    if (overhead > minHeight)
+                    {
+                        minHeight = overhead;
                     }
                 }
                 else
@@ -996,6 +1075,7 @@ namespace Rend.Layout.Internal
                         && firstChild.LineBoxes != null
                         && firstChild.LineBoxes.Count > 1)
                     {
+                        // [CSS-BREAK-3 §5.1] Try line-level splitting
                         float contentStartY = firstChild.ContentRect.Y;
                         float availableForLines = colStartY + columnHeight - contentStartY;
                         if (availableForLines > 0)
@@ -1021,7 +1101,6 @@ namespace Rend.Layout.Internal
                                 {
                                     return false;
                                 }
-
                                 colStartY = firstChild.LineBoxes[splitAfter + 1].Y;
                                 colHasContent = true;
                                 continue;
@@ -1036,6 +1115,30 @@ namespace Rend.Layout.Internal
                     }
                     colStartY = firstChild.BorderRect.Y;
                     colHasContent = false;
+                }
+                // [CSS-BREAK-3 §5.4] Non-monolithic blocks that overflow
+                // the column height and aren't line-splittable can be
+                // fragmented at the column boundary.
+                else if (!colHasContent && heightInCol > columnHeight
+                    && group.Children.Count == 1
+                    && !IsMonolithic(firstChild)
+                    && (firstChild.LineBoxes == null || firstChild.LineBoxes.Count <= 1))
+                {
+                    float remaining = heightInCol;
+                    float splitPoint = colStartY + columnHeight;
+                    while (remaining > columnHeight)
+                    {
+                        col++;
+                        if (col >= columnCount)
+                        {
+                            return false;
+                        }
+                        colStartY = splitPoint;
+                        remaining -= columnHeight;
+                        splitPoint += columnHeight;
+                    }
+                    colHasContent = true;
+                    continue;
                 }
 
                 colHasContent = true;
