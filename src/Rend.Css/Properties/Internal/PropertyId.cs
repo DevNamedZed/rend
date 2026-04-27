@@ -401,7 +401,10 @@ namespace Rend.Css.Properties.Internal
         public const int Scale = 222;
         public const int TransformBox = 223;
 
+        // Overflow Clip Margin
+        public const int OverflowClipMargin = 224;
+
         // Total count
-        public const int Count = 224;
+        public const int Count = 225;
     }
 }

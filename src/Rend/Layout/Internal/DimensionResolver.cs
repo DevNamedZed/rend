@@ -42,9 +42,9 @@ namespace Rend.Layout.Internal
             {
                 // [CSS-SIZING-4 §5.1] If width is auto and element has aspect-ratio
                 // with a definite height, compute width from the ratio.
-                // - content-box (default): width = contentHeight * ratio
-                // - border-box: widthBorderBox = heightBorderBox * ratio,
-                //   then subtract horizontal padding+border for content width
+                // Ratio applies to the box determined by box-sizing: border-box
+                // maps borderBoxWidth = borderBoxHeight * ratio, then subtract
+                // horizontal padding+border for content width.
                 float ratio = ParseAspectRatio(style);
                 float specHeight = style.Height;
                 if (ratio > 0 && !float.IsNaN(specHeight) && specHeight > 0
@@ -64,20 +64,19 @@ namespace Rend.Layout.Internal
                         specHeight = clampMinH;
                     }
 
+                    // [CSS-SIZING-4 §5.1] Ratio maps between the box determined by
+                    // box-sizing. For border-box, specHeight IS the border-box height,
+                    // so apply ratio to get border-box width, then subtract horizontal
+                    // padding+border for content width.
+                    width = specHeight * ratio;
                     if (style.BoxSizing == CssBoxSizing.BorderBox)
                     {
-                        float widthBorderBox = specHeight * ratio;
-                        width = widthBorderBox
-                              - box.PaddingLeft - box.PaddingRight
-                              - box.BorderLeftWidth - box.BorderRightWidth;
+                        width -= (box.PaddingLeft + box.PaddingRight
+                                + box.BorderLeftWidth + box.BorderRightWidth);
                         if (width < 0)
                         {
                             width = 0;
                         }
-                    }
-                    else
-                    {
-                        width = specHeight * ratio;
                     }
                 }
                 else
@@ -214,30 +213,35 @@ namespace Rend.Layout.Internal
 
             if (float.IsNaN(specifiedHeight))
             {
-                // Check for aspect-ratio: if set and width is known, compute height from ratio.
-                // [CSS-SIZING-4 §5.1] Ratio applies to border-box when box-sizing: border-box.
+                // [CSS-SIZING-4 §5.1] Aspect-ratio applies to the box as determined
+                // by box-sizing. For border-box, ratio maps border-box width → height,
+                // then subtract padding/border for content height.
                 float ratio = ParseAspectRatio(style);
                 if (ratio > 0 && box.ContentRect.Width > 0)
                 {
-                    float arHeight;
+                    float verticalExtra = 0;
+                    float ratioWidth = box.ContentRect.Width;
                     if (style.BoxSizing == CssBoxSizing.BorderBox)
                     {
-                        float borderBoxWidth = box.ContentRect.Width
-                            + box.PaddingLeft + box.PaddingRight
-                            + box.BorderLeftWidth + box.BorderRightWidth;
-                        float borderBoxHeight = borderBoxWidth / ratio;
-                        arHeight = borderBoxHeight
-                            - box.PaddingTop - box.PaddingBottom
-                            - box.BorderTopWidth - box.BorderBottomWidth;
-                        if (arHeight < 0) { arHeight = 0; }
+                        float horizontalExtra = box.PaddingLeft + box.PaddingRight
+                                              + box.BorderLeftWidth + box.BorderRightWidth;
+                        verticalExtra = box.PaddingTop + box.PaddingBottom
+                                      + box.BorderTopWidth + box.BorderBottomWidth;
+                        ratioWidth += horizontalExtra;
                     }
-                    else
+
+                    float arHeight = ratioWidth / ratio;
+
+                    float arMinH = ResolveMinMaxH(style.MinHeight, containingBlockHeight);
+                    float arMaxH = ResolveMinMaxH(style.MaxHeight, containingBlockHeight);
+                    arHeight = ApplyMinMax(arHeight, arMinH, arMaxH);
+
+                    // Convert from border-box height to content-box height
+                    if (verticalExtra > 0)
                     {
-                        arHeight = box.ContentRect.Width / ratio;
+                        arHeight -= verticalExtra;
                     }
-                    arHeight = ApplyMinMax(arHeight,
-                        ResolveMinMaxH(style.MinHeight, containingBlockHeight),
-                        ResolveMinMaxH(style.MaxHeight, containingBlockHeight));
+
                     return Math.Max(0, arHeight);
                 }
                 return float.NaN; // auto: determined by content

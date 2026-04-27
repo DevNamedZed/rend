@@ -274,6 +274,13 @@ namespace Rend.Rendering
         /// <param name="target">The render target to draw on.</param>
         public void PaintBox(LayoutBox box, IRenderTarget target)
         {
+            // [CSS2 §E.2] Skip boxes promoted to a higher paint level.
+            // They will be painted by the promoting parent at the correct z-order.
+            if (PaintOrderSorter.IsPromoted(box))
+            {
+                return;
+            }
+
             // Skip boxes with display:none (truly hidden, including all descendants).
             if (ShouldSkipEntirely(box))
             {

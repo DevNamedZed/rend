@@ -125,10 +125,9 @@ namespace Rend.Text.Internal
                     continue;
                 }
 
-                // Rule: Do not break before or after non-breaking space (GL class).
-                if (current == '\u00A0' || next == '\u00A0' ||
-                    current == '\u2007' || next == '\u2007' ||
-                    current == '\u202F' || next == '\u202F')
+                // [UAX #14 §LB12] Do not break before or after GL (Glue) class characters.
+                if (LineBreakClassifier.GetClass(current) == LineBreakClass.GL ||
+                    LineBreakClassifier.GetClass(next) == LineBreakClass.GL)
                 {
                     result[i] = LineBreakOpportunity.Forbidden;
                     continue;

@@ -878,6 +878,10 @@ namespace Rend.Layout.Internal
             // These override min-content flooring in the Maximize Tracks pass.
             float[]? minmaxColFloors = ExtractMinmaxFloors(colRaw, finalCols, containerWidth, colGap);
 
+            // [CSS-GRID §6.5] Extract max caps for minmax(auto/intrinsic, fixedN) tracks.
+            // The content measurement pass clamps the measured size to this cap.
+            float[]? minmaxColMaxCaps = ExtractMinmaxMaxCaps(colRaw, finalCols, containerWidth, colGap);
+
             // Resolve intrinsic (min-content / max-content / fit-content) column tracks by measuring items.
             // Sentinel values: -1 = min-content, -2 = max-content, -3 = fit-content.
             bool hasIntrinsicCols = false;
@@ -1008,6 +1012,12 @@ namespace Rend.Layout.Internal
                             measured = Math.Max(minContentWidths[c],
                                 Math.Min(measured, fitContentColLimits[c]));
                         }
+                        // [CSS-GRID §6.5] minmax(auto, fixedN): clamp content to max cap.
+                        if (minmaxColMaxCaps != null && c < minmaxColMaxCaps.Length
+                            && minmaxColMaxCaps[c] >= 0)
+                        {
+                            measured = Math.Min(measured, minmaxColMaxCaps[c]);
+                        }
                         colWidths[c] = measured;
                     }
                 }
@@ -1129,6 +1139,13 @@ namespace Rend.Layout.Internal
                                 float room = maxSize - colWidths[c];
                                 if (room < growth) { growth = Math.Max(0, room); }
                             }
+                            // [CSS-GRID §6.5] Respect max cap from minmax(auto, fixedN)
+                            if (minmaxColMaxCaps != null && c < minmaxColMaxCaps.Length
+                                && minmaxColMaxCaps[c] >= 0)
+                            {
+                                float capRoom = minmaxColMaxCaps[c] - colWidths[c];
+                                if (capRoom < growth) { growth = Math.Max(0, capRoom); }
+                            }
                             colWidths[c] += growth;
                         }
                     }
@@ -1232,6 +1249,10 @@ namespace Rend.Layout.Internal
                     }
                 }
             }
+
+            // [CSS-GRID §6.5] Extract max caps for minmax(auto, fixedN) row tracks early,
+            // needed during per-item content height clamping below.
+            float[]? minmaxRowMaxCaps = ExtractMinmaxMaxCaps(rowRaw, finalRows, containerHeight, rowGap);
 
             // First pass: layout each item to determine content size and row heights
             for (int i = 0; i < items.Count; i++)
@@ -1452,15 +1473,36 @@ namespace Rend.Layout.Internal
                         // [CSS-GRID §6.5] Automatic minimum size clamping: when the item
                         // has min-height:auto and the track has a definite max sizing
                         // function (fixed track), clamp the auto height to the track size.
-                        if (float.IsNaN(item.StyledElement.Style.MinHeight) && explicitRowTracks != null
+                        if (float.IsNaN(item.StyledElement.Style.MinHeight)
                             && item.StyledElement.Style.OverflowY == CssOverflow.Visible)
                         {
                             float trackMaxH = 0;
-                            for (int r = item.RowStart; r < item.RowStart + item.RowSpan && r < explicitRowTracks.Length; r++)
+                            bool hasDefiniteMax = false;
+                            if (explicitRowTracks != null)
                             {
-                                trackMaxH += explicitRowTracks[r];
+                                for (int r = item.RowStart; r < item.RowStart + item.RowSpan && r < explicitRowTracks.Length; r++)
+                                {
+                                    if (explicitRowTracks[r] > 0)
+                                    {
+                                        trackMaxH += explicitRowTracks[r];
+                                        hasDefiniteMax = true;
+                                    }
+                                }
                             }
-                            if (trackMaxH > 0 && contentHeight > trackMaxH)
+                            // [CSS-GRID §6.5] For minmax(auto, fixedN) tracks, the sentinel
+                            // is in explicitRowTracks but the fixed max is in maxCaps.
+                            if (!hasDefiniteMax && minmaxRowMaxCaps != null)
+                            {
+                                for (int r = item.RowStart; r < item.RowStart + item.RowSpan && r < minmaxRowMaxCaps.Length; r++)
+                                {
+                                    if (minmaxRowMaxCaps[r] >= 0)
+                                    {
+                                        trackMaxH += minmaxRowMaxCaps[r];
+                                        hasDefiniteMax = true;
+                                    }
+                                }
+                            }
+                            if (hasDefiniteMax && contentHeight > trackMaxH)
                             {
                                 contentHeight = trackMaxH;
                             }
@@ -1708,6 +1750,19 @@ namespace Rend.Layout.Internal
                     float autoMin = autoMinRowHeights[r];
                     float capped = Math.Min(rowHeights[r], fitContentRowLimits[r]);
                     rowHeights[r] = Math.Max(autoMin, capped);
+                }
+            }
+
+            // [CSS-GRID §6.5] Apply max caps for minmax(auto, fixedN) row tracks.
+            if (minmaxRowMaxCaps != null)
+            {
+                for (int r = 0; r < finalRows; r++)
+                {
+                    if (r < minmaxRowMaxCaps.Length && minmaxRowMaxCaps[r] >= 0
+                        && rowHeights[r] > minmaxRowMaxCaps[r])
+                    {
+                        rowHeights[r] = minmaxRowMaxCaps[r];
+                    }
                 }
             }
 
@@ -3900,9 +3955,6 @@ namespace Rend.Layout.Internal
                         return maxVal;
                     }
                     var minVal = ParseTrackValue(fn.Arguments[0], containerSize);
-                    // [CSS-GRID §7.2.4] minmax(auto, fixed): auto min = min-content,
-                    // clamped by the max. Use the max value as track size.
-                    // Full iterative min-size-auto resolution not yet implemented.
                     if (minVal.isFr)
                     {
                         return (maxVal.value, false);
@@ -3912,6 +3964,14 @@ namespace Rend.Layout.Internal
                     if (maxVal.value < 0)
                     {
                         return (maxVal.value, false);
+                    }
+                    // [CSS-GRID §6.5] minmax(auto/min-content/max-content, fixed): the min
+                    // is intrinsic so the content measurement pass must run. Return the
+                    // min-content sentinel; ExtractMinmaxMaxCaps stores the fixed max so
+                    // the measured result is clamped to min(content, maxCap).
+                    if (minVal.value < 0 && maxVal.value >= 0)
+                    {
+                        return (-1, false);
                     }
                     // Both fixed: use max as the track size,
                     // but clamp to container when the container has a definite size
@@ -4053,6 +4113,60 @@ namespace Rend.Layout.Internal
                 }
             }
             return floors;
+        }
+
+        /// <summary>
+        /// [CSS-GRID §6.5] Extracts max cap values from minmax(auto/intrinsic, fixedN) tracks.
+        /// Returns a float array indexed by track position, with the fixed max for tracks
+        /// where min is intrinsic and max is definite, and -1 for others.
+        /// Returns null if no such tracks exist.
+        /// </summary>
+        private static float[]? ExtractMinmaxMaxCaps(
+            object? raw, int trackCount, float containerSize, float gap)
+        {
+            if (raw == null)
+            {
+                return null;
+            }
+
+            var flatValues = new List<object>();
+            if (raw is CssListValue list)
+            {
+                for (int i = 0; i < list.Values.Count; i++)
+                {
+                    FlattenTrackValue(list.Values[i], flatValues, containerSize, gap);
+                }
+            }
+            else
+            {
+                FlattenTrackValue(raw, flatValues, containerSize, gap);
+            }
+
+            float[]? caps = null;
+            for (int i = 0; i < Math.Min(flatValues.Count, trackCount); i++)
+            {
+                if (flatValues[i] is CssFunctionValue fn
+                    && fn.Name == "minmax" && fn.Arguments.Count >= 2)
+                {
+                    var minVal = ParseTrackValue(fn.Arguments[0], containerSize);
+                    var maxVal = ParseTrackValue(fn.Arguments[fn.Arguments.Count - 1], containerSize);
+                    // [CSS-GRID §6.5] When min is intrinsic and max is a definite fixed value,
+                    // store the max as a cap for the content measurement pass.
+                    if (minVal.value < 0 && !minVal.isFr && maxVal.value >= 0 && !maxVal.isFr)
+                    {
+                        if (caps == null)
+                        {
+                            caps = new float[trackCount];
+                            for (int j = 0; j < trackCount; j++)
+                            {
+                                caps[j] = -1f;
+                            }
+                        }
+                        caps[i] = maxVal.value;
+                    }
+                }
+            }
+            return caps;
         }
 
         /// <summary>
@@ -5457,6 +5571,14 @@ namespace Rend.Layout.Internal
             // [CSS-GRID §7.2.4.1] Extract fit-content limits
             float[]? fitContentLimits = ExtractFitContentLimits(colRaw, finalCols, containingWidth, colGap);
 
+            // [CSS-GRID §6.5] Extract max caps for minmax(auto, fixedN) intrinsic tracks
+            float[]? intrinsicMaxCaps = ExtractMinmaxMaxCaps(colRaw, finalCols, containingWidth, colGap);
+
+            // [CSS-SIZING-4 §5.1] Resolve row track heights so that items with
+            // aspect-ratio + percentage/auto height can derive their width contribution.
+            var rowRawForHeight = style.GetRefValue(PropertyId.GridTemplateRows);
+            float[]? rowTrackHeights = ResolveTrackList(rowRawForHeight, 0);
+
             // Measure intrinsic column widths from items
             bool isMinContent = keyword == SizingKeyword.MinContent;
             var measuredWidths = new float[finalCols];
@@ -5482,7 +5604,41 @@ namespace Rend.Layout.Internal
                     continue;
                 }
 
-                float itemOuterWidth = MeasureGridItemOuterWidth(item, isMinContent, containingWidth, context);
+                // Compute the definite row height for this item (if available)
+                float itemRowHeight = float.NaN;
+                if (rowTrackHeights != null && item.RowStart >= 0)
+                {
+                    float totalRowHeight = 0;
+                    float rowGapVal = style.RowGap;
+                    if (float.IsNaN(rowGapVal) || rowGapVal < 0 || DeferredPercent.IsEncoded(rowGapVal))
+                    {
+                        rowGapVal = 0;
+                    }
+                    bool allDefinite = true;
+                    for (int r = item.RowStart; r < item.RowStart + item.RowSpan; r++)
+                    {
+                        if (r < rowTrackHeights.Length && rowTrackHeights[r] > 0)
+                        {
+                            totalRowHeight += rowTrackHeights[r];
+                            if (r > item.RowStart)
+                            {
+                                totalRowHeight += rowGapVal;
+                            }
+                        }
+                        else
+                        {
+                            allDefinite = false;
+                            break;
+                        }
+                    }
+                    if (allDefinite)
+                    {
+                        itemRowHeight = totalRowHeight;
+                    }
+                }
+
+                float itemOuterWidth = MeasureGridItemOuterWidth(
+                    item, isMinContent, containingWidth, context, itemRowHeight);
                 if (itemOuterWidth > measuredWidths[item.ColStart])
                 {
                     measuredWidths[item.ColStart] = itemOuterWidth;
@@ -5493,7 +5649,8 @@ namespace Rend.Layout.Internal
                                  && columnWidths[item.ColStart] > -3.5f;
                 if (isFitContent && !isMinContent)
                 {
-                    float minWidth = MeasureGridItemOuterWidth(item, true, containingWidth, context);
+                    float minWidth = MeasureGridItemOuterWidth(
+                        item, true, containingWidth, context, itemRowHeight);
                     if (minWidth > minContentWidths[item.ColStart])
                     {
                         minContentWidths[item.ColStart] = minWidth;
@@ -5522,6 +5679,12 @@ namespace Rend.Layout.Internal
                 {
                     measured = Math.Max(minContentWidths[c],
                         Math.Min(measured, fitContentLimits[c]));
+                }
+                // [CSS-GRID §6.5] minmax(auto, fixedN): clamp content to max cap.
+                if (intrinsicMaxCaps != null && c < intrinsicMaxCaps.Length
+                    && intrinsicMaxCaps[c] >= 0)
+                {
+                    measured = Math.Min(measured, intrinsicMaxCaps[c]);
                 }
                 columnWidths[c] = measured;
             }
@@ -5677,6 +5840,7 @@ namespace Rend.Layout.Internal
             }
 
             float[]? fitContentLimits = ExtractFitContentLimits(rowRaw, maxRow, containingWidth, rowGap);
+            float[]? rowMaxCaps = ExtractMinmaxMaxCaps(rowRaw, maxRow, containingWidth, rowGap);
 
             bool isMinContent = keyword == SizingKeyword.MinContent;
             var measuredWidths = new float[maxRow];
@@ -5735,6 +5899,12 @@ namespace Rend.Layout.Internal
                     measured = Math.Max(minContentWidths[r],
                         Math.Min(measured, fitContentLimits[r]));
                 }
+                // [CSS-GRID §6.5] minmax(auto, fixedN): clamp content to max cap.
+                if (rowMaxCaps != null && r < rowMaxCaps.Length
+                    && rowMaxCaps[r] >= 0)
+                {
+                    measured = Math.Min(measured, rowMaxCaps[r]);
+                }
                 rowWidths[r] = measured;
             }
 
@@ -5777,7 +5947,8 @@ namespace Rend.Layout.Internal
         /// for intrinsic sizing purposes.
         /// </summary>
         private static float MeasureGridItemOuterWidth(
-            GridItem item, bool isMinContent, float containingWidth, LayoutContext context)
+            GridItem item, bool isMinContent, float containingWidth, LayoutContext context,
+            float definiteRowHeight = float.NaN)
         {
             if (item.StyledElement == null)
             {
@@ -5804,6 +5975,97 @@ namespace Rend.Layout.Internal
                     outerWidth = childWidth + tempBox.MarginLeft + tempBox.MarginRight;
                 }
                 return outerWidth;
+            }
+
+            // [CSS-SIZING-4 §5.1] If the item has aspect-ratio and its height is
+            // definite (from the grid row track), derive width = height * ratio.
+            // This handles items like `aspect-ratio: 1/1; height: 100%` inside
+            // inline-grid with explicit row tracks.
+            float aspectRatio = DimensionResolver.GetAspectRatio(childStyle);
+            if (aspectRatio > 0 && !float.IsNaN(definiteRowHeight) && definiteRowHeight > 0)
+            {
+                float resolvedHeight = float.NaN;
+                float cssHeight = childStyle.Height;
+
+                if (DeferredPercent.IsEncoded(cssHeight))
+                {
+                    // Percentage height resolves against the definite row track
+                    resolvedHeight = DeferredPercent.Resolve(cssHeight, definiteRowHeight);
+                }
+                else if (float.IsNaN(cssHeight))
+                {
+                    // Auto height with aspect-ratio: the item stretches to fill the row
+                    resolvedHeight = definiteRowHeight;
+                }
+                else if (cssHeight > 0)
+                {
+                    // Explicit height
+                    resolvedHeight = cssHeight;
+                }
+
+                if (!float.IsNaN(resolvedHeight) && resolvedHeight > 0)
+                {
+                    var arBox = new LayoutBox(item.StyledElement, BoxType.Block);
+                    BoxModelCalculator.ApplyBoxModel(arBox, childStyle, containingWidth);
+
+                    if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
+                    {
+                        // Height includes padding+border; extract content height
+                        float verticalExtra = arBox.PaddingTop + arBox.PaddingBottom
+                                            + arBox.BorderTopWidth + arBox.BorderBottomWidth;
+                        resolvedHeight = Math.Max(0, resolvedHeight - verticalExtra);
+                    }
+
+                    float derivedContentWidth = resolvedHeight * aspectRatio;
+                    float outerDerived = derivedContentWidth + arBox.PaddingLeft + arBox.PaddingRight
+                                       + arBox.BorderLeftWidth + arBox.BorderRightWidth
+                                       + arBox.MarginLeft + arBox.MarginRight;
+                    return outerDerived;
+                }
+            }
+
+            // Also check for replaced elements (SVG, canvas, img) with intrinsic
+            // aspect ratio — their viewBox/intrinsic dimensions define aspect ratio
+            // even without explicit CSS aspect-ratio property.
+            if (aspectRatio <= 0 && ReplacedElementLayout.IsReplaced(item.StyledElement)
+                && !float.IsNaN(definiteRowHeight) && definiteRowHeight > 0)
+            {
+                float cssHeight = childStyle.Height;
+                bool hasPercentHeight = DeferredPercent.IsEncoded(cssHeight);
+                bool hasAutoHeight = float.IsNaN(cssHeight);
+
+                if (hasPercentHeight || hasAutoHeight)
+                {
+                    float resolvedHeight = hasPercentHeight
+                        ? DeferredPercent.Resolve(cssHeight, definiteRowHeight)
+                        : definiteRowHeight;
+
+                    if (resolvedHeight > 0)
+                    {
+                        var replBox = new LayoutBox(item.StyledElement, BoxType.Block);
+                        BoxModelCalculator.ApplyBoxModel(replBox, childStyle, containingWidth);
+                        float contentH = resolvedHeight;
+                        if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            contentH = Math.Max(0, resolvedHeight
+                                - replBox.PaddingTop - replBox.PaddingBottom
+                                - replBox.BorderTopWidth - replBox.BorderBottomWidth);
+                        }
+
+                        // Get intrinsic ratio from the replaced element
+                        float intrinsicRatio = ReplacedElementLayout.GetIntrinsicRatio(
+                            item.StyledElement);
+                        if (intrinsicRatio > 0)
+                        {
+                            float derivedContentWidth = contentH * intrinsicRatio;
+                            float outerDerived = derivedContentWidth
+                                + replBox.PaddingLeft + replBox.PaddingRight
+                                + replBox.BorderLeftWidth + replBox.BorderRightWidth
+                                + replBox.MarginLeft + replBox.MarginRight;
+                            return outerDerived;
+                        }
+                    }
+                }
             }
 
             // Use BFC's MeasureIntrinsicWidth for content measurement

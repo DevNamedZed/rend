@@ -637,7 +637,8 @@ namespace Rend.Layout.Internal
         /// Resolve the content dimensions for a replaced element.
         /// </summary>
         public static void ResolveDimensions(LayoutBox box, ComputedStyle style,
-                                              float containingWidth, float intrinsicWidth, float intrinsicHeight)
+                                              float containingWidth, float containingHeight,
+                                              float intrinsicWidth, float intrinsicHeight)
         {
             float width = style.Width;
             float height = style.Height;
@@ -699,9 +700,23 @@ namespace Rend.Layout.Internal
                 // Fixed pixel width with border-box: subtract padding+border
                 width -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
             }
+            // [CSS-SIZING-3 §5.4] Resolve percentage heights against the containing block height.
+            // When the containing block height is definite (e.g., flex item with explicit height),
+            // the percentage resolves to a concrete value; otherwise it behaves as auto.
             if (DeferredPercent.IsEncoded(height))
             {
-                height = float.NaN; // percentage heights without containing block → auto
+                if (!float.IsNaN(containingHeight) && containingHeight > 0)
+                {
+                    height = DeferredPercent.Resolve(height, containingHeight);
+                    if (style.BoxSizing == CssBoxSizing.BorderBox)
+                    {
+                        height -= (box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth);
+                    }
+                }
+                else
+                {
+                    height = float.NaN;
+                }
             }
             else if (!float.IsNaN(height) && style.BoxSizing == CssBoxSizing.BorderBox)
             {

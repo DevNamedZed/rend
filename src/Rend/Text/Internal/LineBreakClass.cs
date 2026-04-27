@@ -137,6 +137,13 @@ namespace Rend.Text.Internal
             // Hyphens
             if (codePoint == 0x002D) return LineBreakClass.HY; // hyphen-minus
             if (codePoint == 0x2010 || codePoint == 0x2013) return LineBreakClass.BA; // hyphen, en dash
+            // [UAX #14] GL (Glue) — no break before or after.
+            if (codePoint == 0x2011) return LineBreakClass.GL; // non-breaking hyphen
+            // [UAX #14] Tibetan GL marks
+            if (codePoint == 0x0F08 || codePoint == 0x0F0C || codePoint == 0x0F12)
+            {
+                return LineBreakClass.GL;
+            }
             if (codePoint == 0x00AD) return LineBreakClass.BA; // soft hyphen
 
             // [UAX #14] Open punctuation (OP)

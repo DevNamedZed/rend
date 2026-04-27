@@ -86,6 +86,16 @@ namespace Rend.Css
             get => (CssOverflow)_values[PropertyId.Overflow_Y].IntValue;
         }
 
+        /// <summary>
+        /// [CSS-OVERFLOW-3 §3.4] The resolved overflow-clip-margin value,
+        /// or null if not set (defaults to padding-box 0px).
+        /// </summary>
+        public Values.OverflowClipMarginInfo? OverflowClipMargin
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _refValues[PropertyId.OverflowClipMargin] as Values.OverflowClipMarginInfo;
+        }
+
         #endregion
 
         #region Dimensions

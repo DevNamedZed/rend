@@ -104,29 +104,39 @@ namespace Rend.Style
             }
             bool counterResetUsesFunction = CounterTracker.CounterResetHasFunctionValue(computedStyle);
 
-            bool pushedCounterScope = scopeCounters
-                || isListContainer
-                || hasNestedCounterReset
-                || counterResetUsesFunction;
+            // [CSS-LISTS-3 §3.1] An element with display:none does not generate a box,
+            // so counter-reset, counter-increment, and counter-set have no effect.
+            // [CSS-DISPLAY-3 §7.1] display:contents also does not generate a box.
+            bool generatesBox = computedStyle.Display != CssDisplay.None
+                             && computedStyle.Display != CssDisplay.Contents;
+
+            bool pushedCounterScope = generatesBox
+                && (scopeCounters
+                    || isListContainer
+                    || hasNestedCounterReset
+                    || counterResetUsesFunction);
             if (pushedCounterScope)
             {
                 _counterTracker.PushScope();
             }
 
-            if (counterResetEntries != null)
+            if (generatesBox)
             {
-                _counterTracker.ApplyCounterResetEntries(counterResetEntries);
+                if (counterResetEntries != null)
+                {
+                    _counterTracker.ApplyCounterResetEntries(counterResetEntries);
+                }
+                if (isListContainer)
+                {
+                    ApplyImplicitListContainerReset(element, computedStyle);
+                }
+                _counterTracker.ProcessCounterIncrement(computedStyle);
+                if (isListItem)
+                {
+                    ApplyImplicitListItemIncrement(element, computedStyle);
+                }
+                _counterTracker.ProcessCounterSet(computedStyle);
             }
-            if (isListContainer)
-            {
-                ApplyImplicitListContainerReset(element, computedStyle);
-            }
-            _counterTracker.ProcessCounterIncrement(computedStyle);
-            if (isListItem)
-            {
-                ApplyImplicitListItemIncrement(element, computedStyle);
-            }
-            _counterTracker.ProcessCounterSet(computedStyle);
 
             var children = new List<StyledNode>();
 
@@ -221,7 +231,7 @@ namespace Rend.Style
 
             // Fall back to string representation
             var content = style.Content;
-            if (string.IsNullOrEmpty(content)) return null;
+            if (content == null) return null;
             if (content == "none" || content == "normal") return null;
             return content;
         }

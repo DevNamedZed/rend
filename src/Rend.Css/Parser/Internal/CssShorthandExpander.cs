@@ -895,6 +895,22 @@ namespace Rend.Css.Parser.Internal
 
         private static bool ExpandBackground(CssValue value, bool important, List<CssDeclaration> output)
         {
+            // [CSS-CASCADE-4 §7.3] CSS-wide keywords on shorthands apply to all longhands.
+            if (value is CssKeywordValue globalKw
+                && (globalKw.Keyword == "inherit" || globalKw.Keyword == "initial"
+                 || globalKw.Keyword == "unset" || globalKw.Keyword == "revert"))
+            {
+                output.Add(new CssDeclaration("background-color", value, important));
+                output.Add(new CssDeclaration("background-image", value, important));
+                output.Add(new CssDeclaration("background-repeat", value, important));
+                output.Add(new CssDeclaration("background-position", value, important));
+                output.Add(new CssDeclaration("background-size", value, important));
+                output.Add(new CssDeclaration("background-clip", value, important));
+                output.Add(new CssDeclaration("background-origin", value, important));
+                output.Add(new CssDeclaration("background-attachment", value, important));
+                return true;
+            }
+
             // BUG-051: Split comma-separated layers and expand each independently.
             // Per CSS Backgrounds L3 §3, background shorthand is a comma-separated list of layers.
             // Each longhand becomes a comma-separated list. background-color only applies to final layer.

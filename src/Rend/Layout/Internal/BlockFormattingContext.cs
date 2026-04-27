@@ -65,8 +65,18 @@ namespace Rend.Layout.Internal
                 parentContentHeight = parent.ContentRect.Height;
             }
 
+            // [CSS-SIZING-3 §5.4] Propagate the containing block height so that nested
+            // formatting contexts (IFC replaced elements, nested BFC) can resolve
+            // percentage heights against it.
+            var savedContainingBlockHeight = context.ContainingBlockHeight;
+            context.ContainingBlockHeight = parentContentHeight;
+
             var styledElement = parent.StyledNode as StyledElement;
-            if (styledElement == null) return;
+            if (styledElement == null)
+            {
+                context.ContainingBlockHeight = savedContainingBlockHeight;
+                return;
+            }
 
             var floatCtx = new FloatContext(parent.ContentRect.X, parent.ContentRect.Width);
             var prevFloatCtx = context.FloatContext;
@@ -143,9 +153,21 @@ namespace Rend.Layout.Internal
                     continue;
                 }
 
-                if (child is StyledPseudoElement pseudo)
+                // [CSS2 §9.7] Absolutely/fixed positioned or floated pseudo-elements
+                // get blockified display. Convert to a StyledElement so the normal
+                // element layout path handles abspos/float positioning correctly.
+                if (child is StyledPseudoElement pseudo
+                    && (pseudo.Style.Position == CssPosition.Absolute
+                        || pseudo.Style.Position == CssPosition.Fixed
+                        || pseudo.Style.Float != CssFloat.None))
                 {
-                    var pseudoDisplay = pseudo.Style.Display;
+                    child = ConvertPseudoToElement(pseudo, styledElement);
+                    // Fall through to the StyledElement handling below
+                }
+
+                if (child is StyledPseudoElement inlinePseudo)
+                {
+                    var pseudoDisplay = inlinePseudo.Style.Display;
                     // [CSS2 §12.1] Pseudo-elements with block-level display (flex, grid,
                     // block, table) create proper layout boxes, not inline text.
                     if (pseudoDisplay == CssDisplay.Flex || pseudoDisplay == CssDisplay.InlineFlex
@@ -155,15 +177,15 @@ namespace Rend.Layout.Internal
                         var doc = styledElement.Element.OwnerDocument;
                         var pseudoEl = doc!.CreateElement("div");
                         var pseudoChildren = new List<StyledNode>();
-                        if (!string.IsNullOrEmpty(pseudo.Content))
+                        if (!string.IsNullOrEmpty(inlinePseudo.Content))
                         {
-                            pseudoChildren.Add(new StyledText(pseudo.Content, pseudo.Style));
+                            pseudoChildren.Add(new StyledText(inlinePseudo.Content, inlinePseudo.Style));
                         }
-                        var pseudoStyled = new StyledElement(pseudoEl, pseudo.Style, pseudoChildren);
+                        var pseudoStyled = new StyledElement(pseudoEl, inlinePseudo.Style, pseudoChildren);
                         var pseudoBox = CreateLayoutBox(pseudoStyled);
-                        BoxModelCalculator.ApplyBoxModel(pseudoBox, pseudo.Style, containingWidth);
-                        float pseudoW = DimensionResolver.ResolveWidth(pseudo.Style, containingWidth, pseudoBox);
-                        float pseudoH = DimensionResolver.ResolveHeight(pseudo.Style, float.NaN, pseudoBox);
+                        BoxModelCalculator.ApplyBoxModel(pseudoBox, inlinePseudo.Style, containingWidth);
+                        float pseudoW = DimensionResolver.ResolveWidth(inlinePseudo.Style, containingWidth, pseudoBox);
+                        float pseudoH = DimensionResolver.ResolveHeight(inlinePseudo.Style, float.NaN, pseudoBox);
                         if (float.IsNaN(pseudoH)) { pseudoH = 0; }
                         float pseudoY = cursorY + MarginCollapsing.Collapse(prevMarginBottom, pseudoBox.MarginTop)
                                       + pseudoBox.BorderTopWidth + pseudoBox.PaddingTop;
@@ -184,7 +206,7 @@ namespace Rend.Layout.Internal
                     // any consecutive inline siblings into one anonymous block.
                     if (vertical)
                     {
-                        var pseudoText = new StyledText(pseudo.Content, pseudo.Style);
+                        var pseudoText = new StyledText(inlinePseudo.Content, inlinePseudo.Style);
                         var inlineBox = CreateInlineBox(pseudoText, context, containingWidth, cursorY, vertical);
                         inlineBox.ContentRect = new RectF(cursorX, parent.ContentRect.Y, 0, containingWidth);
                         parent.AddChild(inlineBox);
@@ -193,7 +215,7 @@ namespace Rend.Layout.Internal
                     else
                     {
                         var inlineRun = new List<StyledNode>();
-                        inlineRun.Add(pseudo);
+                        inlineRun.Add(inlinePseudo);
                         CollectAdjacentInlineRun(effectiveChildren, ref i, inlineRun);
 
                         float pseudoAnonY = cursorY + MarginCollapsing.Collapse(prevMarginBottom, 0);
@@ -443,7 +465,26 @@ namespace Rend.Layout.Internal
                     {
                         preHeight = 0;
                     }
-                    posBox.ContentRect = new RectF(parent.ContentRect.X, staticY, posWidth, preHeight);
+                    // [CSS2 §10.3.7] Static position X for abspos elements.
+                    // For inline-level elements, the static position is where a hypothetical
+                    // inline box would be placed — respecting float exclusions and text-align.
+                    // For block-level elements, the margin edge aligns with the parent content edge.
+                    float staticX;
+                    bool isInlineLevel = childStyle.Display == CssDisplay.Inline
+                                      || childStyle.Display == CssDisplay.InlineBlock
+                                      || childStyle.Display == CssDisplay.InlineFlex
+                                      || childStyle.Display == CssDisplay.InlineGrid;
+                    if (isInlineLevel)
+                    {
+                        staticX = ComputeInlineStaticX(styledElement, floatCtx,
+                            cursorY, prevMarginBottom, posBox, posWidth);
+                    }
+                    else
+                    {
+                        staticX = parent.ContentRect.X + posBox.MarginLeft
+                                + posBox.BorderLeftWidth + posBox.PaddingLeft;
+                    }
+                    posBox.ContentRect = new RectF(staticX, staticY, posWidth, preHeight);
                     LayoutChildren(posBox, context);
                     float posHeight = preHeight > 0 ? preHeight : CalculateAutoHeight(posBox);
                     posBox.ContentRect = new RectF(posBox.ContentRect.X, posBox.ContentRect.Y, posWidth, posHeight);
@@ -554,6 +595,20 @@ namespace Rend.Layout.Internal
                             }
                         }
                     }
+                }
+                else if (childStyle.Display == CssDisplay.Table
+                    && childElement.TagName != "table"
+                    && (float.IsNaN(childStyle.Width) || childStyle.Width == 0))
+                {
+                    // [CSS-TABLES §17.5.2] Non-table elements with display:table and auto
+                    // width use shrink-to-fit: min(max-content, available).
+                    // Real <table> elements handle shrink-to-fit via TableLayout + post-layout
+                    // adjustment at the contentRect update below.
+                    float availableForTable = DimensionResolver.ResolveWidth(
+                        childStyle, containingWidth, childBox, parentContentHeight);
+                    float maxContentWidth = MeasureIntrinsicWidth(
+                        childElement, SizingKeyword.MaxContent, containingWidth, context);
+                    contentWidth = Math.Min(maxContentWidth, availableForTable);
                 }
                 else
                 {
@@ -697,7 +752,7 @@ namespace Rend.Layout.Internal
                                 }
                             }
                         }
-                        ReplacedElementLayout.ResolveDimensions(childBox, childStyle, containingWidth, intrinsicW, intrinsicH);
+                        ReplacedElementLayout.ResolveDimensions(childBox, childStyle, containingWidth, parentContentHeight, intrinsicW, intrinsicH);
                         contentWidth = childBox.ContentRect.Width;
                         contentHeight = childBox.ContentRect.Height;
                     }
@@ -885,7 +940,7 @@ namespace Rend.Layout.Internal
                                 }
                             }
                         }
-                        ReplacedElementLayout.ResolveDimensions(childBox, childStyle, containingWidth, intrinsicW, intrinsicH);
+                        ReplacedElementLayout.ResolveDimensions(childBox, childStyle, containingWidth, parentContentHeight, intrinsicW, intrinsicH);
                         contentWidth = childBox.ContentRect.Width;
                         contentHeight = childBox.ContentRect.Height;
                     }
@@ -1105,8 +1160,22 @@ namespace Rend.Layout.Internal
                 prevFloatCtx.PropagateClearY(floatCtx);
             }
 
-            // Restore previous float context
+            // Restore previous float context and containing block height
             context.FloatContext = prevFloatCtx;
+            context.ContainingBlockHeight = savedContainingBlockHeight;
+        }
+
+        internal static StyledElement ConvertPseudoToElement(StyledPseudoElement pseudo,
+            StyledElement ownerElement)
+        {
+            var doc = ownerElement.Element.OwnerDocument;
+            var pseudoEl = doc!.CreateElement("div");
+            var pseudoChildren = new List<StyledNode>();
+            if (!string.IsNullOrEmpty(pseudo.Content))
+            {
+                pseudoChildren.Add(new StyledText(pseudo.Content, pseudo.Style));
+            }
+            return new StyledElement(pseudoEl, pseudo.Style, pseudoChildren);
         }
 
         internal static LayoutBox CreateLayoutBox(StyledElement element)
@@ -1193,8 +1262,11 @@ namespace Rend.Layout.Internal
                             // [CSS2 §9.5] Scope float context to this box's content rect.
                             var prevFloatCtx = context.FloatContext;
                             context.FloatContext = new FloatContext(box.ContentRect.X, box.ContentRect.Width);
+                            var savedCbh = context.ContainingBlockHeight;
+                            context.ContainingBlockHeight = ComputeBoxContainingHeight(box, styledElement);
                             InlineFormattingContext.Layout(box, context);
                             context.FloatContext = prevFloatCtx;
+                            context.ContainingBlockHeight = savedCbh;
                         }
                     }
                     break;
@@ -1222,11 +1294,45 @@ namespace Rend.Layout.Internal
                         // Mirrors the FloatContext creation in Layout() above.
                         var prevFloatCtx = context.FloatContext;
                         context.FloatContext = new FloatContext(box.ContentRect.X, box.ContentRect.Width);
+                        // [CSS-SIZING-3 §5.4] Scope containing block height to this box.
+                        // If this box has a definite height, children resolve percentages
+                        // against it; otherwise height is indefinite (NaN).
+                        var savedCbh = context.ContainingBlockHeight;
+                        context.ContainingBlockHeight = ComputeBoxContainingHeight(box, styledElement);
                         InlineFormattingContext.Layout(box, context);
                         context.FloatContext = prevFloatCtx;
+                        context.ContainingBlockHeight = savedCbh;
                     }
                     break;
             }
+        }
+
+        /// <summary>
+        /// [CSS-SIZING-3 §5.4] Compute the definite containing block height for a box.
+        /// Returns the box's content height if it has a definite CSS height or is a
+        /// stretched flex/grid item; otherwise returns NaN (indefinite).
+        /// </summary>
+        private static float ComputeBoxContainingHeight(LayoutBox box, StyledElement element)
+        {
+            float cssHeight = element.Style.Height;
+            if (!float.IsNaN(cssHeight) && cssHeight > 0)
+            {
+                return cssHeight;
+            }
+            if (DeferredPercent.IsEncoded(cssHeight))
+            {
+                // Percentage height that was already resolved on the box
+                if (box.ContentRect.Height > 0)
+                {
+                    return box.ContentRect.Height;
+                }
+                return float.NaN;
+            }
+            if (box.HasDefiniteCrossSize && box.ContentRect.Height > 0)
+            {
+                return box.ContentRect.Height;
+            }
+            return float.NaN;
         }
 
         private static bool HasTableChildren(StyledElement element)
@@ -1410,6 +1516,61 @@ namespace Rend.Layout.Internal
             return display == CssDisplay.InlineBlock ||
                    display == CssDisplay.InlineFlex ||
                    display == CssDisplay.InlineGrid;
+        }
+
+        /// <summary>
+        /// [CSS2 §10.3.7] Computes the static-position content-box X for an inline-level
+        /// absolutely positioned element. The hypothetical inline box is placed respecting
+        /// float exclusions and text-align. In LTR, the left margin edge is positioned;
+        /// in RTL, the right margin edge is positioned.
+        /// </summary>
+        private static float ComputeInlineStaticX(StyledElement parent, FloatContext floatCtx,
+            float cursorY, float prevMarginBottom, LayoutBox posBox, float posWidth)
+        {
+            float hypotheticalY = cursorY + MarginCollapsing.Collapse(prevMarginBottom, posBox.MarginTop);
+            float leftEdge = floatCtx.GetLeftEdge(hypotheticalY, 0);
+            float rightEdge = floatCtx.GetRightEdge(hypotheticalY, 0);
+
+            var parentTextAlign = parent.Style.TextAlign;
+            var parentDirection = parent.Style.Direction;
+
+            // [CSS2 §10.3.7] Resolve start/end/justify to physical left/right
+            CssTextAlign resolved = parentTextAlign;
+            if (resolved == CssTextAlign.Start || resolved == CssTextAlign.Justify)
+            {
+                resolved = parentDirection == CssDirection.Rtl
+                    ? CssTextAlign.Right : CssTextAlign.Left;
+            }
+            else if (resolved == CssTextAlign.End)
+            {
+                resolved = parentDirection == CssDirection.Rtl
+                    ? CssTextAlign.Left : CssTextAlign.Right;
+            }
+
+            // Position a zero-width hypothetical inline within the available area
+            float hypotheticalEdge;
+            switch (resolved)
+            {
+                case CssTextAlign.Center:
+                    hypotheticalEdge = (leftEdge + rightEdge) / 2;
+                    break;
+                case CssTextAlign.Right:
+                    hypotheticalEdge = rightEdge;
+                    break;
+                default:
+                    hypotheticalEdge = leftEdge;
+                    break;
+            }
+
+            // [CSS2 §10.3.7/§10.3.8] In LTR the static position is the left margin edge;
+            // in RTL the static position is the right margin edge. Convert to content-box X.
+            if (parentDirection == CssDirection.Rtl)
+            {
+                return hypotheticalEdge - posBox.MarginRight - posBox.BorderRightWidth
+                     - posBox.PaddingRight - posWidth;
+            }
+
+            return hypotheticalEdge + posBox.MarginLeft + posBox.BorderLeftWidth + posBox.PaddingLeft;
         }
 
         /// <summary>
@@ -1710,6 +1871,15 @@ namespace Rend.Layout.Internal
             // but their actual content may be narrower. Use recursive measurement.
             float maxRight = GetContentExtent(box);
 
+            // [CSS-TEXT-3 §4.1.2 / CSS-SIZING-3 §4] For max-content with pre-wrap,
+            // trailing preserved spaces contribute to intrinsic max-content size.
+            // FinalizeLineBox subtracts trailing whitespace for hanging (correct for
+            // alignment and wrapping) but max-content needs it included.
+            if (keyword == SizingKeyword.MaxContent)
+            {
+                maxRight = AddTrailingWhitespaceForMaxContent(box, maxRight);
+            }
+
             // Return content width (not including parent's padding/border — the caller
             // uses this as ContentRect.Width which is the content area).
             float measured = maxRight;
@@ -1854,6 +2024,53 @@ namespace Rend.Layout.Internal
                 if (extent > maxExtent)
                 {
                     maxExtent = extent;
+                }
+            }
+
+            return maxExtent;
+        }
+
+        /// <summary>
+        /// [CSS-TEXT-3 §4.1.2] For max-content intrinsic sizing, trailing preserved
+        /// whitespace in pre-wrap lines contributes to the line's max-content size.
+        /// Walks the box tree and adds back any trailing whitespace that was subtracted
+        /// during FinalizeLineBox for hanging purposes.
+        /// </summary>
+        private static float AddTrailingWhitespaceForMaxContent(LayoutBox box, float baseExtent)
+        {
+            float maxExtent = baseExtent;
+            float contentLeft = box.ContentRect.X;
+
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    var line = box.LineBoxes[i];
+                    float lineWidth = line.NaturalContentWidth + line.TrailingWhitespaceWidth;
+                    if (lineWidth > maxExtent)
+                    {
+                        maxExtent = lineWidth;
+                    }
+                }
+            }
+
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                var childStyle = child.StyledNode?.Style;
+                bool isAutoWidthBlock = childStyle != null
+                    && float.IsNaN(childStyle.Width)
+                    && !SizingKeyword.IsSizingKeyword(childStyle.Width)
+                    && !DeferredPercent.IsEncoded(childStyle.Width);
+                if (isAutoWidthBlock)
+                {
+                    float innerExtent = AddTrailingWhitespaceForMaxContent(child, GetContentExtent(child));
+                    float extent = (child.ContentRect.X - contentLeft) + innerExtent
+                                 + child.PaddingRight + child.BorderRightWidth + child.MarginRight;
+                    if (extent > maxExtent)
+                    {
+                        maxExtent = extent;
+                    }
                 }
             }
 

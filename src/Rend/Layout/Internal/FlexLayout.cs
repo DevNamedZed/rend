@@ -2020,6 +2020,12 @@ namespace Rend.Layout.Internal
                 float freeCross = maxCross - itemCross;
                 if (freeCross <= 0)
                 {
+                    // [CSS-FLEXBOX §9.8] Even when freeCross is 0, stretch-aligned items
+                    // have a definite cross size determined by the flex algorithm.
+                    if (align == CssAlignItems.Stretch || (int)align == 0)
+                    {
+                        box.HasDefiniteCrossSize = true;
+                    }
                     continue;
                 }
 

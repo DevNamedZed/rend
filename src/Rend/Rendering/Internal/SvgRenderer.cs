@@ -45,8 +45,28 @@ namespace Rend.Rendering.Internal
 
             target.Save();
 
-            // Clip to content rect
-            target.PushClipRect(contentRect);
+            // [SVG2 §7.7] SVG elements default to overflow:hidden, but CSS overflow
+            // can override this. ClipHandler already applied any CSS overflow clipping,
+            // so only add SVG's own clip when CSS overflow is not being handled externally.
+            // When ClipHandler has applied a per-axis clip (clip+visible), skip SVG clip.
+            bool svgNeedsOwnClip = true;
+            if (styledSvg?.Style != null)
+            {
+                var overflowX = styledSvg.Style.OverflowX;
+                var overflowY = styledSvg.Style.OverflowY;
+                bool xClips = overflowX != CssOverflow.Visible;
+                bool yClips = overflowY != CssOverflow.Visible;
+                if (xClips || yClips)
+                {
+                    // ClipHandler already applied the correct clip for CSS overflow.
+                    svgNeedsOwnClip = false;
+                }
+            }
+
+            if (svgNeedsOwnClip)
+            {
+                target.PushClipRect(contentRect);
+            }
 
             // Translate to content rect origin and scale from viewBox to content rect
             var transform = Matrix3x2.CreateScale(scaleX, scaleY) *
@@ -74,7 +94,10 @@ namespace Rend.Rendering.Internal
                 _currentViewportHeight = previousViewportHeight;
             }
 
-            target.PopClip();
+            if (svgNeedsOwnClip)
+            {
+                target.PopClip();
+            }
             target.Restore();
         }
 

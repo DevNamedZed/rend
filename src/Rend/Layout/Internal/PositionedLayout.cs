@@ -60,11 +60,18 @@ namespace Rend.Layout.Internal
             // positioned ancestor. Use the parent's dimensions for percentage resolution.
             var cb = box.Parent ?? containingBlock;
             float cbWidth = cb.ContentRect.Width;
-            float cbHeight = cb.ContentRect.Height;
-            float top = ResolvePositionValue(style.Top, cbHeight);
-            float left = ResolvePositionValue(style.Left, cbWidth);
-            float bottom = ResolvePositionValue(style.Bottom, cbHeight);
-            float right = ResolvePositionValue(style.Right, cbWidth);
+
+            // [CSS-POSITION-3 §3.3] Percentage top/bottom resolve against the containing
+            // block's height. If that height is indefinite (height is auto and not
+            // resolved by flex/grid stretch), percentage values resolve to 0.
+            float cbStyleHeight = cb.StyledNode?.Style.Height ?? float.NaN;
+            bool hasDefiniteHeight = !float.IsNaN(cbStyleHeight) || cb.HasDefiniteCrossSize;
+            float cbHeight = hasDefiniteHeight ? cb.ContentRect.Height : 0;
+
+            float top = ResolvePositionValueWithCalc(style.Top, cbHeight, style, PropertyId.Top);
+            float left = ResolvePositionValueWithCalc(style.Left, cbWidth, style, PropertyId.Left);
+            float bottom = ResolvePositionValueWithCalc(style.Bottom, cbHeight, style, PropertyId.Bottom);
+            float right = ResolvePositionValueWithCalc(style.Right, cbWidth, style, PropertyId.Right);
 
             if (!float.IsNaN(top)) dy = top;
             else if (!float.IsNaN(bottom)) dy = -bottom;

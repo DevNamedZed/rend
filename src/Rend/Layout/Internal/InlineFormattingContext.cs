@@ -6,6 +6,7 @@ using Rend.Css.Properties.Internal;
 using Rend.Fonts;
 using Rend.Style;
 using Rend.Text;
+using Rend.Css.Resolution.Internal;
 using Rend.Text.Internal;
 
 namespace Rend.Layout.Internal
@@ -290,6 +291,18 @@ namespace Rend.Layout.Internal
                 }
                 else if (child is StyledPseudoElement pseudo)
                 {
+                    // [CSS2 §9.7] Abspos/fixed pseudo-elements are out of flow and must be
+                    // laid out as positioned boxes, not inline text. Convert to a StyledElement
+                    // and fall through to the element handling path below.
+                    if (pseudo.Style.Position == CssPosition.Absolute
+                        || pseudo.Style.Position == CssPosition.Fixed)
+                    {
+                        var converted = BlockFormattingContext.ConvertPseudoToElement(pseudo, styledElement);
+                        LayoutInlineBlock(converted, context, ref cursorX, ref cursorY, startX,
+                                          containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent);
+                        continue;
+                    }
+
                     // Pseudo-element: render as inline text with its own style.
                     // Pass the pseudo's style as styleOverride so the painter uses
                     // its color/font properties instead of falling through to the parent.
@@ -1684,7 +1697,7 @@ namespace Rend.Layout.Internal
                 if (float.IsNaN(tempH)) tempH = intrinsicH;
 
                 box.ContentRect = new RectF(0, 0, contentWidth, tempH);
-                ReplacedElementLayout.ResolveDimensions(box, element.Style, containingWidth, intrinsicW, intrinsicH);
+                ReplacedElementLayout.ResolveDimensions(box, element.Style, containingWidth, context.ContainingBlockHeight, intrinsicW, intrinsicH);
                 contentWidth = box.ContentRect.Width;
                 contentHeight = box.ContentRect.Height;
             }
@@ -1770,6 +1783,21 @@ namespace Rend.Layout.Internal
             bool noWrapInlineBlock = parentWsElement != null
                 && (parentWsElement.Style.WhiteSpace == CssWhiteSpace.Nowrap
                     || parentWsElement.Style.WhiteSpace == CssWhiteSpace.Pre);
+
+            // [UAX #14 §LB12] GL (Glue) class characters suppress breaks after them.
+            // If the last character on the current line is GL, do not wrap the atomic inline.
+            if (!noWrapInlineBlock && currentLine.Fragments.Count > 0)
+            {
+                var lastFrag = currentLine.Fragments[currentLine.Fragments.Count - 1];
+                if (lastFrag.Text != null && lastFrag.Text.Length > 0)
+                {
+                    char trailingChar = lastFrag.Text[lastFrag.Text.Length - 1];
+                    if (Text.Internal.LineBreakClassifier.GetClass(trailingChar) == Text.Internal.LineBreakClass.GL)
+                    {
+                        noWrapInlineBlock = true;
+                    }
+                }
+            }
 
             if (!noWrapInlineBlock && cursorX + totalWidth > startX + containingWidth && currentLine.Fragments.Count > 0)
             {
@@ -2088,6 +2116,11 @@ namespace Rend.Layout.Internal
             // Pass the inline element reference so fragments can be linked back to it
             // (e.g., for detecting <a> elements to generate link annotations).
 
+            // [CSS2 §9.4.3] Track fragment state before children for position:relative offset
+            bool isRelative = element.Style.Position == CssPosition.Relative;
+            int lineBoxCountBefore = lineBoxes.Count;
+            int fragmentCountBefore = currentLine.Fragments.Count;
+
             // Inline box model: advance cursor for left padding/border/margin
             var inlineStyle = element.Style;
             float inlineML = float.IsNaN(inlineStyle.MarginLeft) ? 0 : inlineStyle.MarginLeft;
@@ -2168,6 +2201,132 @@ namespace Rend.Layout.Internal
                 ? (float.IsNaN(inlineStyle.BorderRightWidth) ? 0 : inlineStyle.BorderRightWidth) : 0;
             float inlineMR = float.IsNaN(inlineStyle.MarginRight) ? 0 : inlineStyle.MarginRight;
             cursorX += inlinePR + inlineBR + inlineMR;
+
+            // [CSS2 §9.4.3] Position:relative on inline elements shifts all generated
+            // fragments visually without affecting layout flow.
+            if (isRelative)
+            {
+                ApplyInlineRelativeOffset(inlineStyle, parent, lineBoxes,
+                    lineBoxCountBefore, fragmentCountBefore, currentLine);
+            }
+        }
+
+        /// <summary>
+        /// [CSS2 §9.4.3] Applies position:relative offsets to all fragments generated
+        /// by an inline element. Fragments may span multiple line boxes when the inline
+        /// wraps across lines. The offset is purely visual — it does not affect layout.
+        /// </summary>
+        private static void ApplyInlineRelativeOffset(
+            ComputedStyle style, LayoutBox parent,
+            List<LineBox> lineBoxes, int lineBoxCountBefore,
+            int fragmentCountBefore, LineBox currentLine)
+        {
+            float cbWidth = parent.ContentRect.Width;
+
+            // [CSS-POSITION-3 §3.3] Percentage top/bottom resolve against the containing
+            // block's height. If that height is indefinite (height is auto and not
+            // resolved by flex/grid stretch), percentage values resolve to 0.
+            float cbStyleHeight = parent.StyledNode?.Style.Height ?? float.NaN;
+            bool hasDefiniteHeight = !float.IsNaN(cbStyleHeight) || parent.HasDefiniteCrossSize;
+            float cbHeight = hasDefiniteHeight ? parent.ContentRect.Height : 0;
+
+            float dx = 0;
+            float dy = 0;
+
+            float left = ResolveInlinePositionValue(style.Left, cbWidth, style, PropertyId.Left);
+            float right = ResolveInlinePositionValue(style.Right, cbWidth, style, PropertyId.Right);
+            float top = ResolveInlinePositionValue(style.Top, cbHeight, style, PropertyId.Top);
+            float bottom = ResolveInlinePositionValue(style.Bottom, cbHeight, style, PropertyId.Bottom);
+
+            if (!float.IsNaN(left))
+            {
+                dx = left;
+            }
+            else if (!float.IsNaN(right))
+            {
+                dx = -right;
+            }
+
+            if (!float.IsNaN(top))
+            {
+                dy = top;
+            }
+            else if (!float.IsNaN(bottom))
+            {
+                dy = -bottom;
+            }
+
+            if (dx == 0 && dy == 0)
+            {
+                return;
+            }
+
+            // Shift fragments on line boxes that were finalized during this element
+            for (int lineIndex = lineBoxCountBefore; lineIndex < lineBoxes.Count; lineIndex++)
+            {
+                var line = lineBoxes[lineIndex];
+                int startFrag = (lineIndex == lineBoxCountBefore) ? fragmentCountBefore : 0;
+                for (int fragIndex = startFrag; fragIndex < line.Fragments.Count; fragIndex++)
+                {
+                    var fragment = line.Fragments[fragIndex];
+                    fragment.X += dx;
+                    fragment.Y += dy;
+                    if (fragment.Box != null)
+                    {
+                        fragment.Box.ContentRect = new RectF(
+                            fragment.Box.ContentRect.X + dx,
+                            fragment.Box.ContentRect.Y + dy,
+                            fragment.Box.ContentRect.Width,
+                            fragment.Box.ContentRect.Height);
+                    }
+                }
+            }
+
+            // Shift fragments on the current (not yet finalized) line box.
+            // If new lines were finalized, the original currentLine was pushed into lineBoxes
+            // and the active currentLine is a new object — all its fragments are in scope.
+            int currentLineStart = (lineBoxes.Count > lineBoxCountBefore) ? 0 : fragmentCountBefore;
+            for (int fragIndex = currentLineStart; fragIndex < currentLine.Fragments.Count; fragIndex++)
+            {
+                var fragment = currentLine.Fragments[fragIndex];
+                fragment.X += dx;
+                fragment.Y += dy;
+                if (fragment.Box != null)
+                {
+                    fragment.Box.ContentRect = new RectF(
+                        fragment.Box.ContentRect.X + dx,
+                        fragment.Box.ContentRect.Y + dy,
+                        fragment.Box.ContentRect.Width,
+                        fragment.Box.ContentRect.Height);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Resolves a position offset value for inline relative positioning.
+        /// Handles deferred percentages and deferred calc() expressions.
+        /// </summary>
+        private static float ResolveInlinePositionValue(
+            float value, float containingDimension, ComputedStyle style, int propertyId)
+        {
+            if (float.IsNaN(value))
+            {
+                return float.NaN;
+            }
+            if (DeferredPercent.IsEncoded(value))
+            {
+                return DeferredPercent.Resolve(value, containingDimension);
+            }
+            if (float.IsNegativeInfinity(value))
+            {
+                var refVal = style.GetRefValue(propertyId);
+                if (refVal is CssFunctionValue calcFn)
+                {
+                    return ValueResolver.EvaluateDeferredCalc(calcFn, containingDimension);
+                }
+                return 0;
+            }
+            return value;
         }
 
         private static void AddTextFragment(LineBox line, string text, ShapedTextRun? shaped,
@@ -2682,6 +2841,9 @@ namespace Rend.Layout.Internal
             if (!skipTrailingHang)
             {
                 contentWidth -= trailingWhitespaceWidth;
+                // [CSS-SIZING-3 §4] Store the hung trailing whitespace width so
+                // max-content sizing can add it back per CSS Text 3 §4.1.2.
+                line.TrailingWhitespaceWidth = trailingWhitespaceWidth;
             }
 
             line.NaturalContentWidth = contentWidth;

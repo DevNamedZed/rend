@@ -215,20 +215,65 @@ namespace Rend.Rendering.Internal
             // Check for CSS gradient functions
             if (layerImage is CssFunctionValue gradientFn)
             {
-                var gradient = ParseCssGradient(gradientFn, clipRect, style.Color);
-                if (gradient != null)
-                {
+                // [CSS-BACKGROUNDS-3 §3.5] Check for explicit background-size.
+                object? gradSizeVal = GetLayerRef(sizeRef, layerIdx);
+                bool hasExplicitSize = IsExplicitBackgroundSize(gradSizeVal);
 
-                    BrushInfo gradBrush = BrushInfo.FromGradient(gradient);
-                    if (hasRadius)
+                if (hasExplicitSize)
+                {
+                    // Explicit background-size: compute sized/positioned gradient rect.
+                    float gradientWidth = originRect.Width;
+                    float gradientHeight = originRect.Height;
+                    ComputeBackgroundSizeFromRef(gradSizeVal, originRect, gradientWidth, gradientHeight,
+                        out float gradScaledW, out float gradScaledH);
+
+                    object? gradPosVal = GetLayerRef(positionRef, layerIdx);
+                    ComputeBackgroundPositionFromRef(gradPosVal, originRect, gradScaledW, gradScaledH,
+                        out float gradPosX, out float gradPosY);
+
+                    int gradRepeatMode = GetLayerRepeatMode(repeatRef, layerIdx, style);
+                    bool gradNoRepeat = gradRepeatMode == (int)CssBackgroundRepeat.NoRepeat;
+
+                    var gradRect = new RectF(gradPosX, gradPosY, gradScaledW, gradScaledH);
+                    var gradient = ParseCssGradient(gradientFn, gradRect, style.Color);
+                    if (gradient != null)
                     {
-                        var path = new PathData();
-                        radii.AddToPath(path, clipRect);
-                        target.FillPath(path, gradBrush);
+                        BrushInfo gradBrush = BrushInfo.FromGradient(gradient);
+                        if (hasRadius)
+                        {
+                            var clipPath = new PathData();
+                            radii.AddToPath(clipPath, clipRect);
+                            target.PushClipPath(clipPath);
+                        }
+
+                        // [CSS-BACKGROUNDS-3 §3.3] With no-repeat, paint only the sized rect.
+                        // With repeat, the gradient shader extends to fill the clip area.
+                        RectF fillRect = gradNoRepeat ? gradRect : clipRect;
+                        target.FillRect(fillRect.PixelSnap(), gradBrush);
+
+                        if (hasRadius)
+                        {
+                            target.PopClip();
+                        }
                     }
-                    else
+                }
+                else
+                {
+                    // Default: gradient fills the clip area.
+                    var gradient = ParseCssGradient(gradientFn, clipRect, style.Color);
+                    if (gradient != null)
                     {
-                        target.FillRect(clipRect.PixelSnap(), gradBrush);
+                        BrushInfo gradBrush = BrushInfo.FromGradient(gradient);
+                        if (hasRadius)
+                        {
+                            var path = new PathData();
+                            radii.AddToPath(path, clipRect);
+                            target.FillPath(path, gradBrush);
+                        }
+                        else
+                        {
+                            target.FillRect(clipRect.PixelSnap(), gradBrush);
+                        }
                     }
                 }
                 return;
@@ -504,6 +549,32 @@ namespace Rend.Rendering.Internal
             }
         }
 
+        /// <summary>
+        /// Returns true if the background-size ref value specifies an explicit size
+        /// (not null, not 'auto', not 'auto auto').
+        /// </summary>
+        private static bool IsExplicitBackgroundSize(object? sizeRef)
+        {
+            if (sizeRef == null)
+            {
+                return false;
+            }
+
+            if (sizeRef is CssKeywordValue kw && kw.Keyword == "auto")
+            {
+                return false;
+            }
+
+            if (sizeRef is CssListValue list && list.Separator == ' ' && list.Values.Count >= 2)
+            {
+                bool allAuto = list.Values[0] is CssKeywordValue k0 && k0.Keyword == "auto"
+                    && list.Values[1] is CssKeywordValue k1 && k1.Keyword == "auto";
+                return !allAuto;
+            }
+
+            return true;
+        }
+
         private static float ResolveSizeComponent(CssValue value, float containerSize, float imgSize)
         {
             if (value is CssDimensionValue dim)
@@ -540,13 +611,24 @@ namespace Rend.Rendering.Internal
                 return;
             }
 
-            if (posRef is CssListValue list && list.Separator == ' ' && list.Values.Count >= 2)
+            if (posRef is CssListValue list && list.Separator == ' ')
             {
-                posX = paddingRect.X + ResolvePositionComponent(
-                    list.Values[0], paddingRect.Width, scaledW);
-                posY = paddingRect.Y + ResolvePositionComponent(
-                    list.Values[1], paddingRect.Height, scaledH);
-                return;
+                // [CSS-BACKGROUNDS-3 §3.6] 3/4-value syntax: edge keyword + offset pairs.
+                if (list.Values.Count >= 3 && list.Values[0] is CssKeywordValue)
+                {
+                    ResolveEdgeOffsetPosition(list, paddingRect, scaledW, scaledH,
+                        out posX, out posY);
+                    return;
+                }
+
+                if (list.Values.Count >= 2)
+                {
+                    posX = paddingRect.X + ResolvePositionComponent(
+                        list.Values[0], paddingRect.Width, scaledW);
+                    posY = paddingRect.Y + ResolvePositionComponent(
+                        list.Values[1], paddingRect.Height, scaledH);
+                    return;
+                }
             }
 
             // Single value — only set X, Y defaults to 50%
@@ -555,6 +637,111 @@ namespace Rend.Rendering.Internal
                 posX = paddingRect.X + ResolvePositionComponent(
                     singleValue, paddingRect.Width, scaledW);
                 posY = paddingRect.Y + (paddingRect.Height - scaledH) * 0.5f;
+            }
+        }
+
+        /// <summary>
+        /// [CSS-BACKGROUNDS-3 §3.6] Resolves 3/4-value background-position syntax.
+        /// Each axis is specified as an edge keyword optionally followed by an offset.
+        /// E.g., "right 25px bottom 25%" or "left 50px center".
+        /// </summary>
+        private static void ResolveEdgeOffsetPosition(CssListValue list, RectF paddingRect,
+            float scaledW, float scaledH, out float posX, out float posY)
+        {
+            posX = paddingRect.X;
+            posY = paddingRect.Y;
+
+            // Parse keyword+offset pairs from the value list.
+            // 4-value: [kw, offset, kw, offset]
+            // 3-value: [kw, offset, kw] or [kw, kw, offset]
+            string? xEdge = null;
+            float xOffset = 0;
+            string? yEdge = null;
+            float yOffset = 0;
+
+            int count = list.Values.Count;
+            int index = 0;
+            while (index < count)
+            {
+                if (list.Values[index] is CssKeywordValue kw)
+                {
+                    string edge = kw.Keyword;
+                    float offset = 0;
+
+                    // Check if next value is an offset (not a keyword)
+                    if (index + 1 < count && !(list.Values[index + 1] is CssKeywordValue))
+                    {
+                        offset = ResolvePositionOffset(list.Values[index + 1],
+                            IsHorizontalEdge(edge) ? paddingRect.Width : paddingRect.Height,
+                            IsHorizontalEdge(edge) ? scaledW : scaledH);
+                        index += 2;
+                    }
+                    else
+                    {
+                        index++;
+                    }
+
+                    if (IsHorizontalEdge(edge) || (edge == "center" && xEdge == null))
+                    {
+                        xEdge = edge;
+                        xOffset = offset;
+                    }
+                    else
+                    {
+                        yEdge = edge;
+                        yOffset = offset;
+                    }
+                }
+                else
+                {
+                    index++;
+                }
+            }
+
+            posX = paddingRect.X + ResolveEdgeOffset(
+                xEdge ?? "left", xOffset, paddingRect.Width, scaledW);
+            posY = paddingRect.Y + ResolveEdgeOffset(
+                yEdge ?? "top", yOffset, paddingRect.Height, scaledH);
+        }
+
+        private static bool IsHorizontalEdge(string keyword)
+        {
+            return keyword == "left" || keyword == "right";
+        }
+
+        private static float ResolvePositionOffset(CssValue value, float containerSize,
+            float imageSize)
+        {
+            if (value is CssDimensionValue dim)
+            {
+                return ResolveLengthValue(dim);
+            }
+            if (value is CssPercentageValue pct)
+            {
+                return (containerSize - imageSize) * (pct.Value / 100f);
+            }
+            if (value is CssNumberValue num)
+            {
+                return num.Value;
+            }
+            return 0;
+        }
+
+        private static float ResolveEdgeOffset(string edge, float offset,
+            float containerSize, float imageSize)
+        {
+            switch (edge)
+            {
+                case "left":
+                case "top":
+                    return offset;
+                case "right":
+                case "bottom":
+                    return containerSize - imageSize - offset;
+                case "center":
+                    return (containerSize - imageSize) * 0.5f;
+                default:
+                    return 0;
             }
         }
 
@@ -645,11 +832,11 @@ namespace Rend.Rendering.Internal
                 string dir = dirKw.Keyword;
                 if (dir == "to")
                 {
-                    // [CSS-IMAGES4 §3.1] "to" followed by direction keywords; stop at "in" (color interpolation)
+                    // [CSS-IMAGES4 §3.1] "to" followed by side-or-corner keywords
                     string direction = "";
                     for (int i = 1; i < fn.Arguments.Count; i++)
                     {
-                        if (fn.Arguments[i] is CssKeywordValue kw2 && kw2.Keyword != "in")
+                        if (fn.Arguments[i] is CssKeywordValue kw2 && IsDirectionKeyword(kw2.Keyword))
                         {
                             direction += kw2.Keyword + " ";
                             colorStartIdx = i + 1;
@@ -970,6 +1157,15 @@ namespace Rend.Rendering.Internal
                 ColorInterpolationSpace = colorSpace,
                 HueInterpolationMethod = hueMethod
             };
+        }
+
+        /// <summary>
+        /// [CSS-IMAGES4 §3.1] Returns true if the keyword is a valid side-or-corner direction.
+        /// </summary>
+        private static bool IsDirectionKeyword(string keyword)
+        {
+            return keyword == "top" || keyword == "bottom"
+                || keyword == "left" || keyword == "right";
         }
 
         private static float DirectionToAngle(string direction, float boxWidth, float boxHeight)

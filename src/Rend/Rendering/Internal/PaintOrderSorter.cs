@@ -19,6 +19,20 @@ namespace Rend.Rendering.Internal
         [System.ThreadStatic] private static List<LayoutBox>? t_positionedZeroAuto;
         [System.ThreadStatic] private static List<LayoutBox>? t_positiveZIndex;
 
+        // [CSS2 §E.2] Positioned descendants promoted from non-stacking-context
+        // subtrees. These paint at step 6 of the current level and must be
+        // skipped during their normal parent's recursive paint.
+        [System.ThreadStatic] private static HashSet<LayoutBox>? t_promotedBoxes;
+
+        /// <summary>
+        /// Returns true if the box was promoted to a higher paint level and
+        /// should be skipped during its parent's normal recursive paint.
+        /// </summary>
+        public static bool IsPromoted(LayoutBox box)
+        {
+            return t_promotedBoxes != null && t_promotedBoxes.Contains(box);
+        }
+
         /// <summary>
         /// Returns the children of the given box in CSS 2.1 Appendix E paint order:
         /// <list type="number">
@@ -89,6 +103,26 @@ namespace Rend.Rendering.Internal
             {
                 ClassifyChild(children[i], negativeZIndex, blockNonPositioned, floats,
                               inlines, positionedZeroAuto, positiveZIndex);
+            }
+
+            // [CSS2 §E.2] Promote positioned descendants from non-stacking-context
+            // subtrees. These elements should paint at step 6 of this level, not
+            // buried inside their parent's recursive paint.
+            var promoted = t_promotedBoxes ??= new HashSet<LayoutBox>();
+            promoted.Clear();
+            for (int i = 0; i < blockNonPositioned.Count; i++)
+            {
+                if (!blockNonPositioned[i].EstablishesStackingContext)
+                {
+                    CollectPromotedPositioned(blockNonPositioned[i], positionedZeroAuto, promoted);
+                }
+            }
+            for (int i = 0; i < floats.Count; i++)
+            {
+                if (!floats[i].EstablishesStackingContext)
+                {
+                    CollectPromotedPositioned(floats[i], positionedZeroAuto, promoted);
+                }
             }
 
             // Sort stacking contexts by z-index.
@@ -167,6 +201,32 @@ namespace Rend.Rendering.Internal
             else
             {
                 blockNonPositioned.Add(child);
+            }
+        }
+
+        /// <summary>
+        /// [CSS2 §E.2] Recursively collects positioned descendants from
+        /// non-stacking-context subtrees for promotion to the current paint level.
+        /// </summary>
+        private static void CollectPromotedPositioned(
+            LayoutBox parent, List<LayoutBox> positionedBucket, HashSet<LayoutBox> promoted)
+        {
+            for (int i = 0; i < parent.Children.Count; i++)
+            {
+                var child = parent.Children[i];
+                var style = child.StyledNode?.Style;
+                bool isPositioned = style != null && style.Position != CssPosition.Static;
+
+                if (isPositioned && !child.EstablishesStackingContext)
+                {
+                    positionedBucket.Add(child);
+                    promoted.Add(child);
+                }
+
+                if (!child.EstablishesStackingContext)
+                {
+                    CollectPromotedPositioned(child, positionedBucket, promoted);
+                }
             }
         }
 

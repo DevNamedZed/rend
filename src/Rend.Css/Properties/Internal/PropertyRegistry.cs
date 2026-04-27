@@ -336,7 +336,7 @@ namespace Rend.Css.Properties.Internal
             Register(byName, "border-image-slice", PropertyId.BorderImageSlice, false, PropertyValueType.Raw);
             Register(byName, "border-image-width", PropertyId.BorderImageWidth, false, PropertyValueType.Raw);
             Register(byName, "border-image-outset", PropertyId.BorderImageOutset, false, PropertyValueType.Raw);
-            Register(byName, "border-image-repeat", PropertyId.BorderImageRepeat, false, PropertyValueType.Keyword);
+            Register(byName, "border-image-repeat", PropertyId.BorderImageRepeat, false, PropertyValueType.Raw);
 
             // Column Fill
             Register(byName, "column-fill", PropertyId.ColumnFill, false, PropertyValueType.Keyword);
@@ -409,6 +409,9 @@ namespace Rend.Css.Properties.Internal
             // Print Color Adjust
             Register(byName, "print-color-adjust", PropertyId.PrintColorAdjust, true, PropertyValueType.Keyword);
             RegisterAlias(byName, "-webkit-print-color-adjust", PropertyId.PrintColorAdjust, true, PropertyValueType.Keyword);
+
+            // Overflow Clip Margin
+            Register(byName, "overflow-clip-margin", PropertyId.OverflowClipMargin, false, PropertyValueType.Raw);
 
             // Overflow Anchor
             Register(byName, "overflow-anchor", PropertyId.OverflowAnchor, false, PropertyValueType.Keyword);

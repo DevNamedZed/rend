@@ -25,7 +25,24 @@ namespace Rend.Layout.Internal
             // Build table context: collect rows and cells
             var tableCtx = new TableContext();
             CollectTableStructure(styledElement, tableCtx);
-            if (tableCtx.Rows.Count == 0) return;
+            if (tableCtx.Rows.Count == 0 && tableCtx.Captions.Count == 0) return;
+
+            // [CSS-TABLES §4.1] Tables with only captions and no rows still
+            // need to layout the captions.
+            if (tableCtx.Rows.Count == 0)
+            {
+                float captionCursorY = parent.ContentRect.Y;
+                for (int cap = 0; cap < tableCtx.Captions.Count; cap++)
+                {
+                    captionCursorY = LayoutCaption(tableCtx.Captions[cap], parent, context,
+                        containerWidth, captionCursorY);
+                }
+                float captionHeight = captionCursorY - parent.ContentRect.Y;
+                parent.ContentRect = new RectF(
+                    parent.ContentRect.X, parent.ContentRect.Y,
+                    parent.ContentRect.Width, captionHeight);
+                return;
+            }
 
             int numCols = tableCtx.GetColumnCount();
             if (numCols == 0) return;
@@ -90,6 +107,14 @@ namespace Rend.Layout.Internal
             else
                 colWidths = CalculateAutoWidths(tableCtx, numCols, colAvailWidth, context,
                     hasExplicitWidth: !float.IsNaN(style.Width), collapsed: collapsed);
+
+            // Compute actual table content width from column widths
+            float totalColumnWidth = 0;
+            for (int i = 0; i < numCols; i++)
+            {
+                totalColumnWidth += colWidths[i];
+            }
+            float tableContentWidth = totalColumnWidth + (numCols + 1) * borderSpacingH;
 
             int numRows = tableCtx.Rows.Count;
 
@@ -548,10 +573,19 @@ namespace Rend.Layout.Internal
                     }
                 }
 
+                // [CSS-TABLES §17.5] Row box width matches the table's actual content width
+                // (sum of column widths + spacing), not the original containing block width.
+                float rowWidth = float.IsNaN(style.Width)
+                    ? Math.Min(tableContentWidth, containerWidth)
+                    : containerWidth;
                 rowBox.ContentRect = new RectF(parent.ContentRect.X, rowYPositions[r],
-                                               containerWidth, rowHeights[r]);
-                parent.AddChild(rowBox);
+                                               rowWidth, rowHeights[r]);
             }
+
+            // [CSS2 §17.5.1] Create row group boxes for thead/tbody/tfoot so that
+            // position:relative and containing-block semantics work on these elements.
+            // Group consecutive rows by their RowGroupElement and wrap in layout boxes.
+            WrapRowsInRowGroups(rowBoxes, tableCtx, parent);
 
             // In collapsed mode, account for the outer half of the bottom border
             cursorY += collapseOuterBottom;
@@ -1028,11 +1062,22 @@ namespace Rend.Layout.Internal
             LayoutContext context, float containerWidth, float cursorY)
         {
             var captionBox = new LayoutBox(captionEl, BoxType.TableCaption);
-            BoxModelCalculator.ApplyBoxModel(captionBox, captionEl.Style, containerWidth);
+            var captionStyle = captionEl.Style;
+            BoxModelCalculator.ApplyBoxModel(captionBox, captionStyle, containerWidth);
 
-            float contentWidth = containerWidth - captionBox.PaddingLeft - captionBox.PaddingRight
-                               - captionBox.BorderLeftWidth - captionBox.BorderRightWidth
-                               - captionBox.MarginLeft - captionBox.MarginRight;
+            // [CSS-TABLES §4.1] Caption width: use explicit CSS width if specified,
+            // otherwise fill the table's content width minus caption box model.
+            float contentWidth;
+            if (!float.IsNaN(captionStyle.Width) && !SizingKeyword.IsSizingKeyword(captionStyle.Width))
+            {
+                contentWidth = DimensionResolver.ResolveWidth(captionStyle, containerWidth, captionBox);
+            }
+            else
+            {
+                contentWidth = containerWidth - captionBox.PaddingLeft - captionBox.PaddingRight
+                             - captionBox.BorderLeftWidth - captionBox.BorderRightWidth
+                             - captionBox.MarginLeft - captionBox.MarginRight;
+            }
             contentWidth = Math.Max(0, contentWidth);
 
             float x = parent.ContentRect.X + captionBox.MarginLeft + captionBox.BorderLeftWidth + captionBox.PaddingLeft;
@@ -1041,12 +1086,88 @@ namespace Rend.Layout.Internal
             captionBox.ContentRect = new RectF(x, y, contentWidth, 0);
             BlockFormattingContext.LayoutChildren(captionBox, context);
 
-            float contentHeight = CalculateAutoHeight(captionBox);
+            // [CSS-TABLES §4.1] Caption height: use explicit CSS height if specified,
+            // otherwise auto height from content.
+            float contentHeight;
+            float specifiedHeight = captionStyle.Height;
+            if (!float.IsNaN(specifiedHeight) && specifiedHeight > 0
+                && !DeferredPercent.IsEncoded(specifiedHeight))
+            {
+                contentHeight = specifiedHeight;
+                if (captionStyle.BoxSizing == CssBoxSizing.BorderBox)
+                {
+                    contentHeight -= captionBox.PaddingTop + captionBox.PaddingBottom
+                                   + captionBox.BorderTopWidth + captionBox.BorderBottomWidth;
+                    if (contentHeight < 0) { contentHeight = 0; }
+                }
+            }
+            else
+            {
+                contentHeight = CalculateAutoHeight(captionBox);
+            }
             captionBox.ContentRect = new RectF(x, y, contentWidth, contentHeight);
 
             parent.AddChild(captionBox);
 
             return y + contentHeight + captionBox.PaddingBottom + captionBox.BorderBottomWidth + captionBox.MarginBottom;
+        }
+
+        /// <summary>
+        /// [CSS2 §17.5.1] Wraps row boxes in row group layout boxes so that
+        /// position:relative and containing-block semantics apply to thead/tbody/tfoot.
+        /// Rows without a row group parent are added directly to the table.
+        /// </summary>
+        private static void WrapRowsInRowGroups(LayoutBox[] rowBoxes, TableContext tableCtx,
+            LayoutBox tableParent)
+        {
+            int rowCount = rowBoxes.Length;
+            int index = 0;
+
+            while (index < rowCount)
+            {
+                var rowGroupElement = tableCtx.Rows[index].RowGroupElement;
+
+                if (rowGroupElement == null)
+                {
+                    // Row without a row group — add directly to the table.
+                    tableParent.AddChild(rowBoxes[index]);
+                    index++;
+                    continue;
+                }
+
+                // Collect consecutive rows belonging to the same row group.
+                int groupStart = index;
+                while (index < rowCount
+                       && tableCtx.Rows[index].RowGroupElement == rowGroupElement)
+                {
+                    index++;
+                }
+
+                // Create the row group box spanning from first row to last row.
+                var groupBox = new LayoutBox(rowGroupElement, BoxType.TableRowGroup);
+                float groupTop = rowBoxes[groupStart].ContentRect.Y;
+                float groupBottom = groupTop;
+                for (int r = groupStart; r < index; r++)
+                {
+                    var rb = rowBoxes[r];
+                    float rowBottom = rb.ContentRect.Y + rb.ContentRect.Height;
+                    if (rowBottom > groupBottom)
+                    {
+                        groupBottom = rowBottom;
+                    }
+                }
+                float groupWidth = rowBoxes[groupStart].ContentRect.Width;
+                groupBox.ContentRect = new RectF(
+                    tableParent.ContentRect.X, groupTop,
+                    groupWidth, groupBottom - groupTop);
+
+                for (int r = groupStart; r < index; r++)
+                {
+                    groupBox.AddChild(rowBoxes[r]);
+                }
+
+                tableParent.AddChild(groupBox);
+            }
         }
 
         private static void CollectTableStructure(StyledElement table, TableContext ctx)
@@ -1077,18 +1198,32 @@ namespace Rend.Layout.Internal
                             var rowEl = (StyledElement)rowChild;
                             if (rowEl.Style.Display == CssDisplay.TableRow || rowEl.TagName == "tr")
                             {
-                                ctx.Rows.Add(BuildRow(rowEl));
+                                var row = BuildRow(rowEl);
+                                row.RowGroupElement = childEl;
+                                ctx.Rows.Add(row);
                             }
                         }
                     }
+                }
+                else if (display == CssDisplay.TableColumn || childEl.TagName == "col")
+                {
+                    // [CSS-TABLES §17.5.2.1] Column element defines grid columns and width hints
+                    CollectColumnDefinition(childEl, ctx);
+                }
+                else if (display == CssDisplay.TableColumnGroup || childEl.TagName == "colgroup")
+                {
+                    // [CSS-TABLES §17.5.2.1] Column group — collect child <col> elements,
+                    // or use span attribute if no <col> children
+                    CollectColumnGroup(childEl, ctx);
                 }
                 else if (display == CssDisplay.TableCell ||
                          childEl.TagName == "td" || childEl.TagName == "th")
                 {
                     // [CSS-TABLES §4] Bare td/th without tr → create anonymous row
+                    // Anonymous rows have no styled element (no background/border).
                     if (ctx.AnonymousRow == null)
                     {
-                        ctx.AnonymousRow = new TableRow { StyledElement = childEl };
+                        ctx.AnonymousRow = new TableRow();
                     }
                     int colspan = 1;
                     var csVal = childEl.GetAttribute("colspan");
@@ -1151,16 +1286,153 @@ namespace Rend.Layout.Internal
             return row;
         }
 
+        /// <summary>
+        /// Collect a single &lt;col&gt; element into the table context.
+        /// </summary>
+        private static void CollectColumnDefinition(StyledElement colElement, TableContext ctx)
+        {
+            int span = 1;
+            var spanAttr = colElement.GetAttribute("span");
+            if (spanAttr != null && int.TryParse(spanAttr, out int parsedSpan) && parsedSpan > 0)
+            {
+                span = parsedSpan;
+            }
+
+            float width = colElement.Style.Width;
+
+            ctx.ColumnDefinitions.Add(new TableColumnDefinition
+            {
+                StyledElement = colElement,
+                Span = span,
+                Width = width
+            });
+        }
+
+        /// <summary>
+        /// Collect a &lt;colgroup&gt; element. If it contains &lt;col&gt; children,
+        /// those define the columns. Otherwise the colgroup's span attribute
+        /// defines how many columns it covers.
+        /// </summary>
+        private static void CollectColumnGroup(StyledElement colgroupElement, TableContext ctx)
+        {
+            bool hasColChildren = false;
+            for (int i = 0; i < colgroupElement.Children.Count; i++)
+            {
+                var child = colgroupElement.Children[i];
+                if (child.IsText || child is StyledPseudoElement)
+                {
+                    continue;
+                }
+                var childEl = (StyledElement)child;
+                if (childEl.Style.Display == CssDisplay.TableColumn || childEl.TagName == "col")
+                {
+                    CollectColumnDefinition(childEl, ctx);
+                    hasColChildren = true;
+                }
+            }
+
+            if (!hasColChildren)
+            {
+                // [HTML §4.9.3] colgroup without col children uses span attribute
+                int span = 1;
+                var spanAttr = colgroupElement.GetAttribute("span");
+                if (spanAttr != null && int.TryParse(spanAttr, out int parsedSpan) && parsedSpan > 0)
+                {
+                    span = parsedSpan;
+                }
+
+                float width = colgroupElement.Style.Width;
+
+                ctx.ColumnDefinitions.Add(new TableColumnDefinition
+                {
+                    StyledElement = colgroupElement,
+                    Span = span,
+                    Width = width
+                });
+            }
+        }
+
+        /// <summary>
+        /// Expand column definitions into a per-column width array.
+        /// Returns null if no column definitions exist.
+        /// </summary>
+        private static float[]? ExpandColumnWidths(TableContext ctx, int numCols, float containerWidth)
+        {
+            if (ctx.ColumnDefinitions.Count == 0)
+            {
+                return null;
+            }
+
+            float[] colWidths = new float[numCols];
+            for (int i = 0; i < numCols; i++)
+            {
+                colWidths[i] = float.NaN;
+            }
+
+            int colIndex = 0;
+            for (int d = 0; d < ctx.ColumnDefinitions.Count && colIndex < numCols; d++)
+            {
+                var colDef = ctx.ColumnDefinitions[d];
+                float resolvedWidth = DimensionResolver.ResolvePercentWidth(
+                    colDef.Width, containerWidth);
+
+                for (int s = 0; s < colDef.Span && colIndex < numCols; s++)
+                {
+                    colWidths[colIndex] = resolvedWidth;
+                    colIndex++;
+                }
+            }
+
+            return colWidths;
+        }
+
         private static float[] CalculateFixedWidths(TableContext ctx, int numCols, ref float containerWidth,
                                                      bool collapsed = false)
         {
             float[] widths = new float[numCols];
             float equalWidth = containerWidth / numCols;
 
-            // First row determines widths in fixed layout.
-            // CSS 2.1 §17.5.2.1: cell 'width' is the content width.
-            // Column slot width = content width + padding + borders.
-            // In border-collapse mode, border widths are halved (shared with neighbors).
+            // [CSS-TABLES §17.5.2.1] Fixed layout column width priority:
+            // 1. Column element (<col>) with explicit width
+            // 2. First-row cell with explicit width
+            // 3. Equal distribution of remaining space
+
+            // Step 1: Get col-element widths
+            float[]? colElementWidths = ExpandColumnWidths(ctx, numCols, containerWidth);
+            bool[] assigned = new bool[numCols];
+
+            // Determine how many columns the col elements define
+            int colDefinedCount = 0;
+            if (ctx.ColumnDefinitions.Count > 0)
+            {
+                for (int d = 0; d < ctx.ColumnDefinitions.Count; d++)
+                {
+                    colDefinedCount += ctx.ColumnDefinitions[d].Span;
+                }
+            }
+
+            // Apply col-element widths first (highest priority)
+            if (colElementWidths != null)
+            {
+                for (int c = 0; c < numCols; c++)
+                {
+                    if (!float.IsNaN(colElementWidths[c]) && colElementWidths[c] > 0)
+                    {
+                        widths[c] = colElementWidths[c];
+                        assigned[c] = true;
+                    }
+                    else if (c >= colDefinedCount)
+                    {
+                        // [CSS-TABLES §17.5.2.1] Columns beyond the col-defined grid
+                        // (created by excessive colspan) get 0 width — the cell colspan
+                        // is effectively clamped to the grid.
+                        widths[c] = 0;
+                        assigned[c] = true;
+                    }
+                }
+            }
+
+            // Step 2: First-row cell widths for unassigned columns
             if (ctx.Rows.Count > 0)
             {
                 var firstRow = ctx.Rows[0];
@@ -1168,47 +1440,68 @@ namespace Rend.Layout.Internal
                 for (int c = 0; c < firstRow.Cells.Count && col < numCols; c++)
                 {
                     var cell = firstRow.Cells[c];
-                    float specWidth = DimensionResolver.ResolvePercentWidth(
-                        cell.StyledElement?.Style.Width ?? float.NaN, containerWidth);
+                    int effectiveSpan = Math.Min(cell.ColSpan, numCols - col);
 
-                    float w;
-                    if (!float.IsNaN(specWidth) && specWidth > 0 && cell.StyledElement != null)
+                    // Only apply cell width if none of the spanned columns are
+                    // already assigned by col elements
+                    bool anyAssigned = false;
+                    for (int s = 0; s < effectiveSpan; s++)
                     {
-                        // Specified width is content width; add padding and border for column slot
-                        var cs = cell.StyledElement.Style;
-                        float padH = (float.IsNaN(cs.PaddingLeft) ? 0 : cs.PaddingLeft)
-                                   + (float.IsNaN(cs.PaddingRight) ? 0 : cs.PaddingRight);
-                        float borderH = (cs.BorderLeftStyle != CssBorderStyle.None ? cs.BorderLeftWidth : 0)
-                                      + (cs.BorderRightStyle != CssBorderStyle.None ? cs.BorderRightWidth : 0);
-                        // In border-collapse, each cell's border is halved (shared with adjacent cell/table)
-                        if (collapsed) borderH /= 2f;
-                        w = specWidth + padH + borderH;
-                    }
-                    else
-                    {
-                        w = equalWidth;
+                        if (assigned[col + s])
+                        {
+                            anyAssigned = true;
+                            break;
+                        }
                     }
 
-                    for (int s = 0; s < cell.ColSpan && col < numCols; s++)
+                    if (!anyAssigned)
                     {
-                        widths[col] = w / cell.ColSpan;
-                        col++;
+                        float specWidth = DimensionResolver.ResolvePercentWidth(
+                            cell.StyledElement?.Style.Width ?? float.NaN, containerWidth);
+
+                        if (!float.IsNaN(specWidth) && specWidth > 0 && cell.StyledElement != null)
+                        {
+                            // Specified width is content width; add padding and border for column slot
+                            var cellStyle = cell.StyledElement.Style;
+                            float padH = (float.IsNaN(cellStyle.PaddingLeft) ? 0 : cellStyle.PaddingLeft)
+                                       + (float.IsNaN(cellStyle.PaddingRight) ? 0 : cellStyle.PaddingRight);
+                            float borderH = (cellStyle.BorderLeftStyle != CssBorderStyle.None ? cellStyle.BorderLeftWidth : 0)
+                                          + (cellStyle.BorderRightStyle != CssBorderStyle.None ? cellStyle.BorderRightWidth : 0);
+                            if (collapsed)
+                            {
+                                borderH /= 2f;
+                            }
+                            float cellSlotWidth = (specWidth + padH + borderH) / effectiveSpan;
+                            for (int s = 0; s < effectiveSpan; s++)
+                            {
+                                widths[col + s] = cellSlotWidth;
+                                assigned[col + s] = true;
+                            }
+                        }
                     }
+
+                    col += effectiveSpan;
                 }
-                // Fill remaining
-                for (; col < numCols; col++)
-                    widths[col] = equalWidth;
-
-                // If total column widths exceed container, expand the table (CSS 2.1 §17.5.2.1)
-                float total = 0;
-                for (int i = 0; i < numCols; i++) total += widths[i];
-                if (total > containerWidth)
-                    containerWidth = total;
             }
-            else
+
+            // Step 3: Equal distribution for remaining unassigned columns
+            for (int c = 0; c < numCols; c++)
             {
-                for (int i = 0; i < numCols; i++)
-                    widths[i] = equalWidth;
+                if (!assigned[c])
+                {
+                    widths[c] = equalWidth;
+                }
+            }
+
+            // If total column widths exceed container, expand the table (CSS 2.1 §17.5.2.1)
+            float total = 0;
+            for (int i = 0; i < numCols; i++)
+            {
+                total += widths[i];
+            }
+            if (total > containerWidth)
+            {
+                containerWidth = total;
             }
 
             return widths;
@@ -1221,6 +1514,21 @@ namespace Rend.Layout.Internal
             float[] minWidths = new float[numCols];
             float[] maxWidths = new float[numCols];
             bool[] constrained = new bool[numCols]; // columns with explicit width
+
+            // [CSS-TABLES §17.5.2.2] Apply col-element widths as constraints
+            float[]? colElementWidths = ExpandColumnWidths(ctx, numCols, containerWidth);
+            if (colElementWidths != null)
+            {
+                for (int c = 0; c < numCols; c++)
+                {
+                    if (!float.IsNaN(colElementWidths[c]) && colElementWidths[c] > 0)
+                    {
+                        minWidths[c] = colElementWidths[c];
+                        maxWidths[c] = colElementWidths[c];
+                        constrained[c] = true;
+                    }
+                }
+            }
 
             // Chrome two-pass approach (table_layout_utils.cc):
             // Pass 1: Process colspan==1 cells to establish base column widths
@@ -1297,7 +1605,8 @@ namespace Rend.Layout.Internal
                     float minW = MeasureCellWidth(cell.StyledElement, 1f, context, collapsed);
                     // Measure max-content width
                     float maxMeasureWidth = Math.Min(10000f, containerWidth > 0 ? containerWidth : 10000f);
-                    float maxW = MeasureCellWidth(cell.StyledElement, maxMeasureWidth, context, collapsed);
+                    float maxW = MeasureCellWidth(cell.StyledElement, maxMeasureWidth, context,
+                        collapsed, intrinsicSizing: !hasExplicitWidth);
 
                     if (cell.ColSpan == 1)
                     {
@@ -1487,7 +1796,7 @@ namespace Rend.Layout.Internal
         }
 
         private static float MeasureCellWidth(StyledElement cellElement, float availWidth,
-            LayoutContext context, bool collapsed = false)
+            LayoutContext context, bool collapsed = false, bool intrinsicSizing = false)
         {
             var box = new LayoutBox(cellElement, BoxType.TableCell);
             BoxModelCalculator.ApplyBoxModel(box, cellElement.Style, availWidth);
@@ -1519,17 +1828,33 @@ namespace Rend.Layout.Internal
                 var child = box.Children[i];
                 float childWidth = child.ContentRect.Width;
 
+                // [CSS-SIZING-3 §4] For auto-width table intrinsic sizing, auto-width
+                // block children contribute their content-driven width, not their
+                // fill-available width. A div with width:auto and no text content
+                // stretches to fill the measurement container, inflating the cell's
+                // max-content width to the full container width.
+                if (intrinsicSizing && child.BoxType == BoxType.Block
+                    && child.StyledNode is StyledElement blockEl
+                    && float.IsNaN(blockEl.Style.Width))
+                {
+                    float contentW = MeasureChildContentExtent(child);
+                    if (contentW < childWidth)
+                    {
+                        childWidth = contentW;
+                    }
+                }
+
                 // CSS Sizing L3: percentage widths resolve to auto for intrinsic sizing.
                 // For table children with percentage width, measure their actual content
                 // extent instead of the percentage-resolved width.
                 if (child.BoxType == BoxType.Table && child.StyledNode is StyledElement childEl
                     && DeferredPercent.IsEncoded(childEl.Style.Width))
                 {
-                    // Measure the nested table's content width from its laid-out line boxes
-                    // and children, not from its assigned percentage width.
                     float nestedContentW = MeasureBoxContentWidth(child);
                     if (nestedContentW > 0 && nestedContentW < childWidth)
+                    {
                         childWidth = nestedContentW;
+                    }
                 }
 
                 float right = child.ContentRect.X + childWidth
@@ -1563,6 +1888,57 @@ namespace Rend.Layout.Internal
             float result = maxRight + box.PaddingLeft + box.PaddingRight
                  + box.BorderLeftWidth + box.BorderRightWidth;
             return result;
+        }
+
+        /// <summary>
+        /// [CSS-SIZING-3 §4] Measures the actual content-driven width of a laid-out
+        /// block box by examining its line boxes and recursing into block children.
+        /// Used during cell intrinsic sizing so auto-width blocks don't inflate
+        /// the measured width to the full available container width.
+        /// </summary>
+        private static float MeasureChildContentExtent(LayoutBox box)
+        {
+            float maxRight = 0;
+
+            // Line boxes: inline content width
+            if (box.LineBoxes != null)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    float lineWidth = box.LineBoxes[i].NaturalContentWidth;
+                    if (lineWidth > maxRight)
+                    {
+                        maxRight = lineWidth;
+                    }
+                }
+            }
+
+            // Block children: recurse for auto-width, use ContentRect for explicit width
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                float childWidth;
+                if (child.StyledNode is StyledElement childEl
+                    && float.IsNaN(childEl.Style.Width)
+                    && child.BoxType == BoxType.Block)
+                {
+                    childWidth = MeasureChildContentExtent(child);
+                }
+                else
+                {
+                    childWidth = child.ContentRect.Width;
+                }
+
+                float right = childWidth + child.PaddingLeft + child.PaddingRight
+                    + child.BorderLeftWidth + child.BorderRightWidth
+                    + child.MarginLeft + child.MarginRight;
+                if (right > maxRight)
+                {
+                    maxRight = right;
+                }
+            }
+
+            return maxRight;
         }
 
         /// <summary>
@@ -1678,25 +2054,43 @@ namespace Rend.Layout.Internal
     {
         public List<TableRow> Rows { get; } = new List<TableRow>();
         public List<StyledElement> Captions { get; } = new List<StyledElement>();
+        public List<TableColumnDefinition> ColumnDefinitions { get; } = new List<TableColumnDefinition>();
         public TableRow? AnonymousRow { get; set; }
 
+        /// <summary>
+        /// Returns the number of columns: the larger of the col-element count
+        /// and the maximum row cell-span count.
+        /// </summary>
         public int GetColumnCount()
         {
-            int max = 0;
+            int colDefCount = 0;
+            for (int i = 0; i < ColumnDefinitions.Count; i++)
+            {
+                colDefCount += ColumnDefinitions[i].Span;
+            }
+
+            int maxRowCols = 0;
             for (int r = 0; r < Rows.Count; r++)
             {
                 int count = 0;
                 for (int c = 0; c < Rows[r].Cells.Count; c++)
+                {
                     count += Rows[r].Cells[c].ColSpan;
-                if (count > max) max = count;
+                }
+                if (count > maxRowCols)
+                {
+                    maxRowCols = count;
+                }
             }
-            return max;
+
+            return Math.Max(colDefCount, maxRowCols);
         }
     }
 
     internal sealed class TableRow
     {
         public StyledElement? StyledElement { get; set; }
+        public StyledElement? RowGroupElement { get; set; }
         public List<TableCell> Cells { get; } = new List<TableCell>();
     }
 
@@ -1705,5 +2099,17 @@ namespace Rend.Layout.Internal
         public StyledElement? StyledElement { get; set; }
         public int ColSpan { get; set; } = 1;
         public int RowSpan { get; set; } = 1;
+    }
+
+    /// <summary>
+    /// A column definition from a &lt;col&gt; element.
+    /// [CSS-TABLES §17.5.2.1] Column elements define the grid and provide
+    /// width hints that take priority over first-row cell widths.
+    /// </summary>
+    internal sealed class TableColumnDefinition
+    {
+        public StyledElement? StyledElement { get; set; }
+        public int Span { get; set; } = 1;
+        public float Width { get; set; } = float.NaN;
     }
 }

@@ -34,6 +34,13 @@ namespace Rend.Layout
         /// <summary>Natural content width before text-align adjustment. Used for intrinsic sizing.</summary>
         internal float NaturalContentWidth { get; set; }
 
+        /// <summary>
+        /// [CSS-SIZING-3 §4] Width of trailing preserved whitespace that was subtracted
+        /// from NaturalContentWidth for hanging. For max-content sizing with pre-wrap,
+        /// this width must be added back per CSS Text 3 §4.1.2.
+        /// </summary>
+        internal float TrailingWhitespaceWidth { get; set; }
+
         /// <summary>Fragments within this line.</summary>
         public IReadOnlyList<LineFragment> Fragments => _fragments;
 

@@ -661,19 +661,22 @@ namespace Rend.Css.Resolution.Internal
         }
 
         /// <summary>
-        /// [CSS-OVERFLOW §3] If one overflow axis is visible and the other is not,
-        /// the visible axis computes to auto.
+        /// [CSS-OVERFLOW-3 §3] If one overflow axis is visible and the other is not,
+        /// the visible axis computes to auto — UNLESS the other axis is clip.
+        /// overflow:clip + overflow:visible is a valid per-axis combination.
         /// </summary>
         private static void PropagateOverflow(PropertyValue[] values)
         {
             var overflowX = (CssOverflow)values[PropertyId.Overflow_X].IntValue;
             var overflowY = (CssOverflow)values[PropertyId.Overflow_Y].IntValue;
 
-            if (overflowX != CssOverflow.Visible && overflowY == CssOverflow.Visible)
+            if (overflowX != CssOverflow.Visible && overflowX != CssOverflow.Clip
+                && overflowY == CssOverflow.Visible)
             {
                 values[PropertyId.Overflow_Y] = PropertyValue.FromKeyword((int)CssOverflow.Auto);
             }
-            else if (overflowY != CssOverflow.Visible && overflowX == CssOverflow.Visible)
+            else if (overflowY != CssOverflow.Visible && overflowY != CssOverflow.Clip
+                && overflowX == CssOverflow.Visible)
             {
                 values[PropertyId.Overflow_X] = PropertyValue.FromKeyword((int)CssOverflow.Auto);
             }

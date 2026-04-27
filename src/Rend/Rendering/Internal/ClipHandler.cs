@@ -1,5 +1,7 @@
+using System;
 using Rend.Core.Values;
 using Rend.Css;
+using Rend.Css.Values;
 using Rend.Layout;
 
 namespace Rend.Rendering.Internal
@@ -68,6 +70,7 @@ namespace Rend.Rendering.Internal
                     return false;
                 }
             }
+
             bool needsClip = NeedsClipping(overflowX) || NeedsClipping(overflowY)
                 || contain == CssContain.Paint || contain == CssContain.Content || contain == CssContain.Strict;
             if (!needsClip)
@@ -75,8 +78,22 @@ namespace Rend.Rendering.Internal
                 return false;
             }
 
+            // [CSS-OVERFLOW-3 §3.4] overflow-clip-margin applies only when the clip
+            // is established by overflow:clip or by paint containment (with overflow:visible).
+            // It does NOT apply when overflow is hidden/scroll/auto — those establish
+            // their own non-expandable clip regardless of containment.
+            bool hasNonClipOverflow = overflowX == CssOverflow.Hidden || overflowX == CssOverflow.Scroll
+                || overflowX == CssOverflow.Auto || overflowY == CssOverflow.Hidden
+                || overflowY == CssOverflow.Scroll || overflowY == CssOverflow.Auto;
+            bool clipMarginApplies = !hasNonClipOverflow
+                && (overflowX == CssOverflow.Clip || overflowY == CssOverflow.Clip
+                    || contain == CssContain.Paint || contain == CssContain.Content
+                    || contain == CssContain.Strict);
+            OverflowClipMarginInfo? clipMarginInfo = clipMarginApplies ? style.OverflowClipMargin : null;
+            float clipMargin = clipMarginInfo?.Margin ?? 0f;
 
-
+            // Determine the base clip rect from the reference box.
+            RectF baseClipRect = GetReferenceBox(box, clipMarginInfo);
 
             // Use rounded clip path when border-radius is set.
             // [CSS-OVERFLOW §5.1] When one axis is clip and the other is visible,
@@ -85,15 +102,40 @@ namespace Rend.Rendering.Internal
             bool mixedClipVisible = (overflowX == CssOverflow.Clip && overflowY == CssOverflow.Visible)
                 || (overflowX == CssOverflow.Visible && overflowY == CssOverflow.Clip);
 
+            // [CSS-OVERFLOW-3 §3.4] Expand the clip rect outward by the clip margin.
+            RectF clipRect = ExpandRect(baseClipRect, clipMargin);
+
+            // [CSS-OVERFLOW-3 §3] When one axis is clip and the other is visible,
+            // extend the clip rect to allow overflow on the visible axis.
+            if (mixedClipVisible)
+            {
+                const float largeExtent = 100000f;
+                if (overflowX == CssOverflow.Visible)
+                {
+                    clipRect = new RectF(
+                        -largeExtent, clipRect.Y,
+                        largeExtent * 2, clipRect.Height);
+                }
+                else
+                {
+                    clipRect = new RectF(
+                        clipRect.X, -largeExtent,
+                        clipRect.Width, largeExtent * 2);
+                }
+            }
+
             if (radii.HasRadius && !mixedClipVisible)
             {
+                // [CSS-OVERFLOW-3 §3.4] When overflow-clip-margin expands the clip,
+                // border-radius corners are also expanded outward by the margin.
+                BorderRadii expandedRadii = ExpandRadii(radii, clipMargin);
                 var path = new PathData();
-                radii.AddToPath(path, box.PaddingRect);
+                expandedRadii.AddToPath(path, clipRect);
                 target.PushClipPath(path);
             }
             else
             {
-                target.PushClipRect(box.PaddingRect);
+                target.PushClipRect(clipRect);
             }
 
             return true;
@@ -107,6 +149,65 @@ namespace Rend.Rendering.Internal
         public static void Restore(IRenderTarget target)
         {
             target.PopClip();
+        }
+
+        /// <summary>
+        /// [CSS-OVERFLOW-3 §3.4] Returns the reference box rect for the clip region.
+        /// </summary>
+        private static RectF GetReferenceBox(LayoutBox box, OverflowClipMarginInfo? clipMarginInfo)
+        {
+            if (clipMarginInfo == null)
+            {
+                return box.PaddingRect;
+            }
+
+            switch (clipMarginInfo.ReferenceBox)
+            {
+                case CssVisualBox.ContentBox:
+                    return box.ContentRect;
+                case CssVisualBox.BorderBox:
+                    return box.BorderRect;
+                case CssVisualBox.PaddingBox:
+                default:
+                    return box.PaddingRect;
+            }
+        }
+
+        /// <summary>Expands a rectangle outward by the given amount on all sides.</summary>
+        private static RectF ExpandRect(RectF rect, float amount)
+        {
+            if (amount == 0f)
+            {
+                return rect;
+            }
+            return new RectF(
+                rect.X - amount,
+                rect.Y - amount,
+                rect.Width + amount * 2f,
+                rect.Height + amount * 2f);
+        }
+
+        /// <summary>
+        /// [CSS-OVERFLOW-3 §3.4] Expands border-radius values outward by the clip margin.
+        /// Each radius is increased by the margin amount (minimum 0).
+        /// </summary>
+        private static BorderRadii ExpandRadii(BorderRadii radii, float margin)
+        {
+            if (margin == 0f)
+            {
+                return radii;
+            }
+            return new BorderRadii
+            {
+                TlRx = Math.Max(0f, radii.TlRx + margin),
+                TlRy = Math.Max(0f, radii.TlRy + margin),
+                TrRx = Math.Max(0f, radii.TrRx + margin),
+                TrRy = Math.Max(0f, radii.TrRy + margin),
+                BrRx = Math.Max(0f, radii.BrRx + margin),
+                BrRy = Math.Max(0f, radii.BrRy + margin),
+                BlRx = Math.Max(0f, radii.BlRx + margin),
+                BlRy = Math.Max(0f, radii.BlRy + margin)
+            };
         }
 
         private static bool NeedsClipping(CssOverflow overflow)

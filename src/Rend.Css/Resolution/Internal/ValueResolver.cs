@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Rend.Core.Values;
 using Rend.Css.Properties.Internal;
+using Rend.Css.Values;
 
 namespace Rend.Css.Resolution.Internal
 {
@@ -211,6 +212,11 @@ namespace Rend.Css.Resolution.Internal
                     return TryResolveString(value, out refResult);
 
                 case PropertyValueType.Raw:
+                    // [CSS-OVERFLOW-3 §3.4] overflow-clip-margin: <visual-box> || <length [0,∞]>
+                    if (prop.Id == PropertyId.OverflowClipMargin)
+                    {
+                        return TryResolveOverflowClipMargin(value, ctx, out refResult);
+                    }
                     refResult = value;
                     return true;
 
@@ -2147,6 +2153,81 @@ namespace Rend.Css.Resolution.Internal
                 case "right": result = PropertyValue.FromKeyword((int)CssTextUnderlinePosition.Right); return true;
                 default: return false;
             }
+        }
+
+        #endregion
+
+        #region Overflow Clip Margin
+
+        /// <summary>
+        /// [CSS-OVERFLOW-3 §3.4] Resolves overflow-clip-margin: &lt;visual-box&gt; || &lt;length [0,∞]&gt;.
+        /// Default reference box is padding-box; default margin is 0px.
+        /// </summary>
+        private static bool TryResolveOverflowClipMargin(CssValue value, CssResolutionContext ctx,
+            out object? refResult)
+        {
+            refResult = null;
+            CssVisualBox box = CssVisualBox.PaddingBox;
+            float margin = 0f;
+
+            if (value is CssListValue list && list.Separator == ' ')
+            {
+                for (int i = 0; i < list.Values.Count; i++)
+                {
+                    if (!TryParseClipMarginComponent(list.Values[i], ctx, ref box, ref margin))
+                    {
+                        return false;
+                    }
+                }
+            }
+            else
+            {
+                if (!TryParseClipMarginComponent(value, ctx, ref box, ref margin))
+                {
+                    return false;
+                }
+            }
+
+            if (margin < 0f)
+            {
+                return false;
+            }
+
+            refResult = new OverflowClipMarginInfo(box, margin);
+            return true;
+        }
+
+        private static bool TryParseClipMarginComponent(CssValue component, CssResolutionContext ctx,
+            ref CssVisualBox box, ref float margin)
+        {
+            if (component is CssKeywordValue keyword)
+            {
+                switch (keyword.Keyword)
+                {
+                    case "content-box": box = CssVisualBox.ContentBox; return true;
+                    case "padding-box": box = CssVisualBox.PaddingBox; return true;
+                    case "border-box": box = CssVisualBox.BorderBox; return true;
+                    default: return false;
+                }
+            }
+
+            if (component is CssDimensionValue dim)
+            {
+                var unit = MapUnit(dim.Unit);
+                if (unit != CssLengthUnit.None)
+                {
+                    margin = new CssLength(dim.Value, unit).ToPx(ctx);
+                    return true;
+                }
+            }
+
+            if (component is CssNumberValue num && num.Value == 0f)
+            {
+                margin = 0f;
+                return true;
+            }
+
+            return false;
         }
 
         #endregion

@@ -264,10 +264,12 @@ namespace Rend.Rendering.Internal
 
             if (mode == RepeatMode.Space && tileCount > 1)
             {
-                float gap = (destLength - tileCount * tileSize) / (tileCount - 1);
+                // [CSS-BACKGROUNDS-3 §5.4] Space distributes extra space "around"
+                // tiles: before the first, between each pair, and after the last.
+                float gap = (destLength - tileCount * tileSize) / (tileCount + 1);
                 for (int i = 0; i < tileCount; i++)
                 {
-                    float offset = i * (tileSize + gap);
+                    float offset = gap + i * (tileSize + gap);
                     RectF tileDest;
                     if (horizontal)
                     {
