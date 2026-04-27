@@ -246,26 +246,38 @@ namespace Rend.Css
 
         public CssColor BorderTopColor
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _values[PropertyId.BorderTopColor].ToColor();
+            get
+            {
+                var pv = _values[PropertyId.BorderTopColor];
+                return pv.IsCurrentColor() ? Color : pv.ToColor();
+            }
         }
 
         public CssColor BorderRightColor
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _values[PropertyId.BorderRightColor].ToColor();
+            get
+            {
+                var pv = _values[PropertyId.BorderRightColor];
+                return pv.IsCurrentColor() ? Color : pv.ToColor();
+            }
         }
 
         public CssColor BorderBottomColor
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _values[PropertyId.BorderBottomColor].ToColor();
+            get
+            {
+                var pv = _values[PropertyId.BorderBottomColor];
+                return pv.IsCurrentColor() ? Color : pv.ToColor();
+            }
         }
 
         public CssColor BorderLeftColor
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _values[PropertyId.BorderLeftColor].ToColor();
+            get
+            {
+                var pv = _values[PropertyId.BorderLeftColor];
+                return pv.IsCurrentColor() ? Color : pv.ToColor();
+            }
         }
 
         public float BorderTopLeftRadius
@@ -310,8 +322,11 @@ namespace Rend.Css
 
         public CssColor OutlineColor
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _values[PropertyId.OutlineColor].ToColor();
+            get
+            {
+                var pv = _values[PropertyId.OutlineColor];
+                return pv.IsCurrentColor() ? Color : pv.ToColor();
+            }
         }
 
         public float OutlineOffset
@@ -332,8 +347,11 @@ namespace Rend.Css
 
         public CssColor BackgroundColor
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _values[PropertyId.BackgroundColor].ToColor();
+            get
+            {
+                var pv = _values[PropertyId.BackgroundColor];
+                return pv.IsCurrentColor() ? Color : pv.ToColor();
+            }
         }
 
         public float Opacity
@@ -475,8 +493,11 @@ namespace Rend.Css
 
         public CssColor TextDecorationColor
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _values[PropertyId.TextDecoration_Color].ToColor();
+            get
+            {
+                var pv = _values[PropertyId.TextDecoration_Color];
+                return pv.IsCurrentColor() ? Color : pv.ToColor();
+            }
         }
 
         public float TextDecorationThickness
@@ -643,6 +664,12 @@ namespace Rend.Css
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => (CssAlignItems)_values[PropertyId.AlignContent].IntValue;
+        }
+
+        public bool AlignContentSafe
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => CssAlignmentFlags.IsSafe(_values[PropertyId.AlignContent].IntValue);
         }
 
         public CssJustifyContent JustifyContent
@@ -905,8 +932,11 @@ namespace Rend.Css
 
         public CssColor ColumnRuleColor
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _values[PropertyId.ColumnRuleColor].ToColor();
+            get
+            {
+                var pv = _values[PropertyId.ColumnRuleColor];
+                return pv.IsCurrentColor() ? Color : pv.ToColor();
+            }
         }
 
         public CssColumnSpan ColumnSpan
@@ -1179,7 +1209,15 @@ namespace Rend.Css
 
         public string? FontFeatureSettings
         {
-            get => _refValues[PropertyId.FontFeatureSettings] as string;
+            get
+            {
+                var raw = _refValues[PropertyId.FontFeatureSettings];
+                if (raw is string s)
+                {
+                    return s;
+                }
+                return raw?.ToString();
+            }
         }
 
         #endregion

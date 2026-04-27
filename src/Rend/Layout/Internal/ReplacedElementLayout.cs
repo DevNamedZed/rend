@@ -778,22 +778,33 @@ namespace Rend.Layout.Internal
             float maxH = style.MaxHeight;
 
             // [CSS-SIZING-3 §5.1] For replaced elements, intrinsic sizing keywords in
-            // min/max constraints resolve to the intrinsic dimension.
+            // min/max constraints resolve to the intrinsic size. When the element has
+            // an aspect ratio and the other axis is definite, transfer through the
+            // ratio (e.g. min-content width = resolvedHeight * ratio when height is
+            // specified). This matches Chrome's LayoutReplaced constraint resolution.
             if (SizingKeyword.IsSizingKeyword(minW))
             {
-                minW = intrinsicWidth;
+                minW = (ratio > 0 && !float.IsNaN(height) && height > 0)
+                    ? height * ratio
+                    : intrinsicWidth;
             }
             if (SizingKeyword.IsSizingKeyword(maxW))
             {
-                maxW = intrinsicWidth;
+                maxW = (ratio > 0 && !float.IsNaN(height) && height > 0)
+                    ? height * ratio
+                    : intrinsicWidth;
             }
             if (SizingKeyword.IsSizingKeyword(minH))
             {
-                minH = intrinsicHeight;
+                minH = (ratio > 0 && !float.IsNaN(width) && width > 0)
+                    ? width / ratio
+                    : intrinsicHeight;
             }
             if (SizingKeyword.IsSizingKeyword(maxH))
             {
-                maxH = intrinsicHeight;
+                maxH = (ratio > 0 && !float.IsNaN(width) && width > 0)
+                    ? width / ratio
+                    : intrinsicHeight;
             }
 
             // Resolve deferred percentage min/max (encoded with sentinel offset)

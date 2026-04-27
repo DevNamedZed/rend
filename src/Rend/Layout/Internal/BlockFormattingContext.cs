@@ -4,6 +4,7 @@ using Rend.Core.Values;
 using Rend.Css;
 using Rend.Css.Properties.Internal;
 using Rend.Style;
+using Rend.Text;
 
 namespace Rend.Layout.Internal
 {
@@ -398,8 +399,8 @@ namespace Rend.Layout.Internal
                     }
 
                     // [CSS2 §10.4] Apply min/max-width to abspos shrink-to-fit
-                    float absMinW = DimensionResolver.ResolvePercentWidth(childStyle.MinWidth, containingWidth);
-                    float absMaxW = DimensionResolver.ResolvePercentWidth(childStyle.MaxWidth, containingWidth);
+                    float absMinW = DimensionResolver.ResolvePercentWidth(childStyle.MinWidth, containingWidth, childStyle, PropertyId.MinWidth);
+                    float absMaxW = DimensionResolver.ResolvePercentWidth(childStyle.MaxWidth, containingWidth, childStyle, PropertyId.MaxWidth);
                     // [CSS-SIZING-3 §5.1] Resolve sizing keywords for min/max-width
                     if (SizingKeyword.IsSizingKeyword(childStyle.MaxWidth))
                     {
@@ -619,8 +620,8 @@ namespace Rend.Layout.Internal
                 // [CSS-UI §3.2] When box-sizing: border-box, min-width/max-width
                 // apply to the border box, so subtract horizontal padding+border
                 // before clamping the content width.
-                float cwMinW = DimensionResolver.ResolvePercentWidth(childStyle.MinWidth, containingWidth);
-                float cwMaxW = DimensionResolver.ResolvePercentWidth(childStyle.MaxWidth, containingWidth);
+                float cwMinW = DimensionResolver.ResolvePercentWidth(childStyle.MinWidth, containingWidth, childStyle, PropertyId.MinWidth);
+                float cwMaxW = DimensionResolver.ResolvePercentWidth(childStyle.MaxWidth, containingWidth, childStyle, PropertyId.MaxWidth);
                 if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
                 {
                     float horizontalExtra = childBox.PaddingLeft + childBox.PaddingRight
@@ -1410,6 +1411,12 @@ namespace Rend.Layout.Internal
                 {
                     return true;
                 }
+                // [CSS2 §9.2.1.1] An inline element with block-level descendants
+                // triggers block-in-inline splitting — the parent must use BFC.
+                if (display == CssDisplay.Inline && HasBlockChildren(childElement))
+                {
+                    return true;
+                }
             }
             return false;
         }
@@ -1689,6 +1696,7 @@ namespace Rend.Layout.Internal
 
             var anonStyled = new StyledElement(anonElement, blockStyle, anonChildren);
             var box = new LayoutBox(anonStyled, BoxType.Block);
+            box.IsAnonymousBlock = true;
             box.ContentRect = new RectF(parent.ContentRect.X, cursorY, containingWidth, 0);
 
             InlineFormattingContext.Layout(box, context);
@@ -1760,7 +1768,8 @@ namespace Rend.Layout.Internal
                         lineHeight = metricsLineHeight;
                 }
 
-                var shaped = context.TextMeasurer.Shape(textNode.Text, fontDesc, fontSize);
+                string? fontFeatures = FontVariantFeatureMapper.BuildFeatureString(textNode.Style);
+                var shaped = context.TextMeasurer.Shape(textNode.Text, fontDesc, fontSize, fontFeatures);
                 box.ShapedRun = shaped;
                 box.TextX = 0;
                 box.TextY = cursorY + lineHeight;

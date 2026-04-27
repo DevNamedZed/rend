@@ -80,10 +80,28 @@ namespace Rend.Layout.Internal
             // ::first-letter tracking
             bool firstLetterProcessed = styledElement.FirstLetterStyle == null;
 
-            // Text indent for first line
+            // [CSS-TEXT-3 §8.1] Text indent for first line — resolve deferred % / calc() against CB
             float textIndent = styledElement.Style.TextIndent;
+            if (float.IsNegativeInfinity(textIndent))
+            {
+                var refVal = styledElement.Style.GetRefValue(PropertyId.TextIndent);
+                if (refVal is CssFunctionValue calcFn)
+                {
+                    textIndent = ValueResolver.EvaluateDeferredCalc(calcFn, containingWidth);
+                }
+                else
+                {
+                    textIndent = 0;
+                }
+            }
+            else if (DeferredPercent.IsEncoded(textIndent))
+            {
+                textIndent = DeferredPercent.Resolve(textIndent, containingWidth);
+            }
             if (!float.IsNaN(textIndent) && textIndent != 0)
+            {
                 cursorX += textIndent;
+            }
 
             // [CSS-LISTS-3 §3] list-style-position: inside — reserve space on the
             // first line for the ::marker. Chrome uses the measured width of the
@@ -140,6 +158,7 @@ namespace Rend.Layout.Internal
                                         flStyle.FontWeight,
                                         flStyle.FontStyle,
                                         Fonts.FontDescriptor.StretchToPercentage(flStyle.FontStretch));
+                                    string? flFontFeatures = FontVariantFeatureMapper.BuildFeatureString(flStyle);
                                     float flFontSize = flStyle.FontSize;
                                     float flLineHeight = flStyle.LineHeight;
                                     bool flNormalLH = float.IsNaN(flLineHeight) || flLineHeight == 0;
@@ -163,13 +182,13 @@ namespace Rend.Layout.Internal
                                         && Math.Abs(flFontSize - styledElement.Style.FontSize) < 0.01f;
                                     if (sameFontAsParent && context.TextMeasurer != null)
                                     {
-                                        var fullShaped = context.TextMeasurer.Shape(trimmed, flFontDesc, flFontSize);
+                                        var fullShaped = context.TextMeasurer.Shape(trimmed, flFontDesc, flFontSize, flFontFeatures);
                                         var split = fullShaped.SplitAtCharIndex(endIdx);
                                         flShaped = split.first;
                                     }
                                     else
                                     {
-                                        flShaped = context.TextMeasurer!.Shape(firstLetter, flFontDesc, flFontSize);
+                                        flShaped = context.TextMeasurer!.Shape(firstLetter, flFontDesc, flFontSize, flFontFeatures);
                                     }
                                     float flTextWidth = flShaped.TotalWidth;
 
@@ -255,7 +274,8 @@ namespace Rend.Layout.Internal
                                         var flFontDesc2 = new Fonts.FontDescriptor(
                                             flStyle.FontFamilies, flStyle.FontWeight, flStyle.FontStyle,
                                             Fonts.FontDescriptor.StretchToPercentage(flStyle.FontStretch));
-                                        var fullShaped = context.TextMeasurer.Shape(trimmed, flFontDesc2, flStyle.FontSize);
+                                        string? flFontFeatures2 = FontVariantFeatureMapper.BuildFeatureString(flStyle);
+                                        var fullShaped = context.TextMeasurer.Shape(trimmed, flFontDesc2, flStyle.FontSize, flFontFeatures2);
                                         var splitResult = fullShaped.SplitAtCharIndex(endIdx);
                                         // First letter with cross-boundary shaped glyphs
                                         var firstLetterText = new StyledText(firstLetter, flStyle);
@@ -662,11 +682,12 @@ namespace Rend.Layout.Internal
                     style.FontWeight,
                     style.FontStyle,
                     FontDescriptor.StretchToPercentage(style.FontStretch));
+                string? fontFeatures = FontVariantFeatureMapper.BuildFeatureString(style);
 
                 // In vertical mode, each character or word-segment occupies a vertical slot.
                 // For the pragmatic approach (sideways text), we shape the entire run and
                 // treat its measured width as the vertical extent.
-                var shaped = context.TextMeasurer.Shape(text, fontDesc, fontSize);
+                var shaped = context.TextMeasurer.Shape(text, fontDesc, fontSize, fontFeatures);
                 float textWidth = shaped.TotalWidth + CalculateSpacingExtra(text, style);
 
                 if (cursorY + textWidth <= startY + containingHeight)
@@ -928,6 +949,7 @@ namespace Rend.Layout.Internal
                     style.FontWeight,
                     style.FontStyle,
                     FontDescriptor.StretchToPercentage(style.FontStretch));
+                string? fontFeatures = FontVariantFeatureMapper.BuildFeatureString(style);
 
                 ascent = context.TextMeasurer.GetAscent(fontDesc, fontSize);
 
@@ -936,7 +958,9 @@ namespace Rend.Layout.Internal
                 {
                     float metricsLineHeight = context.TextMeasurer.GetNormalLineHeight(fontDesc, fontSize);
                     if (!float.IsNaN(metricsLineHeight) && metricsLineHeight > 0)
+                    {
                         lineHeight = metricsLineHeight;
+                    }
                 }
 
                 // CSS half-leading: the baseline position from the top of the line box
@@ -950,10 +974,12 @@ namespace Rend.Layout.Internal
                 // Strip soft hyphens from display text (invisible unless at a break point)
                 string displayText = text;
                 if (style.Hyphens != CssHyphens.None && text.IndexOf('\u00AD') >= 0)
+                {
                     displayText = text.Replace("\u00AD", string.Empty);
+                }
 
                 // Shape and measure (use pre-shaped run for cross-boundary shaping)
-                var shaped = preShapedRun ?? context.TextMeasurer.Shape(displayText, fontDesc, fontSize);
+                var shaped = preShapedRun ?? context.TextMeasurer.Shape(displayText, fontDesc, fontSize, fontFeatures);
 
                 // Add extra width for letter-spacing and word-spacing
                 float adjustedWidth = shaped.TotalWidth + CalculateSpacingExtra(displayText, style);
@@ -968,7 +994,7 @@ namespace Rend.Layout.Internal
                     string trimmedForWrap = displayText.TrimEnd(' ');
                     if (trimmedForWrap.Length < displayText.Length && trimmedForWrap.Length > 0)
                     {
-                        var trimShaped = context.TextMeasurer.Shape(trimmedForWrap, fontDesc, fontSize);
+                        var trimShaped = context.TextMeasurer.Shape(trimmedForWrap, fontDesc, fontSize, fontFeatures);
                         wrapCheckWidth = trimShaped.TotalWidth + CalculateSpacingExtra(trimmedForWrap, style);
                     }
                 }
@@ -987,7 +1013,7 @@ namespace Rend.Layout.Internal
                              ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
                              lineHeight, ascent, parent, inlineAncestor, style.LetterSpacing, style.WordSpacing,
                              style.WordBreak, style.OverflowWrap, style.Hyphens, style.WhiteSpace,
-                             style.LineBreak);
+                             style.LineBreak, fontFeatures);
                 }
             }
             else
@@ -1042,7 +1068,8 @@ namespace Rend.Layout.Internal
             CssOverflowWrap overflowWrap = CssOverflowWrap.Normal,
             CssHyphens hyphens = CssHyphens.Manual,
             CssWhiteSpace whiteSpace = CssWhiteSpace.Normal,
-            CssLineBreak lineBreak = CssLineBreak.Auto)
+            CssLineBreak lineBreak = CssLineBreak.Auto,
+            string? fontFeatures = null)
         {
             // Find break opportunities
             var breaker = new LineBreaker();
@@ -1125,7 +1152,7 @@ namespace Rend.Layout.Internal
 
                     // Strip soft hyphens from display text (they're invisible unless at a break point)
                     string displayWord = hasSoftHyphens ? word.Replace("\u00AD", string.Empty) : word;
-                    var shaped = context.TextMeasurer!.Shape(displayWord, fontDesc, fontSize);
+                    var shaped = context.TextMeasurer!.Shape(displayWord, fontDesc, fontSize, fontFeatures);
                     float wordWidth = shaped.TotalWidth + CalculateSpacingExtraRaw(displayWord, letterSpacing, wordSpacing);
 
                     // Compute the full-line width by reshaping accumulated text + this word as
@@ -1152,7 +1179,7 @@ namespace Rend.Layout.Internal
                                 : lineCandidate.TrimEnd(' ');
                             if (measureCandidate.Length > 0)
                             {
-                                var candShape = context.TextMeasurer!.Shape(measureCandidate, fontDesc, fontSize);
+                                var candShape = context.TextMeasurer!.Shape(measureCandidate, fontDesc, fontSize, fontFeatures);
                                 candidateWidth = candShape.TotalWidth + CalculateSpacingExtraRaw(measureCandidate, letterSpacing, wordSpacing);
                             }
                             else
@@ -1177,7 +1204,8 @@ namespace Rend.Layout.Internal
                                 bool softHyphenBreak = hasSoftHyphens && wordStart > 0 && text[wordStart - 1] == '\u00AD';
                                 FlushAccumulatedText(text, lineTextStart, wordStart, hasSoftHyphens, fontDesc, fontSize,
                                     context, currentLine, lineFragStartX, accumulatedWidth, lineHeight, ascent,
-                                    inlineAncestor, letterSpacing, wordSpacing, appendHyphen: softHyphenBreak);
+                                    inlineAncestor, letterSpacing, wordSpacing, appendHyphen: softHyphenBreak,
+                                    fontFeatures: fontFeatures);
                                 cursorX = lineFragStartX + accumulatedWidth;
                                 lineTextStart = wordStart;
                                 lineFragStartX = cursorX;
@@ -1187,7 +1215,8 @@ namespace Rend.Layout.Internal
                             wordHandled = TryAutoHyphenate(displayWord, fontDesc, fontSize, context,
                                 ref cursorX, ref cursorY, ref startX, ref containingWidth,
                                 ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
-                                lineHeight, ascent, parent, inlineAncestor, letterSpacing, wordSpacing);
+                                lineHeight, ascent, parent, inlineAncestor, letterSpacing, wordSpacing,
+                                fontFeatures);
                             if (wordHandled)
                             {
                                 lineTextStart = end;
@@ -1204,7 +1233,8 @@ namespace Rend.Layout.Internal
                                 bool softHyphenBreak = hasSoftHyphens && wordStart > 0 && text[wordStart - 1] == '\u00AD';
                                 FlushAccumulatedText(text, lineTextStart, wordStart, hasSoftHyphens, fontDesc, fontSize,
                                     context, currentLine, lineFragStartX, accumulatedWidth, lineHeight, ascent,
-                                    inlineAncestor, letterSpacing, wordSpacing, appendHyphen: softHyphenBreak);
+                                    inlineAncestor, letterSpacing, wordSpacing, appendHyphen: softHyphenBreak,
+                                    fontFeatures: fontFeatures);
                                 UpdateLineMetrics(ref maxLineHeight, ref lineBaseline, lineHeight, ascent);
                             }
 
@@ -1234,7 +1264,7 @@ namespace Rend.Layout.Internal
                                         : newLineCandidate.TrimEnd(' ');
                                     if (nlMeasure.Length > 0)
                                     {
-                                        var nlShape = context.TextMeasurer!.Shape(nlMeasure, fontDesc, fontSize);
+                                        var nlShape = context.TextMeasurer!.Shape(nlMeasure, fontDesc, fontSize, fontFeatures);
                                         candidateWidth = nlShape.TotalWidth + CalculateSpacingExtraRaw(nlMeasure, letterSpacing, wordSpacing);
                                     }
                                     else
@@ -1266,7 +1296,8 @@ namespace Rend.Layout.Internal
                         {
                             WrapTextBreakAll(displayWord, fontDesc, fontSize, context, ref cursorX, ref cursorY, ref startX,
                                              ref containingWidth, ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline,
-                                             lineHeight, ascent, parent, inlineAncestor, letterSpacing, wordSpacing);
+                                             lineHeight, ascent, parent, inlineAncestor, letterSpacing, wordSpacing,
+                                             fontFeatures);
                             lineTextStart = end;
                             lineFragStartX = cursorX;
                             accumulatedWidth = 0;
@@ -1288,7 +1319,7 @@ namespace Rend.Layout.Internal
             {
                 FlushAccumulatedText(text, lineTextStart, text.Length, hasSoftHyphens, fontDesc, fontSize,
                     context, currentLine, lineFragStartX, accumulatedWidth, lineHeight, ascent,
-                    inlineAncestor, letterSpacing, wordSpacing);
+                    inlineAncestor, letterSpacing, wordSpacing, fontFeatures: fontFeatures);
             }
         }
 
@@ -1302,7 +1333,8 @@ namespace Rend.Layout.Internal
             FontDescriptor fontDesc, float fontSize, LayoutContext context,
             LineBox currentLine, float fragX, float totalWidth,
             float lineHeight, float ascent, StyledElement? inlineAncestor,
-            float letterSpacing, float wordSpacing, bool appendHyphen = false)
+            float letterSpacing, float wordSpacing, bool appendHyphen = false,
+            string? fontFeatures = null)
         {
             int segLen = Math.Max(0, textEnd - textStart);
             if (segLen == 0 || textStart < 0 || textStart >= fullText.Length) { return; }
@@ -1321,7 +1353,7 @@ namespace Rend.Layout.Internal
                 segment += "-";
             }
 
-            var shaped = context.TextMeasurer!.Shape(segment, fontDesc, fontSize);
+            var shaped = context.TextMeasurer!.Shape(segment, fontDesc, fontSize, fontFeatures);
             // Use the shaped width for the combined segment (more accurate than sum of word widths)
             float segmentWidth = shaped.TotalWidth + CalculateSpacingExtraRaw(segment, letterSpacing, wordSpacing);
 
@@ -1341,7 +1373,8 @@ namespace Rend.Layout.Internal
             ref LineBox currentLine, List<LineBox> lineBoxes,
             ref float maxLineHeight, ref float lineBaseline,
             float lineHeight, float ascent, LayoutBox parent,
-            StyledElement? inlineAncestor, float letterSpacing, float wordSpacing)
+            StyledElement? inlineAncestor, float letterSpacing, float wordSpacing,
+            string? fontFeatures = null)
         {
             // Extract only the alphabetic portion for dictionary lookup (strip leading/trailing punctuation/spaces)
             int alphaStart = 0;
@@ -1390,7 +1423,7 @@ namespace Rend.Layout.Internal
 
             // Place the hyphenated prefix on the current line
             string firstPart = word.Substring(0, bestSplit) + "-";
-            var firstShaped = context.TextMeasurer.Shape(firstPart, fontDesc, fontSize);
+            var firstShaped = context.TextMeasurer.Shape(firstPart, fontDesc, fontSize, fontFeatures);
             float firstWidth = firstShaped.TotalWidth + CalculateSpacingExtraRaw(firstPart, letterSpacing, wordSpacing);
             AddTextFragment(currentLine, firstPart, firstShaped, cursorX, firstWidth, lineHeight, ascent, inlineAncestor);
             cursorX += firstWidth;
@@ -1404,7 +1437,7 @@ namespace Rend.Layout.Internal
             string secondPart = word.Substring(bestSplit);
             if (secondPart.Length > 0)
             {
-                var secondShaped = context.TextMeasurer.Shape(secondPart, fontDesc, fontSize);
+                var secondShaped = context.TextMeasurer.Shape(secondPart, fontDesc, fontSize, fontFeatures);
                 float secondWidth = secondShaped.TotalWidth + CalculateSpacingExtraRaw(secondPart, letterSpacing, wordSpacing);
                 AddTextFragment(currentLine, secondPart, secondShaped, cursorX, secondWidth, lineHeight, ascent, inlineAncestor);
                 cursorX += secondWidth;
@@ -1421,7 +1454,8 @@ namespace Rend.Layout.Internal
             ref LineBox currentLine, List<LineBox> lineBoxes,
             ref float maxLineHeight, ref float lineBaseline,
             float lineHeight, float ascent, LayoutBox parent,
-            StyledElement? inlineAncestor, float letterSpacing, float wordSpacing)
+            StyledElement? inlineAncestor, float letterSpacing, float wordSpacing,
+            string? fontFeatures = null)
         {
             // Batch consecutive characters that fit on the same line into a single
             // text fragment to preserve proper kerning and avoid per-character spacing artifacts.
@@ -1433,7 +1467,7 @@ namespace Rend.Layout.Internal
             {
                 int charLen = char.IsHighSurrogate(text[i]) && i + 1 < text.Length ? 2 : 1;
                 string ch = text.Substring(i, charLen);
-                var charShaped = context.TextMeasurer!.Shape(ch, fontDesc, fontSize);
+                var charShaped = context.TextMeasurer!.Shape(ch, fontDesc, fontSize, fontFeatures);
                 float charWidth = charShaped.TotalWidth;
                 if (letterSpacing != 0 && i > 0) charWidth += letterSpacing;
                 if (wordSpacing != 0 && ch == " ") charWidth += wordSpacing;
@@ -1447,7 +1481,8 @@ namespace Rend.Layout.Internal
                     if (i > batchStart)
                     {
                         FlushBreakAllBatch(text, batchStart, i, fontDesc, fontSize, context,
-                            batchX, batchWidth, lineHeight, ascent, currentLine, inlineAncestor);
+                            batchX, batchWidth, lineHeight, ascent, currentLine, inlineAncestor,
+                            fontFeatures);
                     }
                     StartNewLine(parent, ref cursorX, ref cursorY, ref startX, ref containingWidth,
                                  ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, context);
@@ -1467,20 +1502,22 @@ namespace Rend.Layout.Internal
             if (text.Length > batchStart)
             {
                 FlushBreakAllBatch(text, batchStart, text.Length, fontDesc, fontSize, context,
-                    batchX, batchWidth, lineHeight, ascent, currentLine, inlineAncestor);
+                    batchX, batchWidth, lineHeight, ascent, currentLine, inlineAncestor,
+                    fontFeatures);
             }
         }
 
         private static void FlushBreakAllBatch(
             string text, int start, int end, FontDescriptor fontDesc, float fontSize,
             LayoutContext context, float x, float width,
-            float lineHeight, float ascent, LineBox currentLine, StyledElement? inlineAncestor)
+            float lineHeight, float ascent, LineBox currentLine, StyledElement? inlineAncestor,
+            string? fontFeatures = null)
         {
             int batchLen = Math.Max(0, end - start);
             if (batchLen == 0 || start < 0 || start >= text.Length) { return; }
             batchLen = Math.Min(batchLen, text.Length - start);
             string batchText = text.Substring(start, batchLen);
-            var shaped = context.TextMeasurer!.Shape(batchText, fontDesc, fontSize);
+            var shaped = context.TextMeasurer!.Shape(batchText, fontDesc, fontSize, fontFeatures);
             AddTextFragment(currentLine, batchText, shaped, x, width, lineHeight, ascent, inlineAncestor);
         }
 
@@ -1763,8 +1800,8 @@ namespace Rend.Layout.Internal
 
             // [CSS2 §10.4] Apply min-width/max-width constraints
             {
-                float ibMinW = DimensionResolver.ResolvePercentWidth(element.Style.MinWidth, containingWidth);
-                float ibMaxW = DimensionResolver.ResolvePercentWidth(element.Style.MaxWidth, containingWidth);
+                float ibMinW = DimensionResolver.ResolvePercentWidth(element.Style.MinWidth, containingWidth, element.Style, PropertyId.MinWidth);
+                float ibMaxW = DimensionResolver.ResolvePercentWidth(element.Style.MaxWidth, containingWidth, element.Style, PropertyId.MaxWidth);
                 if (element.Style.BoxSizing == CssBoxSizing.BorderBox)
                 {
                     float hExtra = box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth;
@@ -2223,12 +2260,17 @@ namespace Rend.Layout.Internal
         {
             float cbWidth = parent.ContentRect.Width;
 
-            // [CSS-POSITION-3 §3.3] Percentage top/bottom resolve against the containing
-            // block's height. If that height is indefinite (height is auto and not
-            // resolved by flex/grid stretch), percentage values resolve to 0.
-            float cbStyleHeight = parent.StyledNode?.Style.Height ?? float.NaN;
-            bool hasDefiniteHeight = !float.IsNaN(cbStyleHeight) || parent.HasDefiniteCrossSize;
-            float cbHeight = hasDefiniteHeight ? parent.ContentRect.Height : 0;
+            // [CSS2 §10.6] Percentage top/bottom resolve against the containing block's
+            // height. Anonymous block wrappers are transparent for this purpose — walk
+            // up to the real block container that has a definite height.
+            var heightCb = parent;
+            while (heightCb.IsAnonymousBlock && heightCb.Parent != null)
+            {
+                heightCb = heightCb.Parent;
+            }
+            float cbStyleHeight = heightCb.StyledNode?.Style.Height ?? float.NaN;
+            bool hasDefiniteHeight = !float.IsNaN(cbStyleHeight) || heightCb.HasDefiniteCrossSize;
+            float cbHeight = hasDefiniteHeight ? heightCb.ContentRect.Height : 0;
 
             float dx = 0;
             float dy = 0;
@@ -3145,7 +3187,9 @@ namespace Rend.Layout.Internal
                             fragStyle.FontStyle,
                             FontDescriptor.StretchToPercentage(fragStyle.FontStretch))
                         : new FontDescriptor("serif", 400, CssFontStyle.Normal, 100f);
-                    var shapedEllipsis = context.TextMeasurer.Shape(ellipsis, fontDesc, fontSize);
+                    string? ellipsisFeatures = fragStyle != null
+                        ? FontVariantFeatureMapper.BuildFeatureString(fragStyle) : null;
+                    var shapedEllipsis = context.TextMeasurer.Shape(ellipsis, fontDesc, fontSize, ellipsisFeatures);
                     ellipsisWidth = shapedEllipsis.TotalWidth;
                 }
                 if (ellipsisWidth <= 0) ellipsisWidth = 10f; // fallback

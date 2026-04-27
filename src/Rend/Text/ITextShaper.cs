@@ -13,7 +13,9 @@ namespace Rend.Text
         /// <param name="fontSize">The font size in points/pixels.</param>
         /// <param name="language">Optional BCP 47 language tag.</param>
         /// <param name="script">Optional ISO 15924 script tag.</param>
+        /// <param name="fontFeatures">Optional CSS font-feature-settings string.</param>
         /// <returns>A shaped text run containing positioned glyphs.</returns>
-        ShapedTextRun Shape(string text, byte[] fontData, float fontSize, string? language = null, string? script = null);
+        ShapedTextRun Shape(string text, byte[] fontData, float fontSize,
+            string? language = null, string? script = null, string? fontFeatures = null);
     }
 }

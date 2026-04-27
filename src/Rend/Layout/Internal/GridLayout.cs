@@ -4,6 +4,7 @@ using Rend.Core.Values;
 using Rend.Css;
 using Rend.Css.Properties.Internal;
 using Rend.Style;
+using Rend.Text;
 
 namespace Rend.Layout.Internal
 {
@@ -77,13 +78,38 @@ namespace Rend.Layout.Internal
             }
 
             float rowGap = style.RowGap;
-            if (DeferredPercent.IsEncoded(rowGap))
+            if (float.IsNegativeInfinity(rowGap))
+            {
+                var rowGapRef = style.GetRefValue(PropertyId.RowGap);
+                if (rowGapRef is CssFunctionValue rowGapCalc)
+                {
+                    rowGap = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(
+                        rowGapCalc, containerHeight > 0 ? containerHeight : containerWidth);
+                }
+                else
+                {
+                    rowGap = 0;
+                }
+            }
+            else if (DeferredPercent.IsEncoded(rowGap))
             {
                 rowGap = DeferredPercent.Resolve(rowGap, containerHeight > 0 ? containerHeight : containerWidth);
             }
             if (float.IsNaN(rowGap) || rowGap < 0) { rowGap = 0; }
             float colGap = style.ColumnGap;
-            if (DeferredPercent.IsEncoded(colGap))
+            if (float.IsNegativeInfinity(colGap))
+            {
+                var colGapRef = style.GetRefValue(PropertyId.ColumnGap);
+                if (colGapRef is CssFunctionValue colGapCalc)
+                {
+                    colGap = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(colGapCalc, containerWidth);
+                }
+                else
+                {
+                    colGap = 0;
+                }
+            }
+            else if (DeferredPercent.IsEncoded(colGap))
             {
                 colGap = DeferredPercent.Resolve(colGap, containerWidth);
             }
@@ -120,6 +146,7 @@ namespace Rend.Layout.Internal
                     var anonStyled = new StyledElement(anonElement, blockStyle, anonChildren);
 
                     var textBox = new LayoutBox(anonStyled, BoxType.Block);
+                    textBox.IsAnonymousBlock = true;
                     textBox.ContentRect = new RectF(0, 0, parent.ContentRect.Width, 0);
                     var savedFloatCtx = context.FloatContext;
                     context.FloatContext = null;
@@ -151,7 +178,8 @@ namespace Rend.Layout.Internal
                     {
                         var fontDesc = new Fonts.FontDescriptor(pseudo.Style.FontFamilies,
                             pseudo.Style.FontWeight, pseudo.Style.FontStyle);
-                        var shaped = context.TextMeasurer.Shape(pseudo.Content, fontDesc, fontSize);
+                        string? fontFeatures = FontVariantFeatureMapper.BuildFeatureString(pseudo.Style);
+                        var shaped = context.TextMeasurer.Shape(pseudo.Content, fontDesc, fontSize, fontFeatures);
                         measuredWidth = shaped.TotalWidth;
                     }
                     else
@@ -254,10 +282,12 @@ namespace Rend.Layout.Internal
                             + posBox.BorderTopWidth + posBox.BorderBottomWidth
                             + posBox.MarginTop + posBox.MarginBottom;
 
-                        CssAlignItems absAlignSelf = childEl.Style.AlignSelf;
+                        CssAlignItems absAlignSelf = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                            (int)childEl.Style.AlignSelf);
                         if (absAlignSelf == CssAlignItems.Normal || (int)absAlignSelf > (int)CssAlignItems.Normal)
                         {
-                            absAlignSelf = style.AlignItems;
+                            absAlignSelf = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                                (int)style.AlignItems);
                         }
                         float absFreeV = cbHeight - absOuterH;
                         if (absFreeV > 0)
@@ -273,10 +303,12 @@ namespace Rend.Layout.Internal
                             }
                         }
 
-                        CssAlignItems absJustifySelf = childEl.Style.JustifySelf;
+                        CssAlignItems absJustifySelf = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                            (int)childEl.Style.JustifySelf);
                         if (absJustifySelf == CssAlignItems.Normal || (int)absJustifySelf > (int)CssAlignItems.Normal)
                         {
-                            absJustifySelf = style.JustifyItems;
+                            absJustifySelf = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                                (int)style.JustifyItems);
                         }
                         float absFreeH = cbWidth - absOuterW;
                         if (absFreeH > 0)
@@ -1213,7 +1245,8 @@ namespace Rend.Layout.Internal
             // 'normal' keyword to CssJustifyContent.FlexStart, so that sentinel is
             // what we treat as the grid default here.
             {
-                var jcForStretch = style.JustifyContent;
+                var jcForStretch = (CssJustifyContent)Css.CssAlignmentFlags.StripSafe(
+                    (int)style.JustifyContent);
                 bool stretchByDefault = jcForStretch == CssJustifyContent.FlexStart
                                       || jcForStretch == CssJustifyContent.Stretch;
                 if (stretchByDefault)
@@ -1285,8 +1318,10 @@ namespace Rend.Layout.Internal
                     bool heightAutoForGrid = float.IsNaN(item.StyledElement.Style.Height);
                     if (itemAr > 0 && widthAutoForGrid && heightAutoForGrid && explicitRowTracks != null)
                     {
-                        CssAlignItems itemAlignBlock = style.AlignItems;
-                        CssAlignItems selfBlock = item.StyledElement.Style.AlignSelf;
+                        CssAlignItems itemAlignBlock = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                            (int)style.AlignItems);
+                        CssAlignItems selfBlock = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                            (int)item.StyledElement.Style.AlignSelf);
                         if (selfBlock != CssAlignItems.Normal && (int)selfBlock <= (int)CssAlignItems.Normal)
                         {
                             itemAlignBlock = selfBlock;
@@ -1344,10 +1379,12 @@ namespace Rend.Layout.Internal
                             // explicit, ResolveWidth's aspect-ratio transfer path already
                             // returns the correct preferred size (height × ratio), so we
                             // must fall through to ResolveWidth in that case.
-                            CssAlignItems justifySelfInline = item.StyledElement.Style.JustifySelf;
+                            CssAlignItems justifySelfInline = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                                (int)item.StyledElement.Style.JustifySelf);
                             if (justifySelfInline == CssAlignItems.Normal || (int)justifySelfInline > (int)CssAlignItems.Normal)
                             {
-                                justifySelfInline = style.JustifyItems;
+                                justifySelfInline = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                                    (int)style.JustifyItems);
                             }
                             bool gridItemIsStretched = IsStretch(justifySelfInline);
                             if (gridItemIsStretched)
@@ -1371,10 +1408,12 @@ namespace Rend.Layout.Internal
                             // Baseline falls back to start when the item does not
                             // participate in a shared baseline context, so it also
                             // uses intrinsic sizing here.
-                            CssAlignItems effectiveJustifySelf = item.StyledElement.Style.JustifySelf;
+                            CssAlignItems effectiveJustifySelf = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                                (int)item.StyledElement.Style.JustifySelf);
                             if (effectiveJustifySelf == CssAlignItems.Normal || (int)effectiveJustifySelf > (int)CssAlignItems.Normal)
                             {
-                                effectiveJustifySelf = style.JustifyItems;
+                                effectiveJustifySelf = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                                    (int)style.JustifyItems);
                             }
                             if (IsStretch(effectiveJustifySelf))
                             {
@@ -1790,7 +1829,8 @@ namespace Rend.Layout.Internal
             // trigger stretching — max-height fallback (auto-height container) must not.
             if (containerHeightIsDefinite && finalRows > 0)
             {
-                var alignContent = style.AlignContent;
+                var alignContent = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                    (int)style.AlignContent);
                 bool stretchRows = alignContent == CssAlignItems.Stretch
                                 || alignContent == CssAlignItems.Normal;
                 if (stretchRows)
@@ -1880,8 +1920,10 @@ namespace Rend.Layout.Internal
             }
 
             // Read container-level alignment defaults
-            CssAlignItems containerAlignItems = style.AlignItems;
-            CssAlignItems containerJustifyItems = style.JustifyItems;
+            CssAlignItems containerAlignItems = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                (int)style.AlignItems);
+            CssAlignItems containerJustifyItems = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                (int)style.JustifyItems);
 
             // [CSS-SIZING-3 §5.2.2] Percent heights on grid items resolve against
             // the grid area size. The first-pass item layout used explicitRowTracks
@@ -1985,12 +2027,16 @@ namespace Rend.Layout.Internal
                     for (int i = 0; i < items.Count; i++)
                     {
                         var styledEl = items[i].StyledElement;
-                        if (styledEl != null
-                            && (styledEl.Style.AlignSelf == CssAlignItems.Baseline
-                                || styledEl.Style.AlignSelf == CssAlignItems.LastBaseline))
+                        if (styledEl != null)
                         {
-                            hasBaselineAlignment = true;
-                            break;
+                            var selfAlignRaw = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                                (int)styledEl.Style.AlignSelf);
+                            if (selfAlignRaw == CssAlignItems.Baseline
+                                || selfAlignRaw == CssAlignItems.LastBaseline)
+                            {
+                                hasBaselineAlignment = true;
+                                break;
+                            }
                         }
                     }
                 }
@@ -2129,11 +2175,15 @@ namespace Rend.Layout.Internal
                     for (int i = 0; i < items.Count; i++)
                     {
                         var styledEl = items[i].StyledElement;
-                        if (styledEl != null
-                            && styledEl.Style.JustifySelf == CssAlignItems.Baseline)
+                        if (styledEl != null)
                         {
-                            hasColumnBaselineAlignment = true;
-                            break;
+                            var selfJustifyRaw = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                                (int)styledEl.Style.JustifySelf);
+                            if (selfJustifyRaw == CssAlignItems.Baseline)
+                            {
+                                hasColumnBaselineAlignment = true;
+                                break;
+                            }
                         }
                     }
                 }
@@ -2207,7 +2257,8 @@ namespace Rend.Layout.Internal
                 int distributionCols = nonCollapsedCols > 0 ? nonCollapsedCols : finalCols;
                 if (freeInline > 1f)
                 {
-                    var jc = style.JustifyContent;
+                    var jc = (CssJustifyContent)Css.CssAlignmentFlags.StripSafe(
+                        (int)style.JustifyContent);
                     if (jc == CssJustifyContent.Stretch && distributionCols > 0)
                     {
                         // [CSS-ALIGN §5.3.4] Distribute free space equally to non-collapsed columns
@@ -2271,7 +2322,8 @@ namespace Rend.Layout.Internal
                 float freeBlock = containerHeight - totalRowH;
                 if (freeBlock > 0)
                 {
-                    var ac = style.AlignContent;
+                    var ac = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                        (int)style.AlignContent);
                     if (ac == CssAlignItems.Center)
                         alignContentOffset = freeBlock / 2f;
                     else if (ac == CssAlignItems.End || ac == CssAlignItems.FlexEnd)
@@ -2385,13 +2437,19 @@ namespace Rend.Layout.Internal
                 if (item.StyledElement != null)
                 {
                     var itemStyle = item.StyledElement.Style;
-                    CssAlignItems selfBlock = itemStyle.AlignSelf;
-                    CssAlignItems selfInline = itemStyle.JustifySelf;
+                    CssAlignItems selfBlock = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                        (int)itemStyle.AlignSelf);
+                    CssAlignItems selfInline = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                        (int)itemStyle.JustifySelf);
                     // Only override if explicitly set (valid enum range and not Normal/auto)
                     if (selfBlock != CssAlignItems.Normal && (int)selfBlock <= (int)CssAlignItems.Normal)
+                    {
                         alignBlock = selfBlock;
+                    }
                     if (selfInline != CssAlignItems.Normal && (int)selfInline <= (int)CssAlignItems.Normal)
+                    {
                         alignInline = selfInline;
+                    }
                 }
 
                 // [CSS-GRID §10.3] Auto margins absorb free space, overriding alignment.
@@ -2837,10 +2895,12 @@ namespace Rend.Layout.Internal
                 float staticX = gridArea.X;
                 float staticY = gridArea.Y;
 
-                CssAlignItems justifySelf = item.StyledElement.Style.JustifySelf;
+                CssAlignItems justifySelf = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                    (int)item.StyledElement.Style.JustifySelf);
                 if (justifySelf == CssAlignItems.Normal || (int)justifySelf > (int)CssAlignItems.Normal)
                 {
-                    justifySelf = containerStyle.JustifyItems;
+                    justifySelf = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                        (int)containerStyle.JustifyItems);
                 }
                 float freeH = areaWidth - outerWidth;
                 if (freeH > 0)
@@ -2856,10 +2916,12 @@ namespace Rend.Layout.Internal
                     }
                 }
 
-                CssAlignItems alignSelf = item.StyledElement.Style.AlignSelf;
+                CssAlignItems alignSelf = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                    (int)item.StyledElement.Style.AlignSelf);
                 if (alignSelf == CssAlignItems.Normal || (int)alignSelf > (int)CssAlignItems.Normal)
                 {
-                    alignSelf = containerStyle.AlignItems;
+                    alignSelf = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                        (int)containerStyle.AlignItems);
                 }
                 float freeV = areaHeight - outerHeight;
                 if (freeV > 0)
@@ -4697,7 +4759,8 @@ namespace Rend.Layout.Internal
             {
                 return containerDefault;
             }
-            var selfAlign = item.StyledElement.Style.AlignSelf;
+            var selfAlign = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                (int)item.StyledElement.Style.AlignSelf);
             if (selfAlign != CssAlignItems.Normal && (int)selfAlign <= (int)CssAlignItems.Normal)
             {
                 return selfAlign;
@@ -4715,7 +4778,8 @@ namespace Rend.Layout.Internal
             {
                 return containerDefault;
             }
-            var selfJustify = item.StyledElement.Style.JustifySelf;
+            var selfJustify = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
+                (int)item.StyledElement.Style.JustifySelf);
             if (selfJustify != CssAlignItems.Normal && (int)selfJustify <= (int)CssAlignItems.Normal)
             {
                 return selfJustify;
@@ -5261,10 +5325,12 @@ namespace Rend.Layout.Internal
                     var anonTextElement = anonTextDoc!.CreateElement("div");
                     var anonTextChildren = new List<StyledNode> { new StyledText(textNode.Text, anonTextStyle) };
                     var anonTextStyled = new StyledElement(anonTextElement, anonTextStyle, anonTextChildren);
+                    var anonTextBox = new LayoutBox(anonTextStyled, BoxType.Block);
+                    anonTextBox.IsAnonymousBlock = true;
                     items.Add(new GridItem
                     {
                         StyledElement = anonTextStyled,
-                        Box = new LayoutBox(anonTextStyled, BoxType.Block),
+                        Box = anonTextBox,
                         OriginalIndex = items.Count
                     });
                     continue;

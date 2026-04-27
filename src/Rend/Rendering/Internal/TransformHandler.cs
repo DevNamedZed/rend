@@ -4,6 +4,7 @@ using System.Numerics;
 using Rend.Core.Values;
 using Rend.Css;
 using Rend.Css.Properties.Internal;
+using Rend.Css.Resolution.Internal;
 using Rend.Layout;
 using Transform2D = Rend.Core.Values.Matrix3x2;
 
@@ -705,6 +706,10 @@ namespace Rend.Rendering.Internal
                         return size;
                 }
             }
+            if (value is CssFunctionValue fn && fn.Name == "calc")
+            {
+                return ValueResolver.EvaluateDeferredCalc(fn, size);
+            }
             return size * 0.5f;
         }
 
@@ -746,6 +751,10 @@ namespace Rend.Rendering.Internal
             if (value is CssPercentageValue pct)
             {
                 return pct.Value * referenceSize / 100f;
+            }
+            if (value is CssFunctionValue fn && fn.Name == "calc")
+            {
+                return ValueResolver.EvaluateDeferredCalc(fn, referenceSize);
             }
             return 0;
         }

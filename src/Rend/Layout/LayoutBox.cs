@@ -114,6 +114,13 @@ namespace Rend.Layout
         /// </summary>
         public bool HasDefiniteCrossSize { get; set; }
 
+        /// <summary>
+        /// [CSS2 §9.2.1.1] True when this box is an anonymous block wrapper generated
+        /// by the layout engine (not present in the source document). Anonymous blocks
+        /// are transparent for containing-block height resolution.
+        /// </summary>
+        internal bool IsAnonymousBlock { get; set; }
+
         /// <summary>Column rules to paint between multi-column columns.</summary>
         internal List<ColumnRuleInfo>? ColumnRules { get; set; }
 
@@ -145,6 +152,15 @@ namespace Rend.Layout
         internal CssColor? CollapsedBorderRightColor { get; set; }
         internal CssColor? CollapsedBorderBottomColor { get; set; }
         internal CssColor? CollapsedBorderLeftColor { get; set; }
+
+        /// <summary>
+        /// [CSS-POSITION-3 §2.1] The (dx, dy) offset applied by position:relative.
+        /// Stored so the painter can un-shift backgrounds for table internal elements
+        /// (row-group, row) where Chrome paints the background at the original grid
+        /// position, not the shifted position.
+        /// </summary>
+        internal float RelativeOffsetX { get; set; }
+        internal float RelativeOffsetY { get; set; }
     }
 
     /// <summary>

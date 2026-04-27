@@ -101,9 +101,9 @@ namespace Rend.Layout.Internal
                 }
             }
 
-            // Apply min/max constraints (resolve deferred percentages)
-            float minW = ResolvePercentWidth(style.MinWidth, containingBlockWidth);
-            float maxW = ResolvePercentWidth(style.MaxWidth, containingBlockWidth);
+            // Apply min/max constraints (resolve deferred percentages and deferred calc)
+            float minW = ResolvePercentWidth(style.MinWidth, containingBlockWidth, style, PropertyId.MinWidth);
+            float maxW = ResolvePercentWidth(style.MaxWidth, containingBlockWidth, style, PropertyId.MaxWidth);
 
             // [CSS-SIZING-4 §5.2] Transfer max-height/min-height constraints through
             // aspect-ratio to max-width/min-width. Only when width is AUTO and
@@ -171,7 +171,24 @@ namespace Rend.Layout.Internal
         {
             if (float.IsNegativeInfinity(value))
             {
-                return value; // deferred calc — needs style context, handle at call site
+                return value; // deferred calc — needs style context, use overload with style param
+            }
+            if (DeferredPercent.IsEncoded(value))
+            {
+                return DeferredPercent.Resolve(value, containingBlockWidth);
+            }
+            return value;
+        }
+
+        /// <summary>
+        /// Resolve a width value that may be a deferred calc() or deferred percentage.
+        /// </summary>
+        public static float ResolvePercentWidth(float value, float containingBlockWidth,
+            ComputedStyle style, int propertyId)
+        {
+            if (float.IsNegativeInfinity(value))
+            {
+                return ResolveDeferredCalc(style, propertyId, containingBlockWidth);
             }
             if (DeferredPercent.IsEncoded(value))
             {
@@ -232,8 +249,8 @@ namespace Rend.Layout.Internal
 
                     float arHeight = ratioWidth / ratio;
 
-                    float arMinH = ResolveMinMaxH(style.MinHeight, containingBlockHeight);
-                    float arMaxH = ResolveMinMaxH(style.MaxHeight, containingBlockHeight);
+                    float arMinH = ResolveMinMaxH(style.MinHeight, containingBlockHeight, style, PropertyId.MinHeight);
+                    float arMaxH = ResolveMinMaxH(style.MaxHeight, containingBlockHeight, style, PropertyId.MaxHeight);
                     arHeight = ApplyMinMax(arHeight, arMinH, arMaxH);
 
                     // Convert from border-box height to content-box height
@@ -256,8 +273,8 @@ namespace Rend.Layout.Internal
                 height -= vExtra;
             }
 
-            float minH = ResolveMinMaxH(style.MinHeight, containingBlockHeight);
-            float maxH = ResolveMinMaxH(style.MaxHeight, containingBlockHeight);
+            float minH = ResolveMinMaxH(style.MinHeight, containingBlockHeight, style, PropertyId.MinHeight);
+            float maxH = ResolveMinMaxH(style.MaxHeight, containingBlockHeight, style, PropertyId.MaxHeight);
             if (vExtra > 0)
             {
                 if (!float.IsNaN(minH) && minH >= 0)
@@ -285,8 +302,13 @@ namespace Rend.Layout.Internal
             return ResolveMinMaxH(value, containingBlockHeight);
         }
 
-        private static float ResolveMinMaxH(float value, float containingBlockHeight)
+        private static float ResolveMinMaxH(float value, float containingBlockHeight,
+            ComputedStyle? style = null, int propertyId = 0)
         {
+            if (float.IsNegativeInfinity(value) && style != null && propertyId != 0)
+            {
+                return ResolveDeferredCalc(style, propertyId, containingBlockHeight);
+            }
             if (DeferredPercent.IsEncoded(value))
             {
                 if (float.IsNaN(containingBlockHeight) || containingBlockHeight <= 0)

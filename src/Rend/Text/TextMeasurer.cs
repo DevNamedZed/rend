@@ -162,8 +162,10 @@ namespace Rend.Text
         /// <param name="text">The text to shape.</param>
         /// <param name="font">The font descriptor.</param>
         /// <param name="fontSize">The font size in pixels.</param>
+        /// <param name="fontFeatures">Optional CSS font-feature-settings string for OpenType features.</param>
         /// <returns>The shaped text run.</returns>
-        public ShapedTextRun Shape(string text, FontDescriptor font, float fontSize)
+        public ShapedTextRun Shape(string text, FontDescriptor font, float fontSize,
+            string? fontFeatures = null)
         {
             if (text == null) throw new ArgumentNullException(nameof(text));
 
@@ -181,7 +183,7 @@ namespace Rend.Text
                 return new ShapedTextRun(fallbackGlyphs, text, fontSize);
             }
 
-            return _textShaper.Shape(text, entry.FontData, fontSize);
+            return _textShaper.Shape(text, entry.FontData, fontSize, fontFeatures: fontFeatures);
         }
     }
 }

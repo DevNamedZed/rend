@@ -118,6 +118,18 @@ namespace Rend.Layout.Internal
 
             int numRows = tableCtx.Rows.Count;
 
+            // [CSS-TABLES §5.4] Build collapsed-row flags for visibility: collapse handling.
+            // Collapsed rows take zero height and contribute no border-spacing.
+            bool[] isRowCollapsed = new bool[numRows];
+            for (int r = 0; r < numRows; r++)
+            {
+                var row = tableCtx.Rows[r];
+                if (row.StyledElement?.Style.Visibility == CssVisibility.Collapse)
+                {
+                    isRowCollapsed[r] = true;
+                }
+            }
+
             // Build occupied grid for rowspan/colspan tracking
             var occupied = new bool[numRows, numCols];
             float[] rowHeights = new float[numRows];
@@ -136,8 +148,8 @@ namespace Rend.Layout.Internal
                 var rowBox = new LayoutBox(row.StyledElement, BoxType.TableRow);
                 rowBoxes[r] = rowBox;
 
-                // visibility: collapse — row takes no space but structure is preserved
-                if (row.StyledElement?.Style.Visibility == CssVisibility.Collapse)
+                // [CSS-TABLES §5.4] visibility: collapse — row takes no space but structure is preserved
+                if (isRowCollapsed[r])
                 {
                     rowHeights[r] = 0;
                     continue;
@@ -276,34 +288,57 @@ namespace Rend.Layout.Internal
                 float spannedHeight = 0;
                 for (int rs = 0; rs < rsc.RowSpan; rs++)
                 {
-                    spannedHeight += originalRowHeights[rsc.StartRow + rs] + (rs > 0 ? borderSpacingV : 0);
+                    int rowIdx = rsc.StartRow + rs;
+                    // [CSS-TABLES §5.4] Collapsed rows contribute zero height and no spacing
+                    if (isRowCollapsed[rowIdx])
+                    {
+                        continue;
+                    }
+                    spannedHeight += originalRowHeights[rowIdx] + (rs > 0 ? borderSpacingV : 0);
                 }
 
                 if (rsc.TotalHeight > spannedHeight)
                 {
                     float extra = rsc.TotalHeight - spannedHeight;
-                    // Distribute extra height proportionally to original row heights
+                    // Distribute extra height proportionally to non-collapsed row heights
                     float totalRowHeight = 0;
+                    int visibleRowCount = 0;
                     for (int rs = 0; rs < rsc.RowSpan; rs++)
                     {
-                        totalRowHeight += originalRowHeights[rsc.StartRow + rs];
+                        int rowIdx = rsc.StartRow + rs;
+                        if (isRowCollapsed[rowIdx])
+                        {
+                            continue;
+                        }
+                        totalRowHeight += originalRowHeights[rowIdx];
+                        visibleRowCount++;
                     }
 
                     if (totalRowHeight > 0)
                     {
                         for (int rs = 0; rs < rsc.RowSpan; rs++)
                         {
-                            float rowExtra = extra * (originalRowHeights[rsc.StartRow + rs] / totalRowHeight);
-                            extraPerRow[rsc.StartRow + rs] = Math.Max(extraPerRow[rsc.StartRow + rs], rowExtra);
+                            int rowIdx = rsc.StartRow + rs;
+                            if (isRowCollapsed[rowIdx])
+                            {
+                                continue;
+                            }
+                            float rowExtra = extra * (originalRowHeights[rowIdx] / totalRowHeight);
+                            extraPerRow[rowIdx] = Math.Max(extraPerRow[rowIdx], rowExtra);
                         }
                     }
-                    else
+                    else if (visibleRowCount > 0)
                     {
-                        // All spanned rows have zero height: distribute equally
-                        float perRow = extra / rsc.RowSpan;
+                        // All visible spanned rows have zero height: distribute equally
+                        float perRow = extra / visibleRowCount;
                         for (int rs = 0; rs < rsc.RowSpan; rs++)
                         {
-                            extraPerRow[rsc.StartRow + rs] = Math.Max(extraPerRow[rsc.StartRow + rs], perRow);
+                            int rowIdx = rsc.StartRow + rs;
+                            if (isRowCollapsed[rowIdx])
+                            {
+                                continue;
+                            }
+                            extraPerRow[rowIdx] = Math.Max(extraPerRow[rowIdx], perRow);
                         }
                     }
                 }
@@ -312,6 +347,10 @@ namespace Rend.Layout.Internal
             // Apply the maximum extra from all spans to each row
             for (int r = 0; r < numRows; r++)
             {
+                if (isRowCollapsed[r])
+                {
+                    continue;
+                }
                 rowHeights[r] = originalRowHeights[r] + extraPerRow[r];
             }
 
@@ -446,6 +485,11 @@ namespace Rend.Layout.Internal
 
                 for (int r = 0; r < numRows; r++)
                 {
+                    // [CSS-TABLES §5.4] Collapsed rows stay at zero height
+                    if (isRowCollapsed[r])
+                    {
+                        continue;
+                    }
                     float maxH = 0;
                     for (int ci = 0; ci < rowBoxes[r].Children.Count; ci++)
                     {
@@ -486,8 +530,12 @@ namespace Rend.Layout.Internal
             for (int r = 0; r < numRows; r++)
             {
                 rowYPositions[r] = cursorY;
+                if (isRowCollapsed[r])
+                {
+                    // [CSS-TABLES §5.4] Collapsed rows produce no height and no border-spacing
+                    continue;
+                }
                 cursorY += rowHeights[r] + borderSpacingV;
-
             }
 
             for (int r = 0; r < numRows; r++)
@@ -506,8 +554,22 @@ namespace Rend.Layout.Internal
                     if (cellRowSpan > 1)
                     {
                         cellHeight = 0;
+                        bool addedFirstRow = false;
                         for (int rs = 0; rs < cellRowSpan && r + rs < numRows; rs++)
-                            cellHeight += rowHeights[r + rs] + (rs > 0 ? borderSpacingV : 0);
+                        {
+                            int rowIdx = r + rs;
+                            // [CSS-TABLES §5.4] Collapsed rows contribute zero height
+                            if (isRowCollapsed[rowIdx])
+                            {
+                                continue;
+                            }
+                            if (addedFirstRow)
+                            {
+                                cellHeight += borderSpacingV;
+                            }
+                            cellHeight += rowHeights[rowIdx];
+                            addedFirstRow = true;
+                        }
                     }
 
                     // Position the cell — content rect spans the full row height
@@ -619,21 +681,153 @@ namespace Rend.Layout.Internal
                 parent.ContentRect.X, parent.ContentRect.Y,
                 parent.ContentRect.Width, tableContentHeight);
 
-            // For auto-width tables, shrink-wrap the parent to actual content width
+            // For auto-width tables, shrink-wrap the parent to actual content width.
+            // [CSS-FLEXBOX §9.2] When the table is a flex/grid item, the parent
+            // layout algorithm has already determined the definite main/cross size —
+            // do not shrink-wrap below that.
             if (float.IsNaN(style.Width))
             {
-                float totalColWidth = 0;
-                for (int i = 0; i < numCols; i++)
-                    totalColWidth += colWidths[i];
-                float actualWidth = totalColWidth + (numCols + 1) * borderSpacingH
-                                  + collapseOuterLeft + collapseOuterRight;
-                if (actualWidth < containerWidth)
+                bool isFlexOrGridItem = false;
+                if (parent.Parent?.StyledNode is StyledElement parentElement)
                 {
-                    parent.ContentRect = new RectF(
-                        parent.ContentRect.X, parent.ContentRect.Y,
-                        actualWidth, parent.ContentRect.Height);
+                    var parentDisplay = parentElement.Style.Display;
+                    isFlexOrGridItem = parentDisplay == CssDisplay.Flex
+                                    || parentDisplay == CssDisplay.InlineFlex
+                                    || parentDisplay == CssDisplay.Grid
+                                    || parentDisplay == CssDisplay.InlineGrid;
+                }
+
+                if (!isFlexOrGridItem)
+                {
+                    float totalColWidth = 0;
+                    for (int i = 0; i < numCols; i++)
+                    {
+                        totalColWidth += colWidths[i];
+                    }
+                    float actualWidth = totalColWidth + (numCols + 1) * borderSpacingH
+                                      + collapseOuterLeft + collapseOuterRight;
+                    // [CSS-TABLES §4.1] Used min-width of a table is
+                    // max(min-width, min-content-width). The actualWidth is the
+                    // min-content width; enforce the specified min-width floor.
+                    float tableMinWidth = style.MinWidth;
+                    if (!float.IsNaN(tableMinWidth) && tableMinWidth > 0)
+                    {
+                        if (style.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            tableMinWidth -= parent.PaddingLeft + parent.PaddingRight
+                                           + parent.BorderLeftWidth + parent.BorderRightWidth;
+                            if (tableMinWidth < 0) { tableMinWidth = 0; }
+                        }
+                        if (actualWidth < tableMinWidth)
+                        {
+                            actualWidth = tableMinWidth;
+                        }
+                    }
+                    if (actualWidth < containerWidth)
+                    {
+                        parent.ContentRect = new RectF(
+                            parent.ContentRect.X, parent.ContentRect.Y,
+                            actualWidth, parent.ContentRect.Height);
+                    }
                 }
             }
+        }
+
+        /// <summary>
+        /// [CSS-TABLES §4.1] Compute the min-content width of a table element.
+        /// This is the sum of column min-content widths plus border-spacing,
+        /// independent of the available container width.
+        /// </summary>
+        internal static float ComputeMinContentWidth(StyledElement tableElement, LayoutContext context)
+        {
+            var style = tableElement.Style;
+            bool collapsed = style.BorderCollapse == CssBorderCollapse.Collapse;
+            float borderSpacingH = collapsed ? 0 : Math.Max(style.BorderSpacing, 0);
+
+            var tableCtx = new TableContext();
+            CollectTableStructure(tableElement, tableCtx);
+            if (tableCtx.Rows.Count == 0)
+            {
+                return 0;
+            }
+
+            int numCols = tableCtx.GetColumnCount();
+            if (numCols == 0)
+            {
+                return 0;
+            }
+
+            float[] minWidths = new float[numCols];
+            int numRows = tableCtx.Rows.Count;
+            var occupied = new bool[numRows, numCols];
+
+            for (int r = 0; r < numRows; r++)
+            {
+                int col = 0;
+                for (int c = 0; c < tableCtx.Rows[r].Cells.Count && col < numCols; c++)
+                {
+                    while (col < numCols && occupied[r, col])
+                    {
+                        col++;
+                    }
+                    if (col >= numCols)
+                    {
+                        break;
+                    }
+
+                    var cell = tableCtx.Rows[r].Cells[c];
+                    int effRowSpan = Math.Min(cell.RowSpan, numRows - r);
+                    int effColSpan = Math.Min(cell.ColSpan, numCols - col);
+                    for (int rs = 0; rs < effRowSpan; rs++)
+                    {
+                        for (int cs = 0; cs < effColSpan; cs++)
+                        {
+                            occupied[r + rs, col + cs] = true;
+                        }
+                    }
+
+                    if (cell.StyledElement == null)
+                    {
+                        col += cell.ColSpan;
+                        continue;
+                    }
+
+                    float minW = MeasureCellWidth(cell.StyledElement, 1f, context, collapsed);
+                    if (cell.ColSpan == 1)
+                    {
+                        if (minW > minWidths[col])
+                        {
+                            minWidths[col] = minW;
+                        }
+                    }
+                    else
+                    {
+                        // Distribute colspan min-width across columns
+                        float sumMin = 0;
+                        for (int s = col; s < col + effColSpan && s < numCols; s++)
+                        {
+                            sumMin += minWidths[s];
+                        }
+                        float excess = minW - sumMin;
+                        if (excess > 0)
+                        {
+                            float perCol = excess / effColSpan;
+                            for (int s = col; s < col + effColSpan && s < numCols; s++)
+                            {
+                                minWidths[s] += perCol;
+                            }
+                        }
+                    }
+                    col += cell.ColSpan;
+                }
+            }
+
+            float totalMin = 0;
+            for (int i = 0; i < numCols; i++)
+            {
+                totalMin += minWidths[i];
+            }
+            return totalMin + (numCols + 1) * borderSpacingH;
         }
 
         private static void CollapseBorders(LayoutBox[] rowBoxes, int numRows, int numCols,
@@ -1826,6 +2020,15 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < box.Children.Count; i++)
             {
                 var child = box.Children[i];
+
+                // [CSS2 §10.3.7] Absolutely/fixed positioned children are out of
+                // normal flow and do not contribute to the cell's intrinsic width.
+                if (child.StyledNode is StyledElement absEl
+                    && (absEl.Style.Position == Css.CssPosition.Absolute
+                        || absEl.Style.Position == Css.CssPosition.Fixed))
+                {
+                    continue;
+                }
                 float childWidth = child.ContentRect.Width;
 
                 // [CSS-SIZING-3 §4] For auto-width table intrinsic sizing, auto-width
@@ -2017,6 +2220,16 @@ namespace Rend.Layout.Internal
             for (int i = 0; i < box.Children.Count; i++)
             {
                 var child = box.Children[i];
+
+                // [CSS2 §10.6.3] Absolutely/fixed positioned children are out of
+                // normal flow and do not contribute to auto height calculation.
+                if (child.StyledNode is StyledElement absEl
+                    && (absEl.Style.Position == Css.CssPosition.Absolute
+                        || absEl.Style.Position == Css.CssPosition.Fixed))
+                {
+                    continue;
+                }
+
                 float childBottom = child.ContentRect.Y + child.ContentRect.Height
                                   + child.PaddingBottom + child.BorderBottomWidth
                                   - box.ContentRect.Y;

@@ -190,16 +190,49 @@ namespace Rend.Css.Resolution.Internal
                     }
                     // [CSS-ALIGN-3 §4.2] "last baseline" two-keyword value for
                     // align-items/align-self/justify-items/justify-self/align-content.
+                    // [CSS-ALIGN-3 §5.4] "safe <alignment>" / "unsafe <alignment>"
+                    // overflow position keywords.
                     if (value is CssListValue alignList && alignList.Separator == ' '
                         && alignList.Values.Count == 2
-                        && IsAlignmentProperty(prop.Id))
+                        && IsAlignmentOrJustifyProperty(prop.Id))
                     {
                         if (alignList.Values[0] is CssKeywordValue firstKw
-                            && alignList.Values[1] is CssKeywordValue secondKw
-                            && firstKw.Keyword == "last" && secondKw.Keyword == "baseline")
+                            && alignList.Values[1] is CssKeywordValue secondKw)
                         {
-                            result = PropertyValue.FromKeyword((int)CssAlignItems.LastBaseline);
-                            return true;
+                            if (firstKw.Keyword == "last" && secondKw.Keyword == "baseline")
+                            {
+                                result = PropertyValue.FromKeyword((int)CssAlignItems.LastBaseline);
+                                return true;
+                            }
+                            // [CSS-ALIGN-3 §5.4] safe/unsafe overflow position
+                            if (firstKw.Keyword == "safe" || firstKw.Keyword == "unsafe")
+                            {
+                                bool isSafe = firstKw.Keyword == "safe";
+                                if (prop.Id == PropertyId.JustifyContent)
+                                {
+                                    if (TryMapJustifyContent(secondKw.Keyword, out result))
+                                    {
+                                        if (isSafe)
+                                        {
+                                            result = PropertyValue.FromKeyword(
+                                                result.IntValue | CssAlignmentFlags.SafeBit);
+                                        }
+                                        return true;
+                                    }
+                                }
+                                else
+                                {
+                                    if (TryMapAlignItems(secondKw.Keyword, out result))
+                                    {
+                                        if (isSafe)
+                                        {
+                                            result = PropertyValue.FromKeyword(
+                                                result.IntValue | CssAlignmentFlags.SafeBit);
+                                        }
+                                        return true;
+                                    }
+                                }
+                            }
                         }
                     }
                     return TryResolveKeyword(value, prop.Id, out result);
@@ -264,6 +297,11 @@ namespace Rend.Css.Resolution.Internal
             {
                 return true;
             }
+            // [CSS-TEXT-3 §8.1] text-indent percentage resolves against containing block width
+            if (id == PropertyId.TextIndent)
+            {
+                return true;
+            }
             return false;
         }
 
@@ -272,6 +310,11 @@ namespace Rend.Css.Resolution.Internal
             return id == PropertyId.AlignItems || id == PropertyId.AlignSelf
                 || id == PropertyId.AlignContent || id == PropertyId.JustifyItems
                 || id == PropertyId.JustifySelf;
+        }
+
+        private static bool IsAlignmentOrJustifyProperty(int id)
+        {
+            return IsAlignmentProperty(id) || id == PropertyId.JustifyContent;
         }
 
         private static bool IsBorderRadiusProperty(int id)
@@ -624,9 +667,6 @@ namespace Rend.Css.Resolution.Internal
                 case PropertyId.OutlineStyle:
                 case PropertyId.ColumnRuleStyle:
                     return TryMapBorderStyle(keyword, out result);
-
-                case PropertyId.BackgroundRepeat:
-                    return TryMapBackgroundRepeat(keyword, out result);
 
                 case PropertyId.TextOverflow:
                     return TryMapTextOverflow(keyword, out result);
@@ -1266,7 +1306,8 @@ namespace Rend.Css.Resolution.Internal
                 case "start": result = PropertyValue.FromKeyword((int)CssTextAlign.Start); return true;
                 case "end": result = PropertyValue.FromKeyword((int)CssTextAlign.End); return true;
                 case "auto": result = PropertyValue.FromKeyword((int)CssTextAlign.Auto); return true;
-                case "justify-all": result = PropertyValue.FromKeyword((int)CssTextAlign.JustifyAll); return true;
+                // [COMPAT] Chrome does not support text-align: justify-all (CSS Text L3 §7.4).
+                // Parsing it as unknown causes the declaration to be dropped, matching Chrome.
                 default: return false;
             }
         }

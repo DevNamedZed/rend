@@ -80,6 +80,7 @@ namespace Rend.Rendering.Internal
                 PaintBackgroundLayer(layerImage, layerIdx, repeatRef, positionRef, sizeRef,
                     style, clipRect, originRect, radii, hasRadius, target, imageResolver);
             }
+
         }
 
         /// <summary>
@@ -212,6 +213,9 @@ namespace Rend.Rendering.Internal
             BorderRadii radii, bool hasRadius, IRenderTarget target,
             ImageResolverDelegate? imageResolver)
         {
+            // [CSS-IMAGES-4 §2.3] Unwrap image-set(): extract the first image option.
+            layerImage = UnwrapImageSet(layerImage);
+
             // Check for CSS gradient functions
             if (layerImage is CssFunctionValue gradientFn)
             {
@@ -231,29 +235,111 @@ namespace Rend.Rendering.Internal
                     ComputeBackgroundPositionFromRef(gradPosVal, originRect, gradScaledW, gradScaledH,
                         out float gradPosX, out float gradPosY);
 
-                    int gradRepeatMode = GetLayerRepeatMode(repeatRef, layerIdx, style);
-                    bool gradNoRepeat = gradRepeatMode == (int)CssBackgroundRepeat.NoRepeat;
+                    GetLayerRepeatModes(repeatRef, layerIdx,
+                        out var gradRepeatX, out var gradRepeatY);
+                    bool gradNoRepeat = gradRepeatX == CssBackgroundRepeat.NoRepeat
+                                     && gradRepeatY == CssBackgroundRepeat.NoRepeat;
+                    bool gradNeedsTiling = gradRepeatX == CssBackgroundRepeat.Round
+                                        || gradRepeatX == CssBackgroundRepeat.Space
+                                        || gradRepeatY == CssBackgroundRepeat.Round
+                                        || gradRepeatY == CssBackgroundRepeat.Space;
 
-                    var gradRect = new RectF(gradPosX, gradPosY, gradScaledW, gradScaledH);
-                    var gradient = ParseCssGradient(gradientFn, gradRect, style.Color);
-                    if (gradient != null)
+                    // [CSS-BACKGROUNDS-3 §3.4] Per-axis round/space scaling.
+                    float gradGapX = 0, gradGapY = 0;
+                    if (gradRepeatX == CssBackgroundRepeat.Round && gradScaledW > 0)
                     {
-                        BrushInfo gradBrush = BrushInfo.FromGradient(gradient);
+                        int tilesX = Math.Max(1, (int)Math.Round(clipRect.Width / gradScaledW));
+                        gradScaledW = clipRect.Width / tilesX;
+                    }
+                    else if (gradRepeatX == CssBackgroundRepeat.Space && gradScaledW > 0)
+                    {
+                        int tilesX = Math.Max(1, (int)(clipRect.Width / gradScaledW));
+                        if (tilesX > 1)
+                        {
+                            gradGapX = (clipRect.Width - tilesX * gradScaledW) / (tilesX - 1);
+                        }
+                    }
+
+                    if (gradRepeatY == CssBackgroundRepeat.Round && gradScaledH > 0)
+                    {
+                        int tilesY = Math.Max(1, (int)Math.Round(clipRect.Height / gradScaledH));
+                        gradScaledH = clipRect.Height / tilesY;
+                    }
+                    else if (gradRepeatY == CssBackgroundRepeat.Space && gradScaledH > 0)
+                    {
+                        int tilesY = Math.Max(1, (int)(clipRect.Height / gradScaledH));
+                        if (tilesY > 1)
+                        {
+                            gradGapY = (clipRect.Height - tilesY * gradScaledH) / (tilesY - 1);
+                        }
+                    }
+
+                    if (gradNeedsTiling && gradScaledW > 0 && gradScaledH > 0)
+                    {
+                        bool gradTilesOnX = gradRepeatX != CssBackgroundRepeat.NoRepeat;
+                        bool gradTilesOnY = gradRepeatY != CssBackgroundRepeat.NoRepeat;
+                        int tilesX = gradTilesOnX
+                            ? Math.Max(1, (int)Math.Ceiling(clipRect.Width / (gradScaledW + gradGapX)))
+                            : 1;
+                        int tilesY = gradTilesOnY
+                            ? Math.Max(1, (int)Math.Ceiling(clipRect.Height / (gradScaledH + gradGapY)))
+                            : 1;
+
+                        float startX = gradTilesOnX ? clipRect.X : gradPosX;
+                        float startY = gradTilesOnY ? clipRect.Y : gradPosY;
+
                         if (hasRadius)
                         {
                             var clipPath = new PathData();
                             radii.AddToPath(clipPath, clipRect);
                             target.PushClipPath(clipPath);
                         }
+                        target.PushClipRect(clipRect);
 
-                        // [CSS-BACKGROUNDS-3 §3.3] With no-repeat, paint only the sized rect.
-                        // With repeat, the gradient shader extends to fill the clip area.
-                        RectF fillRect = gradNoRepeat ? gradRect : clipRect;
-                        target.FillRect(fillRect.PixelSnap(), gradBrush);
+                        for (int ty = 0; ty < tilesY; ty++)
+                        {
+                            float tileY = startY + ty * (gradScaledH + gradGapY);
+                            for (int tx = 0; tx < tilesX; tx++)
+                            {
+                                float tileX = startX + tx * (gradScaledW + gradGapX);
+                                var tileRect = new RectF(tileX, tileY, gradScaledW, gradScaledH);
+                                var gradient = ParseCssGradient(gradientFn, tileRect, style.Color);
+                                if (gradient != null)
+                                {
+                                    target.FillRect(tileRect.PixelSnap(), BrushInfo.FromGradient(gradient));
+                                }
+                            }
+                        }
 
+                        target.PopClip();
                         if (hasRadius)
                         {
                             target.PopClip();
+                        }
+                    }
+                    else
+                    {
+                        var gradRect = new RectF(gradPosX, gradPosY, gradScaledW, gradScaledH);
+                        var gradient = ParseCssGradient(gradientFn, gradRect, style.Color);
+                        if (gradient != null)
+                        {
+                            BrushInfo gradBrush = BrushInfo.FromGradient(gradient);
+                            if (hasRadius)
+                            {
+                                var clipPath = new PathData();
+                                radii.AddToPath(clipPath, clipRect);
+                                target.PushClipPath(clipPath);
+                            }
+
+                            // [CSS-BACKGROUNDS-3 §3.3] With no-repeat, paint only the sized rect.
+                            // With repeat, the gradient shader extends to fill the clip area.
+                            RectF fillRect = gradNoRepeat ? gradRect : clipRect;
+                            target.FillRect(fillRect.PixelSnap(), gradBrush);
+
+                            if (hasRadius)
+                            {
+                                target.PopClip();
+                            }
                         }
                     }
                 }
@@ -322,11 +408,12 @@ namespace Rend.Rendering.Internal
             ComputeBackgroundPositionFromRef(layerPosition, originRect, scaledW, scaledH,
                 out float posX, out float posY);
 
-            // Get repeat mode for this layer.
-            int repeatMode = GetLayerRepeatMode(repeatRef, layerIdx, style);
+            // [CSS-BACKGROUNDS-3 §3.4] Get per-axis repeat modes for this layer.
+            GetLayerRepeatModes(repeatRef, layerIdx, out var repeatModeX, out var repeatModeY);
 
             // Clip to background-clip rect for tiled backgrounds.
-            bool needsClip = repeatMode != (int)CssBackgroundRepeat.NoRepeat;
+            bool needsClip = repeatModeX != CssBackgroundRepeat.NoRepeat
+                          || repeatModeY != CssBackgroundRepeat.NoRepeat;
             if (needsClip)
             {
                 if (hasRadius)
@@ -343,43 +430,64 @@ namespace Rend.Rendering.Internal
 
             // [CSS-BACKGROUNDS-3 §3.4] round: scale image so integer tiles fill the area.
             // space: distribute extra space evenly between unscaled tiles.
-            bool isRound = repeatMode == (int)CssBackgroundRepeat.Round;
-            bool isSpace = repeatMode == (int)CssBackgroundRepeat.Space;
             float spaceGapX = 0, spaceGapY = 0;
-            if (isRound && scaledW > 0 && scaledH > 0)
+            if (repeatModeX == CssBackgroundRepeat.Round && scaledW > 0)
             {
-                float areaW = clipRect.Width;
-                float areaH = clipRect.Height;
-                int tilesX = Math.Max(1, (int)Math.Round(areaW / scaledW));
-                int tilesY = Math.Max(1, (int)Math.Round(areaH / scaledH));
-                scaledW = areaW / tilesX;
-                scaledH = areaH / tilesY;
+                int tilesX = Math.Max(1, (int)Math.Round(clipRect.Width / scaledW));
+                scaledW = clipRect.Width / tilesX;
             }
-            else if (isSpace && scaledW > 0 && scaledH > 0)
+            else if (repeatModeX == CssBackgroundRepeat.Space && scaledW > 0)
             {
-                float areaW = clipRect.Width;
-                float areaH = clipRect.Height;
-                int tilesX = Math.Max(1, (int)(areaW / scaledW));
-                int tilesY = Math.Max(1, (int)(areaH / scaledH));
+                int tilesX = Math.Max(1, (int)(clipRect.Width / scaledW));
                 if (tilesX > 1)
                 {
-                    spaceGapX = (areaW - tilesX * scaledW) / (tilesX - 1);
-                }
-                if (tilesY > 1)
-                {
-                    spaceGapY = (areaH - tilesY * scaledH) / (tilesY - 1);
+                    spaceGapX = (clipRect.Width - tilesX * scaledW) / (tilesX - 1);
                 }
             }
 
-            // Draw image tile(s).
-            bool repeatX = repeatMode == (int)CssBackgroundRepeat.Repeat ||
-                           repeatMode == (int)CssBackgroundRepeat.RepeatX ||
-                           isRound || isSpace;
-            bool repeatY = repeatMode == (int)CssBackgroundRepeat.Repeat ||
-                           repeatMode == (int)CssBackgroundRepeat.RepeatY ||
-                           isRound || isSpace;
+            if (repeatModeY == CssBackgroundRepeat.Round && scaledH > 0)
+            {
+                int tilesY = Math.Max(1, (int)Math.Round(clipRect.Height / scaledH));
+                scaledH = clipRect.Height / tilesY;
+            }
+            else if (repeatModeY == CssBackgroundRepeat.Space && scaledH > 0)
+            {
+                int tilesY = Math.Max(1, (int)(clipRect.Height / scaledH));
+                if (tilesY > 1)
+                {
+                    spaceGapY = (clipRect.Height - tilesY * scaledH) / (tilesY - 1);
+                }
+            }
 
-            if (!repeatX && !repeatY)
+            bool tilesOnX = repeatModeX != CssBackgroundRepeat.NoRepeat;
+            bool tilesOnY = repeatModeY != CssBackgroundRepeat.NoRepeat;
+            bool needsManualTiling = spaceGapX > 0 || spaceGapY > 0
+                || (repeatModeX == CssBackgroundRepeat.Space)
+                || (repeatModeY == CssBackgroundRepeat.Space);
+
+            if (needsManualTiling)
+            {
+                // [CSS-BACKGROUNDS §3.4] space/round with mixed axes: draw individual tiles.
+                int tilesX = tilesOnX && scaledW > 0
+                    ? Math.Max(1, (int)(clipRect.Width / scaledW)) : 1;
+                int tilesY = tilesOnY && scaledH > 0
+                    ? Math.Max(1, (int)(clipRect.Height / scaledH)) : 1;
+
+                float startX = tilesOnX ? clipRect.X : posX;
+                float startY = tilesOnY ? clipRect.Y : posY;
+
+                for (int ty = 0; ty < tilesY; ty++)
+                {
+                    float tileY = startY + ty * (scaledH + spaceGapY);
+                    for (int tx = 0; tx < tilesX; tx++)
+                    {
+                        float tileX = startX + tx * (scaledW + spaceGapX);
+                        var destRect = new RectF(tileX, tileY, scaledW, scaledH);
+                        target.DrawImage(imageData, destRect);
+                    }
+                }
+            }
+            else if (!tilesOnX && !tilesOnY)
             {
                 // No repeat: single image.
                 var destRect = new RectF(posX, posY, scaledW, scaledH);
@@ -389,11 +497,11 @@ namespace Rend.Rendering.Internal
             {
                 // Tile the image using shader-based tiling for seamless boundaries.
                 RectF fillArea;
-                if (repeatX && repeatY)
+                if (tilesOnX && tilesOnY)
                 {
                     fillArea = clipRect;
                 }
-                else if (repeatX)
+                else if (tilesOnX)
                 {
                     fillArea = new RectF(clipRect.X, posY, clipRect.Width, scaledH);
                 }
@@ -432,33 +540,84 @@ namespace Rend.Rendering.Internal
         }
 
         /// <summary>
-        /// Gets the repeat mode for a specific layer.
+        /// [CSS-BACKGROUNDS-3 §3.4] Gets the per-axis repeat modes for a specific layer.
+        /// CSS background-repeat accepts one or two values: single value applies to both axes,
+        /// two space-separated values set X and Y independently.
         /// </summary>
-        private static int GetLayerRepeatMode(object? repeatRef, int layerIdx, ComputedStyle style)
+        private static void GetLayerRepeatModes(object? repeatRef, int layerIdx,
+            out CssBackgroundRepeat modeX, out CssBackgroundRepeat modeY)
         {
-            if (repeatRef is CssListValue repeatList && repeatList.Separator == ',')
-            {
-                int idx = layerIdx < repeatList.Values.Count ? layerIdx : layerIdx % repeatList.Values.Count;
-                if (idx < repeatList.Values.Count)
-                {
-                    var val = repeatList.Values[idx];
-                    if (val is CssKeywordValue kw)
-                    {
-                        switch (kw.Keyword)
-                        {
-                            case "repeat": return (int)CssBackgroundRepeat.Repeat;
-                            case "no-repeat": return (int)CssBackgroundRepeat.NoRepeat;
-                            case "repeat-x": return (int)CssBackgroundRepeat.RepeatX;
-                            case "repeat-y": return (int)CssBackgroundRepeat.RepeatY;
-                            case "round": return (int)CssBackgroundRepeat.Round;
-                            case "space": return (int)CssBackgroundRepeat.Space;
-                        }
-                    }
-                }
-            }
-            return style.GetRawValue(PropertyId.BackgroundRepeat).IntValue;
+            object? layerVal = GetLayerRef(repeatRef, layerIdx);
+            ParseRepeatValue(layerVal, out modeX, out modeY);
         }
 
+        /// <summary>
+        /// Parses a background-repeat value into per-axis modes.
+        /// </summary>
+        private static void ParseRepeatValue(object? value,
+            out CssBackgroundRepeat modeX, out CssBackgroundRepeat modeY)
+        {
+            modeX = CssBackgroundRepeat.Repeat;
+            modeY = CssBackgroundRepeat.Repeat;
+
+            if (value is CssKeywordValue kw)
+            {
+                switch (kw.Keyword)
+                {
+                    case "repeat":
+                        modeX = CssBackgroundRepeat.Repeat;
+                        modeY = CssBackgroundRepeat.Repeat;
+                        return;
+                    case "no-repeat":
+                        modeX = CssBackgroundRepeat.NoRepeat;
+                        modeY = CssBackgroundRepeat.NoRepeat;
+                        return;
+                    case "repeat-x":
+                        modeX = CssBackgroundRepeat.Repeat;
+                        modeY = CssBackgroundRepeat.NoRepeat;
+                        return;
+                    case "repeat-y":
+                        modeX = CssBackgroundRepeat.NoRepeat;
+                        modeY = CssBackgroundRepeat.Repeat;
+                        return;
+                    case "round":
+                        modeX = CssBackgroundRepeat.Round;
+                        modeY = CssBackgroundRepeat.Round;
+                        return;
+                    case "space":
+                        modeX = CssBackgroundRepeat.Space;
+                        modeY = CssBackgroundRepeat.Space;
+                        return;
+                }
+            }
+
+            if (value is CssListValue list && list.Separator == ' ' && list.Values.Count >= 2)
+            {
+                modeX = ParseSingleRepeatKeyword(list.Values[0]);
+                modeY = ParseSingleRepeatKeyword(list.Values[1]);
+            }
+        }
+
+        private static CssBackgroundRepeat ParseSingleRepeatKeyword(CssValue value)
+        {
+            if (value is CssKeywordValue kw)
+            {
+                switch (kw.Keyword)
+                {
+                    case "repeat": return CssBackgroundRepeat.Repeat;
+                    case "no-repeat": return CssBackgroundRepeat.NoRepeat;
+                    case "round": return CssBackgroundRepeat.Round;
+                    case "space": return CssBackgroundRepeat.Space;
+                }
+            }
+            return CssBackgroundRepeat.Repeat;
+        }
+
+        /// <summary>
+        /// [CSS-TABLES §4 + CSS-POSITION-3 §2.1] Returns true when the box is a
+        /// table-row-group or table-row that has been shifted by position:relative.
+        /// Chrome paints these backgrounds at the original (unshifted) grid position.
+        /// </summary>
         private static RectF ResolveBoxRect(LayoutBox box, CssBackgroundClip boxArea)
         {
             switch (boxArea)
@@ -776,6 +935,26 @@ namespace Rend.Rendering.Internal
                 }
             }
             return 0; // default
+        }
+
+        /// <summary>
+        /// [CSS-IMAGES-4 §2.3] Unwraps image-set() to extract the first image option.
+        /// image-set() contains comma-separated options, each with an image and resolution.
+        /// We select the first option at 1x (ignoring resolution for now).
+        /// </summary>
+        private static object? UnwrapImageSet(object? layerImage)
+        {
+            if (layerImage is CssFunctionValue imageSetFn && imageSetFn.Name == "image-set")
+            {
+                foreach (var arg in imageSetFn.Arguments)
+                {
+                    if (arg is CssFunctionValue || arg is CssUrlValue)
+                    {
+                        return arg;
+                    }
+                }
+            }
+            return layerImage;
         }
 
         /// <summary>
@@ -1279,12 +1458,30 @@ namespace Rend.Rendering.Internal
                         continue;
                     }
                 }
-                else if (val is CssFunctionValue colorFn)
+                else if (val is CssFunctionValue funcVal)
                 {
-                    if (TryParseColorFunction(colorFn, out var parsedColor))
-                        color = parsedColor;
-                    else
+                    if (IsMathFunction(funcVal.Name))
+                    {
+                        // [CSS-VALUES §8] Math function at color position — attach to previous stop
+                        if (stops.Count > 0)
+                        {
+                            var ctx = new Core.Values.CssResolutionContext(
+                                16f, 16f, 0, 0, gradientLineLength);
+                            float px = Css.Resolution.Internal.ValueResolver.EvaluateCalc(
+                                funcVal.Arguments, ctx);
+                            float pos = gradientLineLength > 0 ? px / gradientLineLength : px / 100f;
+                            stops[stops.Count - 1] = new GradientStop(stops[stops.Count - 1].Color, pos);
+                        }
                         continue;
+                    }
+                    else if (TryParseColorFunction(funcVal, out var parsedColor))
+                    {
+                        color = parsedColor;
+                    }
+                    else
+                    {
+                        continue;
+                    }
                 }
                 else continue;
 
@@ -1319,6 +1516,16 @@ namespace Rend.Rendering.Internal
                         position = 0f;
                         i++;
                     }
+                    else if (next is CssFunctionValue calcFn && IsMathFunction(calcFn.Name))
+                    {
+                        // [CSS-VALUES §8] Math functions in gradient stop positions
+                        var ctx = new Core.Values.CssResolutionContext(
+                            16f, 16f, 0, 0, gradientLineLength);
+                        float px = Css.Resolution.Internal.ValueResolver.EvaluateCalc(
+                            calcFn.Arguments, ctx);
+                        position = gradientLineLength > 0 ? px / gradientLineLength : px / 100f;
+                        i++;
+                    }
 
                     // CSS double-position syntax: "color pos1 pos2" → two stops
                     if (!float.IsNaN(position) && i + 1 < args.Count)
@@ -1345,6 +1552,16 @@ namespace Rend.Rendering.Internal
                         else if (next2 is CssNumberValue numPos2 && numPos2.Value == 0)
                         {
                             position2 = 0f;
+                            i++;
+                        }
+                        else if (next2 is CssFunctionValue calcFn2 && IsMathFunction(calcFn2.Name))
+                        {
+                            // [CSS-VALUES §8] Math functions in gradient double-position
+                            var ctx2 = new Core.Values.CssResolutionContext(
+                                16f, 16f, 0, 0, gradientLineLength);
+                            float px2 = Css.Resolution.Internal.ValueResolver.EvaluateCalc(
+                                calcFn2.Arguments, ctx2);
+                            position2 = gradientLineLength > 0 ? px2 / gradientLineLength : px2 / 100f;
                             i++;
                         }
                     }
@@ -1418,6 +1635,12 @@ namespace Rend.Rendering.Internal
                     stops[j] = new GradientStop(stops[j].Color, stops[j - 1].Position);
                 }
             }
+
+        }
+
+        private static bool IsMathFunction(string name)
+        {
+            return name == "calc" || name == "min" || name == "max" || name == "clamp";
         }
 
         private static bool IsAngleUnit(string unit)

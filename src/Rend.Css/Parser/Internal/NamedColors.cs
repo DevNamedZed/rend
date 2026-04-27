@@ -341,7 +341,7 @@ namespace Rend.Css.Parser.Internal
                 case "activetext": color = new CssColor(255, 0, 0); return true;
                 case "buttonface": color = new CssColor(240, 240, 240); return true;
                 case "buttontext": color = new CssColor(0, 0, 0); return true;
-                case "buttonborder": color = new CssColor(118, 118, 118); return true;
+                case "buttonborder": color = new CssColor(0, 0, 0); return true;
                 case "field": color = new CssColor(255, 255, 255); return true;
                 case "fieldtext": color = new CssColor(0, 0, 0); return true;
                 case "highlight": color = new CssColor(0, 120, 215); return true;
@@ -355,28 +355,28 @@ namespace Rend.Css.Parser.Internal
                 case "accentcolortext": color = new CssColor(255, 255, 255); return true;
 
                 // Deprecated system colors (CSS Color 4 §6.2) — mapped to current equivalents
-                case "activeborder": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
-                case "activecaption": color = new CssColor(255, 255, 255); return true; // = Canvas
+                case "activeborder": color = new CssColor(0, 0, 0); return true; // = ButtonBorder
+                case "activecaption": color = new CssColor(0, 0, 0); return true; // Chrome headless: black
                 case "appworkspace": color = new CssColor(255, 255, 255); return true; // = Canvas
                 case "background": color = new CssColor(255, 255, 255); return true; // = Canvas
                 case "buttonhighlight": color = new CssColor(240, 240, 240); return true; // = ButtonFace
                 case "buttonshadow": color = new CssColor(240, 240, 240); return true; // = ButtonFace
                 case "captiontext": color = new CssColor(0, 0, 0); return true; // = CanvasText
-                case "inactiveborder": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
+                case "inactiveborder": color = new CssColor(0, 0, 0); return true; // = ButtonBorder
                 case "inactivecaption": color = new CssColor(255, 255, 255); return true; // = Canvas
-                case "inactivecaptiontext": color = new CssColor(109, 109, 109); return true; // = GrayText
+                case "inactivecaptiontext": color = new CssColor(128, 128, 128); return true; // Chrome headless: (128,128,128)
                 case "infobackground": color = new CssColor(255, 255, 255); return true; // = Canvas
                 case "infotext": color = new CssColor(0, 0, 0); return true; // = CanvasText
                 case "menu": color = new CssColor(255, 255, 255); return true; // = Canvas
                 case "menutext": color = new CssColor(0, 0, 0); return true; // = CanvasText
                 case "scrollbar": color = new CssColor(255, 255, 255); return true; // = Canvas
-                case "threeddarkshadow": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
+                case "threeddarkshadow": color = new CssColor(0, 0, 0); return true; // = ButtonBorder
                 case "threedface": color = new CssColor(240, 240, 240); return true; // = ButtonFace
-                case "threedhighlight": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
-                case "threedlightshadow": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
-                case "threedshadow": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
+                case "threedhighlight": color = new CssColor(0, 0, 0); return true; // = ButtonBorder
+                case "threedlightshadow": color = new CssColor(0, 0, 0); return true; // = ButtonBorder
+                case "threedshadow": color = new CssColor(0, 0, 0); return true; // = ButtonBorder
                 case "window": color = new CssColor(255, 255, 255); return true; // = Canvas
-                case "windowframe": color = new CssColor(118, 118, 118); return true; // = ButtonBorder
+                case "windowframe": color = new CssColor(0, 0, 0); return true; // = ButtonBorder
                 case "windowtext": color = new CssColor(0, 0, 0); return true; // = CanvasText
 
                 default:

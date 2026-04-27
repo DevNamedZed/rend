@@ -1020,7 +1020,8 @@ namespace Rend.Css.Parser.Internal
                      fn.Name == "conic-gradient" || fn.Name == "-webkit-linear-gradient" ||
                      fn.Name == "-webkit-radial-gradient" ||
                      fn.Name == "repeating-linear-gradient" || fn.Name == "repeating-radial-gradient" ||
-                     fn.Name == "repeating-conic-gradient"))
+                     fn.Name == "repeating-conic-gradient" ||
+                     fn.Name == "image-set"))
                 {
                     image = p;
                 }

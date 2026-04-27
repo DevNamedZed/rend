@@ -62,15 +62,49 @@ namespace Rend.Layout.Internal
         public static bool ShouldCollapseWithLastChild(LayoutBox parent)
         {
             if (parent.PaddingBottom != 0 || parent.BorderBottomWidth != 0)
+            {
                 return false;
+            }
 
-            if (!float.IsNaN(parent.StyledNode?.Style.Height ?? float.NaN))
+            // [CSS-SIZING-3 §5.1] Margin collapse requires height to "behave as auto".
+            // This includes: auto (NaN), intrinsic keywords (min/max/fit-content),
+            // deferred percentages (cyclic), and deferred calc with percentages.
+            if (!HeightBehavesAsAuto(parent.StyledNode?.Style.Height ?? float.NaN))
+            {
                 return false;
+            }
 
             if (EstablishesBfc(parent))
+            {
                 return false;
+            }
 
             return true;
+        }
+
+        /// <summary>
+        /// [CSS-SIZING-3 §5.1] Returns true if the height value "behaves as auto"
+        /// for margin collapsing purposes.
+        /// </summary>
+        private static bool HeightBehavesAsAuto(float height)
+        {
+            if (float.IsNaN(height))
+            {
+                return true;
+            }
+            if (SizingKeyword.IsSizingKeyword(height))
+            {
+                return true;
+            }
+            if (DeferredPercent.IsEncoded(height))
+            {
+                return true;
+            }
+            if (float.IsNegativeInfinity(height))
+            {
+                return true;
+            }
+            return false;
         }
 
         /// <summary>

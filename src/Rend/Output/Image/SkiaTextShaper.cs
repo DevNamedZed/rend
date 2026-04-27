@@ -90,7 +90,8 @@ namespace Rend.Output.Image
         }
 
         public ShapedTextRun Shape(string text, byte[] fontData, float fontSize,
-                                     string? language = null, string? script = null)
+                                     string? language = null, string? script = null,
+                                     string? fontFeatures = null)
         {
             if (text == null)
             {
@@ -129,7 +130,15 @@ namespace Rend.Output.Image
 
                     buffer.GuessSegmentProperties();
 
-                    cached.HbFont.Shape(buffer);
+                    var features = Text.HarfBuzzTextShaper.ParseFontFeatures(fontFeatures);
+                    if (features != null)
+                    {
+                        cached.HbFont.Shape(buffer, features);
+                    }
+                    else
+                    {
+                        cached.HbFont.Shape(buffer);
+                    }
 
                     var glyphInfos = buffer.GlyphInfos;
                     var glyphPositions = buffer.GlyphPositions;

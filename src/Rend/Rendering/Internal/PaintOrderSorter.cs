@@ -114,14 +114,16 @@ namespace Rend.Rendering.Internal
             {
                 if (!blockNonPositioned[i].EstablishesStackingContext)
                 {
-                    CollectPromotedPositioned(blockNonPositioned[i], positionedZeroAuto, promoted);
+                    CollectPromotedPositioned(blockNonPositioned[i], positionedZeroAuto,
+                        promoted, negativeZIndex, positiveZIndex);
                 }
             }
             for (int i = 0; i < floats.Count; i++)
             {
                 if (!floats[i].EstablishesStackingContext)
                 {
-                    CollectPromotedPositioned(floats[i], positionedZeroAuto, promoted);
+                    CollectPromotedPositioned(floats[i], positionedZeroAuto,
+                        promoted, negativeZIndex, positiveZIndex);
                 }
             }
 
@@ -207,9 +209,14 @@ namespace Rend.Rendering.Internal
         /// <summary>
         /// [CSS2 §E.2] Recursively collects positioned descendants from
         /// non-stacking-context subtrees for promotion to the current paint level.
+        /// Stacking-context children are also promoted to the correct z-index bucket.
         /// </summary>
         private static void CollectPromotedPositioned(
-            LayoutBox parent, List<LayoutBox> positionedBucket, HashSet<LayoutBox> promoted)
+            LayoutBox parent,
+            List<LayoutBox> positionedBucket,
+            HashSet<LayoutBox> promoted,
+            List<LayoutBox>? negativeZIndex = null,
+            List<LayoutBox>? positiveZIndex = null)
         {
             for (int i = 0; i < parent.Children.Count; i++)
             {
@@ -217,7 +224,28 @@ namespace Rend.Rendering.Internal
                 var style = child.StyledNode?.Style;
                 bool isPositioned = style != null && style.Position != CssPosition.Static;
 
-                if (isPositioned && !child.EstablishesStackingContext)
+                if (child.EstablishesStackingContext)
+                {
+                    // [CSS2 §E.2] Stacking context descendants of non-stacking-context
+                    // parents must be promoted to the nearest ancestor stacking context.
+                    float z = child.ZIndex;
+                    if (z < 0f && negativeZIndex != null)
+                    {
+                        negativeZIndex.Add(child);
+                        promoted.Add(child);
+                    }
+                    else if (z > 0f && positiveZIndex != null)
+                    {
+                        positiveZIndex.Add(child);
+                        promoted.Add(child);
+                    }
+                    else
+                    {
+                        positionedBucket.Add(child);
+                        promoted.Add(child);
+                    }
+                }
+                else if (isPositioned)
                 {
                     positionedBucket.Add(child);
                     promoted.Add(child);
@@ -225,7 +253,8 @@ namespace Rend.Rendering.Internal
 
                 if (!child.EstablishesStackingContext)
                 {
-                    CollectPromotedPositioned(child, positionedBucket, promoted);
+                    CollectPromotedPositioned(child, positionedBucket, promoted,
+                        negativeZIndex, positiveZIndex);
                 }
             }
         }

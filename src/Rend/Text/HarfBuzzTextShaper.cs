@@ -30,7 +30,8 @@ namespace Rend.Text
         internal Fonts.IFontProvider? FallbackFontProvider { get; set; }
 
         /// <inheritdoc />
-        public ShapedTextRun Shape(string text, byte[] fontData, float fontSize, string? language = null, string? script = null)
+        public ShapedTextRun Shape(string text, byte[] fontData, float fontSize,
+            string? language = null, string? script = null, string? fontFeatures = null)
         {
             if (text == null) throw new ArgumentNullException(nameof(text));
             if (fontData == null) throw new ArgumentNullException(nameof(fontData));
@@ -65,7 +66,16 @@ namespace Rend.Text
                     }
 
                     buffer.GuessSegmentProperties();
-                    font.Shape(buffer);
+
+                    var features = ParseFontFeatures(fontFeatures);
+                    if (features != null)
+                    {
+                        font.Shape(buffer, features);
+                    }
+                    else
+                    {
+                        font.Shape(buffer);
+                    }
 
                     var glyphInfos = buffer.GlyphInfos;
                     var glyphPositions = buffer.GlyphPositions;
@@ -392,6 +402,110 @@ namespace Rend.Text
                     throw;
                 }
             }
+        }
+
+        internal static Feature[]? ParseFontFeatures(string? fontFeatures)
+        {
+            if (string.IsNullOrWhiteSpace(fontFeatures) || fontFeatures == "normal")
+            {
+                return null;
+            }
+
+            var featureList = new List<Feature>();
+            var entries = fontFeatures!.Split(',');
+
+            for (int i = 0; i < entries.Length; i++)
+            {
+                string entry = entries[i].Trim();
+                if (entry.Length == 0)
+                {
+                    continue;
+                }
+
+                // CSS font-feature-settings format: "tag" [value]
+                // e.g., "liga" 1, "smcp", "kern" 0
+                // Tag is 4 chars in quotes; value defaults to 1 if omitted.
+                string tag;
+                uint value = 1;
+
+                // Extract quoted tag.
+                int quoteStart = entry.IndexOf('"');
+                if (quoteStart < 0)
+                {
+                    quoteStart = entry.IndexOf('\'');
+                }
+                if (quoteStart >= 0)
+                {
+                    char quoteChar = entry[quoteStart];
+                    int quoteEnd = entry.IndexOf(quoteChar, quoteStart + 1);
+                    if (quoteEnd < 0 || quoteEnd - quoteStart - 1 != 4)
+                    {
+                        continue;
+                    }
+                    tag = entry.Substring(quoteStart + 1, 4);
+
+                    // Parse optional value after the closing quote.
+                    string remainder = entry.Substring(quoteEnd + 1).Trim();
+                    if (remainder.Length > 0)
+                    {
+                        if (remainder == "on")
+                        {
+                            value = 1;
+                        }
+                        else if (remainder == "off")
+                        {
+                            value = 0;
+                        }
+                        else if (uint.TryParse(remainder, out uint parsed))
+                        {
+                            value = parsed;
+                        }
+                    }
+                }
+                else
+                {
+                    // No quotes — try bare tag (e.g., from font-variant mapping).
+                    var parts = entry.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length == 0 || parts[0].Length != 4)
+                    {
+                        continue;
+                    }
+                    tag = parts[0];
+                    if (parts.Length > 1)
+                    {
+                        if (parts[1] == "on")
+                        {
+                            value = 1;
+                        }
+                        else if (parts[1] == "off")
+                        {
+                            value = 0;
+                        }
+                        else if (uint.TryParse(parts[1], out uint parsed))
+                        {
+                            value = parsed;
+                        }
+                    }
+                }
+
+                if (tag.Length != 4)
+                {
+                    continue;
+                }
+
+                // Encode 4-char tag as uint32 (big-endian, per OpenType spec).
+                uint tagValue = (uint)((tag[0] << 24) | (tag[1] << 16) | (tag[2] << 8) | tag[3]);
+
+                featureList.Add(new Feature
+                {
+                    Tag = tagValue,
+                    Value = value,
+                    Start = 0,
+                    End = uint.MaxValue
+                });
+            }
+
+            return featureList.Count > 0 ? featureList.ToArray() : null;
         }
 
         private static Script ParseScript(string script)

@@ -79,15 +79,15 @@ namespace Rend.Rendering.Internal
         private static EmphasisMarkFont BuildMarkFont(in EmphasisPaintContext context,
             byte[]? fontData, IRenderTarget target)
         {
-            float ascent;
-            float descent;
+            float textAscent;
+            float textDescent;
             if (fontData != null)
             {
-                (ascent, descent) = target.GetFontMetrics(fontData, context.FontSize);
+                (textAscent, textDescent) = target.GetFontMetrics(fontData, context.FontSize);
             }
             else
             {
-                (ascent, descent) = target.GetFontMetrics(context.PrimaryDescriptor, context.FontSize);
+                (textAscent, textDescent) = target.GetFontMetrics(context.PrimaryDescriptor, context.FontSize);
             }
 
             float markY;
@@ -95,12 +95,12 @@ namespace Rend.Rendering.Internal
             {
                 // Mark above text: place the mark baseline at the content-area top
                 // (textBaseline - ascent), shifted up by roughly the mark's descent.
-                markY = context.TextBaselineY - ascent - context.MarkFontSize * 0.5f;
+                markY = context.TextBaselineY - textAscent - context.MarkFontSize * 0.5f;
             }
             else
             {
                 // Mark below text: place the mark baseline below the content-area bottom.
-                markY = context.TextBaselineY + descent + context.MarkFontSize * 0.8f;
+                markY = context.TextBaselineY + textDescent + context.MarkFontSize * 0.8f;
             }
 
             // [CSS-TEXT-DECOR-3 §3.5] The mark glyph itself is always drawn with the

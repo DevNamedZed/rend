@@ -114,7 +114,7 @@ namespace Rend.Css.Properties.Internal
             Register(byName, "color", PropertyId.Color, true, PropertyValueType.Color);
             Register(byName, "background-color", PropertyId.BackgroundColor, false, PropertyValueType.Color);
             Register(byName, "background-image", PropertyId.BackgroundImage, false, PropertyValueType.Raw);
-            Register(byName, "background-repeat", PropertyId.BackgroundRepeat, false, PropertyValueType.Keyword);
+            Register(byName, "background-repeat", PropertyId.BackgroundRepeat, false, PropertyValueType.Raw);
             Register(byName, "background-position", PropertyId.BackgroundPosition, false, PropertyValueType.Raw);
             Register(byName, "background-size", PropertyId.BackgroundSize, false, PropertyValueType.Raw);
             Register(byName, "opacity", PropertyId.Opacity, false, PropertyValueType.Number);

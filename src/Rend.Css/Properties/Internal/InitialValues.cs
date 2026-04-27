@@ -73,7 +73,7 @@ namespace Rend.Css.Properties.Internal
             _values[PropertyId.Color] = PropertyValue.FromColor(CssColor.Black);
             _values[PropertyId.BackgroundColor] = PropertyValue.FromColor(CssColor.Transparent);
             _refValues[PropertyId.BackgroundImage] = "none";
-            _values[PropertyId.BackgroundRepeat] = PropertyValue.FromKeyword(0); // repeat
+            _refValues[PropertyId.BackgroundRepeat] = new CssKeywordValue("repeat"); // repeat both axes
             _values[PropertyId.Opacity] = PropertyValue.FromNumber(1f);
 
             // Typography

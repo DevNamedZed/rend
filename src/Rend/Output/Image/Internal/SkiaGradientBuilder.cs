@@ -43,6 +43,10 @@ namespace Rend.Output.Image.Internal
                 }
             }
 
+            // [CSS-IMAGES3 §3.4] Clamp gradient stop positions to [0,1] range for Skia.
+            // When stops extend beyond the visible region, interpolate colors at boundaries.
+            ClampStopPositions(ref colors, ref positions);
+
             // [CSS-BACKGROUNDS §2.11] When a positioning area is specified (canvas
             // backgrounds), use it for shader geometry instead of the fill bounds.
             RectF shaderBounds = gradient.PositioningBounds ?? bounds;
@@ -340,6 +344,86 @@ namespace Rend.Output.Image.Internal
 
             return SKShader.CreateSweepGradient(
                 new SKPoint(cx, cy), finalColors.ToArray(), finalPositions.ToArray());
+        }
+
+        /// <summary>
+        /// [CSS-IMAGES3 §3.4] Clamp gradient stop positions to the [0,1] range.
+        /// Skia requires positions in [0,1]. When CSS calc() produces positions far
+        /// outside this range, interpolate the visible colors at the 0 and 1 boundaries.
+        /// </summary>
+        private static void ClampStopPositions(ref SKColor[] colors, ref float[] positions)
+        {
+            if (positions.Length < 2)
+            {
+                return;
+            }
+
+            float firstPos = positions[0];
+            float lastPos = positions[positions.Length - 1];
+
+            // If all positions are within [0,1], nothing to do
+            if (firstPos >= 0f && lastPos <= 1f)
+            {
+                return;
+            }
+
+            var srcColors = colors;
+            var srcPositions = positions;
+
+            // Build new stop list with positions clamped to [0,1]
+            var newColors = new List<SKColor>();
+            var newPositions = new List<float>();
+
+            // Add boundary color at 0
+            newColors.Add(InterpolateColorAt(0f, srcColors, srcPositions));
+            newPositions.Add(0f);
+
+            // Add any original stops that fall within (0,1)
+            for (int i = 0; i < srcPositions.Length; i++)
+            {
+                if (srcPositions[i] > 0f && srcPositions[i] < 1f)
+                {
+                    newColors.Add(srcColors[i]);
+                    newPositions.Add(srcPositions[i]);
+                }
+            }
+
+            // Add boundary color at 1
+            newColors.Add(InterpolateColorAt(1f, srcColors, srcPositions));
+            newPositions.Add(1f);
+
+            colors = newColors.ToArray();
+            positions = newPositions.ToArray();
+        }
+
+        private static SKColor InterpolateColorAt(float pos, SKColor[] colors, float[] positions)
+        {
+            if (pos <= positions[0])
+            {
+                return colors[0];
+            }
+
+            if (pos >= positions[positions.Length - 1])
+            {
+                return colors[colors.Length - 1];
+            }
+
+            for (int i = 0; i < positions.Length - 1; i++)
+            {
+                if (pos >= positions[i] && pos <= positions[i + 1])
+                {
+                    float range = positions[i + 1] - positions[i];
+                    if (range < 0.000001f)
+                    {
+                        return colors[i];
+                    }
+
+                    float t = (pos - positions[i]) / range;
+                    return LerpColor(colors[i], colors[i + 1], t);
+                }
+            }
+
+            return colors[colors.Length - 1];
         }
 
         private static SKColor LerpColor(SKColor a, SKColor b, float t)

@@ -73,8 +73,8 @@ namespace Rend.Layout.Internal
             }
 
             // [CSS2 §10.4] Apply min-width/max-width to float content width
-            float minW = DimensionResolver.ResolvePercentWidth(style.MinWidth, containingWidth);
-            float maxW = DimensionResolver.ResolvePercentWidth(style.MaxWidth, containingWidth);
+            float minW = DimensionResolver.ResolvePercentWidth(style.MinWidth, containingWidth, style, PropertyId.MinWidth);
+            float maxW = DimensionResolver.ResolvePercentWidth(style.MaxWidth, containingWidth, style, PropertyId.MaxWidth);
             if (style.BoxSizing == CssBoxSizing.BorderBox)
             {
                 float hExtra = floatBox.PaddingLeft + floatBox.PaddingRight + floatBox.BorderLeftWidth + floatBox.BorderRightWidth;

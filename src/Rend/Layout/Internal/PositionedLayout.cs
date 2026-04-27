@@ -61,12 +61,17 @@ namespace Rend.Layout.Internal
             var cb = box.Parent ?? containingBlock;
             float cbWidth = cb.ContentRect.Width;
 
-            // [CSS-POSITION-3 §3.3] Percentage top/bottom resolve against the containing
-            // block's height. If that height is indefinite (height is auto and not
-            // resolved by flex/grid stretch), percentage values resolve to 0.
-            float cbStyleHeight = cb.StyledNode?.Style.Height ?? float.NaN;
-            bool hasDefiniteHeight = !float.IsNaN(cbStyleHeight) || cb.HasDefiniteCrossSize;
-            float cbHeight = hasDefiniteHeight ? cb.ContentRect.Height : 0;
+            // [CSS2 §10.6] Percentage top/bottom resolve against the containing block's
+            // height. Anonymous block wrappers are transparent for this purpose — walk
+            // up to the real block container that has a definite height.
+            var heightCb = cb;
+            while (heightCb.IsAnonymousBlock && heightCb.Parent != null)
+            {
+                heightCb = heightCb.Parent;
+            }
+            float cbStyleHeight = heightCb.StyledNode?.Style.Height ?? float.NaN;
+            bool hasDefiniteHeight = !float.IsNaN(cbStyleHeight) || heightCb.HasDefiniteCrossSize;
+            float cbHeight = hasDefiniteHeight ? heightCb.ContentRect.Height : 0;
 
             float top = ResolvePositionValueWithCalc(style.Top, cbHeight, style, PropertyId.Top);
             float left = ResolvePositionValueWithCalc(style.Left, cbWidth, style, PropertyId.Left);
@@ -86,6 +91,8 @@ namespace Rend.Layout.Internal
                     box.ContentRect.Y + dy,
                     box.ContentRect.Width,
                     box.ContentRect.Height);
+                box.RelativeOffsetX = dx;
+                box.RelativeOffsetY = dy;
             }
         }
 

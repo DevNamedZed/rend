@@ -654,8 +654,12 @@ namespace Rend.Css.Parser.Internal
 
                 if (t.Type == CssTokenType.LeftParen)
                 {
-                    depth++;
+                    // [CSS-VALUES §8.1] Parenthesized sub-expressions in calc()
+                    // Recursively parse as a nested calc group to preserve grouping.
                     _pos++;
+                    var subArgs = new List<CssValue>();
+                    ParseCalcArgs(subArgs);
+                    args.Add(new CssFunctionValue("calc", subArgs));
                     continue;
                 }
 

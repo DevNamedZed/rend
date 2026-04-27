@@ -101,8 +101,8 @@ namespace Rend.Layout.Internal
                 return true;
             }
 
-            // Elements with CSS transforms
-            if (style.GetRefValue(Css.Properties.Internal.PropertyId.Transform) != null)
+            // [CSS-TRANSFORM1 §2] Elements with a transform value other than none
+            if (HasActiveTransform(style))
             {
                 return true;
             }
@@ -115,6 +115,34 @@ namespace Rend.Layout.Internal
                 return true;
             }
 
+            return false;
+        }
+
+        /// <summary>
+        /// [CSS-TRANSFORM1 §2] Returns true if the style has an active transform
+        /// (a function value, not just the keyword "none" or an invalid keyword).
+        /// </summary>
+        private static bool HasActiveTransform(ComputedStyle style)
+        {
+            object? transformRef = style.GetRefValue(Css.Properties.Internal.PropertyId.Transform);
+            if (transformRef == null)
+            {
+                return false;
+            }
+            if (transformRef is Css.CssFunctionValue)
+            {
+                return true;
+            }
+            if (transformRef is Css.CssListValue list)
+            {
+                for (int i = 0; i < list.Values.Count; i++)
+                {
+                    if (list.Values[i] is Css.CssFunctionValue)
+                    {
+                        return true;
+                    }
+                }
+            }
             return false;
         }
 
