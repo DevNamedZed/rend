@@ -245,6 +245,7 @@ namespace Rend.Rendering.Internal
                                         || gradRepeatY == CssBackgroundRepeat.Space;
 
                     // [CSS-BACKGROUNDS-3 §3.4] Per-axis round/space scaling.
+                    // round: Chrome uses clip area. space: uses positioning area.
                     float gradGapX = 0, gradGapY = 0;
                     if (gradRepeatX == CssBackgroundRepeat.Round && gradScaledW > 0)
                     {
@@ -253,10 +254,10 @@ namespace Rend.Rendering.Internal
                     }
                     else if (gradRepeatX == CssBackgroundRepeat.Space && gradScaledW > 0)
                     {
-                        int tilesX = Math.Max(1, (int)(clipRect.Width / gradScaledW));
+                        int tilesX = Math.Max(1, (int)(originRect.Width / gradScaledW));
                         if (tilesX > 1)
                         {
-                            gradGapX = (clipRect.Width - tilesX * gradScaledW) / (tilesX - 1);
+                            gradGapX = (originRect.Width - tilesX * gradScaledW) / (tilesX - 1);
                         }
                     }
 
@@ -267,10 +268,10 @@ namespace Rend.Rendering.Internal
                     }
                     else if (gradRepeatY == CssBackgroundRepeat.Space && gradScaledH > 0)
                     {
-                        int tilesY = Math.Max(1, (int)(clipRect.Height / gradScaledH));
+                        int tilesY = Math.Max(1, (int)(originRect.Height / gradScaledH));
                         if (tilesY > 1)
                         {
-                            gradGapY = (clipRect.Height - tilesY * gradScaledH) / (tilesY - 1);
+                            gradGapY = (originRect.Height - tilesY * gradScaledH) / (tilesY - 1);
                         }
                     }
 
@@ -278,15 +279,30 @@ namespace Rend.Rendering.Internal
                     {
                         bool gradTilesOnX = gradRepeatX != CssBackgroundRepeat.NoRepeat;
                         bool gradTilesOnY = gradRepeatY != CssBackgroundRepeat.NoRepeat;
-                        int tilesX = gradTilesOnX
-                            ? Math.Max(1, (int)Math.Ceiling(clipRect.Width / (gradScaledW + gradGapX)))
+                        bool gradSpaceX = gradRepeatX == CssBackgroundRepeat.Space;
+                        bool gradSpaceY = gradRepeatY == CssBackgroundRepeat.Space;
+                        float gradSpaceOriginX = gradSpaceX ? originRect.X : clipRect.X;
+                        float gradSpaceOriginY = gradSpaceY ? originRect.Y : clipRect.Y;
+                        float gradStepX = gradScaledW + gradGapX;
+                        float gradStepY = gradScaledH + gradGapY;
+                        float startX = gradTilesOnX ? gradSpaceOriginX : gradPosX;
+                        float startY = gradTilesOnY ? gradSpaceOriginY : gradPosY;
+                        if (gradSpaceX && gradStepX > 0 && startX > clipRect.X)
+                        {
+                            int backTilesX = (int)Math.Ceiling((startX - clipRect.X) / gradStepX);
+                            startX -= backTilesX * gradStepX;
+                        }
+                        if (gradSpaceY && gradStepY > 0 && startY > clipRect.Y)
+                        {
+                            int backTilesY = (int)Math.Ceiling((startY - clipRect.Y) / gradStepY);
+                            startY -= backTilesY * gradStepY;
+                        }
+                        int tilesX = gradTilesOnX && gradStepX > 0
+                            ? Math.Max(1, (int)Math.Ceiling((clipRect.Right - startX) / gradStepX))
                             : 1;
-                        int tilesY = gradTilesOnY
-                            ? Math.Max(1, (int)Math.Ceiling(clipRect.Height / (gradScaledH + gradGapY)))
+                        int tilesY = gradTilesOnY && gradStepY > 0
+                            ? Math.Max(1, (int)Math.Ceiling((clipRect.Bottom - startY) / gradStepY))
                             : 1;
-
-                        float startX = gradTilesOnX ? clipRect.X : gradPosX;
-                        float startY = gradTilesOnY ? clipRect.Y : gradPosY;
 
                         if (hasRadius)
                         {
@@ -429,7 +445,9 @@ namespace Rend.Rendering.Internal
             }
 
             // [CSS-BACKGROUNDS-3 §3.4] round: scale image so integer tiles fill the area.
+            // Chrome uses the clip area (border-box) for round scaling.
             // space: distribute extra space evenly between unscaled tiles.
+            // CSS spec says space uses the positioning area (originRect).
             float spaceGapX = 0, spaceGapY = 0;
             if (repeatModeX == CssBackgroundRepeat.Round && scaledW > 0)
             {
@@ -438,10 +456,10 @@ namespace Rend.Rendering.Internal
             }
             else if (repeatModeX == CssBackgroundRepeat.Space && scaledW > 0)
             {
-                int tilesX = Math.Max(1, (int)(clipRect.Width / scaledW));
+                int tilesX = Math.Max(1, (int)(originRect.Width / scaledW));
                 if (tilesX > 1)
                 {
-                    spaceGapX = (clipRect.Width - tilesX * scaledW) / (tilesX - 1);
+                    spaceGapX = (originRect.Width - tilesX * scaledW) / (tilesX - 1);
                 }
             }
 
@@ -452,10 +470,10 @@ namespace Rend.Rendering.Internal
             }
             else if (repeatModeY == CssBackgroundRepeat.Space && scaledH > 0)
             {
-                int tilesY = Math.Max(1, (int)(clipRect.Height / scaledH));
+                int tilesY = Math.Max(1, (int)(originRect.Height / scaledH));
                 if (tilesY > 1)
                 {
-                    spaceGapY = (clipRect.Height - tilesY * scaledH) / (tilesY - 1);
+                    spaceGapY = (originRect.Height - tilesY * scaledH) / (tilesY - 1);
                 }
             }
 
@@ -467,14 +485,31 @@ namespace Rend.Rendering.Internal
 
             if (needsManualTiling)
             {
-                // [CSS-BACKGROUNDS §3.4] space/round with mixed axes: draw individual tiles.
-                int tilesX = tilesOnX && scaledW > 0
-                    ? Math.Max(1, (int)(clipRect.Width / scaledW)) : 1;
-                int tilesY = tilesOnY && scaledH > 0
-                    ? Math.Max(1, (int)(clipRect.Height / scaledH)) : 1;
-
-                float startX = tilesOnX ? clipRect.X : posX;
-                float startY = tilesOnY ? clipRect.Y : posY;
+                // [CSS-BACKGROUNDS-3 §3.4] space: gap/count from positioning area,
+                // but tiles continue into the clip area if it extends beyond.
+                // Extend backwards from origin to cover any clip area before origin.
+                bool spaceX = repeatModeX == CssBackgroundRepeat.Space;
+                bool spaceY = repeatModeY == CssBackgroundRepeat.Space;
+                float spaceOriginX = spaceX ? originRect.X : clipRect.X;
+                float spaceOriginY = spaceY ? originRect.Y : clipRect.Y;
+                float stepX = scaledW + spaceGapX;
+                float stepY = scaledH + spaceGapY;
+                float startX = tilesOnX ? spaceOriginX : posX;
+                float startY = tilesOnY ? spaceOriginY : posY;
+                if (spaceX && stepX > 0 && startX > clipRect.X)
+                {
+                    int backTilesX = (int)Math.Ceiling((startX - clipRect.X) / stepX);
+                    startX -= backTilesX * stepX;
+                }
+                if (spaceY && stepY > 0 && startY > clipRect.Y)
+                {
+                    int backTilesY = (int)Math.Ceiling((startY - clipRect.Y) / stepY);
+                    startY -= backTilesY * stepY;
+                }
+                int tilesX = tilesOnX && stepX > 0
+                    ? Math.Max(1, (int)Math.Ceiling((clipRect.Right - startX) / stepX)) : 1;
+                int tilesY = tilesOnY && stepY > 0
+                    ? Math.Max(1, (int)Math.Ceiling((clipRect.Bottom - startY) / stepY)) : 1;
 
                 for (int ty = 0; ty < tilesY; ty++)
                 {

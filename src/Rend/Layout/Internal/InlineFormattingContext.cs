@@ -47,8 +47,10 @@ namespace Rend.Layout.Internal
 
             if (vertical)
             {
-                // Vertical writing mode: fall back to horizontal layout for now
-                // (full vertical-rl/vertical-lr is a future enhancement)
+                // [CSS-WRITING-MODES-3 §3.1] Vertical writing mode: inline axis is
+                // vertical (top-to-bottom), block axis is horizontal.
+                LayoutVertical(parent, context, styledElement);
+                return;
             }
 
             float containingWidth = parent.ContentRect.Width;
@@ -819,15 +821,18 @@ namespace Rend.Layout.Internal
             text = WhitespaceCollapser.Collapse(text, style.WhiteSpace);
             if (string.IsNullOrEmpty(text)) return;
 
-            // [CSS-TEXT-3 §5.3] Expand tab characters in pre/pre-wrap modes using tab-size.
-            if (text.IndexOf('\t') >= 0 &&
+            // [CSS-TEXT-3 §8.2] Detect tab characters in pre/pre-wrap/break-spaces modes.
+            // Tab stops are computed from the block container's font metrics, not replaced
+            // with space characters, because the spec requires tab-stop positions relative
+            // to the block's starting content edge using the block container's space advance.
+            bool hasTabs = text.IndexOf('\t') >= 0 &&
                 (style.WhiteSpace == CssWhiteSpace.Pre ||
                  style.WhiteSpace == CssWhiteSpace.PreWrap ||
-                 style.WhiteSpace == CssWhiteSpace.BreakSpaces))
+                 style.WhiteSpace == CssWhiteSpace.BreakSpaces);
+            float tabStopInterval = 0;
+            if (hasTabs)
             {
-                int tabSize = (int)style.TabSize;
-                if (tabSize < 0) { tabSize = 8; }
-                text = text.Replace("\t", tabSize > 0 ? new string(' ', tabSize) : string.Empty);
+                tabStopInterval = CalculateTabStopInterval(style.TabSize, parent, context);
             }
 
             // Apply text-transform
@@ -854,21 +859,50 @@ namespace Rend.Layout.Internal
                                      style.WhiteSpace == CssWhiteSpace.PreLine ||
                                      style.WhiteSpace == CssWhiteSpace.BreakSpaces;
 
-            if (preservesNewlines && text.IndexOf('\n') >= 0)
+            if (hasTabs || (preservesNewlines && text.IndexOf('\n') >= 0))
             {
-                string[] segments = text.Split('\n');
-                for (int seg = 0; seg < segments.Length; seg++)
+                bool hasNewlines = preservesNewlines && text.IndexOf('\n') >= 0;
+                string[] lines = hasNewlines ? text.Split('\n') : new[] { text };
+                float blockStartX = parent.ContentRect.X;
+
+                for (int seg = 0; seg < lines.Length; seg++)
                 {
-                    if (segments[seg].Length > 0)
+                    string line = lines[seg];
+
+                    if (hasTabs && line.IndexOf('\t') >= 0)
                     {
-                        var segText = new StyledText(segments[seg], style);
-                        LayoutTextRunSegment(segText, context, ref cursorX, ref cursorY, ref startX, ref containingWidth,
-                                             ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, parent,
-                                             inlineAncestor, styleOverride);
+                        // [CSS-TEXT-3 §8.2] Split on tab characters and advance cursorX
+                        // to the next tab stop between each segment.
+                        string[] tabSegments = line.Split('\t');
+                        for (int tabIndex = 0; tabIndex < tabSegments.Length; tabIndex++)
+                        {
+                            if (tabSegments[tabIndex].Length > 0)
+                            {
+                                var segText = new StyledText(tabSegments[tabIndex], style);
+                                LayoutTextRunSegment(segText, context, ref cursorX, ref cursorY, ref startX,
+                                    ref containingWidth, ref currentLine, lineBoxes,
+                                    ref maxLineHeight, ref lineBaseline, parent,
+                                    inlineAncestor, styleOverride);
+                            }
+                            if (tabIndex < tabSegments.Length - 1 && tabStopInterval > 0)
+                            {
+                                float positionFromBlockStart = cursorX - blockStartX;
+                                float nextTabStop = tabStopInterval *
+                                    (float)Math.Ceiling((positionFromBlockStart + 0.001f) / tabStopInterval);
+                                cursorX = blockStartX + nextTabStop;
+                            }
+                        }
+                    }
+                    else if (line.Length > 0)
+                    {
+                        var segText = new StyledText(line, style);
+                        LayoutTextRunSegment(segText, context, ref cursorX, ref cursorY, ref startX,
+                            ref containingWidth, ref currentLine, lineBoxes,
+                            ref maxLineHeight, ref lineBaseline, parent,
+                            inlineAncestor, styleOverride);
                     }
 
-                    // Force a line break after each segment except the last
-                    if (seg < segments.Length - 1)
+                    if (seg < lines.Length - 1)
                     {
                         StartNewLine(parent, ref cursorX, ref cursorY, ref startX, ref containingWidth,
                                      ref currentLine, lineBoxes, ref maxLineHeight, ref lineBaseline, context);
@@ -1697,6 +1731,16 @@ namespace Rend.Layout.Internal
                 {
                     if (intrinsicW <= 0) intrinsicW = duW;
                     if (intrinsicH <= 0) intrinsicH = duH;
+                }
+
+                // [CSS-SIZING-4 §3] contain:size overrides intrinsic dimensions
+                var containValueIfc = element.Style.Contain;
+                if (containValueIfc == CssContain.Size || containValueIfc == CssContain.Strict)
+                {
+                    float ciW = element.Style.GetValues()[PropertyId.ContainIntrinsicWidth].FloatValue;
+                    float ciH = element.Style.GetValues()[PropertyId.ContainIntrinsicHeight].FloatValue;
+                    if (!float.IsNaN(ciW) && ciW > 0) { intrinsicW = ciW; }
+                    if (!float.IsNaN(ciH) && ciH > 0) { intrinsicH = ciH; }
                 }
 
                 // Resolve CSS width (handles deferred percentage encoding)
@@ -3272,6 +3316,56 @@ namespace Rend.Layout.Internal
             }
 
             return text.Substring(0, estimatedChars);
+        }
+
+        /// <summary>
+        /// [CSS-TEXT-3 §8.2] Calculates the tab stop interval in pixels.
+        /// Uses the block container's font for the space advance width, and
+        /// includes the block container's letter-spacing and word-spacing.
+        /// </summary>
+        private static float CalculateTabStopInterval(
+            float tabSize, LayoutBox blockContainer, LayoutContext context)
+        {
+            if (tabSize <= 0)
+            {
+                return 0;
+            }
+
+            var blockStyled = blockContainer.StyledNode as StyledElement;
+            if (blockStyled == null)
+            {
+                return tabSize * 8f;
+            }
+
+            var blockStyle = blockStyled.Style;
+            float spaceAdvance;
+
+            if (context.TextMeasurer != null)
+            {
+                var fontDesc = new FontDescriptor(
+                    blockStyle.FontFamilies,
+                    blockStyle.FontWeight,
+                    blockStyle.FontStyle,
+                    FontDescriptor.StretchToPercentage(blockStyle.FontStretch));
+                spaceAdvance = context.TextMeasurer.MeasureWidth(" ", fontDesc, blockStyle.FontSize);
+            }
+            else
+            {
+                spaceAdvance = blockStyle.FontSize * 0.5f;
+            }
+
+            float letterSpacing = blockStyle.LetterSpacing;
+            if (float.IsNaN(letterSpacing))
+            {
+                letterSpacing = 0;
+            }
+            float wordSpacing = blockStyle.WordSpacing;
+            if (float.IsNaN(wordSpacing))
+            {
+                wordSpacing = 0;
+            }
+
+            return tabSize * (spaceAdvance + letterSpacing + wordSpacing);
         }
 
         private static float CalculateSpacingExtra(string text, ComputedStyle style)

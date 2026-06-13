@@ -407,13 +407,10 @@ namespace Rend.Rendering
             }
 
             // 9. Paint children and inline content in paint order.
-            PaintChildren(box, target);
-
-            // [CSS-TABLES §4.4] Collapsed borders paint on top of cell contents.
-            if (!isHidden && box.CollapsedBorderCell)
-            {
-                BorderPainter.Paint(box, target);
-            }
+            // [CSS-TABLES §4.4] Collapsed borders paint on top of cell contents
+            // but BELOW positioned descendants (CSS2 §E.2 step 6-7).
+            bool paintCollapsedBordersBetween = !isHidden && box.CollapsedBorderCell;
+            PaintChildren(box, target, paintCollapsedBordersBetween);
 
             // 9b. Paint column rules for multi-column layout.
             if (box.ColumnRules != null)
@@ -474,7 +471,8 @@ namespace Rend.Rendering
             }
         }
 
-        private void PaintChildren(LayoutBox box, IRenderTarget target)
+        private void PaintChildren(LayoutBox box, IRenderTarget target,
+            bool paintCollapsedBordersBetween = false)
         {
             // Paint line boxes (inline formatting context).
             if (box.LineBoxes != null && box.LineBoxes.Count > 0)
@@ -486,11 +484,55 @@ namespace Rend.Rendering
             if (box.Children.Count > 0)
             {
                 List<LayoutBox> paintOrder = PaintOrderSorter.GetPaintOrder(box);
-                for (int i = 0; i < paintOrder.Count; i++)
+
+                if (paintCollapsedBordersBetween)
                 {
-                    PaintBox(paintOrder[i], target);
+                    // [CSS-TABLES §4.4 + CSS2 §E.2] Collapsed borders paint on top
+                    // of in-flow content (steps 2-5) but below positioned descendants
+                    // (steps 6-7). Paint non-positioned children first, then collapsed
+                    // borders, then positioned children.
+                    for (int i = 0; i < paintOrder.Count; i++)
+                    {
+                        LayoutBox child = paintOrder[i];
+                        if (IsPositionedChild(child))
+                        {
+                            // Hit the first positioned child — paint collapsed borders now
+                            BorderPainter.Paint(box, target);
+                            // Paint remaining children (positioned ones)
+                            for (int j = i; j < paintOrder.Count; j++)
+                            {
+                                PaintBox(paintOrder[j], target);
+                            }
+                            return;
+                        }
+                        PaintBox(child, target);
+                    }
+                    // No positioned children — paint collapsed borders after all children
+                    BorderPainter.Paint(box, target);
+                }
+                else
+                {
+                    for (int i = 0; i < paintOrder.Count; i++)
+                    {
+                        PaintBox(paintOrder[i], target);
+                    }
                 }
             }
+            else if (paintCollapsedBordersBetween)
+            {
+                // No children — still need to paint collapsed borders
+                BorderPainter.Paint(box, target);
+            }
+        }
+
+        private static bool IsPositionedChild(LayoutBox child)
+        {
+            var style = child.StyledNode?.Style;
+            if (style == null)
+            {
+                return false;
+            }
+            return style.Position != CssPosition.Static;
         }
 
         private void PaintLineBoxes(LayoutBox box, IRenderTarget target)

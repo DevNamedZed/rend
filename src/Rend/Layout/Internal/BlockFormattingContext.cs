@@ -696,46 +696,42 @@ namespace Rend.Layout.Internal
 
                 if (vertical)
                 {
-                    // Vertical writing mode: blocks stack horizontally.
-                    // The inline dimension is the container's height (containingWidth above).
-                    // Each child block fills the inline dimension (height = containingWidth)
-                    // and is positioned along the block axis (horizontal).
+                    // [CSS-WRITING-MODES-3 §3.1, §7.1] Vertical writing mode: blocks
+                    // stack horizontally. CSS width = block-size (physical width),
+                    // CSS height = inline-size (physical height). Re-resolve both
+                    // dimensions with correct logical-to-physical mapping.
+                    float parentBlockSize = parent.ContentRect.Width;
+
                     float x = cursorX + childBox.MarginLeft + childBox.BorderLeftWidth + childBox.PaddingLeft;
                     float y = parent.ContentRect.Y + childBox.MarginTop + childBox.BorderTopWidth + childBox.PaddingTop;
 
-                    // In vertical mode, the child's "width" is its block size and
-                    // "height" is its inline size (= containingWidth for a block-level child).
-                    float childInlineSize = containingWidth;
-                    childBox.ContentRect = new RectF(x, y, contentWidth, childInlineSize);
+                    float childWidth;
+                    float childHeight;
 
-                    float contentHeight;
                     if (isReplaced)
                     {
                         float intrinsicW = 0, intrinsicH = 0;
                         string? attrW = childElement.GetAttribute("width");
                         string? attrH = childElement.GetAttribute("height");
-                        if (attrW != null && float.TryParse(attrW, out float aw)) intrinsicW = aw;
-                        if (attrH != null && float.TryParse(attrH, out float ah)) intrinsicH = ah;
+                        if (attrW != null && float.TryParse(attrW, out float aw)) { intrinsicW = aw; }
+                        if (attrH != null && float.TryParse(attrH, out float ah)) { intrinsicH = ah; }
                         if (ReplacedElementLayout.IsFormControl(childElement))
                         {
-                            if (intrinsicW <= 0) intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(childElement, context.TextMeasurer);
-                            if (intrinsicH <= 0) intrinsicH = ReplacedElementLayout.GetFormControlIntrinsicHeight(childElement);
+                            if (intrinsicW <= 0) { intrinsicW = ReplacedElementLayout.GetFormControlIntrinsicWidth(childElement, context.TextMeasurer); }
+                            if (intrinsicH <= 0) { intrinsicH = ReplacedElementLayout.GetFormControlIntrinsicHeight(childElement); }
                         }
                         if (childElement.TagName == "math" && (intrinsicW <= 0 || intrinsicH <= 0))
                         {
                             var mathSize = Rendering.Internal.MathmlRenderer.MeasureElement(childElement.Element, 16f, context.TextMeasurer);
-                            if (intrinsicW <= 0) intrinsicW = mathSize.Width + 4f;
-                            if (intrinsicH <= 0) intrinsicH = mathSize.Height;
+                            if (intrinsicW <= 0) { intrinsicW = mathSize.Width + 4f; }
+                            if (intrinsicH <= 0) { intrinsicH = mathSize.Height; }
                         }
-                        // Fallback: extract dimensions from data: URI for images
                         if ((intrinsicW <= 0 || intrinsicH <= 0) &&
                             ReplacedElementLayout.TryGetDataUriDimensions(childElement, out float duW, out float duH))
                         {
-                            if (intrinsicW <= 0) intrinsicW = duW;
-                            if (intrinsicH <= 0) intrinsicH = duH;
+                            if (intrinsicW <= 0) { intrinsicW = duW; }
+                            if (intrinsicH <= 0) { intrinsicH = duH; }
                         }
-                        // [CSS-IMAGES-3 §2.2] SVG with viewBox but no width/height attrs:
-                        // use viewBox dimensions as intrinsic size for ratio calculation.
                         if ((intrinsicW <= 0 || intrinsicH <= 0) && childElement.TagName == "svg")
                         {
                             string? viewBox = childElement.GetAttribute("viewbox");
@@ -748,67 +744,153 @@ namespace Rend.Layout.Internal
                                     && float.TryParse(vbParts[3], System.Globalization.NumberStyles.Float,
                                         System.Globalization.CultureInfo.InvariantCulture, out float vbH))
                                 {
-                                    if (intrinsicW <= 0) intrinsicW = vbW;
-                                    if (intrinsicH <= 0) intrinsicH = vbH;
+                                    if (intrinsicW <= 0) { intrinsicW = vbW; }
+                                    if (intrinsicH <= 0) { intrinsicH = vbH; }
                                 }
                             }
                         }
+
+                        // [CSS-SIZING-4 §3] contain:size overrides intrinsic dimensions
+                        var containValueVwm = childStyle.Contain;
+                        if (containValueVwm == CssContain.Size || containValueVwm == CssContain.Strict)
+                        {
+                            float ciW = childStyle.GetValues()[PropertyId.ContainIntrinsicWidth].FloatValue;
+                            float ciH = childStyle.GetValues()[PropertyId.ContainIntrinsicHeight].FloatValue;
+                            if (!float.IsNaN(ciW) && ciW > 0) { intrinsicW = ciW; }
+                            if (!float.IsNaN(ciH) && ciH > 0) { intrinsicH = ciH; }
+                        }
+
                         ReplacedElementLayout.ResolveDimensions(childBox, childStyle, containingWidth, parentContentHeight, intrinsicW, intrinsicH);
-                        contentWidth = childBox.ContentRect.Width;
-                        contentHeight = childBox.ContentRect.Height;
+                        childWidth = childBox.ContentRect.Width;
+                        childHeight = childBox.ContentRect.Height;
                     }
                     else
                     {
-                        // Pre-resolve height for vertical mode too
-                        float preHeightV = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox);
-                        if (!float.IsNaN(preHeightV) && preHeightV > 0)
-                            childBox.ContentRect = new RectF(x, y, contentWidth, preHeightV);
+                        bool childVertical = IsVerticalWritingMode(childStyle);
 
-                        LayoutChildren(childBox, context);
-                        contentHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox);
-                        if (float.IsNaN(contentHeight))
+                        if (!childVertical)
                         {
-                            var contain = childStyle.Contain;
-                            if (contain == CssContain.Size || contain == CssContain.Strict)
+                            // [CSS-WRITING-MODES-3 §7.3.1] Orthogonal flow: horizontal-tb
+                            // child inside vertical parent. The child's available inline-size
+                            // (width) comes from parent's block-size (physical width).
+                            childWidth = DimensionResolver.ResolveWidth(
+                                childStyle, parentBlockSize, childBox, containingWidth);
+                            childHeight = DimensionResolver.ResolveHeight(
+                                childStyle, containingWidth, childBox);
+                            bool autoHeight = float.IsNaN(childHeight);
+                            if (autoHeight)
                             {
-                                float ciHeight = childStyle.GetValues()[PropertyId.ContainIntrinsicHeight].FloatValue;
-                                contentHeight = (!float.IsNaN(ciHeight) && ciHeight > 0) ? ciHeight : 0;
+                                childHeight = 0;
+                            }
+
+                            childBox.ContentRect = new RectF(x, y, childWidth, childHeight);
+                            LayoutChildren(childBox, context);
+
+                            if (autoHeight)
+                            {
+                                childHeight = CalculateAutoHeight(childBox);
+                            }
+                        }
+                        else
+                        {
+                            // [CSS-WRITING-MODES-3 §7.1] Same vertical writing mode.
+                            // CSS width = block-size, CSS height = inline-size.
+                            // Auto inline-size fills containing inline dimension.
+                            float resolvedInlineSize = DimensionResolver.ResolveHeight(
+                                childStyle, containingWidth, childBox);
+                            if (float.IsNaN(resolvedInlineSize))
+                            {
+                                childHeight = containingWidth - BoxModelCalculator.GetVerticalSpacing(childBox);
                             }
                             else
                             {
-                                contentHeight = CalculateAutoHeight(childBox);
+                                childHeight = resolvedInlineSize;
                             }
 
-                            // Apply min-height / max-height to auto height
-                            float minH = DimensionResolver.ResolvePercentHeight(childStyle.MinHeight, parentContentHeight);
-                            float maxH = DimensionResolver.ResolvePercentHeight(childStyle.MaxHeight, parentContentHeight);
-                            // box-sizing: border-box → min/max-height includes padding+border
-                            if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
+                            // [CSS-WRITING-MODES-3 §7.1] Auto block-size (physical width)
+                            // shrinks to content (like auto height in horizontal mode).
+                            bool autoBlockSize = float.IsNaN(childStyle.Width)
+                                || SizingKeyword.IsSizingKeyword(childStyle.Width);
+                            if (!autoBlockSize)
                             {
-                                float vExtra = childBox.PaddingTop + childBox.PaddingBottom
-                                             + childBox.BorderTopWidth + childBox.BorderBottomWidth;
-                                if (!float.IsNaN(minH) && minH >= 0)
-                                {
-                                    minH = Math.Max(0, minH - vExtra);
-                                }
-                                if (!float.IsNaN(maxH) && maxH >= 0)
-                                {
-                                    maxH = Math.Max(0, maxH - vExtra);
-                                }
+                                childWidth = DimensionResolver.ResolveWidth(
+                                    childStyle, parentBlockSize, childBox, containingWidth);
                             }
-                            if (!float.IsNaN(maxH) && maxH >= 0 && contentHeight > maxH)
-                                contentHeight = maxH;
-                            if (!float.IsNaN(minH) && minH >= 0 && contentHeight < minH)
-                                contentHeight = minH;
+                            else
+                            {
+                                childWidth = 0;
+                            }
+
+                            childBox.ContentRect = new RectF(x, y, childWidth, childHeight);
+                            LayoutChildren(childBox, context);
+
+                            if (autoBlockSize)
+                            {
+                                childWidth = CalculateAutoWidth(childBox);
+                            }
+                        }
+
+                        // [CSS2 §10.4] Apply min/max-width constraints
+                        float minBlock = DimensionResolver.ResolvePercentWidth(
+                            childStyle.MinWidth, parentBlockSize, childStyle, PropertyId.MinWidth);
+                        float maxBlock = DimensionResolver.ResolvePercentWidth(
+                            childStyle.MaxWidth, parentBlockSize, childStyle, PropertyId.MaxWidth);
+                        if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            float horizontalExtra = childBox.PaddingLeft + childBox.PaddingRight
+                                + childBox.BorderLeftWidth + childBox.BorderRightWidth;
+                            if (!float.IsNaN(minBlock) && minBlock >= 0)
+                            {
+                                minBlock = Math.Max(0, minBlock - horizontalExtra);
+                            }
+                            if (!float.IsNaN(maxBlock) && maxBlock >= 0)
+                            {
+                                maxBlock = Math.Max(0, maxBlock - horizontalExtra);
+                            }
+                        }
+                        if (!float.IsNaN(maxBlock) && maxBlock >= 0 && childWidth > maxBlock)
+                        {
+                            childWidth = maxBlock;
+                        }
+                        if (!float.IsNaN(minBlock) && minBlock >= 0 && childWidth < minBlock)
+                        {
+                            childWidth = minBlock;
+                        }
+
+                        // Apply min/max-height constraints
+                        float minInline = DimensionResolver.ResolvePercentHeight(
+                            childStyle.MinHeight, containingWidth);
+                        float maxInline = DimensionResolver.ResolvePercentHeight(
+                            childStyle.MaxHeight, containingWidth);
+                        if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
+                        {
+                            float verticalExtra = childBox.PaddingTop + childBox.PaddingBottom
+                                + childBox.BorderTopWidth + childBox.BorderBottomWidth;
+                            if (!float.IsNaN(minInline) && minInline >= 0)
+                            {
+                                minInline = Math.Max(0, minInline - verticalExtra);
+                            }
+                            if (!float.IsNaN(maxInline) && maxInline >= 0)
+                            {
+                                maxInline = Math.Max(0, maxInline - verticalExtra);
+                            }
+                        }
+                        if (!float.IsNaN(maxInline) && maxInline >= 0 && childHeight > maxInline)
+                        {
+                            childHeight = maxInline;
+                        }
+                        if (!float.IsNaN(minInline) && minInline >= 0 && childHeight < minInline)
+                        {
+                            childHeight = minInline;
                         }
                     }
 
-                    childBox.ContentRect = new RectF(x, y, contentWidth, contentHeight);
+                    childBox.ContentRect = new RectF(x, y, childWidth, childHeight);
                     parent.AddChild(childBox);
 
-                    // Advance the cursor in the block direction (horizontal)
-                    cursorX = x + contentWidth + childBox.PaddingRight + childBox.BorderRightWidth + childBox.MarginRight;
-                    prevMarginBottom = 0; // No vertical margin collapsing in vertical mode
+                    // Advance cursor in the block direction (horizontal)
+                    cursorX = x + childWidth + childBox.PaddingRight + childBox.BorderRightWidth + childBox.MarginRight;
+                    prevMarginBottom = 0;
                 }
                 else
                 {
@@ -839,7 +921,7 @@ namespace Rend.Layout.Internal
                     // new block formatting context must not overlap the margin box of
                     // any floats in the same BFC. If it has a specified width that
                     // doesn't fit, move below. If auto width, shrink to fit beside.
-                    if (EstablishesNewBfc(childStyle))
+                    if (EstablishesNewBfc(childStyle) && !IsBodyOverflowPropagated(childBox))
                     {
                         float borderBoxY = y - childBox.PaddingTop - childBox.BorderTopWidth;
                         // [CSS2 §9.5] Use actual element height for float edge queries,
@@ -940,6 +1022,15 @@ namespace Rend.Layout.Internal
                                     if (intrinsicH <= 0) intrinsicH = vbH;
                                 }
                             }
+                        }
+                        // [CSS-SIZING-4 §3] contain:size overrides intrinsic dimensions
+                        var containValue = childStyle.Contain;
+                        if (containValue == CssContain.Size || containValue == CssContain.Strict)
+                        {
+                            float ciW = childStyle.GetValues()[PropertyId.ContainIntrinsicWidth].FloatValue;
+                            float ciH = childStyle.GetValues()[PropertyId.ContainIntrinsicHeight].FloatValue;
+                            if (!float.IsNaN(ciW) && ciW > 0) { intrinsicW = ciW; }
+                            if (!float.IsNaN(ciH) && ciH > 0) { intrinsicH = ciH; }
                         }
                         ReplacedElementLayout.ResolveDimensions(childBox, childStyle, containingWidth, parentContentHeight, intrinsicW, intrinsicH);
                         contentWidth = childBox.ContentRect.Width;
@@ -1447,6 +1538,24 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
+        /// [CSS2 §11.1.1] Returns true if the layout box is a body element whose
+        /// overflow propagates to the viewport (html parent has overflow:visible).
+        /// </summary>
+        internal static bool IsBodyOverflowPropagated(LayoutBox box)
+        {
+            if (box.StyledNode is Style.StyledElement bodyElem
+                && bodyElem.TagName == "body"
+                && box.Parent?.StyledNode is Style.StyledElement htmlElem
+                && htmlElem.TagName == "html"
+                && htmlElem.Style.OverflowX == CssOverflow.Visible
+                && htmlElem.Style.OverflowY == CssOverflow.Visible)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// [CSS2 §10.6.7] Calculates auto height from children, line boxes, and floats.
         /// For elements establishing a BFC, the height includes any floated descendants
         /// whose bottom margin edge extends below the last child.
@@ -1509,6 +1618,51 @@ namespace Rend.Layout.Internal
             }
 
             return bottom - box.ContentRect.Y;
+        }
+
+        /// <summary>
+        /// [CSS-WRITING-MODES-3 §7.1] Calculate auto block-size (physical width) for
+        /// vertical writing mode containers. Finds the rightmost content edge of
+        /// in-flow children, analogous to CalculateAutoHeight for horizontal mode.
+        /// </summary>
+        internal static float CalculateAutoWidth(LayoutBox box)
+        {
+            float right = box.ContentRect.X;
+
+            if (box.LineBoxes != null && box.LineBoxes.Count > 0)
+            {
+                for (int i = 0; i < box.LineBoxes.Count; i++)
+                {
+                    var lineBox = box.LineBoxes[i];
+                    float lineRight = lineBox.X + lineBox.Width;
+                    if (lineRight > right)
+                    {
+                        right = lineRight;
+                    }
+                }
+            }
+
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                var child = box.Children[i];
+                var childStyled = child.StyledNode as Style.StyledElement;
+
+                if (childStyled != null &&
+                    (childStyled.Style.Position == Css.CssPosition.Absolute ||
+                     childStyled.Style.Position == Css.CssPosition.Fixed))
+                {
+                    continue;
+                }
+
+                float childRight = child.ContentRect.X + child.ContentRect.Width
+                                 + child.PaddingRight + child.BorderRightWidth + child.MarginRight;
+                if (childRight > right)
+                {
+                    right = childRight;
+                }
+            }
+
+            return right - box.ContentRect.X;
         }
 
         /// <summary>

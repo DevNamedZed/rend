@@ -84,6 +84,8 @@ namespace Rend.Layout
             // Calculate root height BEFORE positioning so fixed/absolute elements
             // can reference the containing block's actual dimensions.
             // [CSS2 §10.6] Use explicit CSS height if set, otherwise auto height from content.
+            // [CSS-WRITING-MODES-3 §7.1] In vertical writing modes the root's inline-size
+            // [CSS2 §10.6] Use explicit CSS height if set, otherwise auto height from content.
             float rootHeight;
             var rootStyle = styledTree.Root.Style;
             float explicitRootH = Internal.DimensionResolver.ResolveHeight(

@@ -160,8 +160,19 @@ namespace Rend.Layout.Internal
                               + floatBox.BorderTopWidth + floatBox.BorderBottomWidth
                               + floatBox.MarginTop + floatBox.MarginBottom;
 
-            // Find position
+            // [CSS2 §9.5.2] Apply clear property to floats: a float with
+            // clear:left/right/both must be placed below earlier floats
+            // matching that direction.
             float y = floatContext.CurrentY;
+            if (style.Clear != CssClear.None)
+            {
+                float clearY = floatContext.GetClearY(style.Clear);
+                if (clearY > y)
+                {
+                    y = clearY;
+                }
+            }
+
             float x;
 
             if (style.Float == CssFloat.Left)

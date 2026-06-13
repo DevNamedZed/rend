@@ -118,7 +118,15 @@ namespace Rend.Layout.Internal
 
             // overflow != visible establishes a BFC
             if (style.OverflowX != CssOverflow.Visible || style.OverflowY != CssOverflow.Visible)
-                return true;
+            {
+                // [CSS2 §11.1.1] When html has overflow:visible, body's overflow
+                // propagates to the viewport. Body itself behaves as overflow:visible
+                // and does NOT establish a BFC.
+                if (!IsBodyOverflowPropagated(box))
+                {
+                    return true;
+                }
+            }
 
             // Floated elements establish a BFC
             if (style.Float != CssFloat.None)
@@ -151,6 +159,14 @@ namespace Rend.Layout.Internal
                 return true;
 
             return false;
+        }
+
+        /// <summary>
+        /// [CSS2 §11.1.1] Delegates to BFC for body overflow propagation check.
+        /// </summary>
+        private static bool IsBodyOverflowPropagated(LayoutBox box)
+        {
+            return BlockFormattingContext.IsBodyOverflowPropagated(box);
         }
     }
 }

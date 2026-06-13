@@ -169,9 +169,20 @@ namespace Rend.Layout.Internal
             }
             else
             {
-                // Balance without specified height: binary search for the minimum
-                // column height that fits all content into the available columns.
-                targetHeight = BinarySearchColumnHeight(columnBox, columnCount, contentHeight);
+                // [CSS-MULTICOL §3.3] Balance: Chrome's ColumnBalancer starts with
+                // contentHeight / columnCount and validates it. Binary search only
+                // when the even-distribution estimate doesn't fit (e.g., break-avoid
+                // groups or unbreakable blocks larger than the estimate).
+                float initialEstimate = contentHeight / columnCount;
+                var groups = BuildBreakGroups(columnBox.Children);
+                if (FitsInColumnsWithSplitting(columnBox, columnCount, initialEstimate, groups))
+                {
+                    targetHeight = initialEstimate;
+                }
+                else
+                {
+                    targetHeight = BinarySearchColumnHeight(columnBox, columnCount, contentHeight);
+                }
             }
 
             float columnHeight = targetHeight;
@@ -505,7 +516,9 @@ namespace Rend.Layout.Internal
                                 if (box.ColumnRules == null)
                                     box.ColumnRules = new List<ColumnRuleInfo>();
                                 float ruleX = (float)Math.Round(colX - columnGap / 2);
-                                float ruleHeight = tallestColumn > 0 ? tallestColumn : columnHeight;
+                                // [CSS-MULTICOL §4.4] Column rules span the multicol
+                                // container's content height (= balanced column height).
+                                float ruleHeight = columnHeight;
                                 box.ColumnRules.Add(new ColumnRuleInfo
                                 {
                                     X = ruleX,
@@ -528,14 +541,22 @@ namespace Rend.Layout.Internal
             // still occupies the specified block size — Chrome paints the area
             // between the column strip bottom and the container bottom using the
             // multicol's own background.
+            // [CSS-MULTICOL §3.3] The multicol container's block size equals:
+            // - specified height when set with forced breaks,
+            // - the balanced column height when balancing (Chrome's ColumnBalancer),
+            // - the tallest column's extent otherwise (column-fill: auto).
             float finalHeight;
             if (specifiedHeight > 0 && hasForcedBreaks)
             {
                 finalHeight = specifiedHeight;
             }
-            else
+            else if (style.ColumnFill == CssColumnFill.Auto || specifiedHeight > 0)
             {
                 finalHeight = tallestColumn > 0 ? tallestColumn : columnHeight;
+            }
+            else
+            {
+                finalHeight = columnHeight;
             }
             box.ContentRect = new RectF(
                 box.ContentRect.X, box.ContentRect.Y,
@@ -1115,6 +1136,14 @@ namespace Rend.Layout.Internal
                     }
                     colStartY = firstChild.BorderRect.Y;
                     colHasContent = false;
+                }
+                // [CSS-BREAK-3 §5] Multi-child break groups (break-avoid
+                // linked siblings) that exceed the column height cannot be
+                // split — the column height is insufficient.
+                else if (!colHasContent && heightInCol > columnHeight
+                    && group.Children.Count > 1)
+                {
+                    return false;
                 }
                 // [CSS-BREAK-3 §5.4] Non-monolithic blocks that overflow
                 // the column height and aren't line-splittable can be
