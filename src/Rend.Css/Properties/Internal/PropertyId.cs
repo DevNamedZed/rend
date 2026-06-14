@@ -404,7 +404,14 @@ namespace Rend.Css.Properties.Internal
         // Overflow Clip Margin
         public const int OverflowClipMargin = 224;
 
+        // SVG paint properties
+        public const int Fill = 225;
+        public const int Stroke = 226;
+        public const int StrokeWidth = 227;
+        public const int FillOpacity = 228;
+        public const int StrokeOpacity = 229;
+
         // Total count
-        public const int Count = 225;
+        public const int Count = 230;
     }
 }

@@ -451,8 +451,8 @@ namespace Rend.Rendering.Internal
             float spaceGapX = 0, spaceGapY = 0;
             if (repeatModeX == CssBackgroundRepeat.Round && scaledW > 0)
             {
-                int tilesX = Math.Max(1, (int)Math.Round(clipRect.Width / scaledW));
-                scaledW = clipRect.Width / tilesX;
+                int tilesX = Math.Max(1, (int)Math.Round(originRect.Width / scaledW));
+                scaledW = originRect.Width / tilesX;
             }
             else if (repeatModeX == CssBackgroundRepeat.Space && scaledW > 0)
             {
@@ -465,8 +465,8 @@ namespace Rend.Rendering.Internal
 
             if (repeatModeY == CssBackgroundRepeat.Round && scaledH > 0)
             {
-                int tilesY = Math.Max(1, (int)Math.Round(clipRect.Height / scaledH));
-                scaledH = clipRect.Height / tilesY;
+                int tilesY = Math.Max(1, (int)Math.Round(originRect.Height / scaledH));
+                scaledH = originRect.Height / tilesY;
             }
             else if (repeatModeY == CssBackgroundRepeat.Space && scaledH > 0)
             {

@@ -110,5 +110,23 @@ namespace Rend.Css.Properties.Internal
             // currentColor sentinel: RGBA(0, 0, 1, 0) packed as 0x00000001
             return Type == PropertyValueType.Color && ColorValue == 0x00000001u;
         }
+
+        /// <summary>
+        /// [CSS-COLOR-5] Sentinel for a color property whose value is a color function
+        /// (color-mix / relative color) that uses currentColor. It cannot be evaluated until
+        /// the element's `color` is known; the unevaluated CssFunctionValue is kept in the
+        /// property's ref value and resolved at computed-value time. Packed as RGBA(0, 0, 2, 0).
+        /// </summary>
+        internal static readonly PropertyValue DeferredColorFunctionSentinel =
+            FromColor(new CssColor(0, 0, 2, 0));
+
+        /// <summary>
+        /// Returns true if this property value is the deferred-color-function sentinel.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsDeferredColorFunction()
+        {
+            return Type == PropertyValueType.Color && ColorValue == 0x00000002u;
+        }
     }
 }

@@ -1092,5 +1092,76 @@ namespace Rend.Css.Parser.Internal
 
             return true;
         }
+
+        /// <summary>
+        /// [CSS-COLOR-5] True if a color function uses currentColor in any argument (incl.
+        /// nested functions), so its evaluation must be deferred until `color` is known.
+        /// </summary>
+        public static bool FunctionContainsCurrentColor(CssFunctionValue fn)
+            => ArgsContainCurrentColor(fn.Arguments);
+
+        private static bool ArgsContainCurrentColor(IReadOnlyList<CssValue> args)
+        {
+            for (int i = 0; i < args.Count; i++)
+            {
+                if (args[i] is CssKeywordValue kw
+                    && string.Equals(kw.Keyword, "currentcolor", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+                if (args[i] is CssFunctionValue nested && ArgsContainCurrentColor(nested.Arguments))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Resolves a deferred color function by substituting the now-known currentColor for
+        /// currentColor keywords, then re-running the matching color-function parser.
+        /// </summary>
+        public static bool TryResolveDeferredColorFunction(CssFunctionValue fn, CssColor currentColor, out CssColor result)
+        {
+            result = default;
+            var args = SubstituteCurrentColor(fn.Arguments, currentColor);
+            switch (fn.Name.ToLowerInvariant())
+            {
+                case "color-mix": return TryParseColorMix(args, out result);
+                case "rgb":
+                case "rgba": return TryParseRgb(args, out result);
+                case "hsl":
+                case "hsla": return TryParseHsl(args, out result);
+                case "hwb": return TryParseHwb(args, out result);
+                case "lab": return TryParseLab(args, out result);
+                case "lch": return TryParseLch(args, out result);
+                case "oklab": return TryParseOklab(args, out result);
+                case "oklch": return TryParseOklch(args, out result);
+                case "color": return TryParseColorFunction(args, out result);
+                default: return false;
+            }
+        }
+
+        private static List<CssValue> SubstituteCurrentColor(IReadOnlyList<CssValue> args, CssColor currentColor)
+        {
+            var output = new List<CssValue>(args.Count);
+            for (int i = 0; i < args.Count; i++)
+            {
+                if (args[i] is CssKeywordValue kw
+                    && string.Equals(kw.Keyword, "currentcolor", StringComparison.OrdinalIgnoreCase))
+                {
+                    output.Add(new CssColorValue(currentColor));
+                }
+                else if (args[i] is CssFunctionValue nested)
+                {
+                    output.Add(new CssFunctionValue(nested.Name, SubstituteCurrentColor(nested.Arguments, currentColor)));
+                }
+                else
+                {
+                    output.Add(args[i]);
+                }
+            }
+            return output;
+        }
     }
 }

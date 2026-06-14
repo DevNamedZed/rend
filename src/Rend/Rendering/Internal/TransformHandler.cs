@@ -95,12 +95,26 @@ namespace Rend.Rendering.Internal
                 return false;
             }
 
-            // [CSS-TRANSFORM2 §6] Row-vector composition:
-            // CSS column-vector: fromOrigin * perspective * (translate * rotate * scale * transform) * toOrigin
-            // Row-vector equiv:  toOrigin * (transform * scale * rotate * translate) * perspective * fromOrigin
+            // [CSS-TRANSFORM2 §6] Row-vector composition. The child transform is applied around
+            // the child's transform-origin; the parent's perspective is applied around the PARENT's
+            // perspective-origin (the vanishing point) — not the child's origin.
             var toOrigin4 = Matrix4x4.CreateTranslation(-originX, -originY, 0);
             var fromOrigin4 = Matrix4x4.CreateTranslation(originX, originY, 0);
-            Matrix4x4 composed = toOrigin4 * transform4x4 * parentPerspective * fromOrigin4;
+            Matrix4x4 composed;
+            if (parentPerspective == Matrix4x4.Identity)
+            {
+                composed = toOrigin4 * transform4x4 * fromOrigin4;
+            }
+            else
+            {
+                GetParentPerspectiveOrigin(box, out float perspOriginX, out float perspOriginY);
+                var toPersp4 = Matrix4x4.CreateTranslation(-perspOriginX, -perspOriginY, 0);
+                var fromPersp4 = Matrix4x4.CreateTranslation(perspOriginX, perspOriginY, 0);
+                // [transform around child-origin] then [perspective around perspective-origin].
+                // Reduces to the prior formula when the two origins coincide (the default case).
+                composed = toOrigin4 * transform4x4 * fromOrigin4
+                    * toPersp4 * parentPerspective * fromPersp4;
+            }
 
             // [CSS-TRANSFORM2 §5] backface-visibility: hidden — if the element's
             // back face is toward the viewer, skip rendering entirely.
@@ -181,6 +195,26 @@ namespace Rend.Rendering.Internal
             var perspMatrix = Matrix4x4.Identity;
             perspMatrix.M34 = -1f / distance;
             return perspMatrix;
+        }
+
+        /// <summary>
+        /// [CSS-TRANSFORM2 §6] The vanishing point for the parent's perspective, in absolute
+        /// coordinates. perspective-origin is resolved against the parent's border box; the
+        /// default is its center (50% 50%).
+        /// </summary>
+        private static void GetParentPerspectiveOrigin(LayoutBox box, out float originX, out float originY)
+        {
+            LayoutBox? parent = box.Parent;
+            RectF parentRect = parent != null ? parent.BorderRect : box.BorderRect;
+            originX = parentRect.X + parentRect.Width * 0.5f;
+            originY = parentRect.Y + parentRect.Height * 0.5f;
+
+            object? originValue = parent?.StyledNode?.Style?.GetRefValue(PropertyId.PerspectiveOrigin);
+            if (originValue is CssValue originCss
+                && !(originCss is CssKeywordValue kw && kw.Keyword == "none"))
+            {
+                ResolveTransformOrigin(originCss, parentRect, out originX, out originY);
+            }
         }
 
         /// <summary>
@@ -661,8 +695,17 @@ namespace Rend.Rendering.Internal
 
             if (value is CssListValue list && list.Separator == ' ' && list.Values.Count >= 2)
             {
-                originX = borderRect.X + ResolveOriginComponent(list.Values[0], borderRect.Width);
-                originY = borderRect.Y + ResolveOriginComponent(list.Values[1], borderRect.Height);
+                // [CSS-TRANSFORMS-1 §3] Keyword components may appear in either order
+                // (e.g. "top center" == "center top" == "50% 0%"). A vertical keyword
+                // (top/bottom) first, or a horizontal keyword (left/right) second, means
+                // the X and Y components are swapped. Lengths/percentages stay positional.
+                CssValue first = list.Values[0];
+                CssValue second = list.Values[1];
+                bool swap = IsVerticalOriginKeyword(first) || IsHorizontalOriginKeyword(second);
+                CssValue xValue = swap ? second : first;
+                CssValue yValue = swap ? first : second;
+                originX = borderRect.X + ResolveOriginComponent(xValue, borderRect.Width);
+                originY = borderRect.Y + ResolveOriginComponent(yValue, borderRect.Height);
             }
             else if (value is CssKeywordValue kwOrigin)
             {
@@ -677,6 +720,12 @@ namespace Rend.Rendering.Internal
                 originX = borderRect.X + pct.Value / 100f * borderRect.Width;
             }
         }
+
+        private static bool IsVerticalOriginKeyword(CssValue value)
+            => value is CssKeywordValue kw && (kw.Keyword == "top" || kw.Keyword == "bottom");
+
+        private static bool IsHorizontalOriginKeyword(CssValue value)
+            => value is CssKeywordValue kw && (kw.Keyword == "left" || kw.Keyword == "right");
 
         private static float ResolveOriginComponent(CssValue value, float size)
         {

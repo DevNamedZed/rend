@@ -441,10 +441,10 @@ namespace Rend.Internal
                 if (width <= 0) { width = 10; }
                 if (height <= 0) { height = 10; }
 
-                // Extract color from background style or fill attribute
+                // Extract color from background/background-color style or fill attribute
                 string? colorStr = null;
                 var bgMatch = System.Text.RegularExpressions.Regex.Match(svgText,
-                    @"background:\s*([a-zA-Z]+|#[0-9a-fA-F]{3,8})");
+                    @"background(?:-color)?:\s*([a-zA-Z]+|#[0-9a-fA-F]{3,8})");
                 if (bgMatch.Success)
                 {
                     colorStr = bgMatch.Groups[1].Value.Trim();

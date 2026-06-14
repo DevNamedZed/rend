@@ -100,6 +100,18 @@ namespace Rend.Css.Resolution.Internal
                     return TryResolveLength(value, ctx, out result);
 
                 case PropertyValueType.Color:
+                    // [CSS-COLOR-5] color-mix() using currentColor can't be evaluated until
+                    // `color` is known — defer it: keep the function as the ref value and
+                    // resolve at used-value time. (Relative color `rgb(from currentColor …)`
+                    // has its own parse-time path and is handled separately — don't intercept it.)
+                    if (value is CssFunctionValue colorFn
+                        && string.Equals(colorFn.Name, "color-mix", System.StringComparison.OrdinalIgnoreCase)
+                        && Parser.Internal.CssColorParser.FunctionContainsCurrentColor(colorFn))
+                    {
+                        result = PropertyValue.DeferredColorFunctionSentinel;
+                        refResult = colorFn;
+                        return true;
+                    }
                     return TryResolveColor(value, out result);
 
                 case PropertyValueType.Number:

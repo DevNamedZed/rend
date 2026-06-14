@@ -271,6 +271,49 @@ namespace Rend.Tests.Rendering
         }
 
         // ═══════════════════════════════════════════
+        // Background-repeat: round (CSS Backgrounds 3 §3.4)
+        // ═══════════════════════════════════════════
+
+        // Mirrors WPT background-repeat-round-1a: a 72×72 content box with a 1px
+        // border (no padding) and a 32×32 tile. round rescales tiles to fit a whole
+        // number of times in the background positioning area (origin box). Captures
+        // the painter's exact tile width / origin / fill area for diagnosis.
+        [Fact]
+        public void Paint_RepeatRound_CapturesTileSizingAndOrigin()
+        {
+            var target = new BgRecordingTarget();
+            var imageData = new ImageData(new byte[] { 1 }, 32, 32, "png");
+            var box = CreateBox(bgImageUrl: "tile.png",
+                bgRepeat: (int)CssBackgroundRepeat.Round,
+                bgRepeatKeyword: "round",
+                x: 9, y: 9, w: 72, h: 72);
+            box.BorderLeftWidth = 1;
+            box.BorderRightWidth = 1;
+            box.BorderTopWidth = 1;
+            box.BorderBottomWidth = 1;
+            ImageResolverDelegate resolver = _ => imageData;
+
+            // Confirm the box geometry the painter will see.
+            Assert.Equal(72f, box.PaddingRect.Width, 0.5);
+            Assert.Equal(74f, box.BorderRect.Width, 0.5);
+            // Default background-origin must be padding-box (CSS Backgrounds 3 §3.3).
+            Assert.Equal(CssBackgroundOrigin.PaddingBox, box.StyledNode!.Style.BackgroundOrigin);
+
+            BackgroundPainter.Paint(box, target, resolver);
+
+            Assert.Single(target.TiledImages);
+            var tiled = target.TiledImages[0];
+            // Positioning area (padding-box) = 72 → round(72/32)=2 tiles of 36px,
+            // tiled across the border-box clip (74), anchored at the origin (x=9).
+            // Positioning area (padding-box)=72 -> round(72/32)=2 tiles of 36px,
+            // tiled across the border-box clip (74), anchored at the origin (x=9).
+            Assert.Equal(36f, tiled.TileWidth, 0.5);
+            Assert.Equal(36f, tiled.TileHeight, 0.5);
+            Assert.Equal(9f, tiled.OriginX, 0.5);
+            Assert.Equal(74f, tiled.FillArea.Width, 0.5);
+        }
+
+        // ═══════════════════════════════════════════
         // Clipping
         // ═══════════════════════════════════════════
 
@@ -378,6 +421,7 @@ namespace Rend.Tests.Rendering
             CssValue? bgSize = null,
             CssBackgroundOrigin? bgOrigin = null,
             CssBackgroundClip? bgClip = null,
+            string? bgRepeatKeyword = null,
             float x = 0, float y = 0, float w = 200, float h = 200)
         {
             var values = new PropertyValue[PropertyId.Count];
@@ -395,6 +439,13 @@ namespace Rend.Tests.Rendering
             }
 
             values[PropertyId.BackgroundRepeat] = PropertyValue.FromKeyword(bgRepeat);
+
+            // The painter reads the repeat REF value (keyword) via GetLayerRepeatModes,
+            // so round/space detection needs the keyword set, not just the enum value.
+            if (bgRepeatKeyword != null)
+            {
+                refValues[PropertyId.BackgroundRepeat] = new CssKeywordValue(bgRepeatKeyword);
+            }
 
             if (bgPosition != null)
             {
@@ -464,6 +515,7 @@ namespace Rend.Tests.Rendering
                 FilledRects.Add((rect, brush));
             }
             public (float Ascent, float Descent) GetFontMetrics(FontDescriptor font, float fontSize) => (fontSize * 0.8f, fontSize * 0.2f);
+            public (float Ascent, float Descent) GetFontMetrics(byte[] fontData, float fontSize) => (fontSize * 0.8f, fontSize * 0.2f);
             public float GetNormalLineHeight(FontDescriptor font, float fontSize) => fontSize * 1.2f;
 
             public void DrawImage(ImageData image, RectF destRect)
@@ -471,11 +523,16 @@ namespace Rend.Tests.Rendering
                 DrawnImages.Add((image, destRect));
             }
 
-            public List<(ImageData Image, RectF FillArea, float TileWidth, float TileHeight)> TiledImages { get; } = new List<(ImageData, RectF, float, float)>();
+            public void DrawImageRegion(ImageData image, RectF sourceRect, RectF destRect)
+            {
+                DrawnImages.Add((image, destRect));
+            }
+
+            public List<(ImageData Image, RectF FillArea, float TileWidth, float TileHeight, float OriginX, float OriginY)> TiledImages { get; } = new List<(ImageData, RectF, float, float, float, float)>();
 
             public void DrawTiledImage(ImageData image, RectF fillArea, float tileWidth, float tileHeight, float originX, float originY)
             {
-                TiledImages.Add((image, fillArea, tileWidth, tileHeight));
+                TiledImages.Add((image, fillArea, tileWidth, tileHeight, originX, originY));
             }
             public void FillRectWithTiledGradient(Rend.Rendering.GradientInfo gradient, Rend.Core.Values.RectF fillArea, Rend.Core.Values.RectF tileRect) { }
         }

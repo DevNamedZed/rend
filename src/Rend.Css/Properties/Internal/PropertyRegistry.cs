@@ -413,6 +413,15 @@ namespace Rend.Css.Properties.Internal
             // Overflow Clip Margin
             Register(byName, "overflow-clip-margin", PropertyId.OverflowClipMargin, false, PropertyValueType.Raw);
 
+            // SVG paint properties (inherited per SVG 1.1 §3). Stored raw so the SVG
+            // renderer reads the cascaded value; presentation attributes feed the cascade
+            // as specificity-0 declarations.
+            Register(byName, "fill", PropertyId.Fill, true, PropertyValueType.Raw);
+            Register(byName, "stroke", PropertyId.Stroke, true, PropertyValueType.Raw);
+            Register(byName, "stroke-width", PropertyId.StrokeWidth, true, PropertyValueType.Raw);
+            Register(byName, "fill-opacity", PropertyId.FillOpacity, true, PropertyValueType.Raw);
+            Register(byName, "stroke-opacity", PropertyId.StrokeOpacity, true, PropertyValueType.Raw);
+
             // Overflow Anchor
             Register(byName, "overflow-anchor", PropertyId.OverflowAnchor, false, PropertyValueType.Keyword);
 

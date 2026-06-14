@@ -249,7 +249,7 @@ namespace Rend.Css
             get
             {
                 var pv = _values[PropertyId.BorderTopColor];
-                return pv.IsCurrentColor() ? Color : pv.ToColor();
+                return ResolveColorValue(pv, PropertyId.BorderTopColor);
             }
         }
 
@@ -258,7 +258,7 @@ namespace Rend.Css
             get
             {
                 var pv = _values[PropertyId.BorderRightColor];
-                return pv.IsCurrentColor() ? Color : pv.ToColor();
+                return ResolveColorValue(pv, PropertyId.BorderRightColor);
             }
         }
 
@@ -267,7 +267,7 @@ namespace Rend.Css
             get
             {
                 var pv = _values[PropertyId.BorderBottomColor];
-                return pv.IsCurrentColor() ? Color : pv.ToColor();
+                return ResolveColorValue(pv, PropertyId.BorderBottomColor);
             }
         }
 
@@ -276,7 +276,7 @@ namespace Rend.Css
             get
             {
                 var pv = _values[PropertyId.BorderLeftColor];
-                return pv.IsCurrentColor() ? Color : pv.ToColor();
+                return ResolveColorValue(pv, PropertyId.BorderLeftColor);
             }
         }
 
@@ -325,7 +325,7 @@ namespace Rend.Css
             get
             {
                 var pv = _values[PropertyId.OutlineColor];
-                return pv.IsCurrentColor() ? Color : pv.ToColor();
+                return ResolveColorValue(pv, PropertyId.OutlineColor);
             }
         }
 
@@ -350,7 +350,7 @@ namespace Rend.Css
             get
             {
                 var pv = _values[PropertyId.BackgroundColor];
-                return pv.IsCurrentColor() ? Color : pv.ToColor();
+                return ResolveColorValue(pv, PropertyId.BackgroundColor);
             }
         }
 
@@ -496,7 +496,7 @@ namespace Rend.Css
             get
             {
                 var pv = _values[PropertyId.TextDecoration_Color];
-                return pv.IsCurrentColor() ? Color : pv.ToColor();
+                return ResolveColorValue(pv, PropertyId.TextDecoration_Color);
             }
         }
 
@@ -935,7 +935,7 @@ namespace Rend.Css
             get
             {
                 var pv = _values[PropertyId.ColumnRuleColor];
-                return pv.IsCurrentColor() ? Color : pv.ToColor();
+                return ResolveColorValue(pv, PropertyId.ColumnRuleColor);
             }
         }
 
@@ -1260,6 +1260,28 @@ namespace Rend.Css
 
         /// <summary>Get a reference value (string/CssValue) by ID.</summary>
         internal object? GetRefValue(int propertyId) => _refValues[propertyId];
+
+        // [CSS-COLOR-5] Resolve a color property at used-value time: currentColor → this
+        // element's color; a deferred color function (color-mix / relative color that uses
+        // currentColor) → evaluated against this element's color so `inherit` re-resolves
+        // currentColor per the inheriting element.
+        private CssColor ResolveColorValue(PropertyValue pv, int propertyId)
+        {
+            if (pv.IsCurrentColor())
+            {
+                return Color;
+            }
+            if (pv.IsDeferredColorFunction())
+            {
+                if (_refValues[propertyId] is CssFunctionValue fn
+                    && Parser.Internal.CssColorParser.TryResolveDeferredColorFunction(fn, Color, out var resolved))
+                {
+                    return resolved;
+                }
+                return InitialValues.Get(propertyId).ToColor();
+            }
+            return pv.ToColor();
+        }
 
         #endregion
     }

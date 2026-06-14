@@ -202,6 +202,8 @@ namespace Rend.Tests.Rendering
             public void FillPath(PathData path, BrushInfo brush) { }
             public void StrokePath(PathData path, PenInfo pen) { }
             public void DrawImage(ImageData image, RectF destRect) { }
+            public void DrawImageRegion(ImageData image, RectF sourceRect, RectF destRect) { }
+            public (float Ascent, float Descent) GetFontMetrics(byte[] fontData, float fontSize) => (fontSize * 0.8f, fontSize * 0.2f);
             public void DrawTiledImage(ImageData image, RectF fillArea, float tileWidth, float tileHeight, float originX, float originY) { }
             public void FillRectWithTiledGradient(Rend.Rendering.GradientInfo gradient, Rend.Core.Values.RectF fillArea, Rend.Core.Values.RectF tileRect) { }
             public void Finish(Stream output) { }

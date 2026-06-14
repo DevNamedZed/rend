@@ -977,6 +977,13 @@ namespace Rend.Layout.Internal
 
                     float contentHeight;
 
+                    // [CSS-WRITING-MODES-3 §7.3] A vertical-writing-mode child inside a
+                    // horizontal-writing-mode parent establishes an orthogonal flow: its
+                    // available inline-size (physical height) comes from the parent's
+                    // available block-size, not from its own physical width.
+                    bool childOrthogonalVertical = !vertical && IsVerticalWritingMode(childStyle);
+                    float orthogonalAvailableBlock = 0f;
+
                     if (isReplaced)
                     {
                         // Replaced element: resolve dimensions from intrinsic/attribute sizes
@@ -1043,6 +1050,20 @@ namespace Rend.Layout.Internal
                         float preHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox);
                         if (!float.IsNaN(preHeight) && preHeight > 0)
                             childBox.ContentRect = new RectF(childBox.ContentRect.X, y, contentWidth, preHeight);
+
+                        // [CSS-WRITING-MODES-3 §7.3] Seed the orthogonal child's inline-size
+                        // (physical height) from the parent's available block-size so its
+                        // inline content wraps along the correct axis instead of collapsing.
+                        if (childOrthogonalVertical && float.IsNaN(childStyle.Height))
+                        {
+                            orthogonalAvailableBlock = ResolveOrthogonalAvailableBlockSize(
+                                style, parentContentHeight, context);
+                            if (orthogonalAvailableBlock > 0f)
+                            {
+                                childBox.ContentRect = new RectF(
+                                    childBox.ContentRect.X, y, contentWidth, orthogonalAvailableBlock);
+                            }
+                        }
 
                         // Layout children recursively
                         float marginTopBefore = childBox.MarginTop;
@@ -1144,6 +1165,22 @@ namespace Rend.Layout.Internal
                         }
                     }
 
+
+                    // [CSS-WRITING-MODES-3 §7.3] Finalize the orthogonal child: its block-size
+                    // (physical width) shrinks to content, and its inline-size (physical height)
+                    // is the available block-size resolved before layout.
+                    if (childOrthogonalVertical && orthogonalAvailableBlock > 0f)
+                    {
+                        if (float.IsNaN(childStyle.Width) || SizingKeyword.IsSizingKeyword(childStyle.Width))
+                        {
+                            float shrunkBlockSize = CalculateAutoWidth(childBox);
+                            if (shrunkBlockSize > 0f)
+                            {
+                                contentWidth = shrunkBlockSize;
+                            }
+                        }
+                        contentHeight = orthogonalAvailableBlock;
+                    }
 
                     // For auto-width tables, LayoutChildren (TableLayout) may shrink-wrap
                     // the content rect. Preserve that width instead of overwriting.
@@ -1625,6 +1662,33 @@ namespace Rend.Layout.Internal
         /// vertical writing mode containers. Finds the rightmost content edge of
         /// in-flow children, analogous to CalculateAutoHeight for horizontal mode.
         /// </summary>
+        // [CSS-WRITING-MODES-3 §7.3] Available block-size for an orthogonal flow: the
+        // parent's definite content block-size; otherwise the nearest fixed max-height
+        // (an overflow scroller's max-height is treated as a definite constraint per the
+        // orthogonal-auto rule); otherwise the initial containing block's block-size.
+        private static float ResolveOrthogonalAvailableBlockSize(
+            ComputedStyle? parentStyle, float parentContentHeight, LayoutContext context)
+        {
+            if (parentContentHeight > 0f && !float.IsNaN(parentContentHeight))
+            {
+                return parentContentHeight;
+            }
+            if (parentStyle != null)
+            {
+                float maxBlock = DimensionResolver.ResolvePercentHeight(
+                    parentStyle.MaxHeight, context.ContainingBlockHeight);
+                if (!float.IsNaN(maxBlock) && maxBlock > 0f)
+                {
+                    return maxBlock;
+                }
+            }
+            if (context.ContainingBlockHeight > 0f)
+            {
+                return context.ContainingBlockHeight;
+            }
+            return 0f;
+        }
+
         internal static float CalculateAutoWidth(LayoutBox box)
         {
             float right = box.ContentRect.X;

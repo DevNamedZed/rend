@@ -49,6 +49,15 @@ namespace Rend.Layout.Internal
         public static float GetIntrinsicRatio(StyledElement element)
         {
             string tag = element.TagName;
+
+            // [CSS-SIZING-4 §4] A bare `aspect-ratio: <ratio>` (without `auto`) overrides the
+            // element's natural/intrinsic ratio. `auto` (or `auto <ratio>`) keeps intrinsic preference.
+            float overrideRatio = DimensionResolver.GetAspectRatio(element.Style);
+            if (overrideRatio > 0 && !DimensionResolver.IsAspectRatioAuto(element.Style))
+            {
+                return overrideRatio;
+            }
+
             if (tag == "svg")
             {
                 // SVG viewBox defines the intrinsic ratio

@@ -172,22 +172,27 @@ namespace Rend.Rendering.Internal
             // Skip <defs> — definitions are referenced by <use>, not rendered directly
             if (tag == "defs") return;
 
-            // Parse common presentation attributes
-            string? fillAttr = elem.GetAttribute("fill");
-            var fill = ParseColor(fillAttr, CssColor.Black);
-            var stroke = ParseColor(elem.GetAttribute("stroke"), CssColor.Transparent);
-            float strokeWidth = ParseAttrFloat(elem, "stroke-width", 1f);
+            // Resolve paint properties. [SVG 1.1 §6.4] CSS declarations (from a <style>
+            // block, inline style, or inheritance) override the SVG presentation
+            // attribute. Presentation attributes feed the cascade as specificity-0
+            // declarations, so the computed value already reflects the full cascade when
+            // present; otherwise fall back to the raw attribute.
+            string? fillValue = ResolveSvgPaint(styledElem, PropertyId.Fill, elem.GetAttribute("fill"));
+            var fill = ParseColor(fillValue, CssColor.Black);
+            string? strokeValue = ResolveSvgPaint(styledElem, PropertyId.Stroke, elem.GetAttribute("stroke"));
+            var stroke = ParseColor(strokeValue, CssColor.Transparent);
+            float strokeWidth = ResolveSvgNumber(styledElem, PropertyId.StrokeWidth, elem, "stroke-width", 1f);
             float opacity = ParseAttrFloat(elem, "opacity", 1f);
-            bool hasFill = !IsNone(fillAttr) && (fill.A > 0 || IsUrlRef(fillAttr));
-            bool hasStroke = !IsNone(elem.GetAttribute("stroke")) && stroke.A > 0 && strokeWidth > 0;
-            float fillOpacity = ParseAttrFloat(elem, "fill-opacity", 1f);
-            float strokeOpacity = ParseAttrFloat(elem, "stroke-opacity", 1f);
+            bool hasFill = !IsNone(fillValue) && (fill.A > 0 || IsUrlRef(fillValue));
+            bool hasStroke = !IsNone(strokeValue) && stroke.A > 0 && strokeWidth > 0;
+            float fillOpacity = ResolveSvgNumber(styledElem, PropertyId.FillOpacity, elem, "fill-opacity", 1f);
+            float strokeOpacity = ResolveSvgNumber(styledElem, PropertyId.StrokeOpacity, elem, "stroke-opacity", 1f);
 
             // Resolve url(#id) gradient fill
             BrushInfo? gradientBrush = null;
-            if (IsUrlRef(fillAttr))
+            if (IsUrlRef(fillValue))
             {
-                gradientBrush = ResolveUrlFill(elem, fillAttr!, fillOpacity);
+                gradientBrush = ResolveUrlFill(elem, fillValue!, fillOpacity);
                 hasFill = gradientBrush != null;
             }
 
@@ -601,6 +606,36 @@ namespace Rend.Rendering.Internal
                 path.Close();
 
             return path;
+        }
+
+        /// <summary>
+        /// Resolve an SVG paint property (fill/stroke), preferring the cascaded CSS value
+        /// (which already incorporates the presentation attribute as a specificity-0
+        /// declaration plus any <c>&lt;style&gt;</c>/inline/inherited override) and falling
+        /// back to the raw attribute when no CSS value is present.
+        /// </summary>
+        private static string? ResolveSvgPaint(StyledElement? styledElem, int propertyId, string? attributeValue)
+        {
+            if (styledElem != null && styledElem.Style.GetRefValue(propertyId) is CssValue cssValue)
+            {
+                return cssValue.ToString();
+            }
+            return attributeValue;
+        }
+
+        /// <summary>
+        /// Resolve a numeric SVG paint property (stroke-width, fill/stroke-opacity),
+        /// preferring the cascaded CSS value and falling back to the attribute.
+        /// </summary>
+        private static float ResolveSvgNumber(StyledElement? styledElem, int propertyId,
+            Element elem, string attributeName, float defaultValue)
+        {
+            if (styledElem != null && styledElem.Style.GetRefValue(propertyId) is CssValue cssValue
+                && TryParseSvgLength(cssValue.ToString(), out float result))
+            {
+                return result;
+            }
+            return ParseAttrFloat(elem, attributeName, defaultValue);
         }
 
         private static CssColor ParseColor(string? value, CssColor defaultColor)

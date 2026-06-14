@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Rend.Core.Values;
 using Rend.Css.Cascade.Internal;
 using Rend.Css.Media.Internal;
+using Rend.Css.Parser.Internal;
 using Rend.Css.Resolution.Internal;
 using Rend.Css.Supports.Internal;
 using Rend.Css.UserAgent.Internal;
@@ -109,7 +110,7 @@ namespace Rend.Css
                 _options.ViewportHeight,
                 _options.ViewportWidth); // PercentBase: viewport width for percentage resolution
 
-            var builder = new ComputedStyleBuilder(ctx, _options.MeasureCharWidth);
+            var builder = new ComputedStyleBuilder(ctx, _options.MeasureCharWidth, element.GetAttribute);
             var computed = builder.Build(winners, parentStyle);
 
             // [CSS-VALUES §6.1] Track root element's computed font-size for rem resolution.
@@ -199,6 +200,63 @@ namespace Rend.Css
                     declarations.Add(new CascadedDeclaration(decl, priority));
                 }
             }
+
+            CollectSvgGeometryHints(element, declarations);
+        }
+
+        /// <summary>
+        /// [SVG2 §7.2 / CSS-SIZING] The <c>width</c> and <c>height</c> attributes on the
+        /// root <c>&lt;svg&gt;</c> element are presentation attributes that map to the CSS
+        /// width/height properties. They accept a <c>&lt;length-percentage&gt;</c>; a unitless
+        /// number is interpreted as user units (px). HTML's float-only attribute parsing in
+        /// the replaced-element layout cannot read "100px"/"100%", so the geometry must be
+        /// surfaced as CSS declarations here (specificity 0, overridable by author CSS).
+        /// </summary>
+        private static void CollectSvgGeometryHints(IStylableElement element, List<CascadedDeclaration> declarations)
+        {
+            if (element.TagName != "svg")
+            {
+                return;
+            }
+
+            AddSvgGeometryDeclaration(element, "width", declarations);
+            AddSvgGeometryDeclaration(element, "height", declarations);
+        }
+
+        private static void AddSvgGeometryDeclaration(IStylableElement element, string property,
+                                                      List<CascadedDeclaration> declarations)
+        {
+            string? attribute = element.GetAttribute(property);
+            if (attribute == null)
+            {
+                return;
+            }
+
+            string trimmed = attribute.Trim();
+            if (trimmed.Length == 0)
+            {
+                return;
+            }
+
+            CssValue? parsed = CssValueParser.ParseValueString(trimmed);
+            if (parsed == null)
+            {
+                return;
+            }
+
+            // A unitless SVG length is in user units, which equal CSS pixels.
+            if (parsed is CssNumberValue number)
+            {
+                parsed = new CssDimensionValue(number.Value, "px");
+            }
+            else if (parsed is not CssDimensionValue && parsed is not CssPercentageValue)
+            {
+                return;
+            }
+
+            var declaration = new CssDeclaration(property, parsed);
+            var priority = new CascadePriority(CascadeOrigin.Author, false, CssSpecificity.Zero, -1);
+            declarations.Add(new CascadedDeclaration(declaration, priority));
         }
 
         /// <summary>

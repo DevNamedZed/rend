@@ -27,12 +27,15 @@ namespace Rend.Css.Resolution.Internal
     {
         private readonly CssResolutionContext _ctx;
         private readonly System.Func<string[], float, int, float>? _measureCharWidth;
+        private readonly System.Func<string, string?>? _attrGetter;
 
         public ComputedStyleBuilder(CssResolutionContext ctx,
-            System.Func<string[], float, int, float>? measureCharWidth = null)
+            System.Func<string[], float, int, float>? measureCharWidth = null,
+            System.Func<string, string?>? attrGetter = null)
         {
             _ctx = ctx;
             _measureCharWidth = measureCharWidth;
+            _attrGetter = attrGetter;
         }
 
         /// <summary>
@@ -194,6 +197,10 @@ namespace Rend.Css.Resolution.Internal
                     : InitialValues.Get(PropertyId.Color);
             }
 
+            // [CSS-COLOR-5] Resolve deferred color functions (color-mix / relative color that
+            // use currentColor) now that the element's `color` is final.
+            ResolveDeferredColorFunctions(values, refValues, parentValues);
+
             // CSS 2.1 §8.5.1: If border-style is 'none' or 'hidden', border-width computes to 0.
             ZeroBorderWidthForNoneStyle(values);
 
@@ -207,6 +214,38 @@ namespace Rend.Css.Resolution.Internal
             BlockifyForFloatAndOutOfFlow(values);
 
             return new ComputedStyle(values, refValues, customProperties);
+        }
+
+        // [CSS-COLOR-5] Evaluate color properties deferred because they used currentColor inside
+        // a color function (color-mix / relative color). The `color` property resolves first
+        // (its currentColor = inherited color); all others resolve against this element's color.
+        private static void ResolveDeferredColorFunctions(
+            PropertyValue[] values, object?[] refValues, PropertyValue[]? parentValues)
+        {
+            // Only the `color` property is resolved eagerly here: its currentColor is the
+            // INHERITED color, and `Color` must be concrete for the other accessors to use.
+            // All OTHER deferred color functions stay as the sentinel (+ ref) and resolve
+            // lazily at used-value time in the color accessors, so `inherit` carries the
+            // unresolved currentColor to the inheriting element (CSS Color 5).
+            if (values[PropertyId.Color].IsDeferredColorFunction())
+            {
+                CssColor inherited = parentValues != null
+                    ? parentValues[PropertyId.Color].ToColor()
+                    : InitialValues.Get(PropertyId.Color).ToColor();
+                values[PropertyId.Color] =
+                    ResolveDeferredColorOne(refValues[PropertyId.Color], inherited, PropertyId.Color);
+            }
+        }
+
+        private static PropertyValue ResolveDeferredColorOne(object? refValue, CssColor currentColor, int id)
+        {
+            if (refValue is CssFunctionValue fn
+                && CssColorParser.TryResolveDeferredColorFunction(fn, currentColor, out var resolved))
+            {
+                return PropertyValue.FromColor(resolved);
+            }
+            // Unresolvable (e.g. relative-color "from currentColor" not yet supported) → initial.
+            return InitialValues.Get(id);
         }
 
         /// <summary>
@@ -268,6 +307,13 @@ namespace Rend.Css.Resolution.Internal
 
             // Substitute var() references before resolving.
             var resolvedValue = SubstituteVar(value, customProperties);
+
+            // [CSS-VALUES-5 §8] Substitute attr() against the element's attributes.
+            if (_attrGetter != null)
+            {
+                resolvedValue = AttrResolver.Substitute(resolvedValue, _attrGetter);
+            }
+
             if (resolvedValue is GuaranteedInvalidValue)
             {
                 resolvedValue = new CssNumberValue(0);

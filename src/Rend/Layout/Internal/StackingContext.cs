@@ -107,6 +107,12 @@ namespace Rend.Layout.Internal
                 return true;
             }
 
+            // [CSS-TRANSFORMS-2 §3] transform-style: preserve-3d establishes a stacking context.
+            if (HasPreserve3d(style))
+            {
+                return true;
+            }
+
             // Elements with CSS containment (layout, paint, content, or strict)
             var contain = style.Contain;
             if (contain == CssContain.Layout || contain == CssContain.Paint ||
@@ -116,6 +122,16 @@ namespace Rend.Layout.Internal
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// [CSS-TRANSFORMS-2 §3] Returns true if transform-style is preserve-3d, which
+        /// establishes a stacking context (and a 3D rendering context for descendants).
+        /// </summary>
+        private static bool HasPreserve3d(ComputedStyle style)
+        {
+            object? transformStyle = style.GetRefValue(Css.Properties.Internal.PropertyId.TransformStyle);
+            return transformStyle is Css.CssKeywordValue keyword && keyword.Keyword == "preserve-3d";
         }
 
         /// <summary>

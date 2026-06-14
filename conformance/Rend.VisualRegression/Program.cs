@@ -452,6 +452,25 @@ class Program
                         // Best-effort
                     }
                 }
+
+                if (result.ChromeLayout != null)
+                {
+                    try
+                    {
+                        var chromeLayoutJson = JsonSerializer.Serialize(result.ChromeLayout, new JsonSerializerOptions
+                        {
+                            WriteIndented = true,
+                            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                        });
+                        var chromeLayoutPath = Path.Combine(resourcesDir, $"{testCase.Id}-chrome-layout.json");
+                        File.WriteAllText(chromeLayoutPath, chromeLayoutJson);
+                        result.ChromeLayoutPath = chromeLayoutPath;
+                    }
+                    catch
+                    {
+                        // Best-effort
+                    }
+                }
             }
 
             // Free large objects — already written to disk files.
@@ -679,7 +698,7 @@ class Program
                 // Small delay for rendering to settle after DOMContentLoaded
                 await Task.Delay(50);
 
-                return await page.ScreenshotDataAsync(new ScreenshotOptions
+                var png = await page.ScreenshotDataAsync(new ScreenshotOptions
                 {
                     Clip = new PuppeteerSharp.Media.Clip
                     {
@@ -688,6 +707,13 @@ class Program
                         Height = testCase.ViewportHeight,
                     }
                 });
+
+                if (captureLayoutTree)
+                {
+                    result.ChromeLayout = await LayoutTreeDumper.DumpAsync(page);
+                }
+
+                return png;
             });
 
             try

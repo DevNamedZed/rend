@@ -365,6 +365,26 @@ namespace Rend.Layout.Internal
         }
 
         /// <summary>
+        /// [CSS-SIZING-4 §4] True if the aspect-ratio value includes the <c>auto</c> keyword
+        /// (<c>auto</c> or <c>auto &lt;ratio&gt;</c>). When auto is present, a replaced element's
+        /// intrinsic ratio is preferred; a bare <c>&lt;ratio&gt;</c> overrides the intrinsic ratio.
+        /// </summary>
+        public static bool IsAspectRatioAuto(ComputedStyle style)
+        {
+            object? ratioRef = style.GetRefValue(PropertyId.AspectRatio);
+            if (ratioRef is CssKeywordValue kw && kw.Keyword == "auto")
+            {
+                return true;
+            }
+            if (ratioRef is CssListValue list && list.Values.Count > 0
+                && list.Values[0] is CssKeywordValue first && first.Keyword == "auto")
+            {
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// [CSS-SIZING-4 §5.1] Parses the aspect-ratio CSS value.
         /// Supports: "auto", "16/9", "1.5", "auto 16/9" (auto + ratio).
         /// Returns the ratio (width/height) or 0 if auto-only/unset.

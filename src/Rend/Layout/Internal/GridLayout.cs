@@ -1509,6 +1509,26 @@ namespace Rend.Layout.Internal
                     {
                         contentHeight = CalculateAutoHeight(item.Box);
 
+                        // [CSS-SIZING-4 §5.1] A replaced grid item with a definite inline
+                        // size and an auto block size derives its block size from the
+                        // aspect ratio (CSS aspect-ratio, else the intrinsic viewBox/image
+                        // ratio). Without this an svg/img with width:100px + viewBox 1:1
+                        // sizes its auto row track to 0 instead of 100.
+                        bool inlineSizeIsDefinite = !float.IsNaN(item.StyledElement.Style.Width)
+                            && !SizingKeyword.IsSizingKeyword(item.StyledElement.Style.Width);
+                        if (inlineSizeIsDefinite && ReplacedElementLayout.IsReplaced(item.StyledElement))
+                        {
+                            float transferRatio = DimensionResolver.GetAspectRatio(item.StyledElement.Style);
+                            if (transferRatio <= 0)
+                            {
+                                transferRatio = ReplacedElementLayout.GetIntrinsicRatio(item.StyledElement);
+                            }
+                            if (transferRatio > 0)
+                            {
+                                contentHeight = contentWidth / transferRatio;
+                            }
+                        }
+
                         // [CSS-GRID §6.5] Automatic minimum size clamping: when the item
                         // has min-height:auto and the track has a definite max sizing
                         // function (fixed track), clamp the auto height to the track size.
@@ -2571,6 +2591,27 @@ namespace Rend.Layout.Internal
                 float itemAspectRatio = item.StyledElement != null
                     ? DimensionResolver.GetAspectRatio(item.StyledElement.Style) : 0;
 
+                // [CSS-SIZING-4 §5.1 / CSS-ALIGN-3 §9.3] A replaced grid item (svg/img/
+                // canvas) with a definite block size, an auto inline size, and an aspect
+                // ratio (CSS aspect-ratio, else its intrinsic viewBox/image ratio) sizes
+                // its inline axis from the ratio. This does NOT apply when the item's own
+                // justify-self is *explicitly* `stretch` (explicit stretch fills the track
+                // and ignores the ratio, e.g. replaced-alignment-with-aspect-ratio-004).
+                // Scoped to replaced elements: a non-replaced item's effective justify can
+                // come from the container's `justify-items`, whose default is stored as
+                // Stretch (indistinguishable from an explicit `justify-items: stretch`, e.g.
+                // grid-aspect-ratio-018's second grid), so the ratio/fill choice there needs
+                // the justify-items initial-value distinction this code can't yet make.
+                float transferRatio = 0;
+                if (widthIsAuto && !heightIsAuto && item.StyledElement != null
+                    && ReplacedElementLayout.IsReplaced(item.StyledElement)
+                    && !IsExplicitInlineStretch(item.StyledElement.Style))
+                {
+                    transferRatio = itemAspectRatio > 0
+                        ? itemAspectRatio
+                        : ReplacedElementLayout.GetIntrinsicRatio(item.StyledElement);
+                }
+
                 // [CSS-SIZING-4 §5.1] When aspect-ratio is set, stretch in block axis
                 // is preferred. Inline axis derives from ratio, not from stretch.
                 if (itemAspectRatio > 0 && widthIsAuto && heightIsAuto)
@@ -2581,6 +2622,10 @@ namespace Rend.Layout.Internal
                         finalHeight = spanHeight - (outerHeight - finalHeight);
                         finalWidth = finalHeight * itemAspectRatio;
                     }
+                }
+                else if (transferRatio > 0)
+                {
+                    finalWidth = finalHeight * transferRatio;
                 }
                 else
                 {
@@ -5006,6 +5051,17 @@ namespace Rend.Layout.Internal
         private static bool IsStretch(CssAlignItems align)
         {
             return align == CssAlignItems.Stretch || align == CssAlignItems.Normal;
+        }
+
+        /// <summary>
+        /// True when the item's own <c>justify-self</c> is *explicitly* <c>stretch</c>
+        /// (as opposed to the default <c>normal</c>/<c>auto</c>). Used to decide whether a
+        /// replaced item's inline size comes from its aspect ratio (default) or fills the
+        /// track (explicit stretch) — [CSS-ALIGN-3 §9.3].
+        /// </summary>
+        private static bool IsExplicitInlineStretch(ComputedStyle style)
+        {
+            return Css.CssAlignmentFlags.StripSafe((int)style.JustifySelf) == (int)CssAlignItems.Stretch;
         }
 
         /// <summary>
