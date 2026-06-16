@@ -42,7 +42,7 @@ namespace Rend.Layout.Internal
             // Resolve from explicit CSS height so column main-size and cross-axis alignment work.
             if (float.IsNaN(containerHeight) || containerHeight <= 0)
             {
-                float explicitH = DimensionResolver.ResolveHeight(style, float.NaN, parent);
+                float explicitH = DimensionResolver.ResolveHeight(style, float.NaN, parent, context.Viewport);
                 if (hasDefiniteHeight && !float.IsNaN(explicitH) && explicitH >= 0)
                 {
                     containerHeight = explicitH;
@@ -141,7 +141,7 @@ namespace Rend.Layout.Internal
                 var gapRef = style.GetRefValue(gapPropertyId);
                 if (gapRef is CssFunctionValue gapCalc)
                 {
-                    gap = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(gapCalc, gapRefSize);
+                    gap = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(gapCalc, gapRefSize, context.ViewportWidth, context.ViewportHeight);
                 }
                 else
                 {
@@ -161,7 +161,7 @@ namespace Rend.Layout.Internal
                 var crossGapRef = style.GetRefValue(crossGapPropertyId);
                 if (crossGapRef is CssFunctionValue crossGapCalc)
                 {
-                    crossGap = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(crossGapCalc, crossGapRefSize);
+                    crossGap = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(crossGapCalc, crossGapRefSize, context.ViewportWidth, context.ViewportHeight);
                 }
                 else
                 {
@@ -251,7 +251,7 @@ namespace Rend.Layout.Internal
                     var pseudoStyled = new StyledElement(pseudoElement, pseudoStyle, pseudoChildren);
 
                     var pseudoBox = new LayoutBox(pseudoStyled, BoxType.Block);
-                    BoxModelCalculator.ApplyBoxModel(pseudoBox, pseudoStyle, containerWidth);
+                    BoxModelCalculator.ApplyBoxModel(pseudoBox, pseudoStyle, containerWidth, context.Viewport);
 
                     float pseudoBaseSize = ResolveFlexBasis(pseudoStyle, isColumn, containerWidth, containerHeight, pseudoBox, pseudoStyled, context, isAutoMainSize, containerInlineDefinite, style.AlignItems);
                     items.Add(new FlexItem
@@ -274,10 +274,10 @@ namespace Rend.Layout.Internal
                     childElement.Style.Position == CssPosition.Fixed)
                 {
                     var posBox = new LayoutBox(childElement, BoxType.Block);
-                    BoxModelCalculator.ApplyBoxModel(posBox, childElement.Style, containerWidth);
-                    float posWidth = DimensionResolver.ResolveWidth(childElement.Style, containerWidth, posBox);
+                    BoxModelCalculator.ApplyBoxModel(posBox, childElement.Style, containerWidth, context.Viewport);
+                    float posWidth = DimensionResolver.ResolveWidth(childElement.Style, containerWidth, posBox, context.Viewport);
                     // Pre-resolve explicit height so flex/grid children can center.
-                    float posHeight = DimensionResolver.ResolveHeight(childElement.Style, containerHeight, posBox);
+                    float posHeight = DimensionResolver.ResolveHeight(childElement.Style, containerHeight, posBox, context.Viewport);
                     if (float.IsNaN(posHeight)) posHeight = 0;
                     posBox.ContentRect = new RectF(parent.ContentRect.X, parent.ContentRect.Y, posWidth, posHeight);
                     var savedFc = context.FloatContext;
@@ -343,7 +343,7 @@ namespace Rend.Layout.Internal
                 }
 
                 var box = new LayoutBox(childElement, BoxType.Block);
-                BoxModelCalculator.ApplyBoxModel(box, childElement.Style, containerWidth);
+                BoxModelCalculator.ApplyBoxModel(box, childElement.Style, containerWidth, context.Viewport);
 
                 float baseSize = ResolveFlexBasis(childElement.Style, isColumn, containerWidth, containerHeight, box, childElement, context, isAutoMainSize, containerInlineDefinite, style.AlignItems);
                 items.Add(new FlexItem
@@ -488,7 +488,7 @@ namespace Rend.Layout.Internal
                         if (tableMinContent <= 0)
                         {
                             var measureBox = new LayoutBox(item.Box.StyledNode, BoxType.Block);
-                            BoxModelCalculator.ApplyBoxModel(measureBox, item.Style, containerWidth);
+                            BoxModelCalculator.ApplyBoxModel(measureBox, item.Style, containerWidth, context.Viewport);
                             measureBox.ContentRect = new RectF(0, 0, 10000f, 0);
                             var savedFloatCtx = context.FloatContext;
                             context.FloatContext = null;
@@ -720,18 +720,18 @@ namespace Rend.Layout.Internal
 
                         if (shouldStretch)
                         {
-                            contentCross = DimensionResolver.ResolveWidth(item.Style, containerWidth, box);
+                            contentCross = DimensionResolver.ResolveWidth(item.Style, containerWidth, box, context.Viewport);
                         }
                         else if (!float.IsNaN(item.Style.Width))
                         {
-                            contentCross = DimensionResolver.ResolveWidth(item.Style, containerWidth, box);
+                            contentCross = DimensionResolver.ResolveWidth(item.Style, containerWidth, box, context.Viewport);
                         }
                         else
                         {
                             // align-self: start/end/center/baseline with auto width
                             // → fit-content (shrink-to-fit) width
                             var measureBox = new LayoutBox(box.StyledNode, BoxType.Block);
-                            BoxModelCalculator.ApplyBoxModel(measureBox, item.Style, containerWidth);
+                            BoxModelCalculator.ApplyBoxModel(measureBox, item.Style, containerWidth, context.Viewport);
                             float availW = containerWidth - BoxModelCalculator.GetHorizontalSpacing(measureBox);
 
                             // Apply max-width constraint BEFORE measuring so children
@@ -801,8 +801,8 @@ namespace Rend.Layout.Internal
                         }
 
                         // [CSS-SIZING §5.2] Apply cross-axis min/max constraints
-                        float crossMinW = DimensionResolver.ResolvePercentWidth(item.Style.MinWidth, containerWidth, item.Style, PropertyId.MinWidth);
-                        float crossMaxW = DimensionResolver.ResolvePercentWidth(item.Style.MaxWidth, containerWidth, item.Style, PropertyId.MaxWidth);
+                        float crossMinW = DimensionResolver.ResolvePercentWidth(item.Style.MinWidth, containerWidth, item.Style, PropertyId.MinWidth, context.Viewport);
+                        float crossMaxW = DimensionResolver.ResolvePercentWidth(item.Style.MaxWidth, containerWidth, item.Style, PropertyId.MaxWidth, context.Viewport);
                         // [CSS-SIZING §5.2] Resolve sizing keywords for min/max-width
                         if (SizingKeyword.IsSizingKeyword(item.Style.MaxWidth)
                             && item.Box.StyledNode is StyledElement crossMaxEl)
@@ -841,7 +841,7 @@ namespace Rend.Layout.Internal
                         // Set content width on box before resolving height so
                         // aspect-ratio can derive height from width.
                         box.ContentRect = new RectF(0, 0, contentMain, 0);
-                        float specHeight = DimensionResolver.ResolveHeight(item.Style, containerHeight, box);
+                        float specHeight = DimensionResolver.ResolveHeight(item.Style, containerHeight, box, context.Viewport);
                         // [CSS-SIZING-4 §5.1] If height resolves to 0 (unset = auto) and
                         // an aspect-ratio is available, derive height from the main size.
                         // Fall back to the replaced element's intrinsic ratio (SVG
@@ -1191,7 +1191,7 @@ namespace Rend.Layout.Internal
                 var gapRef = style.GetRefValue(gapPropId);
                 if (gapRef is CssFunctionValue gapCalcFn)
                 {
-                    mainAxisGap = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(gapCalcFn, containingWidth);
+                    mainAxisGap = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(gapCalcFn, containingWidth, context.ViewportWidth, context.ViewportHeight);
                 }
                 else
                 {
@@ -1401,7 +1401,7 @@ namespace Rend.Layout.Internal
         {
             var pseudoStyle = pseudo.Style;
             var measureBox = new LayoutBox(pseudo, BoxType.Block);
-            BoxModelCalculator.ApplyBoxModel(measureBox, pseudoStyle, containingWidth);
+            BoxModelCalculator.ApplyBoxModel(measureBox, pseudoStyle, containingWidth, context.Viewport);
 
             float contentWidth;
             float specifiedWidth = pseudoStyle.Width;
@@ -1451,7 +1451,7 @@ namespace Rend.Layout.Internal
         {
             var childStyle = childElement.Style;
             var measureBox = new LayoutBox(childElement, BoxType.Block);
-            BoxModelCalculator.ApplyBoxModel(measureBox, childStyle, containingWidth);
+            BoxModelCalculator.ApplyBoxModel(measureBox, childStyle, containingWidth, context.Viewport);
             float horizontalExtra = measureBox.PaddingLeft + measureBox.PaddingRight
                                   + measureBox.BorderLeftWidth + measureBox.BorderRightWidth
                                   + measureBox.MarginLeft + measureBox.MarginRight;
@@ -1598,7 +1598,7 @@ namespace Rend.Layout.Internal
                     float refSize = isColumn ? containerHeight : containerWidth;
                     if (!float.IsNaN(refSize) && refSize > 0)
                     {
-                        float resolved = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(calcFn, refSize);
+                        float resolved = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(calcFn, refSize, context.ViewportWidth, context.ViewportHeight);
                         if (style.BoxSizing == CssBoxSizing.BorderBox)
                         {
                             if (isColumn)
@@ -1675,7 +1675,7 @@ namespace Rend.Layout.Internal
                         var refVal = style.GetRefValue(propId);
                         if (refVal is CssFunctionValue calcFn)
                         {
-                            float calcSize = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(calcFn, cbDim);
+                            float calcSize = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(calcFn, cbDim, context.ViewportWidth, context.ViewportHeight);
                             // box-sizing: border-box → subtract padding+border
                             if (style.BoxSizing == CssBoxSizing.BorderBox)
                             {
@@ -1750,7 +1750,7 @@ namespace Rend.Layout.Internal
                 if (isColumn)
                 {
                     // Column: main=height, cross=width. If width is definite, height = width / ratio.
-                    float crossWidth = DimensionResolver.ResolveWidth(style, containerWidth, box);
+                    float crossWidth = DimensionResolver.ResolveWidth(style, containerWidth, box, context.Viewport);
 
                     // [CSS-FLEXBOX §9.2 step E] When cross-axis (width) is auto and
                     // the item won't be stretched, ResolveWidth returns the fill-available
@@ -1827,7 +1827,7 @@ namespace Rend.Layout.Internal
                 else
                 {
                     // Row: main=width, cross=height. If height is definite, width = height * ratio.
-                    float crossHeight = DimensionResolver.ResolveHeight(style, containerHeight, box);
+                    float crossHeight = DimensionResolver.ResolveHeight(style, containerHeight, box, context.Viewport);
 
                     // [CSS-FLEXBOX §9.2 + CSS-SIZING-4 §5.1] If cross size is auto but the item
                     // will be stretched to the container's definite cross size, that counts as
@@ -2032,13 +2032,13 @@ namespace Rend.Layout.Internal
 
             // Auto: measure content size via trial layout
             var measureBox = new LayoutBox(element, BoxType.Block);
-            BoxModelCalculator.ApplyBoxModel(measureBox, style, containerWidth);
+            BoxModelCalculator.ApplyBoxModel(measureBox, style, containerWidth, context.Viewport);
 
             if (isColumn)
             {
                 // Column: main axis is height, measure content height.
                 // Width (cross axis) defaults to available width when auto.
-                float w = DimensionResolver.ResolveWidth(style, containerWidth, measureBox);
+                float w = DimensionResolver.ResolveWidth(style, containerWidth, measureBox, context.Viewport);
                 if (float.IsNaN(w))
                 {
                     w = containerWidth - BoxModelCalculator.GetHorizontalSpacing(measureBox);
@@ -2087,8 +2087,8 @@ namespace Rend.Layout.Internal
                 return 0;
             }
             var measureBox = new LayoutBox(element, BoxType.Block);
-            BoxModelCalculator.ApplyBoxModel(measureBox, item.Style, containerWidth);
-            float w = DimensionResolver.ResolveWidth(item.Style, containerWidth, measureBox);
+            BoxModelCalculator.ApplyBoxModel(measureBox, item.Style, containerWidth, context.Viewport);
+            float w = DimensionResolver.ResolveWidth(item.Style, containerWidth, measureBox, context.Viewport);
             if (float.IsNaN(w))
             {
                 w = containerWidth - BoxModelCalculator.GetHorizontalSpacing(measureBox);
@@ -2264,8 +2264,8 @@ namespace Rend.Layout.Internal
                 {
                     float oldWidth = box.ContentRect.Width;
                     float newWidth = oldWidth + freeCross;
-                    float minW = DimensionResolver.ResolvePercentWidth(item.Style.MinWidth, containerWidth, item.Style, PropertyId.MinWidth);
-                    float maxW = DimensionResolver.ResolvePercentWidth(item.Style.MaxWidth, containerWidth, item.Style, PropertyId.MaxWidth);
+                    float minW = DimensionResolver.ResolvePercentWidth(item.Style.MinWidth, containerWidth, item.Style, PropertyId.MinWidth, context.Viewport);
+                    float maxW = DimensionResolver.ResolvePercentWidth(item.Style.MaxWidth, containerWidth, item.Style, PropertyId.MaxWidth, context.Viewport);
                     if (!float.IsNaN(minW) && minW >= 0) { newWidth = Math.Max(newWidth, minW); }
                     if (!float.IsNaN(maxW) && maxW >= 0) { newWidth = Math.Min(newWidth, maxW); }
                     box.ContentRect = new RectF(box.ContentRect.X, box.ContentRect.Y,

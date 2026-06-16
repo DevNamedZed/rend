@@ -168,6 +168,79 @@ namespace Rend.Pdf.Tests
             }
         }
 
+        [Fact]
+        public void Convert_RealFont_CmapMapsLatinLettersToDrawnGlyphs()
+        {
+            byte[]? otf = ConvertTestFont();
+            if (otf == null) { return; }
+
+            Dictionary<int, int> cmap = ParseCmapFormat4(otf);
+            byte[] cff = ExtractCffTable(otf);
+            int pos = 4;
+            ReadIndex(cff, ref pos, out _); // Name
+            ReadIndex(cff, ref pos, out var dictEntries); // Top DICT
+            var dictValues = ParseCffDict(dictEntries[0]);
+            int csPos = dictValues[17][0];
+            ReadIndex(cff, ref csPos, out var charStrings);
+
+            // Each Latin letter must map to a glyph whose Type2 charstring actually
+            // draws something (more than a bare endchar), proving the interpreter,
+            // Subrs extraction and re-emission produced real outlines.
+            foreach (int codePoint in new[] { 'A', 'a', 'e', 'g', 'o' })
+            {
+                Assert.True(cmap.TryGetValue(codePoint, out int glyphId),
+                    $"cmap has no entry for U+{codePoint:X4} ('{(char)codePoint}')");
+                Assert.True(glyphId > 0 && glyphId < charStrings.Count,
+                    $"glyph id {glyphId} for '{(char)codePoint}' out of range");
+                byte[] charString = charStrings[glyphId];
+                _output.WriteLine($"'{(char)codePoint}' -> gid {glyphId}, {charString.Length} bytes");
+                Assert.True(charString.Length > 1,
+                    $"Glyph for '{(char)codePoint}' is empty (only {charString.Length} byte(s))");
+                Assert.Equal(14, charString[charString.Length - 1]); // endchar
+            }
+        }
+
+        private Dictionary<int, int> ParseCmapFormat4(byte[] otf)
+        {
+            int numTables = (otf[4] << 8) | otf[5];
+            int cmapOffset = -1;
+            for (int i = 0; i < numTables; i++)
+            {
+                int dirOffset = 12 + i * 16;
+                if (Encoding.ASCII.GetString(otf, dirOffset, 4) == "cmap")
+                {
+                    cmapOffset = (otf[dirOffset + 8] << 24) | (otf[dirOffset + 9] << 16) |
+                                 (otf[dirOffset + 10] << 8) | otf[dirOffset + 11];
+                    break;
+                }
+            }
+            Assert.True(cmapOffset > 0, "cmap table not found");
+
+            int subtable = cmapOffset + ((otf[cmapOffset + 8] << 24) | (otf[cmapOffset + 9] << 16) |
+                                         (otf[cmapOffset + 10] << 8) | otf[cmapOffset + 11]);
+            int format = (otf[subtable] << 8) | otf[subtable + 1];
+            Assert.Equal(4, format);
+
+            int segCount = ((otf[subtable + 6] << 8) | otf[subtable + 7]) / 2;
+            int endCodes = subtable + 14;
+            int startCodes = endCodes + segCount * 2 + 2;
+            int idDeltas = startCodes + segCount * 2;
+
+            var map = new Dictionary<int, int>();
+            for (int seg = 0; seg < segCount; seg++)
+            {
+                int end = (otf[endCodes + seg * 2] << 8) | otf[endCodes + seg * 2 + 1];
+                int start = (otf[startCodes + seg * 2] << 8) | otf[startCodes + seg * 2 + 1];
+                short delta = (short)((otf[idDeltas + seg * 2] << 8) | otf[idDeltas + seg * 2 + 1]);
+                if (start == 0xFFFF) { continue; }
+                for (int code = start; code <= end; code++)
+                {
+                    map[code] = (code + delta) & 0xFFFF;
+                }
+            }
+            return map;
+        }
+
         // ─── Helpers ──────────────────────────────────────────────────
 
         private byte[]? ConvertTestFont()

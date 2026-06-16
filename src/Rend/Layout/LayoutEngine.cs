@@ -45,10 +45,6 @@ namespace Rend.Layout
             context.ContainingBlockWidth = contentWidth;
             context.ContainingBlockHeight = contentHeight;
 
-            // Set viewport hints for deferred calc() evaluation (vw/vh units)
-            Css.Resolution.Internal.ValueResolver.ViewportWidthHint = options.ViewportWidth;
-            Css.Resolution.Internal.ValueResolver.ViewportHeightHint = options.ViewportHeight;
-
             // Create root layout box
             var rootBox = new LayoutBox(styledTree.Root, BoxType.Block);
             rootBox.ContentRect = new RectF(
@@ -58,7 +54,7 @@ namespace Rend.Layout
                 0); // Height determined by content
 
             // Apply box model to root
-            BoxModelCalculator.ApplyBoxModel(rootBox, styledTree.Root.Style, contentWidth);
+            BoxModelCalculator.ApplyBoxModel(rootBox, styledTree.Root.Style, contentWidth, context.Viewport);
 
             // Layout the tree
             BlockFormattingContext.Layout(rootBox, context);
@@ -89,7 +85,7 @@ namespace Rend.Layout
             float rootHeight;
             var rootStyle = styledTree.Root.Style;
             float explicitRootH = Internal.DimensionResolver.ResolveHeight(
-                rootStyle, options.ViewportHeight, rootBox);
+                rootStyle, options.ViewportHeight, rootBox, context.Viewport);
             if (!float.IsNaN(explicitRootH) && explicitRootH > 0)
             {
                 rootHeight = explicitRootH;
@@ -109,7 +105,7 @@ namespace Rend.Layout
                 options.PageSize.Width, options.PageSize.Height);
 
             // Apply positioning to all boxes
-            ApplyPositioningRecursive(rootBox, rootBox, viewportBox);
+            ApplyPositioningRecursive(rootBox, rootBox, context.Viewport, viewportBox);
 
             // Build stacking contexts (sets ZIndex and EstablishesStackingContext on boxes)
             StackingContext.Build(rootBox);
@@ -130,11 +126,11 @@ namespace Rend.Layout
                 pages = new List<LayoutPage> { page };
             }
 
-            return new LayoutDocument(rootBox, pages);
+            return new LayoutDocument(rootBox, pages, context.Viewport);
         }
 
         private static void ApplyPositioningRecursive(LayoutBox box, LayoutBox containingBlock,
-            LayoutBox? viewportBox = null)
+            Rend.Core.Values.SizeF viewportSize, LayoutBox? viewportBox = null)
         {
             var viewport = viewportBox ?? box;
             var style = box.StyledNode?.Style;
@@ -142,7 +138,7 @@ namespace Rend.Layout
             {
                 float oldX = box.ContentRect.X;
                 float oldY = box.ContentRect.Y;
-                PositionedLayout.ApplyPositioning(box, containingBlock, viewport);
+                PositionedLayout.ApplyPositioning(box, containingBlock, viewportSize, viewport);
                 float dx = box.ContentRect.X - oldX;
                 float dy = box.ContentRect.Y - oldY;
                 // After repositioning, shift all descendants by the same delta
@@ -174,7 +170,7 @@ namespace Rend.Layout
 
             for (int i = 0; i < box.Children.Count; i++)
             {
-                ApplyPositioningRecursive(box.Children[i], newContaining, viewport);
+                ApplyPositioningRecursive(box.Children[i], newContaining, viewportSize, viewport);
             }
         }
 

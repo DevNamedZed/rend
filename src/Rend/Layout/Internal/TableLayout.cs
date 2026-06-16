@@ -177,7 +177,7 @@ namespace Rend.Layout.Internal
 
                     var cellBox = new LayoutBox(cell.StyledElement, BoxType.TableCell);
                     if (cell.StyledElement != null)
-                        BoxModelCalculator.ApplyBoxModel(cellBox, cell.StyledElement.Style, cellWidth);
+                        BoxModelCalculator.ApplyBoxModel(cellBox, cell.StyledElement.Style, cellWidth, context.Viewport);
 
                     float contentWidth = cellWidth - cellBox.PaddingLeft - cellBox.PaddingRight
                                        - cellBox.BorderLeftWidth - cellBox.BorderRightWidth;
@@ -1257,14 +1257,14 @@ namespace Rend.Layout.Internal
         {
             var captionBox = new LayoutBox(captionEl, BoxType.TableCaption);
             var captionStyle = captionEl.Style;
-            BoxModelCalculator.ApplyBoxModel(captionBox, captionStyle, containerWidth);
+            BoxModelCalculator.ApplyBoxModel(captionBox, captionStyle, containerWidth, context.Viewport);
 
             // [CSS-TABLES §4.1] Caption width: use explicit CSS width if specified,
             // otherwise fill the table's content width minus caption box model.
             float contentWidth;
             if (!float.IsNaN(captionStyle.Width) && !SizingKeyword.IsSizingKeyword(captionStyle.Width))
             {
-                contentWidth = DimensionResolver.ResolveWidth(captionStyle, containerWidth, captionBox);
+                contentWidth = DimensionResolver.ResolveWidth(captionStyle, containerWidth, captionBox, context.Viewport);
             }
             else
             {
@@ -1993,7 +1993,7 @@ namespace Rend.Layout.Internal
             LayoutContext context, bool collapsed = false, bool intrinsicSizing = false)
         {
             var box = new LayoutBox(cellElement, BoxType.TableCell);
-            BoxModelCalculator.ApplyBoxModel(box, cellElement.Style, availWidth);
+            BoxModelCalculator.ApplyBoxModel(box, cellElement.Style, availWidth, context.Viewport);
 
             // In border-collapse mode, cell borders are shared with neighbors.
             // For intrinsic sizing, use half the declared border widths (approximation

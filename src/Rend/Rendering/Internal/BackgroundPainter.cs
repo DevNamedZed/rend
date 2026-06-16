@@ -13,7 +13,6 @@ namespace Rend.Rendering.Internal
     /// </summary>
     internal static class BackgroundPainter
     {
-        [ThreadStatic] private static CssColor? _currentColor;
 
         /// <summary>
         /// Paints the background for the given box onto the render target.
@@ -997,37 +996,34 @@ namespace Rend.Rendering.Internal
         /// </summary>
         internal static GradientInfo? ParseCssGradient(CssFunctionValue fn, RectF rect, CssColor? currentColor = null)
         {
-            // Store currentColor for ParseColorStops to use
-            _currentColor = currentColor;
-
             if (fn.Name == "linear-gradient" || fn.Name == "-webkit-linear-gradient")
-                return ParseLinearGradient(fn, rect);
+                return ParseLinearGradient(fn, rect, currentColor);
             if (fn.Name == "repeating-linear-gradient")
             {
-                var g = ParseLinearGradient(fn, rect);
+                var g = ParseLinearGradient(fn, rect, currentColor);
                 if (g != null) g.Repeating = true;
                 return g;
             }
             if (fn.Name == "radial-gradient" || fn.Name == "-webkit-radial-gradient")
-                return ParseRadialGradient(fn, rect);
+                return ParseRadialGradient(fn, rect, currentColor);
             if (fn.Name == "repeating-radial-gradient")
             {
-                var g = ParseRadialGradient(fn, rect);
+                var g = ParseRadialGradient(fn, rect, currentColor);
                 if (g != null) g.Repeating = true;
                 return g;
             }
             if (fn.Name == "conic-gradient")
-                return ParseConicGradient(fn, rect);
+                return ParseConicGradient(fn, rect, currentColor);
             if (fn.Name == "repeating-conic-gradient")
             {
-                var g = ParseConicGradient(fn, rect);
+                var g = ParseConicGradient(fn, rect, currentColor);
                 if (g != null) g.Repeating = true;
                 return g;
             }
             return null;
         }
 
-        private static GradientInfo? ParseLinearGradient(CssFunctionValue fn, RectF rect)
+        private static GradientInfo? ParseLinearGradient(CssFunctionValue fn, RectF rect, CssColor? currentColor)
         {
             if (fn.Arguments.Count == 0) return null;
 
@@ -1074,7 +1070,7 @@ namespace Rend.Rendering.Internal
                                      + Math.Abs(rect.Height * (float)Math.Cos(angleRad));
             if (gradientLineLength <= 0) gradientLineLength = 1;
 
-            var stops = ParseColorStops(fn.Arguments, colorStartIdx, gradientLineLength, _currentColor);
+            var stops = ParseColorStops(fn.Arguments, colorStartIdx, gradientLineLength, currentColor);
             if (stops == null || stops.Length < 2) return null;
 
             return new GradientInfo(GradientType.Linear, stops)
@@ -1085,7 +1081,7 @@ namespace Rend.Rendering.Internal
             };
         }
 
-        private static GradientInfo? ParseRadialGradient(CssFunctionValue fn, RectF rect)
+        private static GradientInfo? ParseRadialGradient(CssFunctionValue fn, RectF rect, CssColor? currentColor)
         {
             if (fn.Arguments.Count == 0) return null;
 
@@ -1257,7 +1253,7 @@ namespace Rend.Rendering.Internal
             TryParseColorInterpolationMethod(fn.Arguments, ref colorStartIdx,
                 out string? colorSpace, out string? hueMethod);
 
-            var stops = ParseColorStops(fn.Arguments, colorStartIdx, gradientRadius, _currentColor);
+            var stops = ParseColorStops(fn.Arguments, colorStartIdx, gradientRadius, currentColor);
             if (stops == null || stops.Length < 2) return null;
 
             return new GradientInfo(GradientType.Radial, stops)
@@ -1270,7 +1266,7 @@ namespace Rend.Rendering.Internal
             };
         }
 
-        private static GradientInfo? ParseConicGradient(CssFunctionValue fn, RectF rect)
+        private static GradientInfo? ParseConicGradient(CssFunctionValue fn, RectF rect, CssColor? currentColor)
         {
             if (fn.Arguments.Count == 0) return null;
 
@@ -1361,7 +1357,7 @@ namespace Rend.Rendering.Internal
             TryParseColorInterpolationMethod(fn.Arguments, ref colorStartIdx,
                 out string? colorSpace, out string? hueMethod);
 
-            var stops = ParseColorStops(fn.Arguments, colorStartIdx, 0, _currentColor, isConic: true);
+            var stops = ParseColorStops(fn.Arguments, colorStartIdx, 0, currentColor, isConic: true);
             if (stops == null || stops.Length < 2) return null;
 
             return new GradientInfo(GradientType.Conic, stops)

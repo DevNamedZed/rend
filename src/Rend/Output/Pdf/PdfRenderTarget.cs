@@ -15,7 +15,7 @@ namespace Rend.Output.Pdf
     /// An <see cref="IRenderTarget"/> implementation that produces PDF output
     /// by bridging drawing commands to a <see cref="PdfDocument"/>.
     /// </summary>
-    internal sealed class PdfRenderTarget : IRenderTarget
+    internal sealed class PdfRenderTarget : IRenderTarget, IDisposable
     {
         private readonly PdfRenderOptions _options;
         private readonly PdfDocument _doc;
@@ -25,7 +25,18 @@ namespace Rend.Output.Pdf
 
         private PdfPage? _currentPage;
         private float _currentPageHeight;
+        private float _currentPageWidth;
         private readonly PdfOutlineNode?[] _bookmarkStack = new PdfOutlineNode?[6];
+
+        // Offscreen rasterization state for CSS filters PDF cannot express natively
+        // (everything except plain opacity). While a capture is active, drawing is rerouted
+        // to an offscreen Skia target; the matching Restore filters and embeds the result.
+        // See spec/investigations/pdf-b1-css-filters-investigation.md.
+        private const float FilterSupersampleScale = 2f;
+        private int _saveDepth;
+        private int _filterEndDepth;
+        private Rend.Output.Image.SkiaRenderTarget? _filterCapture;
+        private Rend.Rendering.CssFilterEffect[]? _filterEffects;
 
         /// <summary>
         /// Creates a new <see cref="PdfRenderTarget"/> with the specified options.
@@ -53,6 +64,7 @@ namespace Rend.Output.Pdf
         {
             _currentPage = _doc.AddPage(width, height);
             _currentPageHeight = height;
+            _currentPageWidth = width;
 
             // Set up coordinate transform: CSS top-left origin to PDF bottom-left origin.
             // This flips Y so that (0,0) is at top-left and Y increases downward.
@@ -74,6 +86,12 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void Save()
         {
+            _saveDepth++;
+            if (_filterCapture != null)
+            {
+                _filterCapture.Save();
+                return;
+            }
             EnsurePage();
             _currentPage!.Content.SaveState();
         }
@@ -81,6 +99,23 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void Restore()
         {
+            if (_filterCapture != null && _saveDepth == _filterEndDepth)
+            {
+                // The Restore that closes the filtered element: embed the rasterized result,
+                // then balance the q emitted before the filter began.
+                FinalizeFilterCapture();
+                _saveDepth--;
+                EnsurePage();
+                _currentPage!.Content.RestoreState();
+                return;
+            }
+            if (_filterCapture != null)
+            {
+                _filterCapture.Restore();
+                _saveDepth--;
+                return;
+            }
+            _saveDepth--;
             EnsurePage();
             _currentPage!.Content.RestoreState();
         }
@@ -88,6 +123,11 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void SetTransform(Matrix3x2 transform)
         {
+            if (_filterCapture != null)
+            {
+                _filterCapture.SetTransform(transform);
+                return;
+            }
             EnsurePage();
             _currentPage!.Content.SetTransform(
                 transform.M11, transform.M12,
@@ -98,6 +138,11 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void ConcatTransform(Matrix3x2 transform)
         {
+            if (_filterCapture != null)
+            {
+                _filterCapture.ConcatTransform(transform);
+                return;
+            }
             EnsurePage();
             // PDF cm operator concatenates with the current CTM
             _currentPage!.Content.ConcatTransform(
@@ -109,6 +154,11 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void SetOpacity(float opacity)
         {
+            if (_filterCapture != null)
+            {
+                _filterCapture.SetOpacity(opacity);
+                return;
+            }
             EnsurePage();
             _currentPage!.Content.SetFillOpacity(opacity);
             _currentPage!.Content.SetStrokeOpacity(opacity);
@@ -117,33 +167,126 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void ApplyFilter(Rendering.CssFilterEffect[] effects)
         {
-            // PDF has limited filter support. Only apply opacity filter.
-            if (effects == null) return;
+            if (_filterCapture != null)
+            {
+                _filterCapture.ApplyFilter(effects);
+                return;
+            }
+            if (effects == null || effects.Length == 0)
+            {
+                return;
+            }
+
+            // Opacity is the only filter PDF expresses natively (ExtGState alpha).
+            if (IsOpacityOnly(effects))
+            {
+                float opacity = 1f;
+                foreach (var effect in effects)
+                {
+                    opacity *= Math.Max(0f, Math.Min(1f, effect.Amount));
+                }
+                SetOpacity(opacity);
+                return;
+            }
+
+            // All other filters have no PDF equivalent: capture the element's subtree to an
+            // offscreen raster, apply the filter, and embed it on the matching Restore.
+            BeginFilterCapture(effects);
+        }
+
+        private static bool IsOpacityOnly(Rendering.CssFilterEffect[] effects)
+        {
             foreach (var effect in effects)
             {
-                if (effect.Type == Rendering.CssFilterType.Opacity)
+                if (effect.Type != Rendering.CssFilterType.Opacity)
                 {
-                    SetOpacity(effect.Amount);
-                    return;
+                    return false;
                 }
             }
+            return true;
+        }
+
+        private void BeginFilterCapture(Rendering.CssFilterEffect[] effects)
+        {
+            EnsurePage();
+            _filterEffects = effects;
+            _filterEndDepth = _saveDepth;
+            var options = new Rend.Output.Image.SkiaRenderOptions { Dpi = 96f * FilterSupersampleScale };
+            _filterCapture = new Rend.Output.Image.SkiaRenderTarget(options);
+            _filterCapture.BeginTransparentPage(_currentPageWidth, _currentPageHeight);
+        }
+
+        private void FinalizeFilterCapture()
+        {
+            Rend.Output.Image.SkiaRenderTarget capture = _filterCapture!;
+            Rendering.CssFilterEffect[] effects = _filterEffects!;
+            _filterCapture = null;
+            _filterEffects = null;
+
+            try
+            {
+                byte[] rgba = capture.ExtractFilteredRgba(effects, FilterSupersampleScale,
+                    out int pixelWidth, out int pixelHeight);
+                if (pixelWidth <= 0 || pixelHeight <= 0)
+                {
+                    return;
+                }
+
+                byte[] pngBytes = EncodePngRgba(rgba, pixelWidth, pixelHeight);
+                PdfImage image = _doc.AddImage(pngBytes, ImageFormat.Png);
+
+                // Place the filtered raster over the whole page. The page CTM flips Y, so negate
+                // the height (matching DrawImage) to draw it right-side-up.
+                _currentPage!.Content.DrawImage(image,
+                    _currentPageWidth, 0f, 0f, -_currentPageHeight, 0f, _currentPageHeight);
+            }
+            finally
+            {
+                capture.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Disposes a filter-capture target left dangling by an unbalanced render (e.g. an
+        /// exception inside a filtered subtree before its matching Restore). Normal renders
+        /// dispose the capture in <see cref="FinalizeFilterCapture"/>.
+        /// </summary>
+        public void Dispose()
+        {
+            _filterCapture?.Dispose();
+            _filterCapture = null;
         }
 
         /// <inheritdoc />
         public void BeginMask()
         {
+            if (_filterCapture != null)
+            {
+                _filterCapture.BeginMask();
+                return;
+            }
             // PDF does not natively support gradient masks; graceful degradation.
         }
 
         /// <inheritdoc />
         public void EndMask(Rendering.GradientInfo gradient, Core.Values.RectF bounds)
         {
+            if (_filterCapture != null)
+            {
+                _filterCapture.EndMask(gradient, bounds);
+                return;
+            }
             // PDF does not natively support gradient masks; graceful degradation.
         }
 
         /// <inheritdoc />
         public void SetBlendMode(Css.CssMixBlendMode blendMode)
         {
+            if (_filterCapture != null)
+            {
+                _filterCapture.SetBlendMode(blendMode);
+                return;
+            }
             if (blendMode == Css.CssMixBlendMode.Normal) return;
             EnsurePage();
             _currentPage!.Content.SetBlendMode(MapBlendMode(blendMode));
@@ -175,12 +318,18 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void SetImageRendering(Css.CssImageRendering rendering)
         {
+            if (_filterCapture != null)
+            {
+                _filterCapture.SetImageRendering(rendering);
+                return;
+            }
             // PDF rendering quality is controlled by the viewer, not the writer
         }
 
         /// <inheritdoc />
         public void SetMaskBlur(float sigma, bool inner = false)
         {
+            if (_filterCapture != null) { _filterCapture.SetMaskBlur(sigma, inner); return; }
             _maskBlurSigma = sigma;
         }
         private float _maskBlurSigma;
@@ -188,6 +337,7 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void PushClipRect(RectF rect)
         {
+            if (_filterCapture != null) { _filterCapture.PushClipRect(rect); return; }
             EnsurePage();
             var content = _currentPage!.Content;
             content.SaveState();
@@ -199,6 +349,7 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void PushClipPath(PathData path)
         {
+            if (_filterCapture != null) { _filterCapture.PushClipPath(path); return; }
             EnsurePage();
             var content = _currentPage!.Content;
             content.SaveState();
@@ -210,6 +361,7 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void PopClip()
         {
+            if (_filterCapture != null) { _filterCapture.PopClip(); return; }
             EnsurePage();
             _currentPage!.Content.RestoreState();
         }
@@ -217,6 +369,7 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void FillRect(RectF rect, BrushInfo brush)
         {
+            if (_filterCapture != null) { _filterCapture.FillRect(rect, brush); return; }
             EnsurePage();
             var content = _currentPage!.Content;
 
@@ -253,6 +406,7 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void StrokeRect(RectF rect, PenInfo pen)
         {
+            if (_filterCapture != null) { _filterCapture.StrokeRect(rect, pen); return; }
             EnsurePage();
             var content = _currentPage!.Content;
 
@@ -267,6 +421,7 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void FillRoundRectDifference(RoundedRectInfo outer, RoundedRectInfo inner, BrushInfo brush)
         {
+            if (_filterCapture != null) { _filterCapture.FillRoundRectDifference(outer, inner, brush); return; }
             // PDF fallback: build EvenOdd path from both rounded rects.
             var path = new PathData();
             path.FillType = PathFillType.EvenOdd;
@@ -280,6 +435,7 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void FillPath(PathData path, BrushInfo brush)
         {
+            if (_filterCapture != null) { _filterCapture.FillPath(path, brush); return; }
             EnsurePage();
             var content = _currentPage!.Content;
             var bounds = path.GetBounds();
@@ -326,6 +482,7 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void StrokePath(PathData path, PenInfo pen)
         {
+            if (_filterCapture != null) { _filterCapture.StrokePath(path, pen); return; }
             EnsurePage();
             var content = _currentPage!.Content;
 
@@ -337,6 +494,7 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void DrawImage(ImageData image, RectF destRect)
         {
+            if (_filterCapture != null) { _filterCapture.DrawImage(image, destRect); return; }
             EnsurePage();
             var content = _currentPage!.Content;
 
@@ -352,6 +510,7 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void DrawImageRegion(ImageData image, RectF sourceRect, RectF destRect)
         {
+            if (_filterCapture != null) { _filterCapture.DrawImageRegion(image, sourceRect, destRect); return; }
             if (sourceRect.Width <= 0 || sourceRect.Height <= 0
                 || destRect.Width <= 0 || destRect.Height <= 0)
             {
@@ -390,6 +549,7 @@ namespace Rend.Output.Pdf
         public void DrawTiledImage(ImageData image, RectF fillArea,
             float tileWidth, float tileHeight, float originX, float originY)
         {
+            if (_filterCapture != null) { _filterCapture.DrawTiledImage(image, fillArea, tileWidth, tileHeight, originX, originY); return; }
             float startX = originX;
             while (startX > fillArea.X)
             {
@@ -413,11 +573,20 @@ namespace Rend.Output.Pdf
         }
 
         /// <inheritdoc />
-        public float MeasureText(string text, TextStyle style) => -1f;
+        public float MeasureText(string text, TextStyle style)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return 0f;
+            }
+            PdfFont pdfFont = ResolvePdfFont(style.Font);
+            return pdfFont.MeasureWidth(text, style.FontSize);
+        }
 
         /// <inheritdoc />
         public void FillRectWithTiledGradient(GradientInfo gradient, RectF fillArea, RectF tileRect)
         {
+            if (_filterCapture != null) { _filterCapture.FillRectWithTiledGradient(gradient, fillArea, tileRect); return; }
             // PDF: fall back to filling the entire area with the gradient (no tiling).
             FillRect(fillArea, BrushInfo.FromGradient(gradient));
         }
@@ -425,6 +594,7 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void DrawText(string text, float x, float y, TextStyle style)
         {
+            if (_filterCapture != null) { _filterCapture.DrawText(text, x, y, style); return; }
             EnsurePage();
             var content = _currentPage!.Content;
 
@@ -461,6 +631,7 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void DrawGlyphs(ShapedTextRun run, float x, float y, CssColor color, FontDescriptor font)
         {
+            if (_filterCapture != null) { _filterCapture.DrawGlyphs(run, x, y, color, font); return; }
             EnsurePage();
             var content = _currentPage!.Content;
 
@@ -1178,6 +1349,10 @@ namespace Rend.Output.Pdf
         private static void WritePath(PathData path, PdfContentStream content)
         {
             IReadOnlyList<PathSegment> segments = path.GetSegments();
+            float currentX = 0f;
+            float currentY = 0f;
+            float subpathStartX = 0f;
+            float subpathStartY = 0f;
             for (int i = 0; i < segments.Count; i++)
             {
                 PathSegment seg = segments[i];
@@ -1185,26 +1360,44 @@ namespace Rend.Output.Pdf
                 {
                     case PathSegmentType.MoveTo:
                         content.MoveTo(seg.X, seg.Y);
+                        currentX = seg.X;
+                        currentY = seg.Y;
+                        subpathStartX = seg.X;
+                        subpathStartY = seg.Y;
                         break;
                     case PathSegmentType.LineTo:
                         content.LineTo(seg.X, seg.Y);
+                        currentX = seg.X;
+                        currentY = seg.Y;
                         break;
                     case PathSegmentType.CubicBezierTo:
                         content.CurveTo(seg.X1, seg.Y1, seg.X2, seg.Y2, seg.X, seg.Y);
+                        currentX = seg.X;
+                        currentY = seg.Y;
                         break;
                     case PathSegmentType.QuadraticBezierTo:
-                        // PDF does not support quadratic bezier natively.
-                        // Convert to cubic: CP1 = P0 + 2/3*(P1-P0), CP2 = P2 + 2/3*(P1-P2).
-                        // We approximate by promoting to cubic with the control point used twice.
-                        // A more accurate conversion would need the current point, but this is a
-                        // reasonable approximation using the control point for both cubic CPs.
-                        content.CurveTo(seg.X1, seg.Y1, seg.X1, seg.Y1, seg.X, seg.Y);
+                        WriteQuadraticAsCubic(content, currentX, currentY, seg.X1, seg.Y1, seg.X, seg.Y);
+                        currentX = seg.X;
+                        currentY = seg.Y;
                         break;
                     case PathSegmentType.Close:
                         content.ClosePath();
+                        currentX = subpathStartX;
+                        currentY = subpathStartY;
                         break;
                 }
             }
+        }
+
+        // PDF has no quadratic Bézier operator (ISO 32000-1 §8.5.2.2). A quadratic curve
+        // is exactly representable as a cubic by degree elevation about its endpoints.
+        private static void WriteQuadraticAsCubic(PdfContentStream content, float startX, float startY, float controlX, float controlY, float endX, float endY)
+        {
+            float control1X = startX + (2f / 3f) * (controlX - startX);
+            float control1Y = startY + (2f / 3f) * (controlY - startY);
+            float control2X = endX + (2f / 3f) * (controlX - endX);
+            float control2Y = endY + (2f / 3f) * (controlY - endY);
+            content.CurveTo(control1X, control1Y, control2X, control2Y, endX, endY);
         }
     }
 }

@@ -15,7 +15,7 @@ namespace Rend.Layout.Internal
         /// Resolve the content width for a block-level element.
         /// </summary>
         public static float ResolveWidth(ComputedStyle style, float containingBlockWidth, LayoutBox box,
-            float containingBlockHeight = float.NaN)
+            Rend.Core.Values.SizeF viewport, float containingBlockHeight = float.NaN)
         {
             float specifiedWidth = style.Width;
             float width;
@@ -23,7 +23,7 @@ namespace Rend.Layout.Internal
             // Deferred calc() with percentage — resolve at layout time
             if (float.IsNegativeInfinity(specifiedWidth))
             {
-                width = ResolveDeferredCalc(style, PropertyId.Width, containingBlockWidth);
+                width = ResolveDeferredCalc(style, PropertyId.Width, containingBlockWidth, viewport);
                 if (style.BoxSizing == CssBoxSizing.BorderBox)
                 {
                     width -= (box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth);
@@ -102,8 +102,8 @@ namespace Rend.Layout.Internal
             }
 
             // Apply min/max constraints (resolve deferred percentages and deferred calc)
-            float minW = ResolvePercentWidth(style.MinWidth, containingBlockWidth, style, PropertyId.MinWidth);
-            float maxW = ResolvePercentWidth(style.MaxWidth, containingBlockWidth, style, PropertyId.MaxWidth);
+            float minW = ResolvePercentWidth(style.MinWidth, containingBlockWidth, style, PropertyId.MinWidth, viewport);
+            float maxW = ResolvePercentWidth(style.MaxWidth, containingBlockWidth, style, PropertyId.MaxWidth, viewport);
 
             // [CSS-SIZING-4 §5.2] Transfer max-height/min-height constraints through
             // aspect-ratio to max-width/min-width. Only when width is AUTO and
@@ -184,11 +184,11 @@ namespace Rend.Layout.Internal
         /// Resolve a width value that may be a deferred calc() or deferred percentage.
         /// </summary>
         public static float ResolvePercentWidth(float value, float containingBlockWidth,
-            ComputedStyle style, int propertyId)
+            ComputedStyle style, int propertyId, Rend.Core.Values.SizeF viewport)
         {
             if (float.IsNegativeInfinity(value))
             {
-                return ResolveDeferredCalc(style, propertyId, containingBlockWidth);
+                return ResolveDeferredCalc(style, propertyId, containingBlockWidth, viewport);
             }
             if (DeferredPercent.IsEncoded(value))
             {
@@ -201,14 +201,15 @@ namespace Rend.Layout.Internal
         /// Resolve the content height for an element.
         /// Returns NaN if height is auto (to be determined by content).
         /// </summary>
-        public static float ResolveHeight(ComputedStyle style, float containingBlockHeight, LayoutBox box)
+        public static float ResolveHeight(ComputedStyle style, float containingBlockHeight, LayoutBox box,
+            Rend.Core.Values.SizeF viewport)
         {
             float specifiedHeight = style.Height;
 
             // Deferred calc() with percentage
             if (float.IsNegativeInfinity(specifiedHeight))
             {
-                specifiedHeight = ResolveDeferredCalc(style, PropertyId.Height, containingBlockHeight);
+                specifiedHeight = ResolveDeferredCalc(style, PropertyId.Height, containingBlockHeight, viewport);
             }
             // Deferred percentage heights (encoded with sentinel offset).
             // Resolve against the containing block height, or treat as auto if unknown.
@@ -249,8 +250,8 @@ namespace Rend.Layout.Internal
 
                     float arHeight = ratioWidth / ratio;
 
-                    float arMinH = ResolveMinMaxH(style.MinHeight, containingBlockHeight, style, PropertyId.MinHeight);
-                    float arMaxH = ResolveMinMaxH(style.MaxHeight, containingBlockHeight, style, PropertyId.MaxHeight);
+                    float arMinH = ResolveMinMaxH(style.MinHeight, containingBlockHeight, viewport, style, PropertyId.MinHeight);
+                    float arMaxH = ResolveMinMaxH(style.MaxHeight, containingBlockHeight, viewport, style, PropertyId.MaxHeight);
                     arHeight = ApplyMinMax(arHeight, arMinH, arMaxH);
 
                     // Convert from border-box height to content-box height
@@ -273,8 +274,8 @@ namespace Rend.Layout.Internal
                 height -= vExtra;
             }
 
-            float minH = ResolveMinMaxH(style.MinHeight, containingBlockHeight, style, PropertyId.MinHeight);
-            float maxH = ResolveMinMaxH(style.MaxHeight, containingBlockHeight, style, PropertyId.MaxHeight);
+            float minH = ResolveMinMaxH(style.MinHeight, containingBlockHeight, viewport, style, PropertyId.MinHeight);
+            float maxH = ResolveMinMaxH(style.MaxHeight, containingBlockHeight, viewport, style, PropertyId.MaxHeight);
             if (vExtra > 0)
             {
                 if (!float.IsNaN(minH) && minH >= 0)
@@ -303,11 +304,14 @@ namespace Rend.Layout.Internal
         }
 
         private static float ResolveMinMaxH(float value, float containingBlockHeight,
-            ComputedStyle? style = null, int propertyId = 0)
+            Rend.Core.Values.SizeF viewport = default, ComputedStyle? style = null, int propertyId = 0)
         {
+            // viewport is only consulted on the deferred-calc branch, which requires a non-null
+            // style + propertyId. ResolvePercentHeight calls this without a style, so the default
+            // viewport is never reached on a calc path.
             if (float.IsNegativeInfinity(value) && style != null && propertyId != 0)
             {
-                return ResolveDeferredCalc(style, propertyId, containingBlockHeight);
+                return ResolveDeferredCalc(style, propertyId, containingBlockHeight, viewport);
             }
             if (DeferredPercent.IsEncoded(value))
             {
@@ -470,12 +474,13 @@ namespace Rend.Layout.Internal
         /// Evaluates a deferred calc() expression stored in the style's ref values.
         /// Used when calc() contains percentages that must resolve at layout time.
         /// </summary>
-        private static float ResolveDeferredCalc(ComputedStyle style, int propertyId, float containingBlockDimension)
+        private static float ResolveDeferredCalc(ComputedStyle style, int propertyId, float containingBlockDimension,
+            Rend.Core.Values.SizeF viewport)
         {
             var refVal = style.GetRefValue(propertyId);
             if (refVal is CssFunctionValue calcFn)
             {
-                return ValueResolver.EvaluateDeferredCalc(calcFn, containingBlockDimension);
+                return ValueResolver.EvaluateDeferredCalc(calcFn, containingBlockDimension, viewport.Width, viewport.Height);
             }
             // Fallback: treat as 0
             return 0;

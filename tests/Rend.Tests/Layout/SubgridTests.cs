@@ -58,7 +58,7 @@ namespace Rend.Tests.Layout
             // When the value is "subgrid", ResolveTrackList should return null
             // because subgrid tracks are not parsed as normal tracks.
             // The subgrid logic is handled separately in GridLayout.Layout().
-            var result = GridLayout.ResolveTrackList(new CssKeywordValue("subgrid"), 400);
+            var result = GridLayout.ResolveTrackList(new CssKeywordValue("subgrid"), 400, default);
             Assert.Null(result);
         }
 

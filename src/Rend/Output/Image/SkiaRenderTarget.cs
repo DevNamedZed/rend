@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using Rend.Core.Values;
 using Rend.Fonts;
 using Rend.Output.Image.Internal;
@@ -191,7 +192,30 @@ namespace Rend.Output.Image
             if (effects == null || effects.Length == 0) return;
             EnsureCanvas();
 
-            // Build combined Skia image filter and color filter from the CSS filter effects.
+            SKImageFilter? imageFilter = BuildCombinedFilter(effects, 1f, out byte alpha);
+            using (var paint = new SKPaint())
+            {
+                paint.Color = new SKColor(255, 255, 255, alpha);
+                if (imageFilter != null)
+                {
+                    paint.ImageFilter = imageFilter;
+                }
+                _currentCanvas!.SaveLayer(paint);
+            }
+            imageFilter?.Dispose();
+
+            // Prevent double-application of opacity from individual draw calls.
+            _opacityStack.Push(_currentOpacity);
+            _currentOpacity = 1f;
+        }
+
+        // Builds the combined Skia image filter (image-filter chain with the colour-matrix
+        // colour filter folded in) for a set of CSS filter effects, returning the composite
+        // opacity as a premultiplied alpha. geometryScale multiplies blur and drop-shadow
+        // distances so the same effects render correctly at supersampled resolutions (used
+        // by the PDF bridge's offscreen filter capture).
+        private static SKImageFilter? BuildCombinedFilter(CssFilterEffect[] effects, float geometryScale, out byte alpha)
+        {
             SKImageFilter? imageFilter = null;
             SKColorFilter? colorFilter = null;
             float opacity = 1f;
@@ -203,7 +227,7 @@ namespace Rend.Output.Image
                     case CssFilterType.Blur:
                         if (effect.Amount > 0)
                         {
-                            var blur = SKImageFilter.CreateBlur(effect.Amount, effect.Amount, imageFilter);
+                            var blur = SKImageFilter.CreateBlur(effect.Amount * geometryScale, effect.Amount * geometryScale, imageFilter);
                             imageFilter?.Dispose();
                             imageFilter = blur;
                         }
@@ -213,7 +237,8 @@ namespace Rend.Output.Image
                     {
                         var shadowColor = new SKColor(effect.Color.R, effect.Color.G, effect.Color.B, effect.Color.A);
                         var shadow = SKImageFilter.CreateDropShadow(
-                            effect.OffsetX, effect.OffsetY, effect.Amount, effect.Amount, shadowColor, imageFilter);
+                            effect.OffsetX * geometryScale, effect.OffsetY * geometryScale,
+                            effect.Amount * geometryScale, effect.Amount * geometryScale, shadowColor, imageFilter);
                         imageFilter?.Dispose();
                         imageFilter = shadow;
                         break;
@@ -331,32 +356,19 @@ namespace Rend.Output.Image
                 }
             }
 
-            // Apply opacity as alpha on the SaveLayer paint (round to match Chrome's SkScalarRoundToInt)
-            byte alpha = (byte)Math.Round(opacity * 255, MidpointRounding.AwayFromZero);
+            // Composite opacity as a premultiplied alpha (round to match Chrome's SkScalarRoundToInt).
+            alpha = (byte)Math.Round(opacity * 255, MidpointRounding.AwayFromZero);
 
-            // Convert color filter to image filter if we have both
+            // Fold the colour-matrix filter into the image-filter chain when present.
             if (colorFilter != null)
             {
-                var cfImageFilter = SKImageFilter.CreateColorFilter(colorFilter, imageFilter);
+                var colorImageFilter = SKImageFilter.CreateColorFilter(colorFilter, imageFilter);
                 imageFilter?.Dispose();
                 colorFilter.Dispose();
-                imageFilter = cfImageFilter;
+                imageFilter = colorImageFilter;
             }
 
-            // Create SaveLayer with the combined filter
-            using (var paint = new SKPaint())
-            {
-                paint.Color = new SKColor(255, 255, 255, alpha);
-                if (imageFilter != null)
-                    paint.ImageFilter = imageFilter;
-                _currentCanvas!.SaveLayer(paint);
-            }
-
-            imageFilter?.Dispose();
-
-            // Prevent double-application of opacity from individual draw calls
-            _opacityStack.Push(_currentOpacity);
-            _currentOpacity = 1f;
+            return imageFilter;
         }
 
         private static SKColorFilter CombineColorFilter(SKColorFilter? existing, SKColorFilter newFilter)
@@ -366,6 +378,76 @@ namespace Rend.Output.Image
             existing.Dispose();
             newFilter.Dispose();
             return combined;
+        }
+
+        /// <summary>
+        /// Begins an offscreen page cleared to transparent (rather than white). Used by the
+        /// PDF bridge to capture a filtered element's subtree before rasterizing it.
+        /// </summary>
+        internal void BeginTransparentPage(float width, float height)
+        {
+            FinishCurrentPage();
+            int pixelWidth = Math.Max(1, (int)Math.Ceiling(width * _dpiScale));
+            int pixelHeight = Math.Max(1, (int)Math.Ceiling(height * _dpiScale));
+            _currentBitmap = new SKBitmap(pixelWidth, pixelHeight, SKColorType.Rgba8888, SKAlphaType.Premul);
+            _currentCanvas = new SKCanvas(_currentBitmap);
+            _currentCanvas.Clear(SKColors.Transparent);
+            if (Math.Abs(_dpiScale - 1f) > 0.001f)
+            {
+                _currentCanvas.Scale(_dpiScale, _dpiScale);
+            }
+            _currentOpacity = 1f;
+            _currentBlendMode = SKBlendMode.SrcOver;
+            _pixelatedRendering = false;
+        }
+
+        /// <summary>
+        /// Applies the combined CSS filter to the current page bitmap and returns the result
+        /// as unpremultiplied RGBA8888 pixels. <paramref name="geometryScale"/> should equal the
+        /// supersample factor so blur/drop-shadow distances match the bitmap resolution.
+        /// </summary>
+        internal byte[] ExtractFilteredRgba(CssFilterEffect[] effects, float geometryScale, out int width, out int height)
+        {
+            EnsureCanvas();
+            _currentCanvas!.Flush();
+            width = _currentBitmap!.Width;
+            height = _currentBitmap.Height;
+
+            SKImageFilter? imageFilter = BuildCombinedFilter(effects, geometryScale, out byte alpha);
+            var premulInfo = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+            using (var rendered = new SKBitmap(premulInfo))
+            {
+                using (var canvas = new SKCanvas(rendered))
+                {
+                    canvas.Clear(SKColors.Transparent);
+                    using (var paint = new SKPaint())
+                    {
+                        paint.Color = new SKColor(255, 255, 255, alpha);
+                        if (imageFilter != null)
+                        {
+                            paint.ImageFilter = imageFilter;
+                        }
+                        canvas.DrawBitmap(_currentBitmap, 0, 0, paint);
+                    }
+                }
+                imageFilter?.Dispose();
+
+                byte[] rgba = new byte[width * height * 4];
+                var unpremulInfo = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+                using (var snapshot = SKImage.FromBitmap(rendered))
+                {
+                    GCHandle handle = GCHandle.Alloc(rgba, GCHandleType.Pinned);
+                    try
+                    {
+                        snapshot.ReadPixels(unpremulInfo, handle.AddrOfPinnedObject(), width * 4, 0, 0);
+                    }
+                    finally
+                    {
+                        handle.Free();
+                    }
+                }
+                return rgba;
+            }
         }
 
         /// <inheritdoc />

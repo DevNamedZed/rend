@@ -51,6 +51,11 @@ namespace Rend.PdfRendering
             int pixelWidth = Math.Max(1, (int)(bitmapWidth * scale + 0.5f));
             int pixelHeight = Math.Max(1, (int)(bitmapHeight * scale + 0.5f));
 
+            // Fetch and parse the content stream before allocating native resources, so a
+            // content/parse failure cannot leak the page bitmap or path.
+            var contentBytes = GetPageContentBytes(pageDict);
+            var operators = _parser.Parse(contentBytes);
+
             var bitmap = new SKBitmap(pixelWidth, pixelHeight, SKColorType.Rgba8888, SKAlphaType.Premul);
             using var canvas = new SKCanvas(bitmap);
             canvas.Clear(SKColors.White);
@@ -78,9 +83,6 @@ namespace Rend.PdfRendering
             var state = new GraphicsState();
             var stateStack = new Stack<GraphicsState>();
             var path = new SKPath();
-
-            var contentBytes = GetPageContentBytes(pageDict);
-            var operators = _parser.Parse(contentBytes);
 
             foreach (var op in operators)
             {

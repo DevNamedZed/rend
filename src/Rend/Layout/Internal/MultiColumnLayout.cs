@@ -630,8 +630,8 @@ namespace Rend.Layout.Internal
                     // Layout the spanning element at full width
                     var spanEl = (StyledElement)child;
                     var spanBox = new LayoutBox(spanEl, BoxType.Block);
-                    BoxModelCalculator.ApplyBoxModel(spanBox, spanEl.Style, availableWidth);
-                    float spanWidth = DimensionResolver.ResolveWidth(spanEl.Style, availableWidth, spanBox);
+                    BoxModelCalculator.ApplyBoxModel(spanBox, spanEl.Style, availableWidth, context.Viewport);
+                    float spanWidth = DimensionResolver.ResolveWidth(spanEl.Style, availableWidth, spanBox, context.Viewport);
                     // Collapse margins between previous segment/spanner and this spanner
                     float collapsedMargin = MarginCollapsing.Collapse(prevMarginBottom, spanBox.MarginTop);
                     float spanX = startX + spanBox.MarginLeft + spanBox.BorderLeftWidth + spanBox.PaddingLeft;
@@ -647,7 +647,7 @@ namespace Rend.Layout.Internal
                             InlineFormattingContext.Layout(spanBox, context);
                     }
 
-                    float spanHeight = DimensionResolver.ResolveHeight(spanEl.Style, containerHeight, spanBox);
+                    float spanHeight = DimensionResolver.ResolveHeight(spanEl.Style, containerHeight, spanBox, context.Viewport);
                     if (float.IsNaN(spanHeight))
                     {
                         spanHeight = CalculateContentHeight(spanBox);

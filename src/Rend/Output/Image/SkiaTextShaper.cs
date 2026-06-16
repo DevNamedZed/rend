@@ -43,8 +43,10 @@ namespace Rend.Output.Image
         private readonly FontFunctions _fontFunctions;
 
         // Pre-allocated single-element arrays to avoid allocation in the hot callback path.
-        [ThreadStatic] private static ushort[]? _singleGlyphId;
-        [ThreadStatic] private static float[]? _singleAdvance;
+        // Per-instance scratch: GetHorizontalGlyphAdvance runs only inside the _cacheLock-held
+        // Shape call (same protection as _activeSkFont above), so no cross-call interleaving.
+        private ushort[]? _singleGlyphId;
+        private float[]? _singleAdvance;
 
         public SkiaTextShaper(SkiaFontMapper fontMapper)
         {
@@ -75,7 +77,7 @@ namespace Rend.Output.Image
                 return 0;
             }
 
-            // Reuse thread-static arrays to avoid allocation per callback.
+            // Reuse the per-instance scratch arrays to avoid allocation per callback.
             var glyphId = _singleGlyphId ??= new ushort[1];
             var advance = _singleAdvance ??= new float[1];
 

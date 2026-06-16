@@ -13,11 +13,20 @@ namespace Rend.Rendering.Internal
     /// Renders inline SVG elements by traversing the SVG DOM subtree
     /// and converting shapes, paths, text, and groups into IRenderTarget drawing calls.
     /// </summary>
-    internal static class SvgRenderer
+    internal sealed class SvgRenderer
     {
-        [ThreadStatic] private static Element? _currentSvgRoot;
-        [ThreadStatic] private static float _currentViewportWidth;
-        [ThreadStatic] private static float _currentViewportHeight;
+        // Per-render state: the SVG root and viewport this renderer resolves against. Owned by the
+        // SvgRenderer instance created in Render and released when the render returns — no TLS.
+        private readonly Element _svgRoot;
+        private readonly float _viewportWidth;
+        private readonly float _viewportHeight;
+
+        private SvgRenderer(Element svgRoot, float viewportWidth, float viewportHeight)
+        {
+            _svgRoot = svgRoot;
+            _viewportWidth = viewportWidth;
+            _viewportHeight = viewportHeight;
+        }
 
         /// <spec>SVG 1.1 §7.10 https://www.w3.org/TR/SVG11/coords.html#Units</spec>
         private enum SvgLengthAxis
@@ -73,26 +82,10 @@ namespace Rend.Rendering.Internal
                             Matrix3x2.CreateTranslation(contentRect.X - vbX * scaleX, contentRect.Y - vbY * scaleY);
             target.SetTransform(transform);
 
-            // Save prior thread-static context so nested renders restore cleanly.
-            Element? previousSvgRoot = _currentSvgRoot;
-            float previousViewportWidth = _currentViewportWidth;
-            float previousViewportHeight = _currentViewportHeight;
-
-            _currentSvgRoot = svgElement;
-            _currentViewportWidth = vbW;
-            _currentViewportHeight = vbH;
-
-            try
-            {
-                // Traverse children (pass styled tree for CSS property lookup)
-                RenderChildren(svgElement, target, styledSvg);
-            }
-            finally
-            {
-                _currentSvgRoot = previousSvgRoot;
-                _currentViewportWidth = previousViewportWidth;
-                _currentViewportHeight = previousViewportHeight;
-            }
+            // This render owns its SVG root + viewport; the instance is GC'd when Render returns.
+            var renderer = new SvgRenderer(svgElement, vbW, vbH);
+            // Traverse children (pass styled tree for CSS property lookup)
+            renderer.RenderChildren(svgElement, target, styledSvg);
 
             if (svgNeedsOwnClip)
             {
@@ -119,7 +112,7 @@ namespace Rend.Rendering.Internal
                    TryParseFloat(parts[3], out h);
         }
 
-        private static void RenderChildren(Element parent, IRenderTarget target,
+        private void RenderChildren(Element parent, IRenderTarget target,
             StyledElement? styledParent = null)
         {
             var child = parent.FirstChild;
@@ -164,7 +157,7 @@ namespace Rend.Rendering.Internal
             return null;
         }
 
-        private static void RenderElement(Element elem, IRenderTarget target,
+        private void RenderElement(Element elem, IRenderTarget target,
             StyledElement? styledElem = null)
         {
             string tag = elem.TagName;
@@ -208,7 +201,7 @@ namespace Rend.Rendering.Internal
                 if (cssTransformVal is CssValue csvTransform &&
                     !(csvTransform is CssKeywordValue noneKw && noneKw.Keyword == "none"))
                 {
-                    transformMatrix = TransformHandler.BuildTransformMatrix(csvTransform);
+                    transformMatrix = TransformHandler.BuildTransformMatrix(csvTransform, new Rend.Core.Values.SizeF(_viewportWidth, _viewportHeight));
                     // [CSS-TRANSFORM §1] Invalid CSS transform (zero/degenerate) → fall back to SVG attribute
                     float det = transformMatrix.M11 * transformMatrix.M22 - transformMatrix.M12 * transformMatrix.M21;
                     hasTransform = transformMatrix != Matrix3x2.Identity && Math.Abs(det) > 0.0001f;
@@ -382,7 +375,7 @@ namespace Rend.Rendering.Internal
             }
         }
 
-        private static void RenderRect(Element elem, IRenderTarget target,
+        private void RenderRect(Element elem, IRenderTarget target,
             BrushInfo fillBrush, CssColor stroke, float strokeWidth,
             bool hasFill, bool hasStroke, float strokeOpacity)
         {
@@ -424,7 +417,7 @@ namespace Rend.Rendering.Internal
             }
         }
 
-        private static void RenderCircle(Element elem, IRenderTarget target,
+        private void RenderCircle(Element elem, IRenderTarget target,
             BrushInfo fillBrush, CssColor stroke, float strokeWidth,
             bool hasFill, bool hasStroke, float strokeOpacity)
         {
@@ -438,7 +431,7 @@ namespace Rend.Rendering.Internal
             if (hasStroke) { target.StrokePath(path, new PenInfo(WithAlpha(stroke, strokeOpacity), strokeWidth)); }
         }
 
-        private static void RenderEllipse(Element elem, IRenderTarget target,
+        private void RenderEllipse(Element elem, IRenderTarget target,
             BrushInfo fillBrush, CssColor stroke, float strokeWidth,
             bool hasFill, bool hasStroke, float strokeOpacity)
         {
@@ -453,7 +446,7 @@ namespace Rend.Rendering.Internal
             if (hasStroke) { target.StrokePath(path, new PenInfo(WithAlpha(stroke, strokeOpacity), strokeWidth)); }
         }
 
-        private static void RenderLine(Element elem, IRenderTarget target,
+        private void RenderLine(Element elem, IRenderTarget target,
             CssColor stroke, float strokeWidth, bool hasStroke, float strokeOpacity)
         {
             if (!hasStroke) return;
@@ -492,7 +485,7 @@ namespace Rend.Rendering.Internal
             if (hasStroke) { target.StrokePath(path, new PenInfo(WithAlpha(stroke, strokeOpacity), strokeWidth)); }
         }
 
-        private static void RenderText(Element elem, IRenderTarget target,
+        private void RenderText(Element elem, IRenderTarget target,
             CssColor fill, float fillOpacity)
         {
             float x = ParseAttrLength(elem, "x", SvgLengthAxis.Horizontal, 0);
@@ -538,7 +531,7 @@ namespace Rend.Rendering.Internal
             target.DrawText(text, x, y, style);
         }
 
-        private static void RenderUse(Element elem, IRenderTarget target)
+        private void RenderUse(Element elem, IRenderTarget target)
         {
             // <use href="#id" x="..." y="..." />
             string? href = elem.GetAttribute("href") ?? elem.GetAttribute("xlink:href");
@@ -727,7 +720,7 @@ namespace Rend.Rendering.Internal
         /// or normalized diagonal according to the axis of the attribute.
         /// </summary>
         /// <spec>SVG 1.1 §7.10 https://www.w3.org/TR/SVG11/coords.html#Units</spec>
-        private static float ParseAttrLength(Element elem, string name, SvgLengthAxis axis, float defaultValue)
+        private float ParseAttrLength(Element elem, string name, SvgLengthAxis axis, float defaultValue)
         {
             string? val = elem.GetAttribute(name);
             if (val == null)
@@ -762,19 +755,19 @@ namespace Rend.Rendering.Internal
         /// diagonal sqrt(vbW^2 + vbH^2) / sqrt(2).
         /// </summary>
         /// <spec>SVG 1.1 §7.10 https://www.w3.org/TR/SVG11/coords.html#Units</spec>
-        private static float ResolveViewportBasis(SvgLengthAxis axis)
+        private float ResolveViewportBasis(SvgLengthAxis axis)
         {
             if (axis == SvgLengthAxis.Horizontal)
             {
-                return _currentViewportWidth;
+                return _viewportWidth;
             }
             if (axis == SvgLengthAxis.Vertical)
             {
-                return _currentViewportHeight;
+                return _viewportHeight;
             }
 
-            float viewportWidth = _currentViewportWidth;
-            float viewportHeight = _currentViewportHeight;
+            float viewportWidth = _viewportWidth;
+            float viewportHeight = _viewportHeight;
             double diagonal = Math.Sqrt(viewportWidth * viewportWidth + viewportHeight * viewportHeight);
             return (float)(diagonal / Math.Sqrt(2d));
         }
@@ -1105,7 +1098,7 @@ namespace Rend.Rendering.Internal
         /// Apply SVG clipPath referenced by url(#id).
         /// Finds the clipPath element, builds a clip rect from its children.
         /// </summary>
-        private static bool ApplySvgClipPath(Element elem, IRenderTarget target, string clipPathValue)
+        private bool ApplySvgClipPath(Element elem, IRenderTarget target, string clipPathValue)
         {
             string trimmed = clipPathValue.Trim();
             int hashIdx = trimmed.IndexOf('#');
@@ -1126,7 +1119,7 @@ namespace Rend.Rendering.Internal
                 return false;
             }
 
-            var root = _currentSvgRoot ?? FindRoot(elem);
+            var root = _svgRoot ?? FindRoot(elem);
             if (root == null)
             {
                 return false;
@@ -1499,7 +1492,7 @@ namespace Rend.Rendering.Internal
         /// <summary>
         /// Resolve a url(#id) fill reference to a BrushInfo (gradient or pattern).
         /// </summary>
-        private static BrushInfo? ResolveUrlFill(Element elem, string fillValue, float fillOpacity)
+        private BrushInfo? ResolveUrlFill(Element elem, string fillValue, float fillOpacity)
         {
             string trimmed = fillValue.Trim();
             if (!trimmed.StartsWith("url(")) { return null; }
@@ -1513,7 +1506,7 @@ namespace Rend.Rendering.Internal
             string refId = trimmed.Substring(hashIdx + 1, endIdx - hashIdx - 1).Trim('\'', '"', ' ');
             if (string.IsNullOrEmpty(refId)) { Console.WriteLine("[SVG] empty refId"); return null; }
 
-            var root = _currentSvgRoot ?? FindRoot(elem);
+            var root = _svgRoot ?? FindRoot(elem);
             if (root == null) { return null; }
 
             var refElem = FindById(root, refId);

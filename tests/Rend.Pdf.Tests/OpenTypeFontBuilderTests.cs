@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using Rend.Pdf.Parsing;
 using Xunit;
@@ -7,11 +8,23 @@ namespace Rend.Pdf.Tests
 {
     public class OpenTypeFontBuilderTests
     {
+        private static IReadOnlyList<int> Widths(int count)
+        {
+            var widths = new int[count];
+            for (int i = 0; i < count; i++)
+            {
+                widths[i] = 500;
+            }
+            return widths;
+        }
+
+        private static readonly IReadOnlyDictionary<int, int> NoCmap = new Dictionary<int, int>();
+
         [Fact]
         public void Build_EmptyCff_ReturnsEmpty()
         {
             byte[] result = OpenTypeFontBuilder.Build(
-                Array.Empty<byte>(), "Test", 1, new float[] { 0, -200, 1000, 800 });
+                Array.Empty<byte>(), "Test", Widths(1), NoCmap, new float[] { 0, -200, 1000, 800 });
             Assert.Empty(result);
         }
 
@@ -20,7 +33,7 @@ namespace Rend.Pdf.Tests
         {
             byte[] minimalCff = { 1, 0, 4, 1 }; // CFF header only
             byte[] result = OpenTypeFontBuilder.Build(
-                minimalCff, "TestFont", 1, new float[] { 0, -200, 1000, 800 });
+                minimalCff, "TestFont", Widths(1), NoCmap, new float[] { 0, -200, 1000, 800 });
 
             Assert.True(result.Length > 12);
             Assert.Equal((byte)'O', result[0]);
@@ -34,7 +47,7 @@ namespace Rend.Pdf.Tests
         {
             byte[] minimalCff = { 1, 0, 4, 1 };
             byte[] result = OpenTypeFontBuilder.Build(
-                minimalCff, "TestFont", 1, new float[] { 0, -200, 1000, 800 });
+                minimalCff, "TestFont", Widths(1), NoCmap, new float[] { 0, -200, 1000, 800 });
 
             int numTables = (result[4] << 8) | result[5];
             Assert.Equal(9, numTables);
@@ -45,7 +58,7 @@ namespace Rend.Pdf.Tests
         {
             byte[] minimalCff = { 1, 0, 4, 1 };
             byte[] result = OpenTypeFontBuilder.Build(
-                minimalCff, "TestFont", 1, new float[] { 0, -200, 1000, 800 });
+                minimalCff, "TestFont", Widths(1), NoCmap, new float[] { 0, -200, 1000, 800 });
 
             int numTables = (result[4] << 8) | result[5];
             string previousTag = "";
@@ -64,7 +77,7 @@ namespace Rend.Pdf.Tests
         {
             byte[] minimalCff = { 1, 0, 4, 1 };
             byte[] result = OpenTypeFontBuilder.Build(
-                minimalCff, "TestFont", 1, new float[] { 0, -200, 1000, 800 });
+                minimalCff, "TestFont", Widths(1), NoCmap, new float[] { 0, -200, 1000, 800 });
 
             // Find head table offset
             int numTables = (result[4] << 8) | result[5];
@@ -92,7 +105,7 @@ namespace Rend.Pdf.Tests
             byte[] minimalCff = { 1, 0, 4, 1 };
             int expectedGlyphs = 42;
             byte[] result = OpenTypeFontBuilder.Build(
-                minimalCff, "TestFont", expectedGlyphs, new float[] { 0, -200, 1000, 800 });
+                minimalCff, "TestFont", Widths(expectedGlyphs), NoCmap, new float[] { 0, -200, 1000, 800 });
 
             int numTables = (result[4] << 8) | result[5];
             for (int i = 0; i < numTables; i++)
@@ -117,7 +130,7 @@ namespace Rend.Pdf.Tests
             byte[] cff = new byte[13]; // Odd size to test padding
             cff[0] = 1; cff[1] = 0; cff[2] = 4; cff[3] = 1;
             byte[] result = OpenTypeFontBuilder.Build(
-                cff, "TestFont", 1, new float[] { 0, -200, 1000, 800 });
+                cff, "TestFont", Widths(1), NoCmap, new float[] { 0, -200, 1000, 800 });
 
             int numTables = (result[4] << 8) | result[5];
             for (int i = 0; i < numTables; i++)

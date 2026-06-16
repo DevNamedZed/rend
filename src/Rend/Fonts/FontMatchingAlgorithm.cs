@@ -24,63 +24,47 @@ namespace Rend.Fonts
         private static readonly Dictionary<string, string[]> GenericFamilyMap = GenericFontFamilies.FallbackMap;
 #endif
 
-        // Reusable scratch lists to reduce per-call allocations.
-        // FontMatchingAlgorithm is only called from the render pipeline (single-threaded),
-        // so thread-static gives us safe reuse without locking.
-        [ThreadStatic] private static List<FontEntry>? t_scratchA;
-        [ThreadStatic] private static List<FontEntry>? t_scratchB;
-
         public static FontEntry? FindBestMatch(FontDescriptor requested, IReadOnlyList<FontEntry> candidates)
         {
             if (candidates == null || candidates.Count == 0)
                 return null;
 
-            var scratchA = t_scratchA ??= new List<FontEntry>();
-            var scratchB = t_scratchB ??= new List<FontEntry>();
+            var scratchA = new List<FontEntry>();
+            var scratchB = new List<FontEntry>();
 
-            try
+            // Walk the font-family fallback chain stored in the descriptor.
+            var families = requested.Families;
+
+            foreach (var family in families)
             {
-                // Walk the font-family fallback chain stored in the descriptor.
-                var families = requested.Families;
+                FilterByFamily(family, candidates, scratchA);
+                if (scratchA.Count > 0) break;
 
-                scratchA.Clear();
-                foreach (var family in families)
+                // Try generic CSS family name fallbacks for this family.
+                if (GenericFamilyMap.TryGetValue(family, out var fallbacks))
                 {
-                    FilterByFamily(family, candidates, scratchA);
-                    if (scratchA.Count > 0) break;
-
-                    // Try generic CSS family name fallbacks for this family.
-                    if (GenericFamilyMap.TryGetValue(family, out var fallbacks))
+                    for (int f = 0; f < fallbacks.Length && scratchA.Count == 0; f++)
                     {
-                        for (int f = 0; f < fallbacks.Length && scratchA.Count == 0; f++)
-                        {
-                            FilterByFamily(fallbacks[f], candidates, scratchA);
-                        }
-                        if (scratchA.Count > 0) break;
+                        FilterByFamily(fallbacks[f], candidates, scratchA);
                     }
+                    if (scratchA.Count > 0) break;
                 }
-
-                if (scratchA.Count == 0)
-                    return null;
-
-                // Step 2: Match style — filter scratchA into scratchB.
-                scratchB.Clear();
-                MatchStyle(requested.Style, scratchA, scratchB);
-                var styleCandidates = scratchB.Count > 0 ? scratchB : scratchA;
-
-                // Step 3: Match weight — allocates internally only when needed.
-                var weightCandidates = MatchWeight(requested.Weight, styleCandidates);
-                if (weightCandidates.Count == 0)
-                    weightCandidates = styleCandidates;
-
-                // Step 4: Match stretch (prefer closest).
-                return MatchStretch(requested.Stretch, weightCandidates);
             }
-            finally
-            {
-                scratchA.Clear();
-                scratchB.Clear();
-            }
+
+            if (scratchA.Count == 0)
+                return null;
+
+            // Step 2: Match style — filter scratchA into scratchB.
+            MatchStyle(requested.Style, scratchA, scratchB);
+            var styleCandidates = scratchB.Count > 0 ? scratchB : scratchA;
+
+            // Step 3: Match weight — allocates internally only when needed.
+            var weightCandidates = MatchWeight(requested.Weight, styleCandidates);
+            if (weightCandidates.Count == 0)
+                weightCandidates = styleCandidates;
+
+            // Step 4: Match stretch (prefer closest).
+            return MatchStretch(requested.Stretch, weightCandidates);
         }
 
         /// <summary>

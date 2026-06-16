@@ -86,10 +86,20 @@ namespace Rend.PdfRendering
                         return;
                     }
 
-                    // Type1→CFF converter: Subrs extraction added but CharString translation
-                    // still produces broken glyphs. Needs debugging of CFF Private DICT Subrs
-                    // offset and callsubr bias. Infrastructure is complete — just needs format
-                    // validation. See spec/reader_investigations/type1-converter-status.md
+                    // Skia cannot load Type1 (PFA/PFB) directly. Convert to OpenType/CFF,
+                    // interpreting the Type1 charstrings and re-emitting them as Type2.
+                    byte[]? convertedOtf = Rend.Pdf.Parsing.Type1ToCffConverter.Convert(fontData, GlyphNameToUnicode);
+                    if (convertedOtf != null && convertedOtf.Length > 0)
+                    {
+                        using var convertedData = SKData.CreateCopy(convertedOtf);
+                        var convertedTypeface = SKTypeface.FromData(convertedData);
+                        if (convertedTypeface != null)
+                        {
+                            typefaceCache[cacheKey] = convertedTypeface;
+                            state.Typeface = convertedTypeface;
+                            return;
+                        }
+                    }
                 }
 
                 isSystemFallback = true;

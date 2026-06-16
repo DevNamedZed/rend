@@ -46,16 +46,13 @@ namespace Rend.Output.Pdf.Internal
             return ImageFormat.Png;
         }
 
-        [ThreadStatic] private static SHA256? t_sha256;
-
         private static string ComputeHash(byte[] data)
         {
-            var sha = t_sha256 ??= SHA256.Create();
-            byte[] hash = sha.ComputeHash(data);
 #if NET5_0_OR_GREATER
-            return Convert.ToHexString(hash);
+            return Convert.ToHexString(SHA256.HashData(data));
 #else
-            return BitConverter.ToString(hash);
+            using SHA256 sha = SHA256.Create();
+            return BitConverter.ToString(sha.ComputeHash(data));
 #endif
         }
     }

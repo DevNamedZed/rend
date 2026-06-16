@@ -145,6 +145,31 @@ namespace Rend.Layout
         internal bool BackfaceHidden { get; set; }
 
         /// <summary>
+        /// [CSS-TRANSFORM2 §4] Paint-time only: the box's full unflattened 4x4 transform in
+        /// the enclosing 3D rendering context's absolute (page) coordinate space, composed as
+        /// <c>localComposed * parent.Accumulated3DTransform</c> (row-vector). Identity/unused
+        /// for boxes not participating in a 3D rendering context. Populated each paint pass by
+        /// the painter; never layout state (the box tree is rebuilt per render, like
+        /// <see cref="BackfaceHidden"/>).
+        /// </summary>
+        internal System.Numerics.Matrix4x4 Accumulated3DTransform { get; set; } = System.Numerics.Matrix4x4.Identity;
+
+        /// <summary>
+        /// [CSS-TRANSFORM2 §4] Paint-time only: true when this box participates in its parent's
+        /// preserve-3d 3D rendering context (parent's used transform-style is preserve-3d and
+        /// this box is a block-level participant). When set, the transform handler flattens the
+        /// accumulated matrix (not the local composed matrix) and sources backface from it.
+        /// </summary>
+        internal bool ParticipatesIn3DContext { get; set; }
+
+        /// <summary>
+        /// [CSS-TRANSFORM2 §4] Paint-time only: painter's-algorithm depth key — the Z of the
+        /// box's absolute border-box center transformed by <see cref="Accumulated3DTransform"/>.
+        /// Participants of a 3D rendering context paint back-to-front (ascending Depth3D).
+        /// </summary>
+        internal float Depth3D { get; set; }
+
+        /// <summary>
         /// Resolved collapsed border colors (CSS 2.1 §17.6.2 priority).
         /// When set, the painter uses these instead of the cell's own border colors.
         /// </summary>

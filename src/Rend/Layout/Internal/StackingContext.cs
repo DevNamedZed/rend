@@ -130,8 +130,7 @@ namespace Rend.Layout.Internal
         /// </summary>
         private static bool HasPreserve3d(ComputedStyle style)
         {
-            object? transformStyle = style.GetRefValue(Css.Properties.Internal.PropertyId.TransformStyle);
-            return transformStyle is Css.CssKeywordValue keyword && keyword.Keyword == "preserve-3d";
+            return Transform3DContext.IsPreserve3d(style);
         }
 
         /// <summary>

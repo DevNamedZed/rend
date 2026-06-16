@@ -16,7 +16,7 @@ namespace Rend.Layout.Internal
         /// <summary>
         /// Apply positioning offsets to a layout box after normal flow layout.
         /// </summary>
-        public static void ApplyPositioning(LayoutBox box, LayoutBox containingBlock, LayoutBox? rootBox = null)
+        public static void ApplyPositioning(LayoutBox box, LayoutBox containingBlock, SizeF viewportSize, LayoutBox? rootBox = null)
         {
             var style = box.StyledNode?.Style;
             if (style == null) return;
@@ -24,7 +24,7 @@ namespace Rend.Layout.Internal
             switch (style.Position)
             {
                 case CssPosition.Relative:
-                    ApplyRelative(box, style, containingBlock);
+                    ApplyRelative(box, style, containingBlock, viewportSize);
                     break;
                 case CssPosition.Absolute:
                     // [CSS2 §10.1] If no positioned ancestor exists, the containing block
@@ -39,19 +39,19 @@ namespace Rend.Layout.Internal
                     {
                         absContaining = rootBox;
                     }
-                    ApplyAbsolute(box, style, absContaining);
+                    ApplyAbsolute(box, style, absContaining, viewportSize);
                     break;
                 case CssPosition.Fixed:
-                    ApplyFixed(box, style, rootBox ?? containingBlock);
+                    ApplyFixed(box, style, rootBox ?? containingBlock, viewportSize);
                     break;
                 case CssPosition.Sticky:
                     // Sticky acts as relative for static rendering
-                    ApplyRelative(box, style, containingBlock);
+                    ApplyRelative(box, style, containingBlock, viewportSize);
                     break;
             }
         }
 
-        private static void ApplyRelative(LayoutBox box, ComputedStyle style, LayoutBox containingBlock)
+        private static void ApplyRelative(LayoutBox box, ComputedStyle style, LayoutBox containingBlock, SizeF viewportSize)
         {
             float dx = 0, dy = 0;
 
@@ -73,10 +73,10 @@ namespace Rend.Layout.Internal
             bool hasDefiniteHeight = !float.IsNaN(cbStyleHeight) || heightCb.HasDefiniteCrossSize;
             float cbHeight = hasDefiniteHeight ? heightCb.ContentRect.Height : 0;
 
-            float top = ResolvePositionValueWithCalc(style.Top, cbHeight, style, PropertyId.Top);
-            float left = ResolvePositionValueWithCalc(style.Left, cbWidth, style, PropertyId.Left);
-            float bottom = ResolvePositionValueWithCalc(style.Bottom, cbHeight, style, PropertyId.Bottom);
-            float right = ResolvePositionValueWithCalc(style.Right, cbWidth, style, PropertyId.Right);
+            float top = ResolvePositionValueWithCalc(style.Top, cbHeight, style, PropertyId.Top, viewportSize);
+            float left = ResolvePositionValueWithCalc(style.Left, cbWidth, style, PropertyId.Left, viewportSize);
+            float bottom = ResolvePositionValueWithCalc(style.Bottom, cbHeight, style, PropertyId.Bottom, viewportSize);
+            float right = ResolvePositionValueWithCalc(style.Right, cbWidth, style, PropertyId.Right, viewportSize);
 
             if (!float.IsNaN(top)) dy = top;
             else if (!float.IsNaN(bottom)) dy = -bottom;
@@ -96,16 +96,16 @@ namespace Rend.Layout.Internal
             }
         }
 
-        private static void ApplyAbsolute(LayoutBox box, ComputedStyle style, LayoutBox containingBlock)
+        private static void ApplyAbsolute(LayoutBox box, ComputedStyle style, LayoutBox containingBlock, SizeF viewportSize)
         {
             // [CSS-GRID §9] Abspos grid items with grid placement use the grid area
             // as their containing block instead of the grid container's padding box.
             var cb = box.GridAreaContainingBlock ?? containingBlock.PaddingRect;
 
-            float top = ResolvePositionValueWithCalc(style.Top, cb.Height, style, PropertyId.Top);
-            float left = ResolvePositionValueWithCalc(style.Left, cb.Width, style, PropertyId.Left);
-            float bottom = ResolvePositionValueWithCalc(style.Bottom, cb.Height, style, PropertyId.Bottom);
-            float right = ResolvePositionValueWithCalc(style.Right, cb.Width, style, PropertyId.Right);
+            float top = ResolvePositionValueWithCalc(style.Top, cb.Height, style, PropertyId.Top, viewportSize);
+            float left = ResolvePositionValueWithCalc(style.Left, cb.Width, style, PropertyId.Left, viewportSize);
+            float bottom = ResolvePositionValueWithCalc(style.Bottom, cb.Height, style, PropertyId.Bottom, viewportSize);
+            float right = ResolvePositionValueWithCalc(style.Right, cb.Width, style, PropertyId.Right, viewportSize);
 
 
             float x = box.ContentRect.X;
@@ -138,7 +138,7 @@ namespace Rend.Layout.Internal
                     var refVal = style.GetRefValue(PropertyId.Height);
                     if (refVal is CssFunctionValue calcFn)
                     {
-                        h = ValueResolver.EvaluateDeferredCalc(calcFn, cbHeight);
+                        h = ValueResolver.EvaluateDeferredCalc(calcFn, cbHeight, viewportSize.Width, viewportSize.Height);
                         if (style.BoxSizing == CssBoxSizing.BorderBox)
                         {
                             h -= box.PaddingTop + box.PaddingBottom + box.BorderTopWidth + box.BorderBottomWidth;
@@ -276,11 +276,11 @@ namespace Rend.Layout.Internal
             box.ContentRect = new RectF(x, y, w, h);
         }
 
-        private static void ApplyFixed(LayoutBox box, ComputedStyle style, LayoutBox containingBlock)
+        private static void ApplyFixed(LayoutBox box, ComputedStyle style, LayoutBox containingBlock, SizeF viewportSize)
         {
             // Fixed positioning is similar to absolute but relative to viewport
             // For PDF/image output, treat as absolute relative to page
-            ApplyAbsolute(box, style, containingBlock);
+            ApplyAbsolute(box, style, containingBlock, viewportSize);
         }
         /// <summary>
         /// Resolves a position value (top/right/bottom/left) that may be a deferred percentage.
@@ -304,7 +304,7 @@ namespace Rend.Layout.Internal
         /// Resolves a position value that may have a deferred calc() expression stored as a ref value.
         /// </summary>
         private static float ResolvePositionValueWithCalc(
-            float value, float containingDimension, ComputedStyle style, int propertyId)
+            float value, float containingDimension, ComputedStyle style, int propertyId, SizeF viewportSize)
         {
             if (float.IsNaN(value))
             {
@@ -319,7 +319,7 @@ namespace Rend.Layout.Internal
                 var refVal = style.GetRefValue(propertyId);
                 if (refVal is CssFunctionValue calcFn)
                 {
-                    return ValueResolver.EvaluateDeferredCalc(calcFn, containingDimension);
+                    return ValueResolver.EvaluateDeferredCalc(calcFn, containingDimension, viewportSize.Width, viewportSize.Height);
                 }
                 return 0;
             }

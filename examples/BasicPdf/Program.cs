@@ -64,3 +64,79 @@ using (var output = File.Create("invoice.png"))
 }
 
 Console.WriteLine("Created invoice.png");
+
+// CSS filter showcase — the same HTML rendered to PDF and PNG so the two can be
+// compared. Every filter except plain opacity is rasterized into the PDF; the PDF
+// and PNG should look the same.
+var filtersHtml = @"
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 16px; }
+        h2 { color: #333; margin: 8px 0; }
+        .row { margin-bottom: 14px; }
+        .box {
+            display: inline-block; width: 88px; height: 88px; margin-right: 12px;
+            background: linear-gradient(135deg, #ff5f6d, #1e5799 60%, #2c5364);
+            border-radius: 10px; color: white; font-size: 12px; font-weight: bold;
+            text-align: center; line-height: 88px; vertical-align: top;
+        }
+        .blur      { filter: blur(3px); }
+        .shadow    { filter: drop-shadow(5px 5px 4px rgba(0,0,0,0.55)); }
+        .gray      { filter: grayscale(1); }
+        .sepia     { filter: sepia(1); }
+        .bright    { filter: brightness(1.5); }
+        .contrast  { filter: contrast(1.8); }
+        .saturate  { filter: saturate(3); }
+        .hue       { filter: hue-rotate(120deg); }
+        .invert    { filter: invert(1); }
+        .opacity   { filter: opacity(0.4); }
+        .combo     { filter: grayscale(0.6) drop-shadow(3px 3px 3px #333); }
+    </style>
+</head>
+<body>
+    <h2>CSS Filters (PDF vs PNG)</h2>
+    <div class='row'>
+        <span class='box'>none</span>
+        <span class='box blur'>blur</span>
+        <span class='box shadow'>drop-shadow</span>
+        <span class='box gray'>grayscale</span>
+        <span class='box sepia'>sepia</span>
+    </div>
+    <div class='row'>
+        <span class='box bright'>brightness</span>
+        <span class='box contrast'>contrast</span>
+        <span class='box saturate'>saturate</span>
+        <span class='box hue'>hue-rotate</span>
+        <span class='box invert'>invert</span>
+    </div>
+    <div class='row'>
+        <span class='box opacity'>opacity</span>
+        <span class='box combo'>combo</span>
+    </div>
+</body>
+</html>";
+
+var filterOptions = new RenderOptions
+{
+    PageSize = PageSize.Letter,
+    MarginTop = 24f,
+    MarginRight = 24f,
+    MarginBottom = 24f,
+    MarginLeft = 24f,
+    Title = "CSS Filters",
+};
+
+using (var output = File.Create("filters.pdf"))
+{
+    Render.ToPdf(filtersHtml, output, filterOptions);
+}
+
+Console.WriteLine("Created filters.pdf");
+
+using (var output = File.Create("filters.png"))
+{
+    Render.ToImage(filtersHtml, output, new RenderOptions { Dpi = 150f });
+}
+
+Console.WriteLine("Created filters.png");

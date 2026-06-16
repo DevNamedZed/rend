@@ -184,9 +184,9 @@ namespace Rend.Layout.Internal
                         }
                         var pseudoStyled = new StyledElement(pseudoEl, inlinePseudo.Style, pseudoChildren);
                         var pseudoBox = CreateLayoutBox(pseudoStyled);
-                        BoxModelCalculator.ApplyBoxModel(pseudoBox, inlinePseudo.Style, containingWidth);
-                        float pseudoW = DimensionResolver.ResolveWidth(inlinePseudo.Style, containingWidth, pseudoBox);
-                        float pseudoH = DimensionResolver.ResolveHeight(inlinePseudo.Style, float.NaN, pseudoBox);
+                        BoxModelCalculator.ApplyBoxModel(pseudoBox, inlinePseudo.Style, containingWidth, context.Viewport);
+                        float pseudoW = DimensionResolver.ResolveWidth(inlinePseudo.Style, containingWidth, pseudoBox, context.Viewport);
+                        float pseudoH = DimensionResolver.ResolveHeight(inlinePseudo.Style, float.NaN, pseudoBox, context.Viewport);
                         if (float.IsNaN(pseudoH)) { pseudoH = 0; }
                         float pseudoY = cursorY + MarginCollapsing.Collapse(prevMarginBottom, pseudoBox.MarginTop)
                                       + pseudoBox.BorderTopWidth + pseudoBox.PaddingTop;
@@ -272,7 +272,7 @@ namespace Rend.Layout.Internal
                 if (childStyle.Position == CssPosition.Absolute || childStyle.Position == CssPosition.Fixed)
                 {
                     var posBox = CreateLayoutBox(childElement);
-                    BoxModelCalculator.ApplyBoxModel(posBox, childStyle, containingWidth);
+                    BoxModelCalculator.ApplyBoxModel(posBox, childStyle, containingWidth, context.Viewport);
                     float posWidth;
                     if (SizingKeyword.IsSizingKeyword(childStyle.Width))
                     {
@@ -282,7 +282,7 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
-                        posWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, posBox);
+                        posWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, posBox, context.Viewport);
                         // CSS 2.1 §10.3.7: Absolutely positioned elements with auto width
                         // use shrink-to-fit (= fit-content), not fill available space.
                         // When left/right is set, constrain available width accordingly.
@@ -399,8 +399,8 @@ namespace Rend.Layout.Internal
                     }
 
                     // [CSS2 §10.4] Apply min/max-width to abspos shrink-to-fit
-                    float absMinW = DimensionResolver.ResolvePercentWidth(childStyle.MinWidth, containingWidth, childStyle, PropertyId.MinWidth);
-                    float absMaxW = DimensionResolver.ResolvePercentWidth(childStyle.MaxWidth, containingWidth, childStyle, PropertyId.MaxWidth);
+                    float absMinW = DimensionResolver.ResolvePercentWidth(childStyle.MinWidth, containingWidth, childStyle, PropertyId.MinWidth, context.Viewport);
+                    float absMaxW = DimensionResolver.ResolvePercentWidth(childStyle.MaxWidth, containingWidth, childStyle, PropertyId.MaxWidth, context.Viewport);
                     // [CSS-SIZING-3 §5.1] Resolve sizing keywords for min/max-width
                     if (SizingKeyword.IsSizingKeyword(childStyle.MaxWidth))
                     {
@@ -435,13 +435,13 @@ namespace Rend.Layout.Internal
                     if ((absContainingHeight <= 0 || float.IsNaN(absContainingHeight))
                         && float.IsNegativeInfinity(childStyle.Height))
                     {
-                        float vpH = Css.Resolution.Internal.ValueResolver.ViewportHeightHint;
+                        float vpH = context.ViewportHeight;
                         if (vpH > 0)
                         {
                             absContainingHeight = vpH;
                         }
                     }
-                    float preHeight = DimensionResolver.ResolveHeight(childStyle, absContainingHeight, posBox);
+                    float preHeight = DimensionResolver.ResolveHeight(childStyle, absContainingHeight, posBox, context.Viewport);
                     if (float.IsNaN(preHeight) && parentContentHeight > 0)
                     {
                         float topVal = childStyle.Top;
@@ -515,7 +515,7 @@ namespace Rend.Layout.Internal
                 childBox.Parent = parent;
 
                 // Apply box model
-                BoxModelCalculator.ApplyBoxModel(childBox, childStyle, containingWidth);
+                BoxModelCalculator.ApplyBoxModel(childBox, childStyle, containingWidth, context.Viewport);
 
                 // [CSS 2.1 §17.6.2] In collapsed-border mode the table element's
                 // border participates in the collapse algorithm and does not inset
@@ -606,22 +606,22 @@ namespace Rend.Layout.Internal
                     // Real <table> elements handle shrink-to-fit via TableLayout + post-layout
                     // adjustment at the contentRect update below.
                     float availableForTable = DimensionResolver.ResolveWidth(
-                        childStyle, containingWidth, childBox, parentContentHeight);
+                        childStyle, containingWidth, childBox, context.Viewport, parentContentHeight);
                     float maxContentWidth = MeasureIntrinsicWidth(
                         childElement, SizingKeyword.MaxContent, containingWidth, context);
                     contentWidth = Math.Min(maxContentWidth, availableForTable);
                 }
                 else
                 {
-                    contentWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, childBox, parentContentHeight);
+                    contentWidth = DimensionResolver.ResolveWidth(childStyle, containingWidth, childBox, context.Viewport, parentContentHeight);
                 }
 
                 // [CSS-SIZING §5.2] Apply min-width/max-width constraints.
                 // [CSS-UI §3.2] When box-sizing: border-box, min-width/max-width
                 // apply to the border box, so subtract horizontal padding+border
                 // before clamping the content width.
-                float cwMinW = DimensionResolver.ResolvePercentWidth(childStyle.MinWidth, containingWidth, childStyle, PropertyId.MinWidth);
-                float cwMaxW = DimensionResolver.ResolvePercentWidth(childStyle.MaxWidth, containingWidth, childStyle, PropertyId.MaxWidth);
+                float cwMinW = DimensionResolver.ResolvePercentWidth(childStyle.MinWidth, containingWidth, childStyle, PropertyId.MinWidth, context.Viewport);
+                float cwMaxW = DimensionResolver.ResolvePercentWidth(childStyle.MaxWidth, containingWidth, childStyle, PropertyId.MaxWidth, context.Viewport);
                 if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
                 {
                     float horizontalExtra = childBox.PaddingLeft + childBox.PaddingRight
@@ -774,9 +774,9 @@ namespace Rend.Layout.Internal
                             // child inside vertical parent. The child's available inline-size
                             // (width) comes from parent's block-size (physical width).
                             childWidth = DimensionResolver.ResolveWidth(
-                                childStyle, parentBlockSize, childBox, containingWidth);
+                                childStyle, parentBlockSize, childBox, context.Viewport, containingWidth);
                             childHeight = DimensionResolver.ResolveHeight(
-                                childStyle, containingWidth, childBox);
+                                childStyle, containingWidth, childBox, context.Viewport);
                             bool autoHeight = float.IsNaN(childHeight);
                             if (autoHeight)
                             {
@@ -797,7 +797,7 @@ namespace Rend.Layout.Internal
                             // CSS width = block-size, CSS height = inline-size.
                             // Auto inline-size fills containing inline dimension.
                             float resolvedInlineSize = DimensionResolver.ResolveHeight(
-                                childStyle, containingWidth, childBox);
+                                childStyle, containingWidth, childBox, context.Viewport);
                             if (float.IsNaN(resolvedInlineSize))
                             {
                                 childHeight = containingWidth - BoxModelCalculator.GetVerticalSpacing(childBox);
@@ -814,7 +814,7 @@ namespace Rend.Layout.Internal
                             if (!autoBlockSize)
                             {
                                 childWidth = DimensionResolver.ResolveWidth(
-                                    childStyle, parentBlockSize, childBox, containingWidth);
+                                    childStyle, parentBlockSize, childBox, context.Viewport, containingWidth);
                             }
                             else
                             {
@@ -832,9 +832,9 @@ namespace Rend.Layout.Internal
 
                         // [CSS2 §10.4] Apply min/max-width constraints
                         float minBlock = DimensionResolver.ResolvePercentWidth(
-                            childStyle.MinWidth, parentBlockSize, childStyle, PropertyId.MinWidth);
+                            childStyle.MinWidth, parentBlockSize, childStyle, PropertyId.MinWidth, context.Viewport);
                         float maxBlock = DimensionResolver.ResolvePercentWidth(
-                            childStyle.MaxWidth, parentBlockSize, childStyle, PropertyId.MaxWidth);
+                            childStyle.MaxWidth, parentBlockSize, childStyle, PropertyId.MaxWidth, context.Viewport);
                         if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
                         {
                             float horizontalExtra = childBox.PaddingLeft + childBox.PaddingRight
@@ -1047,7 +1047,7 @@ namespace Rend.Layout.Internal
                     {
                         // Pre-resolve the child's height if definite so nested percentage children
                         // can resolve against it during LayoutChildren.
-                        float preHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox);
+                        float preHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox, context.Viewport);
                         if (!float.IsNaN(preHeight) && preHeight > 0)
                             childBox.ContentRect = new RectF(childBox.ContentRect.X, y, contentWidth, preHeight);
 
@@ -1096,7 +1096,7 @@ namespace Rend.Layout.Internal
                         }
 
                         // Resolve content height
-                        contentHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox);
+                        contentHeight = DimensionResolver.ResolveHeight(childStyle, parentContentHeight, childBox, context.Viewport);
 
                         // [CSS-SIZING-4 §5.1] When aspect-ratio gives a definite height but
                         // the element has auto height, use max(ratio-height, content-height)
@@ -2041,7 +2041,7 @@ namespace Rend.Layout.Internal
                     float minContentWidth = FlexLayout.ComputeIntrinsicWidth(element, SizingKeyword.MinContent, containingWidth, context);
                     float maxContentWidth = FlexLayout.ComputeIntrinsicWidth(element, SizingKeyword.MaxContent, containingWidth, context);
                     var fitBox = new LayoutBox(element, BoxType.Block);
-                    BoxModelCalculator.ApplyBoxModel(fitBox, element.Style, containingWidth);
+                    BoxModelCalculator.ApplyBoxModel(fitBox, element.Style, containingWidth, context.Viewport);
                     float available = containingWidth - BoxModelCalculator.GetHorizontalSpacing(fitBox);
                     return Math.Max(minContentWidth, Math.Min(maxContentWidth, available));
                 }
@@ -2068,7 +2068,7 @@ namespace Rend.Layout.Internal
                     float minContentWidth = GridLayout.ComputeIntrinsicWidth(element, SizingKeyword.MinContent, containingWidth, context);
                     float maxContentWidth = GridLayout.ComputeIntrinsicWidth(element, SizingKeyword.MaxContent, containingWidth, context);
                     var fitBox = new LayoutBox(element, BoxType.Block);
-                    BoxModelCalculator.ApplyBoxModel(fitBox, element.Style, containingWidth);
+                    BoxModelCalculator.ApplyBoxModel(fitBox, element.Style, containingWidth, context.Viewport);
                     float available = containingWidth - BoxModelCalculator.GetHorizontalSpacing(fitBox);
                     return Math.Max(minContentWidth, Math.Min(maxContentWidth, available));
                 }
@@ -2086,7 +2086,7 @@ namespace Rend.Layout.Internal
                 measureWidth = containingWidth;
 
             var box = new LayoutBox(element, BoxType.Block);
-            BoxModelCalculator.ApplyBoxModel(box, element.Style, measureWidth);
+            BoxModelCalculator.ApplyBoxModel(box, element.Style, measureWidth, context.Viewport);
             float contentWidth = measureWidth - box.PaddingLeft - box.PaddingRight
                                - box.BorderLeftWidth - box.BorderRightWidth;
             contentWidth = Math.Max(0, contentWidth);

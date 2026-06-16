@@ -19,7 +19,7 @@ namespace Rend.Layout.Internal
             if (style == null) return;
 
             float containingWidth = parent.ContentRect.Width;
-            BoxModelCalculator.ApplyBoxModel(floatBox, style, containingWidth);
+            BoxModelCalculator.ApplyBoxModel(floatBox, style, containingWidth, context.Viewport);
 
             float contentWidth;
             bool isFloatReplaced = floatBox.StyledNode is StyledElement floatStyledEl
@@ -55,7 +55,7 @@ namespace Rend.Layout.Internal
             }
             else
             {
-                contentWidth = DimensionResolver.ResolveWidth(style, containingWidth, floatBox);
+                contentWidth = DimensionResolver.ResolveWidth(style, containingWidth, floatBox, context.Viewport);
             }
             // [CSS-SIZING-4 §5.2] Transfer min-height through aspect-ratio for floats
             float arRatio = DimensionResolver.GetAspectRatio(style);
@@ -73,8 +73,8 @@ namespace Rend.Layout.Internal
             }
 
             // [CSS2 §10.4] Apply min-width/max-width to float content width
-            float minW = DimensionResolver.ResolvePercentWidth(style.MinWidth, containingWidth, style, PropertyId.MinWidth);
-            float maxW = DimensionResolver.ResolvePercentWidth(style.MaxWidth, containingWidth, style, PropertyId.MaxWidth);
+            float minW = DimensionResolver.ResolvePercentWidth(style.MinWidth, containingWidth, style, PropertyId.MinWidth, context.Viewport);
+            float maxW = DimensionResolver.ResolvePercentWidth(style.MaxWidth, containingWidth, style, PropertyId.MaxWidth, context.Viewport);
             if (style.BoxSizing == CssBoxSizing.BorderBox)
             {
                 float hExtra = floatBox.PaddingLeft + floatBox.PaddingRight + floatBox.BorderLeftWidth + floatBox.BorderRightWidth;
@@ -103,7 +103,7 @@ namespace Rend.Layout.Internal
             if (isVerticalWMGrid)
             {
                 var verticalWMGridElement = (StyledElement)floatBox.StyledNode!;
-                float explicitInlineSize = DimensionResolver.ResolveHeight(style, float.NaN, floatBox);
+                float explicitInlineSize = DimensionResolver.ResolveHeight(style, float.NaN, floatBox, context.Viewport);
                 if (!float.IsNaN(explicitInlineSize) && explicitInlineSize >= 0)
                 {
                     inlineExtentForVerticalWMGrid = explicitInlineSize;
@@ -131,7 +131,7 @@ namespace Rend.Layout.Internal
                 BlockFormattingContext.Layout(floatBox, context);
             }
 
-            float contentHeight = DimensionResolver.ResolveHeight(style, float.NaN, floatBox);
+            float contentHeight = DimensionResolver.ResolveHeight(style, float.NaN, floatBox, context.Viewport);
             if (float.IsNaN(contentHeight))
             {
                 if (isVerticalWMGrid && inlineExtentForVerticalWMGrid > 0)

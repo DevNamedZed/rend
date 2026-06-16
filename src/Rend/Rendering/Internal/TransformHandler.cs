@@ -24,7 +24,7 @@ namespace Rend.Rendering.Internal
         /// render target state and applies the transform matrix.
         /// </summary>
         /// <returns><c>true</c> if a transform was applied and the state needs to be restored.</returns>
-        public static bool Apply(LayoutBox box, IRenderTarget target)
+        public static bool Apply(LayoutBox box, IRenderTarget target, Rend.Core.Values.SizeF viewport)
         {
             ComputedStyle? style = box.StyledNode?.Style;
             if (style == null)
@@ -32,88 +32,23 @@ namespace Rend.Rendering.Internal
                 return false;
             }
 
-            // Check for transform property
-            CssValue? transformValue = null;
-            object? rawValue = style.GetRefValue(PropertyId.Transform);
-            if (rawValue is CssValue tv && !(tv is CssKeywordValue tkw && tkw.Keyword == "none"))
-            {
-                transformValue = tv;
-            }
-
-            // [CSS-TRANSFORM2 §2.3] Check individual transform properties
-            CssValue? translateValue = style.GetRefValue(PropertyId.Translate) as CssValue;
-            CssValue? rotateValue = style.GetRefValue(PropertyId.Rotate) as CssValue;
-            CssValue? scaleValue = style.GetRefValue(PropertyId.Scale) as CssValue;
-
-            // Skip "none" keywords
-            if (translateValue is CssKeywordValue trKw && trKw.Keyword == "none") { translateValue = null; }
-            if (rotateValue is CssKeywordValue roKw && roKw.Keyword == "none") { rotateValue = null; }
-            if (scaleValue is CssKeywordValue scKw && scKw.Keyword == "none") { scaleValue = null; }
-
-            if (transformValue == null && translateValue == null && rotateValue == null && scaleValue == null)
-            {
-                return false;
-            }
-
-            // Compute transform origin (default: center of border box)
-            RectF borderRect = box.BorderRect;
-            float originX = borderRect.X + borderRect.Width * 0.5f;
-            float originY = borderRect.Y + borderRect.Height * 0.5f;
-
-            object? originValue = style.GetRefValue(PropertyId.TransformOrigin);
-            if (originValue is CssValue originCss)
-            {
-                ResolveTransformOrigin(originCss, borderRect, out originX, out originY);
-            }
-
-            // [CSS-TRANSFORM2 §7] Compose perspective + transform as 4x4, then flatten
-            Matrix4x4 parentPerspective = GetParentPerspective4x4(box);
-
-            // [CSS-TRANSFORM2 §2.3] Individual properties compose as:
-            // CSS: translate * rotate * scale * transform (column-vector)
-            // Row-vector: transform * scale * rotate * translate
-            Matrix4x4 transform4x4 = Matrix4x4.Identity;
-            if (transformValue != null)
-            {
-                transform4x4 = BuildTransformMatrix4x4(transformValue, borderRect);
-            }
-            if (scaleValue != null)
-            {
-                transform4x4 = transform4x4 * ResolveScaleProperty(scaleValue);
-            }
-            if (rotateValue != null)
-            {
-                transform4x4 = transform4x4 * ResolveRotateProperty(rotateValue);
-            }
-            if (translateValue != null)
-            {
-                transform4x4 = transform4x4 * ResolveTranslateProperty(translateValue, borderRect);
-            }
-
-            if (parentPerspective == Matrix4x4.Identity && transform4x4 == Matrix4x4.Identity)
-            {
-                return false;
-            }
-
-            // [CSS-TRANSFORM2 §6] Row-vector composition. The child transform is applied around
-            // the child's transform-origin; the parent's perspective is applied around the PARENT's
-            // perspective-origin (the vanishing point) — not the child's origin.
-            var toOrigin4 = Matrix4x4.CreateTranslation(-originX, -originY, 0);
-            var fromOrigin4 = Matrix4x4.CreateTranslation(originX, originY, 0);
             Matrix4x4 composed;
-            if (parentPerspective == Matrix4x4.Identity)
+            bool hasEffectiveTransform;
+            if (box.ParticipatesIn3DContext)
             {
-                composed = toOrigin4 * transform4x4 * fromOrigin4;
+                // [CSS-TRANSFORM2 §4] Participant of a preserve-3d 3D rendering context: use the
+                // accumulated 4x4 the painter already computed (EnsureAccumulated3D), not the
+                // local composed transform, so ancestor preserve-3d transforms are folded in.
+                composed = box.Accumulated3DTransform;
+                hasEffectiveTransform = composed != Matrix4x4.Identity;
             }
             else
             {
-                GetParentPerspectiveOrigin(box, out float perspOriginX, out float perspOriginY);
-                var toPersp4 = Matrix4x4.CreateTranslation(-perspOriginX, -perspOriginY, 0);
-                var fromPersp4 = Matrix4x4.CreateTranslation(perspOriginX, perspOriginY, 0);
-                // [transform around child-origin] then [perspective around perspective-origin].
-                // Reduces to the prior formula when the two origins coincide (the default case).
-                composed = toOrigin4 * transform4x4 * fromOrigin4
-                    * toPersp4 * parentPerspective * fromPersp4;
+                composed = BuildComposed(box, style, viewport, out hasEffectiveTransform);
+            }
+            if (!hasEffectiveTransform)
+            {
+                return false;
             }
 
             // [CSS-TRANSFORM2 §5] backface-visibility: hidden — if the element's
@@ -139,9 +74,169 @@ namespace Rend.Rendering.Internal
                 return false;
             }
 
+            // [CSS-TRANSFORM2 §3] A transform that flattens to a non-invertible (zero-area) 2D
+            // matrix maps the box to a line or point (e.g. rotateX/Y(90deg)). Chrome paints
+            // nothing in that case; reusing the skip-paint flag culls the box AND its subtree
+            // (otherwise a near-degenerate squash leaves anti-aliased glyph remnants on the
+            // noise floor). Perspective matrices can still cover a non-zero area, so the 2x2
+            // determinant test only applies without perspective.
+            if (!finalMatrix.HasPerspective)
+            {
+                float determinant = finalMatrix.M11 * finalMatrix.M22 - finalMatrix.M12 * finalMatrix.M21;
+                if (Math.Abs(determinant) < 1e-6f)
+                {
+                    box.BackfaceHidden = true;
+                    return false;
+                }
+            }
+
             target.Save();
             target.SetTransform(finalMatrix);
             return true;
+        }
+
+        /// <summary>
+        /// Builds the box's composed 4x4 transform (transform-origin · transform · perspective,
+        /// row-vector) in absolute page coordinates. Sets <paramref name="hasEffectiveTransform"/>
+        /// to false — and returns Identity — when the box has no transform inputs, or when its
+        /// transform and the parent perspective both reduce to identity (the two cases where
+        /// <see cref="Apply"/> must not touch the render target). Decoupled from Apply's
+        /// render-side concerns so the preserve-3d 3D-context accumulation can reuse it even for
+        /// transform-less boxes.
+        /// </summary>
+        private static Matrix4x4 BuildComposed(LayoutBox box, ComputedStyle style, Rend.Core.Values.SizeF viewport, out bool hasEffectiveTransform)
+        {
+            hasEffectiveTransform = false;
+
+            // Check for transform property
+            CssValue? transformValue = null;
+            object? rawValue = style.GetRefValue(PropertyId.Transform);
+            if (rawValue is CssValue tv && !(tv is CssKeywordValue tkw && tkw.Keyword == "none"))
+            {
+                transformValue = tv;
+            }
+
+            // [CSS-TRANSFORM2 §2.3] Check individual transform properties
+            CssValue? translateValue = style.GetRefValue(PropertyId.Translate) as CssValue;
+            CssValue? rotateValue = style.GetRefValue(PropertyId.Rotate) as CssValue;
+            CssValue? scaleValue = style.GetRefValue(PropertyId.Scale) as CssValue;
+
+            // Skip "none" keywords
+            if (translateValue is CssKeywordValue trKw && trKw.Keyword == "none") { translateValue = null; }
+            if (rotateValue is CssKeywordValue roKw && roKw.Keyword == "none") { rotateValue = null; }
+            if (scaleValue is CssKeywordValue scKw && scKw.Keyword == "none") { scaleValue = null; }
+
+            if (transformValue == null && translateValue == null && rotateValue == null && scaleValue == null)
+            {
+                return Matrix4x4.Identity;
+            }
+
+            // Compute transform origin (default: center of border box)
+            RectF borderRect = box.BorderRect;
+            float originX = borderRect.X + borderRect.Width * 0.5f;
+            float originY = borderRect.Y + borderRect.Height * 0.5f;
+
+            object? originValue = style.GetRefValue(PropertyId.TransformOrigin);
+            if (originValue is CssValue originCss)
+            {
+                ResolveTransformOrigin(originCss, borderRect, viewport, out originX, out originY);
+            }
+
+            // [CSS-TRANSFORM2 §7] Compose perspective + transform as 4x4, then flatten
+            Matrix4x4 parentPerspective = GetParentPerspective4x4(box, viewport);
+
+            // [CSS-TRANSFORM2 §2.3] Individual properties compose as:
+            // CSS: translate * rotate * scale * transform (column-vector)
+            // Row-vector: transform * scale * rotate * translate
+            Matrix4x4 transform4x4 = Matrix4x4.Identity;
+            if (transformValue != null)
+            {
+                transform4x4 = BuildTransformMatrix4x4(transformValue, borderRect, viewport);
+            }
+            if (scaleValue != null)
+            {
+                transform4x4 = transform4x4 * ResolveScaleProperty(scaleValue);
+            }
+            if (rotateValue != null)
+            {
+                transform4x4 = transform4x4 * ResolveRotateProperty(rotateValue);
+            }
+            if (translateValue != null)
+            {
+                transform4x4 = transform4x4 * ResolveTranslateProperty(translateValue, borderRect, viewport);
+            }
+
+            if (parentPerspective == Matrix4x4.Identity && transform4x4 == Matrix4x4.Identity)
+            {
+                return Matrix4x4.Identity;
+            }
+
+            // [CSS-TRANSFORM2 §6] Row-vector composition. The child transform is applied around
+            // the child's transform-origin; the parent's perspective is applied around the PARENT's
+            // perspective-origin (the vanishing point) — not the child's origin.
+            var toOrigin4 = Matrix4x4.CreateTranslation(-originX, -originY, 0);
+            var fromOrigin4 = Matrix4x4.CreateTranslation(originX, originY, 0);
+            Matrix4x4 composed;
+            if (parentPerspective == Matrix4x4.Identity)
+            {
+                composed = toOrigin4 * transform4x4 * fromOrigin4;
+            }
+            else
+            {
+                GetParentPerspectiveOrigin(box, viewport, out float perspOriginX, out float perspOriginY);
+                var toPersp4 = Matrix4x4.CreateTranslation(-perspOriginX, -perspOriginY, 0);
+                var fromPersp4 = Matrix4x4.CreateTranslation(perspOriginX, perspOriginY, 0);
+                // [transform around child-origin] then [perspective around perspective-origin].
+                // Reduces to the prior formula when the two origins coincide (the default case).
+                composed = toOrigin4 * transform4x4 * fromOrigin4
+                    * toPersp4 * parentPerspective * fromPersp4;
+            }
+
+            hasEffectiveTransform = true;
+            return composed;
+        }
+
+        /// <summary>
+        /// Returns the box's local composed 4x4 transform in absolute page coordinates (Identity
+        /// when the box has no transform), independent of <see cref="Apply"/>'s render-side early
+        /// returns. Used to seed a preserve-3d context root's accumulated transform so its
+        /// participating children fold the root's own transform in.
+        /// </summary>
+        internal static Matrix4x4 ComputeLocalComposed(LayoutBox box, Rend.Core.Values.SizeF viewport)
+        {
+            ComputedStyle? style = box.StyledNode?.Style;
+            if (style == null)
+            {
+                return Matrix4x4.Identity;
+            }
+            return BuildComposed(box, style, viewport, out _);
+        }
+
+        /// <summary>
+        /// [CSS-TRANSFORM2 §4] Populates <see cref="LayoutBox.Accumulated3DTransform"/> and
+        /// <see cref="LayoutBox.Depth3D"/> for a participant of a preserve-3d 3D rendering
+        /// context. The accumulated transform folds the box's local composed matrix into its
+        /// parent's accumulated transform (row-vector); Depth3D is the Z of the box's absolute
+        /// border-box center under that matrix — the painter's-algorithm back-to-front sort key.
+        /// Must be called before the participant is painted so <see cref="Apply"/> reads it.
+        /// </summary>
+        internal static void EnsureAccumulated3D(LayoutBox box, Rend.Core.Values.SizeF viewport)
+        {
+            ComputedStyle? style = box.StyledNode?.Style;
+            Matrix4x4 localComposed = style != null
+                ? BuildComposed(box, style, viewport, out _)
+                : Matrix4x4.Identity;
+            Matrix4x4 parentAccumulated = box.Parent != null
+                ? box.Parent.Accumulated3DTransform
+                : Matrix4x4.Identity;
+            Matrix4x4 accumulated = localComposed * parentAccumulated;
+            box.Accumulated3DTransform = accumulated;
+
+            RectF borderRect = box.BorderRect;
+            float centerX = borderRect.X + borderRect.Width * 0.5f;
+            float centerY = borderRect.Y + borderRect.Height * 0.5f;
+            // Z of the transformed absolute border-box center (row-vector: [cx cy 0 1] * M).
+            box.Depth3D = centerX * accumulated.M13 + centerY * accumulated.M23 + accumulated.M43;
         }
 
         /// <summary>
@@ -156,7 +251,7 @@ namespace Rend.Rendering.Internal
         /// [CSS-TRANSFORM2 §7] Get the perspective matrix from the parent's CSS perspective property.
         /// Returns a 4x4 matrix to be composed with the child's transform before flattening.
         /// </summary>
-        private static Matrix4x4 GetParentPerspective4x4(LayoutBox box)
+        private static Matrix4x4 GetParentPerspective4x4(LayoutBox box, Rend.Core.Values.SizeF viewport)
         {
             LayoutBox? parent = box.Parent;
             if (parent == null)
@@ -183,7 +278,7 @@ namespace Rend.Rendering.Internal
                 {
                     return Matrix4x4.Identity;
                 }
-                distance = ResolveLength(perspCss);
+                distance = ResolveLength(perspCss, viewport);
             }
 
             if (distance <= 0f)
@@ -202,7 +297,7 @@ namespace Rend.Rendering.Internal
         /// coordinates. perspective-origin is resolved against the parent's border box; the
         /// default is its center (50% 50%).
         /// </summary>
-        private static void GetParentPerspectiveOrigin(LayoutBox box, out float originX, out float originY)
+        private static void GetParentPerspectiveOrigin(LayoutBox box, Rend.Core.Values.SizeF viewport, out float originX, out float originY)
         {
             LayoutBox? parent = box.Parent;
             RectF parentRect = parent != null ? parent.BorderRect : box.BorderRect;
@@ -213,7 +308,7 @@ namespace Rend.Rendering.Internal
             if (originValue is CssValue originCss
                 && !(originCss is CssKeywordValue kw && kw.Keyword == "none"))
             {
-                ResolveTransformOrigin(originCss, parentRect, out originX, out originY);
+                ResolveTransformOrigin(originCss, parentRect, viewport, out originX, out originY);
             }
         }
 
@@ -221,16 +316,16 @@ namespace Rend.Rendering.Internal
         /// [CSS-TRANSFORM2 §2.3] Resolve the 'translate' individual property.
         /// Syntax: none | x [y [z]]
         /// </summary>
-        private static Matrix4x4 ResolveTranslateProperty(CssValue value, RectF borderRect)
+        private static Matrix4x4 ResolveTranslateProperty(CssValue value, RectF borderRect, Rend.Core.Values.SizeF viewport)
         {
             if (value is CssListValue list && list.Separator == ' ')
             {
-                float tx = list.Values.Count > 0 ? ResolveLengthOrPercent(list.Values[0], borderRect.Width) : 0;
-                float ty = list.Values.Count > 1 ? ResolveLengthOrPercent(list.Values[1], borderRect.Height) : 0;
-                float tz = list.Values.Count > 2 ? ResolveLength(list.Values[2]) : 0;
+                float tx = list.Values.Count > 0 ? ResolveLengthOrPercent(list.Values[0], borderRect.Width, viewport) : 0;
+                float ty = list.Values.Count > 1 ? ResolveLengthOrPercent(list.Values[1], borderRect.Height, viewport) : 0;
+                float tz = list.Values.Count > 2 ? ResolveLength(list.Values[2], viewport) : 0;
                 return Matrix4x4.CreateTranslation(tx, ty, tz);
             }
-            float singleTx = ResolveLengthOrPercent(value, borderRect.Width);
+            float singleTx = ResolveLengthOrPercent(value, borderRect.Width, viewport);
             return Matrix4x4.CreateTranslation(singleTx, 0, 0);
         }
 
@@ -301,7 +396,7 @@ namespace Rend.Rendering.Internal
         /// <summary>
         /// Build the transform as a 4x4 matrix (always, for perspective composition).
         /// </summary>
-        private static Matrix4x4 BuildTransformMatrix4x4(CssValue value, RectF? refBox)
+        private static Matrix4x4 BuildTransformMatrix4x4(CssValue value, RectF? refBox, Rend.Core.Values.SizeF viewport)
         {
             var functions = CollectFunctions(value);
             if (functions.Count == 0)
@@ -312,7 +407,7 @@ namespace Rend.Rendering.Internal
             Matrix4x4 result = Matrix4x4.Identity;
             for (int i = 0; i < functions.Count; i++)
             {
-                Matrix4x4 m = Parse3DFunction(functions[i], refBox);
+                Matrix4x4 m = Parse3DFunction(functions[i], refBox, viewport);
                 result = result * m;
             }
             return result;
@@ -322,7 +417,7 @@ namespace Rend.Rendering.Internal
         /// Builds a Matrix3x2 from a CSS transform value (single function or space-separated list).
         /// Uses 4x4 matrix internally for 3D transforms, then flattens to 3x3.
         /// </summary>
-        internal static Transform2D BuildTransformMatrix(CssValue value, RectF? refBox = null)
+        internal static Transform2D BuildTransformMatrix(CssValue value, Rend.Core.Values.SizeF viewport, RectF? refBox = null)
         {
             var functions = CollectFunctions(value);
             if (functions.Count == 0)
@@ -343,30 +438,30 @@ namespace Rend.Rendering.Internal
 
             if (has3D)
             {
-                return Build3DTransform(functions, refBox);
+                return Build3DTransform(functions, refBox, viewport);
             }
 
-            return Build2DTransform(functions, refBox);
+            return Build2DTransform(functions, refBox, viewport);
         }
 
-        private static Transform2D Build2DTransform(List<CssFunctionValue> functions, RectF? refBox)
+        private static Transform2D Build2DTransform(List<CssFunctionValue> functions, RectF? refBox, Rend.Core.Values.SizeF viewport)
         {
             Transform2D result = Transform2D.Identity;
             for (int i = 0; i < functions.Count; i++)
             {
-                Transform2D m = Parse2DFunction(functions[i], refBox);
+                Transform2D m = Parse2DFunction(functions[i], refBox, viewport);
                 result = result * m;
             }
             return result;
         }
 
-        private static Transform2D Build3DTransform(List<CssFunctionValue> functions, RectF? refBox)
+        private static Transform2D Build3DTransform(List<CssFunctionValue> functions, RectF? refBox, Rend.Core.Values.SizeF viewport)
         {
             // [CSS-TRANSFORM2 §5] Compose transforms as 4x4 matrices, then flatten
             Matrix4x4 result = Matrix4x4.Identity;
             for (int i = 0; i < functions.Count; i++)
             {
-                Matrix4x4 m = Parse3DFunction(functions[i], refBox);
+                Matrix4x4 m = Parse3DFunction(functions[i], refBox, viewport);
                 result = result * m;
             }
             return Transform2D.FromMatrix4x4(result);
@@ -401,7 +496,7 @@ namespace Rend.Rendering.Internal
                 || lower == "perspective";
         }
 
-        private static Matrix4x4 Parse3DFunction(CssFunctionValue fn, RectF? refBox)
+        private static Matrix4x4 Parse3DFunction(CssFunctionValue fn, RectF? refBox, Rend.Core.Values.SizeF viewport)
         {
             string name = fn.Name.ToLowerInvariant();
             var args = fn.Arguments;
@@ -411,34 +506,34 @@ namespace Rend.Rendering.Internal
                 // --- 2D functions promoted to 4x4 ---
                 case "translate":
                 {
-                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0) : 0;
-                    float ty = args.Count > 1 ? ResolveLengthOrPercent(args[1], refBox?.Height ?? 0) : 0;
+                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0, viewport) : 0;
+                    float ty = args.Count > 1 ? ResolveLengthOrPercent(args[1], refBox?.Height ?? 0, viewport) : 0;
                     return Matrix4x4.CreateTranslation(tx, ty, 0);
                 }
 
                 case "translatex":
                 {
-                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0) : 0;
+                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0, viewport) : 0;
                     return Matrix4x4.CreateTranslation(tx, 0, 0);
                 }
 
                 case "translatey":
                 {
-                    float ty = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Height ?? 0) : 0;
+                    float ty = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Height ?? 0, viewport) : 0;
                     return Matrix4x4.CreateTranslation(0, ty, 0);
                 }
 
                 case "translatez":
                 {
-                    float tz = args.Count > 0 ? ResolveLength(args[0]) : 0;
+                    float tz = args.Count > 0 ? ResolveLength(args[0], viewport) : 0;
                     return Matrix4x4.CreateTranslation(0, 0, tz);
                 }
 
                 case "translate3d":
                 {
-                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0) : 0;
-                    float ty = args.Count > 1 ? ResolveLengthOrPercent(args[1], refBox?.Height ?? 0) : 0;
-                    float tz = args.Count > 2 ? ResolveLength(args[2]) : 0;
+                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0, viewport) : 0;
+                    float ty = args.Count > 1 ? ResolveLengthOrPercent(args[1], refBox?.Height ?? 0, viewport) : 0;
+                    float tz = args.Count > 2 ? ResolveLength(args[2], viewport) : 0;
                     return Matrix4x4.CreateTranslation(tx, ty, tz);
                 }
 
@@ -543,7 +638,7 @@ namespace Rend.Rendering.Internal
                 case "perspective":
                 {
                     // [CSS-TRANSFORM2 §14] perspective(d)
-                    float distance = args.Count > 0 ? ResolveLength(args[0]) : 0;
+                    float distance = args.Count > 0 ? ResolveLength(args[0], viewport) : 0;
                     if (distance <= 0)
                     {
                         return Matrix4x4.Identity;
@@ -596,7 +691,7 @@ namespace Rend.Rendering.Internal
             }
         }
 
-        private static Transform2D Parse2DFunction(CssFunctionValue fn, RectF? refBox)
+        private static Transform2D Parse2DFunction(CssFunctionValue fn, RectF? refBox, Rend.Core.Values.SizeF viewport)
         {
             string name = fn.Name.ToLowerInvariant();
             var args = fn.Arguments;
@@ -605,20 +700,20 @@ namespace Rend.Rendering.Internal
             {
                 case "translate":
                 {
-                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0) : 0;
-                    float ty = args.Count > 1 ? ResolveLengthOrPercent(args[1], refBox?.Height ?? 0) : 0;
+                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0, viewport) : 0;
+                    float ty = args.Count > 1 ? ResolveLengthOrPercent(args[1], refBox?.Height ?? 0, viewport) : 0;
                     return Transform2D.CreateTranslation(tx, ty);
                 }
 
                 case "translatex":
                 {
-                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0) : 0;
+                    float tx = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Width ?? 0, viewport) : 0;
                     return Transform2D.CreateTranslation(tx, 0);
                 }
 
                 case "translatey":
                 {
-                    float ty = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Height ?? 0) : 0;
+                    float ty = args.Count > 0 ? ResolveLengthOrPercent(args[0], refBox?.Height ?? 0, viewport) : 0;
                     return Transform2D.CreateTranslation(0, ty);
                 }
 
@@ -687,7 +782,7 @@ namespace Rend.Rendering.Internal
         }
 
         private static void ResolveTransformOrigin(CssValue value, RectF borderRect,
-            out float originX, out float originY)
+            Rend.Core.Values.SizeF viewport, out float originX, out float originY)
         {
             // Default: center
             originX = borderRect.X + borderRect.Width * 0.5f;
@@ -704,8 +799,8 @@ namespace Rend.Rendering.Internal
                 bool swap = IsVerticalOriginKeyword(first) || IsHorizontalOriginKeyword(second);
                 CssValue xValue = swap ? second : first;
                 CssValue yValue = swap ? first : second;
-                originX = borderRect.X + ResolveOriginComponent(xValue, borderRect.Width);
-                originY = borderRect.Y + ResolveOriginComponent(yValue, borderRect.Height);
+                originX = borderRect.X + ResolveOriginComponent(xValue, borderRect.Width, viewport);
+                originY = borderRect.Y + ResolveOriginComponent(yValue, borderRect.Height, viewport);
             }
             else if (value is CssKeywordValue kwOrigin)
             {
@@ -727,7 +822,7 @@ namespace Rend.Rendering.Internal
         private static bool IsHorizontalOriginKeyword(CssValue value)
             => value is CssKeywordValue kw && (kw.Keyword == "left" || kw.Keyword == "right");
 
-        private static float ResolveOriginComponent(CssValue value, float size)
+        private static float ResolveOriginComponent(CssValue value, float size, Rend.Core.Values.SizeF viewport)
         {
             if (value is CssDimensionValue dim)
             {
@@ -757,7 +852,7 @@ namespace Rend.Rendering.Internal
             }
             if (value is CssFunctionValue fn && fn.Name == "calc")
             {
-                return ValueResolver.EvaluateDeferredCalc(fn, size);
+                return ValueResolver.EvaluateDeferredCalc(fn, size, viewport.Width, viewport.Height);
             }
             return size * 0.5f;
         }
@@ -787,7 +882,7 @@ namespace Rend.Rendering.Internal
             }
         }
 
-        private static float ResolveLengthOrPercent(CssValue value, float referenceSize)
+        private static float ResolveLengthOrPercent(CssValue value, float referenceSize, Rend.Core.Values.SizeF viewport)
         {
             if (value is CssDimensionValue dim)
             {
@@ -803,14 +898,14 @@ namespace Rend.Rendering.Internal
             }
             if (value is CssFunctionValue fn && fn.Name == "calc")
             {
-                return ValueResolver.EvaluateDeferredCalc(fn, referenceSize);
+                return ValueResolver.EvaluateDeferredCalc(fn, referenceSize, viewport.Width, viewport.Height);
             }
             return 0;
         }
 
-        private static float ResolveLength(CssValue value)
+        private static float ResolveLength(CssValue value, Rend.Core.Values.SizeF viewport)
         {
-            return ResolveLengthOrPercent(value, 0);
+            return ResolveLengthOrPercent(value, 0, viewport);
         }
 
         private static float ResolveLengthValue(CssDimensionValue dim)

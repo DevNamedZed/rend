@@ -1136,25 +1136,10 @@ namespace Rend.Css.Resolution.Internal
         }
 
         /// <summary>
-        /// Evaluates a deferred calc/min/max/clamp expression at layout time with
-        /// the correct containing block width as the percentage base.
+        /// Evaluates a deferred calc/min/max/clamp expression at layout time. Percentages
+        /// resolve against <paramref name="containingBlockWidth"/>; vw/vh/vmin/vmax units
+        /// resolve against the explicit viewport dimensions supplied by the caller.
         /// </summary>
-        public static float EvaluateDeferredCalc(CssFunctionValue calcFn, float containingBlockWidth)
-        {
-            // Use containing block as fallback for viewport when viewport isn't known.
-            // Callers with LayoutContext should use the overload with explicit viewport dims.
-            return EvaluateDeferredCalc(calcFn, containingBlockWidth,
-                ViewportWidthHint > 0 ? ViewportWidthHint : containingBlockWidth,
-                ViewportHeightHint > 0 ? ViewportHeightHint : containingBlockWidth);
-        }
-
-        /// <summary>
-        /// Thread-local viewport hints set by LayoutEngine before layout begins.
-        /// Used by deferred calc() evaluation to resolve vw/vh units correctly.
-        /// </summary>
-        [ThreadStatic] internal static float ViewportWidthHint;
-        [ThreadStatic] internal static float ViewportHeightHint;
-
         public static float EvaluateDeferredCalc(CssFunctionValue calcFn, float containingBlockWidth,
             float viewportWidth, float viewportHeight)
         {

@@ -23,6 +23,17 @@ namespace Rend.Rendering
         private readonly bool _generateLinks;
         private readonly bool _generateBookmarks;
 
+        // Per-paint scratch (Appendix-E buckets + promoted-box set). One Painter == one document
+        // paint, so this lives for the render and is released with the Painter — replaces the
+        // former thread-static state in PaintOrderSorter.
+        private readonly PaintContext _paintContext = new();
+
+        // Viewport of the document currently being painted; set at the top of Paint() and read when
+        // applying transforms so transform/transform-origin calc() with vw/vh units resolve without
+        // thread-local state. One Painter paints one document, so this is per-render state owned by
+        // the Painter — replaces the former thread-static viewport hint in ValueResolver.
+        private Rend.Core.Values.SizeF _viewport;
+
 
         /// <summary>
         /// Creates a new <see cref="Painter"/> instance.
@@ -84,6 +95,7 @@ namespace Rend.Rendering
         internal void Paint(LayoutDocument document, IRenderTarget target,
             HeaderFooterRenderer? headerFooterRenderer)
         {
+            _viewport = document.Viewport;
             IReadOnlyList<LayoutPage> pages = document.Pages;
             int totalPages = pages.Count;
 
@@ -276,7 +288,7 @@ namespace Rend.Rendering
         {
             // [CSS2 §E.2] Skip boxes promoted to a higher paint level.
             // They will be painted by the promoting parent at the correct z-order.
-            if (PaintOrderSorter.IsPromoted(box))
+            if (PaintOrderSorter.IsPromoted(_paintContext, box))
             {
                 return;
             }
@@ -327,7 +339,7 @@ namespace Rend.Rendering
             bool skipBoxPainting = isHidden || hideEmptyCell;
 
             // 1. Apply transform if present.
-            bool hasTransform = TransformHandler.Apply(box, target);
+            bool hasTransform = TransformHandler.Apply(box, target, _viewport);
 
             // [CSS-TRANSFORM2 §5] Skip painting if backface is hidden and facing viewer.
             if (box.BackfaceHidden)
@@ -483,7 +495,16 @@ namespace Rend.Rendering
             // Paint child boxes in CSS 2.1 Appendix E order.
             if (box.Children.Count > 0)
             {
-                List<LayoutBox> paintOrder = PaintOrderSorter.GetPaintOrder(box);
+                List<LayoutBox> paintOrder = PaintOrderSorter.GetPaintOrder(_paintContext, box);
+
+                // [CSS-TRANSFORM2 §4] In a preserve-3d 3D rendering context, the participating
+                // block-level children paint back-to-front by transformed depth (painter's
+                // algorithm), not in DOM/z-index order. Reorder only the participant subset of
+                // the Appendix-E paint order; promoted/inline/boundary children keep their slots.
+                if (Transform3DContext.Is3DRenderingContext(box))
+                {
+                    paintOrder = DepthSortParticipants(box, paintOrder);
+                }
 
                 if (paintCollapsedBordersBetween)
                 {
@@ -523,6 +544,79 @@ namespace Rend.Rendering
                 // No children — still need to paint collapsed borders
                 BorderPainter.Paint(box, target);
             }
+        }
+
+        // Depth keys within this epsilon are treated as equal, so participants at the same
+        // plane keep their original document order (deterministic, no run-to-run drift).
+        private const float DepthSortEpsilon = 0.01f;
+
+        /// <summary>
+        /// [CSS-TRANSFORM2 §4] Reorders the participating subset of a preserve-3d context's
+        /// paint order back-to-front by <see cref="LayoutBox.Depth3D"/>. Non-participants
+        /// (promoted, inline-level, or flattening-boundary children) keep their Appendix-E
+        /// slots; only participant boxes are permuted among the participant positions.
+        /// </summary>
+        private List<LayoutBox> DepthSortParticipants(LayoutBox contextBox, List<LayoutBox> paintOrder)
+        {
+            // [CSS-TRANSFORM2 §4] Multi-level accumulation: seed the context root's own composed
+            // transform so its participating children fold it in (their accumulated matrix is
+            // childComposed * contextBox.Accumulated3DTransform). A NESTED context already had its
+            // Accumulated set by its parent's sort (it is itself a participant) — don't overwrite
+            // it, so the full ancestor chain accumulates through transform-less middle elements.
+            if (!contextBox.ParticipatesIn3DContext)
+            {
+                contextBox.Accumulated3DTransform = TransformHandler.ComputeLocalComposed(contextBox, _viewport);
+            }
+
+            var participantIndices = new List<int>();
+            for (int i = 0; i < paintOrder.Count; i++)
+            {
+                LayoutBox child = paintOrder[i];
+                child.ParticipatesIn3DContext = false;
+                child.Accumulated3DTransform = System.Numerics.Matrix4x4.Identity;
+                child.Depth3D = 0f;
+
+                if (PaintOrderSorter.IsPromoted(_paintContext, child))
+                {
+                    continue;
+                }
+                if (!Transform3DContext.IsBlockLevel(child))
+                {
+                    continue;
+                }
+                if (Transform3DContext.IsFlatteningBoundary(child))
+                {
+                    continue;
+                }
+
+                child.ParticipatesIn3DContext = true;
+                TransformHandler.EnsureAccumulated3D(child, _viewport);
+                participantIndices.Add(i);
+            }
+
+            if (participantIndices.Count < 2)
+            {
+                return paintOrder;
+            }
+
+            var sortedParticipants = new List<int>(participantIndices);
+            sortedParticipants.Sort((firstIndex, secondIndex) =>
+            {
+                float firstDepth = paintOrder[firstIndex].Depth3D;
+                float secondDepth = paintOrder[secondIndex].Depth3D;
+                if (Math.Abs(firstDepth - secondDepth) > DepthSortEpsilon)
+                {
+                    return firstDepth < secondDepth ? -1 : 1;
+                }
+                return firstIndex.CompareTo(secondIndex);
+            });
+
+            var result = new List<LayoutBox>(paintOrder);
+            for (int slot = 0; slot < participantIndices.Count; slot++)
+            {
+                result[participantIndices[slot]] = paintOrder[sortedParticipants[slot]];
+            }
+            return result;
         }
 
         private static bool IsPositionedChild(LayoutBox child)

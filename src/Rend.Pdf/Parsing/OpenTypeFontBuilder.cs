@@ -12,24 +12,26 @@ namespace Rend.Pdf.Parsing
     /// </summary>
     public static class OpenTypeFontBuilder
     {
-        public static byte[] Build(byte[] cffData, string fontName, int numGlyphs, float[] fontBBox)
+        public static byte[] Build(byte[] cffData, string fontName, IReadOnlyList<int> advanceWidths,
+            IReadOnlyDictionary<int, int> unicodeToGlyph, float[] fontBBox)
         {
             if (cffData == null || cffData.Length == 0)
             {
                 return Array.Empty<byte>();
             }
 
+            int numGlyphs = advanceWidths.Count;
             var tables = new Dictionary<string, byte[]>
             {
                 ["CFF "] = cffData,
                 ["head"] = BuildHeadTable(fontBBox),
                 ["hhea"] = BuildHheaTable(fontBBox, numGlyphs),
-                ["hmtx"] = BuildHmtxTable(numGlyphs),
+                ["hmtx"] = BuildHmtxTable(advanceWidths),
                 ["maxp"] = BuildMaxpTable(numGlyphs),
                 ["name"] = BuildNameTable(fontName),
                 ["OS/2"] = BuildOs2Table(fontBBox),
                 ["post"] = BuildPostTable(),
-                ["cmap"] = BuildCmapTable(),
+                ["cmap"] = BuildCmapTable(unicodeToGlyph),
             };
 
             return BuildSfnt(tables);
@@ -64,12 +66,13 @@ namespace Rend.Pdf.Parsing
             return data;
         }
 
-        private static byte[] BuildHmtxTable(int numGlyphs)
+        private static byte[] BuildHmtxTable(IReadOnlyList<int> advanceWidths)
         {
-            var data = new byte[numGlyphs * 4];
-            for (int i = 0; i < numGlyphs; i++)
+            var data = new byte[advanceWidths.Count * 4];
+            for (int i = 0; i < advanceWidths.Count; i++)
             {
-                WriteUInt16(data, i * 4, 500);
+                int advance = advanceWidths[i];
+                WriteUInt16(data, i * 4, (ushort)(advance < 0 ? 0 : (advance > 0xFFFF ? 0xFFFF : advance)));
             }
             return data;
         }
@@ -140,24 +143,81 @@ namespace Rend.Pdf.Parsing
             return data;
         }
 
-        private static byte[] BuildCmapTable()
+        private static byte[] BuildCmapTable(IReadOnlyDictionary<int, int> unicodeToGlyph)
         {
+            byte[] format4 = BuildCmapFormat4(unicodeToGlyph);
+
             using var stream = new MemoryStream();
-            WriteUInt16(stream, 0);
-            WriteUInt16(stream, 1);
-            WriteUInt16(stream, 1);
-            WriteUInt16(stream, 0);
-            WriteUInt32(stream, 12);
+            WriteUInt16(stream, 0); // version
+            WriteUInt16(stream, 1); // numTables
+            WriteUInt16(stream, 3); // platformID = Windows
+            WriteUInt16(stream, 1); // encodingID = Unicode BMP
+            WriteUInt32(stream, 12); // offset to subtable
+            stream.Write(format4, 0, format4.Length);
+            return stream.ToArray();
+        }
 
-            WriteUInt16(stream, 0);
-            WriteUInt16(stream, 262);
-            WriteUInt16(stream, 0);
-
-            for (int i = 0; i < 256; i++)
+        private static byte[] BuildCmapFormat4(IReadOnlyDictionary<int, int> unicodeToGlyph)
+        {
+            var codePoints = new List<int>();
+            foreach (int code in unicodeToGlyph.Keys)
             {
-                stream.WriteByte((byte)i);
+                if (code >= 0 && code <= 0xFFFF)
+                {
+                    codePoints.Add(code);
+                }
+            }
+            codePoints.Sort();
+
+            var startCodes = new List<int>();
+            var endCodes = new List<int>();
+            var idDeltas = new List<int>();
+            int index = 0;
+            while (index < codePoints.Count)
+            {
+                int segmentStart = codePoints[index];
+                int glyphStart = unicodeToGlyph[segmentStart];
+                int last = index;
+                while (last + 1 < codePoints.Count &&
+                       codePoints[last + 1] == codePoints[last] + 1 &&
+                       unicodeToGlyph[codePoints[last + 1]] == unicodeToGlyph[codePoints[last]] + 1)
+                {
+                    last++;
+                }
+                startCodes.Add(segmentStart);
+                endCodes.Add(codePoints[last]);
+                idDeltas.Add((glyphStart - segmentStart) & 0xFFFF);
+                index = last + 1;
             }
 
+            startCodes.Add(0xFFFF);
+            endCodes.Add(0xFFFF);
+            idDeltas.Add(1);
+
+            int segCount = startCodes.Count;
+            int searchRange = 2;
+            int entrySelector = 0;
+            while (searchRange * 2 <= segCount * 2)
+            {
+                searchRange *= 2;
+                entrySelector++;
+            }
+            int rangeShift = segCount * 2 - searchRange;
+
+            using var stream = new MemoryStream();
+            WriteUInt16(stream, 4); // format
+            int length = 16 + segCount * 8;
+            WriteUInt16(stream, (ushort)length);
+            WriteUInt16(stream, 0); // language
+            WriteUInt16(stream, (ushort)(segCount * 2));
+            WriteUInt16(stream, (ushort)searchRange);
+            WriteUInt16(stream, (ushort)entrySelector);
+            WriteUInt16(stream, (ushort)rangeShift);
+            foreach (int endCode in endCodes) { WriteUInt16(stream, (ushort)endCode); }
+            WriteUInt16(stream, 0); // reservedPad
+            foreach (int startCode in startCodes) { WriteUInt16(stream, (ushort)startCode); }
+            foreach (int idDelta in idDeltas) { WriteUInt16(stream, (ushort)idDelta); }
+            foreach (int unused in startCodes) { WriteUInt16(stream, 0); } // idRangeOffset (all 0)
             return stream.ToArray();
         }
 

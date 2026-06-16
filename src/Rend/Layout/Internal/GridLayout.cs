@@ -46,7 +46,7 @@ namespace Rend.Layout.Internal
             // Resolve from explicit CSS height so fr row tracks work correctly.
             if (!containerHeightIsDefinite)
             {
-                float explicitH = DimensionResolver.ResolveHeight(style, float.NaN, parent);
+                float explicitH = DimensionResolver.ResolveHeight(style, float.NaN, parent, context.Viewport);
                 if (!float.IsNaN(explicitH) && explicitH > 0)
                 {
                     containerHeight = explicitH;
@@ -84,7 +84,7 @@ namespace Rend.Layout.Internal
                 if (rowGapRef is CssFunctionValue rowGapCalc)
                 {
                     rowGap = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(
-                        rowGapCalc, containerHeight > 0 ? containerHeight : containerWidth);
+                        rowGapCalc, containerHeight > 0 ? containerHeight : containerWidth, context.ViewportWidth, context.ViewportHeight);
                 }
                 else
                 {
@@ -102,7 +102,7 @@ namespace Rend.Layout.Internal
                 var colGapRef = style.GetRefValue(PropertyId.ColumnGap);
                 if (colGapRef is CssFunctionValue colGapCalc)
                 {
-                    colGap = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(colGapCalc, containerWidth);
+                    colGap = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(colGapCalc, containerWidth, context.ViewportWidth, context.ViewportHeight);
                 }
                 else
                 {
@@ -233,7 +233,7 @@ namespace Rend.Layout.Internal
                         cbHeight = containerHeight;
                         if (cbHeight <= 0)
                         {
-                            cbHeight = DimensionResolver.ResolveHeight(style, float.NaN, parent);
+                            cbHeight = DimensionResolver.ResolveHeight(style, float.NaN, parent, context.Viewport);
                             if (float.IsNaN(cbHeight) || cbHeight <= 0)
                             {
                                 cbHeight = 0;
@@ -242,7 +242,7 @@ namespace Rend.Layout.Internal
                     }
 
                     var posBox = absposItem.Box;
-                    BoxModelCalculator.ApplyBoxModel(posBox, childEl.Style, cbWidth);
+                    BoxModelCalculator.ApplyBoxModel(posBox, childEl.Style, cbWidth, context.Viewport);
                     float posWidth;
                     bool widthIsAutoAbspos = float.IsNaN(childEl.Style.Width);
                     if (widthIsAutoAbspos)
@@ -259,12 +259,12 @@ namespace Rend.Layout.Internal
                     }
                     else
                     {
-                        posWidth = DimensionResolver.ResolveWidth(childEl.Style, cbWidth, posBox);
+                        posWidth = DimensionResolver.ResolveWidth(childEl.Style, cbWidth, posBox, context.Viewport);
                     }
 
                     posBox.ContentRect = new RectF(parent.ContentRect.X, parent.ContentRect.Y, posWidth, 0);
                     BlockFormattingContext.LayoutChildren(posBox, context);
-                    float posHeight = DimensionResolver.ResolveHeight(childEl.Style, cbHeight, posBox);
+                    float posHeight = DimensionResolver.ResolveHeight(childEl.Style, cbHeight, posBox, context.Viewport);
                     if (float.IsNaN(posHeight))
                     {
                         posHeight = BlockFormattingContext.CalculateAutoHeight(posBox);
@@ -352,7 +352,7 @@ namespace Rend.Layout.Internal
                     : containerPhysicalHeight <= 0;
                 if (emptyHasNoBlockExtent)
                 {
-                    var earlyRowTracks = ResolveTrackList(rowRaw, containerHeight, rowGap, rowLineNames);
+                    var earlyRowTracks = ResolveTrackList(rowRaw, containerHeight, context.Viewport, rowGap, rowLineNames);
                     if (earlyRowTracks != null)
                     {
                         float totalEmptyRowH = 0;
@@ -426,10 +426,10 @@ namespace Rend.Layout.Internal
             // Resolve explicit tracks (use subgrid tracks if the axis is subgridded)
             var explicitColTracks = isSubgridCols && subgridColTracks != null
                 ? subgridColTracks
-                : ResolveTrackList(colRaw, containerWidth, colGap, colLineNames);
+                : ResolveTrackList(colRaw, containerWidth, context.Viewport, colGap, colLineNames);
             var explicitRowTracks = isSubgridRows && subgridRowTracks != null
                 ? subgridRowTracks
-                : ResolveTrackList(rowRaw, containerHeight, rowGap, rowLineNames);
+                : ResolveTrackList(rowRaw, containerHeight, context.Viewport, rowGap, rowLineNames);
 
             int explicitCols = explicitColTracks?.Length ?? 0;
             int explicitRows = explicitRowTracks?.Length ?? 0;
@@ -865,7 +865,7 @@ namespace Rend.Layout.Internal
 
                 // Redistribute freed space only if tracks have flexible (fr) max.
                 // Fixed tracks (e.g., repeat(auto-fit, 100px)) keep their size.
-                if (emptyCount > 0 && HasAutoFitFr(colRaw))
+                if (emptyCount > 0 && HasAutoFitFr(colRaw, context.Viewport))
                 {
                     int occupiedCount = explicitColTracks.Length - emptyCount;
                     if (occupiedCount > 0)
@@ -898,21 +898,21 @@ namespace Rend.Layout.Internal
             {
                 colWidths = BuildTrackSizes(autoFitColTracks, finalCols, containerWidth,
                     colGap, style.GetRefValue(PropertyId.GridAutoColumns), containerWidth,
-                    out isImplicitAutoCol);
+                    context.Viewport, out isImplicitAutoCol);
             }
             float[] rowHeights = new float[finalRows];
 
             // [CSS-GRID §7.2.4.1] Extract fit-content limits from raw track definitions.
             // fit-content(limit) = minmax(auto, min(max-content, limit))
-            float[]? fitContentColLimits = ExtractFitContentLimits(colRaw, finalCols, containerWidth, colGap);
+            float[]? fitContentColLimits = ExtractFitContentLimits(colRaw, finalCols, containerWidth, colGap, context.Viewport);
 
             // [CSS-GRID §6.5] Extract explicit minmax floors for minmax(Npx, auto) tracks.
             // These override min-content flooring in the Maximize Tracks pass.
-            float[]? minmaxColFloors = ExtractMinmaxFloors(colRaw, finalCols, containerWidth, colGap);
+            float[]? minmaxColFloors = ExtractMinmaxFloors(colRaw, finalCols, containerWidth, colGap, context.Viewport);
 
             // [CSS-GRID §6.5] Extract max caps for minmax(auto/intrinsic, fixedN) tracks.
             // The content measurement pass clamps the measured size to this cap.
-            float[]? minmaxColMaxCaps = ExtractMinmaxMaxCaps(colRaw, finalCols, containerWidth, colGap);
+            float[]? minmaxColMaxCaps = ExtractMinmaxMaxCaps(colRaw, finalCols, containerWidth, colGap, context.Viewport);
 
             // Resolve intrinsic (min-content / max-content / fit-content) column tracks by measuring items.
             // Sentinel values: -1 = min-content, -2 = max-content, -3 = fit-content.
@@ -995,7 +995,7 @@ namespace Rend.Layout.Internal
                     }
                     // Add horizontal box model spacing
                     var tempBox = new LayoutBox(item.StyledElement, BoxType.Block);
-                    BoxModelCalculator.ApplyBoxModel(tempBox, item.StyledElement.Style, containerWidth);
+                    BoxModelCalculator.ApplyBoxModel(tempBox, item.StyledElement.Style, containerWidth, context.Viewport);
                     float boxSpacing = tempBox.PaddingLeft + tempBox.PaddingRight
                                      + tempBox.BorderLeftWidth + tempBox.BorderRightWidth
                                      + tempBox.MarginLeft + tempBox.MarginRight;
@@ -1133,7 +1133,7 @@ namespace Rend.Layout.Internal
                     float itemWidth = BlockFormattingContext.MeasureIntrinsicWidth(
                         item.StyledElement, SizingKeyword.MaxContent, containerWidth, context);
                     var spanBox = new LayoutBox(item.StyledElement, BoxType.Block);
-                    BoxModelCalculator.ApplyBoxModel(spanBox, item.StyledElement.Style, containerWidth);
+                    BoxModelCalculator.ApplyBoxModel(spanBox, item.StyledElement.Style, containerWidth, context.Viewport);
                     itemWidth += spanBox.PaddingLeft + spanBox.PaddingRight
                                + spanBox.BorderLeftWidth + spanBox.BorderRightWidth
                                + spanBox.MarginLeft + spanBox.MarginRight;
@@ -1285,7 +1285,7 @@ namespace Rend.Layout.Internal
 
             // [CSS-GRID §6.5] Extract max caps for minmax(auto, fixedN) row tracks early,
             // needed during per-item content height clamping below.
-            float[]? minmaxRowMaxCaps = ExtractMinmaxMaxCaps(rowRaw, finalRows, containerHeight, rowGap);
+            float[]? minmaxRowMaxCaps = ExtractMinmaxMaxCaps(rowRaw, finalRows, containerHeight, rowGap, context.Viewport);
 
             // First pass: layout each item to determine content size and row heights
             for (int i = 0; i < items.Count; i++)
@@ -1307,7 +1307,7 @@ namespace Rend.Layout.Internal
                 }
                 else
                 {
-                    BoxModelCalculator.ApplyBoxModel(item.Box, item.StyledElement.Style, cellWidth);
+                    BoxModelCalculator.ApplyBoxModel(item.Box, item.StyledElement.Style, cellWidth, context.Viewport);
 
                     // [CSS-SIZING-4 §5.1] When aspect-ratio is set, both axes are auto,
                     // and stretch applies in the block axis with a definite row height,
@@ -1395,7 +1395,7 @@ namespace Rend.Layout.Internal
                             }
                             else
                             {
-                                contentWidth = DimensionResolver.ResolveWidth(item.StyledElement.Style, cellWidth, item.Box);
+                                contentWidth = DimensionResolver.ResolveWidth(item.StyledElement.Style, cellWidth, item.Box, context.Viewport);
                             }
                         }
                         else if (widthAutoForGrid)
@@ -1417,7 +1417,7 @@ namespace Rend.Layout.Internal
                             }
                             if (IsStretch(effectiveJustifySelf))
                             {
-                                contentWidth = DimensionResolver.ResolveWidth(item.StyledElement.Style, cellWidth, item.Box);
+                                contentWidth = DimensionResolver.ResolveWidth(item.StyledElement.Style, cellWidth, item.Box, context.Viewport);
                             }
                             else
                             {
@@ -1431,7 +1431,7 @@ namespace Rend.Layout.Internal
                         }
                         else
                         {
-                            contentWidth = DimensionResolver.ResolveWidth(item.StyledElement.Style, cellWidth, item.Box);
+                            contentWidth = DimensionResolver.ResolveWidth(item.StyledElement.Style, cellWidth, item.Box, context.Viewport);
                         }
                         if (float.IsNaN(contentWidth))
                         {
@@ -1504,7 +1504,7 @@ namespace Rend.Layout.Internal
 
                     // Use explicit row track height as containing block for percentage height resolution
                     float rowTrackHeight = preHeight > 0 ? preHeight : float.NaN;
-                    float contentHeight = DimensionResolver.ResolveHeight(item.StyledElement.Style, rowTrackHeight, item.Box);
+                    float contentHeight = DimensionResolver.ResolveHeight(item.StyledElement.Style, rowTrackHeight, item.Box, context.Viewport);
                     if (float.IsNaN(contentHeight))
                     {
                         contentHeight = CalculateAutoHeight(item.Box);
@@ -1669,9 +1669,9 @@ namespace Rend.Layout.Internal
 
             // [CSS-GRID §7.2.4.1] Extract fit-content row limits early for auto minimum save.
             float[]? fitContentRowLimits = ExtractFitContentLimits(
-                rowRaw, finalRows, containerHeight, rowGap);
+                rowRaw, finalRows, containerHeight, rowGap, context.Viewport);
             // [CSS-GRID §6.5] Extract explicit minmax floors for row tracks.
-            float[]? minmaxRowFloors = ExtractMinmaxFloors(rowRaw, finalRows, containerHeight, rowGap);
+            float[]? minmaxRowFloors = ExtractMinmaxFloors(rowRaw, finalRows, containerHeight, rowGap, context.Viewport);
             // Save auto minimum (non-spanning content heights) for fit-content floor.
             // Must be saved BEFORE spanning distribution inflates row heights.
             float[]? autoMinRowHeights = null;
@@ -1829,7 +1829,7 @@ namespace Rend.Layout.Internal
             object? autoRowRaw = style.GetRefValue(PropertyId.GridAutoRows);
             if (autoRowRaw != null)
             {
-                var autoRowTracks = ResolveTrackList(autoRowRaw, containerHeight);
+                var autoRowTracks = ResolveTrackList(autoRowRaw, containerHeight, context.Viewport);
                 if (autoRowTracks != null && autoRowTracks.Length > 0)
                 {
                     float autoRowSize = autoRowTracks[0];
@@ -1987,7 +1987,7 @@ namespace Rend.Layout.Internal
                 }
 
                 float resolvedHeight = DimensionResolver.ResolveHeight(
-                    item.StyledElement.Style, cbHeight, item.Box);
+                    item.StyledElement.Style, cbHeight, item.Box, context.Viewport);
                 if (float.IsNaN(resolvedHeight))
                 {
                     continue;
@@ -2855,7 +2855,7 @@ namespace Rend.Layout.Internal
 
                 // Lay out the abspos item using the grid area as containing block.
                 var posBox = item.Box;
-                BoxModelCalculator.ApplyBoxModel(posBox, item.StyledElement.Style, areaWidth);
+                BoxModelCalculator.ApplyBoxModel(posBox, item.StyledElement.Style, areaWidth, context.Viewport);
 
                 // Isolate float context for abspos grid item layout.
                 var savedFloatCtx = context.FloatContext;
@@ -2895,7 +2895,7 @@ namespace Rend.Layout.Internal
                 else
                 {
                     posWidth = DimensionResolver.ResolveWidth(
-                        itemStyle, areaWidth, posBox);
+                        itemStyle, areaWidth, posBox, context.Viewport);
                 }
 
                 // [CSS2 §10.6.4] Pre-resolve height from top/bottom constraints so
@@ -2922,7 +2922,7 @@ namespace Rend.Layout.Internal
                 BlockFormattingContext.LayoutChildren(posBox, context);
 
                 float posHeight = DimensionResolver.ResolveHeight(
-                    itemStyle, areaHeight, posBox);
+                    itemStyle, areaHeight, posBox, context.Viewport);
                 if (float.IsNaN(posHeight))
                 {
                     posHeight = preHeight > 0 ? preHeight : BlockFormattingContext.CalculateAutoHeight(posBox);
@@ -3223,7 +3223,7 @@ namespace Rend.Layout.Internal
         // [CSS-GRID-1 §7.2.3] https://drafts.csswg.org/css-grid-1/#auto-tracks
         // [CSS-GRID-1 §11.8] https://drafts.csswg.org/css-grid-1/#algo-stretch
         private static float[] BuildTrackSizes(float[]? explicitTracks, int count, float containerSize,
-            float gap, object? autoTrackRaw, float defaultSize, out bool[] isImplicitAuto)
+            float gap, object? autoTrackRaw, float defaultSize, Rend.Core.Values.SizeF viewport, out bool[] isImplicitAuto)
         {
             var sizes = new float[count];
             isImplicitAuto = new bool[count];
@@ -3245,7 +3245,7 @@ namespace Rend.Layout.Internal
             float autoSize = 0;
             if (autoTrackRaw != null)
             {
-                var autoTracks = ResolveTrackList(autoTrackRaw, containerSize);
+                var autoTracks = ResolveTrackList(autoTrackRaw, containerSize, viewport);
                 if (autoTracks != null && autoTracks.Length > 0)
                 {
                     autoSize = autoTracks[0];
@@ -3630,7 +3630,7 @@ namespace Rend.Layout.Internal
         /// Supports: px values, percentages, fr units, repeat(count, size).
         /// Returns null for "none" or missing values.
         /// </summary>
-        internal static float[]? ResolveTrackList(object? raw, float containerSize, float gap = 0,
+        internal static float[]? ResolveTrackList(object? raw, float containerSize, Rend.Core.Values.SizeF viewport, float gap = 0,
             Dictionary<string, List<int>>? lineNames = null)
         {
             if (raw == null) return null;
@@ -3672,12 +3672,12 @@ namespace Rend.Layout.Internal
                             continue; // don't add to flatValues — it's a line name, not a track
                         }
                     }
-                    FlattenTrackValue(val, flatValues, containerSize, gap);
+                    FlattenTrackValue(val, flatValues, containerSize, viewport, gap);
                 }
             }
             else
             {
-                FlattenTrackValue(raw, flatValues, containerSize, gap);
+                FlattenTrackValue(raw, flatValues, containerSize, viewport, gap);
             }
 
             if (flatValues.Count == 0) return null;
@@ -3691,9 +3691,9 @@ namespace Rend.Layout.Internal
 
             for (int i = 0; i < flatValues.Count; i++)
             {
-                var parsed = ParseTrackValue(flatValues[i], containerSize);
+                var parsed = ParseTrackValue(flatValues[i], containerSize, viewport);
                 sizes.Add(parsed);
-                minFloors[i] = GetMinmaxFloor(flatValues[i], containerSize);
+                minFloors[i] = GetMinmaxFloor(flatValues[i], containerSize, viewport);
                 if (parsed.value < 0)
                 {
                     hasIntrinsic = true;
@@ -3861,7 +3861,7 @@ namespace Rend.Layout.Internal
             }
         }
 
-        private static bool HasAutoFitFr(object? raw)
+        private static bool HasAutoFitFr(object? raw, Rend.Core.Values.SizeF viewport)
         {
             if (raw is CssFunctionValue fn && fn.Name == "repeat" && fn.Arguments.Count >= 2)
             {
@@ -3879,7 +3879,7 @@ namespace Rend.Layout.Internal
                         }
                         else
                         {
-                            var parsed = ParseTrackValue(fn.Arguments[j], 0);
+                            var parsed = ParseTrackValue(fn.Arguments[j], 0, viewport);
                             if (parsed.isFr) { return true; }
                         }
                     }
@@ -3889,7 +3889,7 @@ namespace Rend.Layout.Internal
             {
                 for (int i = 0; i < list.Values.Count; i++)
                 {
-                    if (HasAutoFitFr(list.Values[i])) { return true; }
+                    if (HasAutoFitFr(list.Values[i], viewport)) { return true; }
                 }
             }
             return false;
@@ -3917,7 +3917,7 @@ namespace Rend.Layout.Internal
             return false;
         }
 
-        private static void FlattenTrackValue(object val, List<object> output, float containerSize, float gap = 0)
+        private static void FlattenTrackValue(object val, List<object> output, float containerSize, Rend.Core.Values.SizeF viewport, float gap = 0)
         {
             if (val is CssFunctionValue fn && fn.Name == "repeat" && fn.Arguments.Count >= 2)
             {
@@ -3957,20 +3957,20 @@ namespace Rend.Layout.Internal
                                     }
                                     if (allKw) { continue; }
                                 }
-                                var innerParsed = ParseTrackValue(innerArg, containerSize);
+                                var innerParsed = ParseTrackValue(innerArg, containerSize, viewport);
                                 trackMinSize += innerParsed.isFr ? 0 : Math.Max(0, innerParsed.value);
                                 tracksPerRepeat++;
                             }
                         }
                         else if (arg is CssFunctionValue minmaxFn && minmaxFn.Name == "minmax" && minmaxFn.Arguments.Count >= 2)
                         {
-                            var minParsed = ParseTrackValue(minmaxFn.Arguments[0], containerSize);
+                            var minParsed = ParseTrackValue(minmaxFn.Arguments[0], containerSize, viewport);
                             trackMinSize += minParsed.isFr ? 0 : minParsed.value;
                             tracksPerRepeat++;
                         }
                         else
                         {
-                            var parsed = ParseTrackValue(arg, containerSize);
+                            var parsed = ParseTrackValue(arg, containerSize, viewport);
                             trackMinSize += parsed.isFr ? 0 : Math.Max(0, parsed.value);
                             tracksPerRepeat++;
                         }
@@ -4028,7 +4028,7 @@ namespace Rend.Layout.Internal
             }
         }
 
-        private static (float value, bool isFr) ParseTrackValue(object val, float containerSize)
+        private static (float value, bool isFr) ParseTrackValue(object val, float containerSize, Rend.Core.Values.SizeF viewport)
         {
             if (val is CssDimensionValue dim)
             {
@@ -4054,14 +4054,14 @@ namespace Rend.Layout.Internal
                 if (fn.Name == "minmax" && fn.Arguments.Count >= 2)
                 {
                     // minmax(min, max): use max if it's fr, otherwise clamp between min and max
-                    var maxVal = ParseTrackValue(fn.Arguments[fn.Arguments.Count - 1], containerSize);
+                    var maxVal = ParseTrackValue(fn.Arguments[fn.Arguments.Count - 1], containerSize, viewport);
                     if (maxVal.isFr)
                     {
                         // fr-based max: report as fr so it gets flexible space,
                         // minimum will be enforced in ResolveTrackList via minmax tracking
                         return maxVal;
                     }
-                    var minVal = ParseTrackValue(fn.Arguments[0], containerSize);
+                    var minVal = ParseTrackValue(fn.Arguments[0], containerSize, viewport);
                     if (minVal.isFr)
                     {
                         return (maxVal.value, false);
@@ -4102,7 +4102,7 @@ namespace Rend.Layout.Internal
                 if (fn.Name == "calc" || fn.Name == "min" || fn.Name == "max" || fn.Name == "clamp")
                 {
                     var ctx = new Core.Values.CssResolutionContext(16f, 16f, containerSize, containerSize, containerSize);
-                    float result = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(fn, containerSize);
+                    float result = Css.Resolution.Internal.ValueResolver.EvaluateDeferredCalc(fn, containerSize, viewport.Width, viewport.Height);
                     return (result, false);
                 }
             }
@@ -4112,11 +4112,11 @@ namespace Rend.Layout.Internal
         /// <summary>
         /// Extract minmax minimum constraint for a track value, or 0 if none.
         /// </summary>
-        private static float GetMinmaxFloor(object val, float containerSize)
+        private static float GetMinmaxFloor(object val, float containerSize, Rend.Core.Values.SizeF viewport)
         {
             if (val is CssFunctionValue fn && fn.Name == "minmax" && fn.Arguments.Count >= 2)
             {
-                var minVal = ParseTrackValue(fn.Arguments[0], containerSize);
+                var minVal = ParseTrackValue(fn.Arguments[0], containerSize, viewport);
                 return minVal.value;
             }
             return 0;
@@ -4128,7 +4128,7 @@ namespace Rend.Layout.Internal
         /// and -1 for non-fit-content tracks. Returns null if no fit-content tracks exist.
         /// </summary>
         private static float[]? ExtractFitContentLimits(
-            object? raw, int trackCount, float containerSize, float gap)
+            object? raw, int trackCount, float containerSize, float gap, Rend.Core.Values.SizeF viewport)
         {
             if (raw == null) return null;
 
@@ -4137,12 +4137,12 @@ namespace Rend.Layout.Internal
             {
                 for (int i = 0; i < list.Values.Count; i++)
                 {
-                    FlattenTrackValue(list.Values[i], flatValues, containerSize, gap);
+                    FlattenTrackValue(list.Values[i], flatValues, containerSize, viewport, gap);
                 }
             }
             else
             {
-                FlattenTrackValue(raw, flatValues, containerSize, gap);
+                FlattenTrackValue(raw, flatValues, containerSize, viewport, gap);
             }
 
             float[]? limits = null;
@@ -4159,7 +4159,7 @@ namespace Rend.Layout.Internal
                             limits[j] = -1f;
                         }
                     }
-                    var limitVal = ParseTrackValue(fn.Arguments[0], containerSize);
+                    var limitVal = ParseTrackValue(fn.Arguments[0], containerSize, viewport);
                     limits[i] = limitVal.value;
                 }
             }
@@ -4173,7 +4173,7 @@ namespace Rend.Layout.Internal
         /// Returns null if no such tracks exist.
         /// </summary>
         private static float[]? ExtractMinmaxFloors(
-            object? raw, int trackCount, float containerSize, float gap)
+            object? raw, int trackCount, float containerSize, float gap, Rend.Core.Values.SizeF viewport)
         {
             if (raw == null)
             {
@@ -4185,12 +4185,12 @@ namespace Rend.Layout.Internal
             {
                 for (int i = 0; i < list.Values.Count; i++)
                 {
-                    FlattenTrackValue(list.Values[i], flatValues, containerSize, gap);
+                    FlattenTrackValue(list.Values[i], flatValues, containerSize, viewport, gap);
                 }
             }
             else
             {
-                FlattenTrackValue(raw, flatValues, containerSize, gap);
+                FlattenTrackValue(raw, flatValues, containerSize, viewport, gap);
             }
 
             float[]? floors = null;
@@ -4199,11 +4199,11 @@ namespace Rend.Layout.Internal
                 if (flatValues[i] is CssFunctionValue fn
                     && fn.Name == "minmax" && fn.Arguments.Count >= 2)
                 {
-                    var maxVal = ParseTrackValue(fn.Arguments[fn.Arguments.Count - 1], containerSize);
+                    var maxVal = ParseTrackValue(fn.Arguments[fn.Arguments.Count - 1], containerSize, viewport);
                     // [CSS-GRID §6.5] Only apply when max is intrinsic (auto/min-content/max-content)
                     if (maxVal.value < 0 && !maxVal.isFr)
                     {
-                        var minVal = ParseTrackValue(fn.Arguments[0], containerSize);
+                        var minVal = ParseTrackValue(fn.Arguments[0], containerSize, viewport);
                         if (minVal.value >= 0 && !minVal.isFr)
                         {
                             if (floors == null)
@@ -4229,7 +4229,7 @@ namespace Rend.Layout.Internal
         /// Returns null if no such tracks exist.
         /// </summary>
         private static float[]? ExtractMinmaxMaxCaps(
-            object? raw, int trackCount, float containerSize, float gap)
+            object? raw, int trackCount, float containerSize, float gap, Rend.Core.Values.SizeF viewport)
         {
             if (raw == null)
             {
@@ -4241,12 +4241,12 @@ namespace Rend.Layout.Internal
             {
                 for (int i = 0; i < list.Values.Count; i++)
                 {
-                    FlattenTrackValue(list.Values[i], flatValues, containerSize, gap);
+                    FlattenTrackValue(list.Values[i], flatValues, containerSize, viewport, gap);
                 }
             }
             else
             {
-                FlattenTrackValue(raw, flatValues, containerSize, gap);
+                FlattenTrackValue(raw, flatValues, containerSize, viewport, gap);
             }
 
             float[]? caps = null;
@@ -4255,8 +4255,8 @@ namespace Rend.Layout.Internal
                 if (flatValues[i] is CssFunctionValue fn
                     && fn.Name == "minmax" && fn.Arguments.Count >= 2)
                 {
-                    var minVal = ParseTrackValue(fn.Arguments[0], containerSize);
-                    var maxVal = ParseTrackValue(fn.Arguments[fn.Arguments.Count - 1], containerSize);
+                    var minVal = ParseTrackValue(fn.Arguments[0], containerSize, viewport);
+                    var maxVal = ParseTrackValue(fn.Arguments[fn.Arguments.Count - 1], containerSize, viewport);
                     // [CSS-GRID §6.5] When min is intrinsic and max is a definite fixed value,
                     // store the max as a cap for the content measurement pass.
                     if (minVal.value < 0 && !minVal.isFr && maxVal.value >= 0 && !maxVal.isFr)
@@ -4356,10 +4356,10 @@ namespace Rend.Layout.Internal
 
                 // Measure this child's height contribution
                 var tempBox = new LayoutBox(childEl, BoxType.Block);
-                BoxModelCalculator.ApplyBoxModel(tempBox, childEl.Style, subgridWidth);
+                BoxModelCalculator.ApplyBoxModel(tempBox, childEl.Style, subgridWidth, context.Viewport);
 
                 float contentHeight;
-                float explicitH = DimensionResolver.ResolveHeight(childEl.Style, float.NaN, tempBox);
+                float explicitH = DimensionResolver.ResolveHeight(childEl.Style, float.NaN, tempBox, context.Viewport);
                 if (!float.IsNaN(explicitH) && explicitH >= 0)
                 {
                     contentHeight = explicitH;
@@ -5331,14 +5331,14 @@ namespace Rend.Layout.Internal
                     continue;
                 }
 
-                var parsed = ParseTrackValue(trackVal, containingWidth);
+                var parsed = ParseTrackValue(trackVal, containingWidth, context.Viewport);
                 if (parsed.isFr)
                 {
                     // [CSS-GRID §12.1] fr tracks for intrinsic sizing: the track's
                     // intrinsic size is max(minmax-floor, items' max-content contribution).
                     // Use -2 sentinel (max-content) so item measurement runs.
                     // The minmax floor is applied as a minimum after measurement.
-                    float minFloor = GetMinmaxFloorForIntrinsic(trackVal, containingWidth);
+                    float minFloor = GetMinmaxFloorForIntrinsic(trackVal, containingWidth, context.Viewport);
                     if (minFloor > 0)
                     {
                         trackSizes[i] = minFloor; // definite minimum, keep as-is
@@ -5518,7 +5518,7 @@ namespace Rend.Layout.Internal
             if (explicitCols == 0 && !HasAnyExplicitPlacement(items))
             {
                 var rowRaw = style.GetRefValue(PropertyId.GridTemplateRows);
-                var explicitRowTracks = ResolveTrackList(rowRaw, 0);
+                var explicitRowTracks = ResolveTrackList(rowRaw, 0, context.Viewport);
                 int explicitRows = explicitRowTracks?.Length ?? 0;
                 bool flowColumn = style.GridAutoFlow == CssGridAutoFlow.Column ||
                                   style.GridAutoFlow == CssGridAutoFlow.ColumnDense;
@@ -5663,7 +5663,7 @@ namespace Rend.Layout.Internal
             object? autoColRaw = style.GetRefValue(PropertyId.GridAutoColumns);
             if (autoColRaw != null)
             {
-                var autoColTracks = ResolveTrackList(autoColRaw, containingWidth);
+                var autoColTracks = ResolveTrackList(autoColRaw, containingWidth, context.Viewport);
                 if (autoColTracks != null && autoColTracks.Length > 0 && autoColTracks[0] > 0)
                 {
                     autoColumnSize = autoColTracks[0];
@@ -5691,15 +5691,15 @@ namespace Rend.Layout.Internal
             }
 
             // [CSS-GRID §7.2.4.1] Extract fit-content limits
-            float[]? fitContentLimits = ExtractFitContentLimits(colRaw, finalCols, containingWidth, colGap);
+            float[]? fitContentLimits = ExtractFitContentLimits(colRaw, finalCols, containingWidth, colGap, context.Viewport);
 
             // [CSS-GRID §6.5] Extract max caps for minmax(auto, fixedN) intrinsic tracks
-            float[]? intrinsicMaxCaps = ExtractMinmaxMaxCaps(colRaw, finalCols, containingWidth, colGap);
+            float[]? intrinsicMaxCaps = ExtractMinmaxMaxCaps(colRaw, finalCols, containingWidth, colGap, context.Viewport);
 
             // [CSS-SIZING-4 §5.1] Resolve row track heights so that items with
             // aspect-ratio + percentage/auto height can derive their width contribution.
             var rowRawForHeight = style.GetRefValue(PropertyId.GridTemplateRows);
-            float[]? rowTrackHeights = ResolveTrackList(rowRawForHeight, 0);
+            float[]? rowTrackHeights = ResolveTrackList(rowRawForHeight, 0, context.Viewport);
 
             // Measure intrinsic column widths from items
             bool isMinContent = keyword == SizingKeyword.MinContent;
@@ -5910,10 +5910,10 @@ namespace Rend.Layout.Internal
                     continue;
                 }
 
-                var parsed = ParseTrackValue(trackVal, containingWidth);
+                var parsed = ParseTrackValue(trackVal, containingWidth, context.Viewport);
                 if (parsed.isFr)
                 {
-                    float minFloor = GetMinmaxFloorForIntrinsic(trackVal, containingWidth);
+                    float minFloor = GetMinmaxFloorForIntrinsic(trackVal, containingWidth, context.Viewport);
                     if (minFloor > 0)
                     {
                         rowTrackSizes[i] = minFloor;
@@ -5937,7 +5937,7 @@ namespace Rend.Layout.Internal
             object? autoRowRaw = style.GetRefValue(PropertyId.GridAutoRows);
             if (autoRowRaw != null)
             {
-                var autoRowTracks = ResolveTrackList(autoRowRaw, containingWidth);
+                var autoRowTracks = ResolveTrackList(autoRowRaw, containingWidth, context.Viewport);
                 if (autoRowTracks != null && autoRowTracks.Length > 0 && autoRowTracks[0] > 0)
                 {
                     autoRowSize = autoRowTracks[0];
@@ -5961,8 +5961,8 @@ namespace Rend.Layout.Internal
                 }
             }
 
-            float[]? fitContentLimits = ExtractFitContentLimits(rowRaw, maxRow, containingWidth, rowGap);
-            float[]? rowMaxCaps = ExtractMinmaxMaxCaps(rowRaw, maxRow, containingWidth, rowGap);
+            float[]? fitContentLimits = ExtractFitContentLimits(rowRaw, maxRow, containingWidth, rowGap, context.Viewport);
+            float[]? rowMaxCaps = ExtractMinmaxMaxCaps(rowRaw, maxRow, containingWidth, rowGap, context.Viewport);
 
             bool isMinContent = keyword == SizingKeyword.MinContent;
             var measuredWidths = new float[maxRow];
@@ -6087,7 +6087,7 @@ namespace Rend.Layout.Internal
                 && !SizingKeyword.IsSizingKeyword(childWidth))
             {
                 var tempBox = new LayoutBox(item.StyledElement, BoxType.Block);
-                BoxModelCalculator.ApplyBoxModel(tempBox, childStyle, containingWidth);
+                BoxModelCalculator.ApplyBoxModel(tempBox, childStyle, containingWidth, context.Viewport);
                 float outerWidth = childWidth + tempBox.PaddingLeft + tempBox.PaddingRight
                                  + tempBox.BorderLeftWidth + tempBox.BorderRightWidth
                                  + tempBox.MarginLeft + tempBox.MarginRight;
@@ -6128,7 +6128,7 @@ namespace Rend.Layout.Internal
                 if (!float.IsNaN(resolvedHeight) && resolvedHeight > 0)
                 {
                     var arBox = new LayoutBox(item.StyledElement, BoxType.Block);
-                    BoxModelCalculator.ApplyBoxModel(arBox, childStyle, containingWidth);
+                    BoxModelCalculator.ApplyBoxModel(arBox, childStyle, containingWidth, context.Viewport);
 
                     if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
                     {
@@ -6165,7 +6165,7 @@ namespace Rend.Layout.Internal
                     if (resolvedHeight > 0)
                     {
                         var replBox = new LayoutBox(item.StyledElement, BoxType.Block);
-                        BoxModelCalculator.ApplyBoxModel(replBox, childStyle, containingWidth);
+                        BoxModelCalculator.ApplyBoxModel(replBox, childStyle, containingWidth, context.Viewport);
                         float contentH = resolvedHeight;
                         if (childStyle.BoxSizing == CssBoxSizing.BorderBox)
                         {
@@ -6196,7 +6196,7 @@ namespace Rend.Layout.Internal
                 item.StyledElement, sizingKeyword, containingWidth, context);
 
             var measureBox = new LayoutBox(item.StyledElement, BoxType.Block);
-            BoxModelCalculator.ApplyBoxModel(measureBox, childStyle, containingWidth);
+            BoxModelCalculator.ApplyBoxModel(measureBox, childStyle, containingWidth, context.Viewport);
             float outerMeasured = contentWidth + measureBox.PaddingLeft + measureBox.PaddingRight
                                 + measureBox.BorderLeftWidth + measureBox.BorderRightWidth
                                 + measureBox.MarginLeft + measureBox.MarginRight;
@@ -6289,7 +6289,7 @@ namespace Rend.Layout.Internal
         /// For minmax(auto/min-content/max-content, fr): returns sentinel for content measurement.
         /// For bare fr: returns 0.
         /// </summary>
-        private static float GetMinmaxFloorForIntrinsic(object val, float containerSize)
+        private static float GetMinmaxFloorForIntrinsic(object val, float containerSize, Rend.Core.Values.SizeF viewport)
         {
             if (val is CssFunctionValue fn && fn.Name == "minmax" && fn.Arguments.Count >= 2)
             {
@@ -6307,7 +6307,7 @@ namespace Rend.Layout.Internal
                     }
                 }
                 // Definite minimum (px, %, etc.)
-                var minVal = ParseTrackValue(minArg, containerSize);
+                var minVal = ParseTrackValue(minArg, containerSize, viewport);
                 if (!minVal.isFr && minVal.value >= 0)
                 {
                     return minVal.value;

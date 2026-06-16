@@ -138,15 +138,15 @@ namespace Rend.PdfRendering
                 return;
             }
 
-            // [SPEC §11.6.5.3] Apply SMask (soft mask) as alpha channel
-            var smaskObj = reader.Resolve(imageDict["SMask"]);
-            if (!smaskObj.IsNull && smaskObj.IsStream)
-            {
-                ApplySoftMask(bitmap, smaskObj, reader);
-            }
-
             try
             {
+                // [SPEC §11.6.5.3] Apply SMask (soft mask) as alpha channel
+                var smaskObj = reader.Resolve(imageDict["SMask"]);
+                if (!smaskObj.IsNull && smaskObj.IsStream)
+                {
+                    ApplySoftMask(bitmap, smaskObj, reader);
+                }
+
                 DrawBitmapInUnitSquare(canvas, state, bitmap);
             }
             finally

@@ -89,7 +89,7 @@ namespace Rend.Layout.Internal
                 var refVal = styledElement.Style.GetRefValue(PropertyId.TextIndent);
                 if (refVal is CssFunctionValue calcFn)
                 {
-                    textIndent = ValueResolver.EvaluateDeferredCalc(calcFn, containingWidth);
+                    textIndent = ValueResolver.EvaluateDeferredCalc(calcFn, containingWidth, context.ViewportWidth, context.ViewportHeight);
                 }
                 else
                 {
@@ -1695,7 +1695,7 @@ namespace Rend.Layout.Internal
             ref float maxLineHeight, ref float lineBaseline, LayoutBox parent)
         {
             var box = new LayoutBox(element, BoxType.InlineBlock);
-            BoxModelCalculator.ApplyBoxModel(box, element.Style, containingWidth);
+            BoxModelCalculator.ApplyBoxModel(box, element.Style, containingWidth, context.Viewport);
 
             float contentWidth;
             float contentHeight = 0;
@@ -1749,7 +1749,7 @@ namespace Rend.Layout.Internal
                 float specW = element.Style.Width;
                 if (DeferredPercent.IsEncoded(specW))
                 {
-                    contentWidth = DimensionResolver.ResolveWidth(element.Style, containingWidth, box);
+                    contentWidth = DimensionResolver.ResolveWidth(element.Style, containingWidth, box, context.Viewport);
                 }
                 else if (float.IsNaN(specW) || SizingKeyword.IsSizingKeyword(specW))
                 {
@@ -1765,7 +1765,7 @@ namespace Rend.Layout.Internal
                 float tempH;
                 if (DeferredPercent.IsEncoded(specH))
                 {
-                    tempH = DimensionResolver.ResolveHeight(element.Style, float.NaN, box);
+                    tempH = DimensionResolver.ResolveHeight(element.Style, float.NaN, box, context.Viewport);
                 }
                 else if (float.IsNaN(specH) || SizingKeyword.IsSizingKeyword(specH))
                 {
@@ -1788,7 +1788,7 @@ namespace Rend.Layout.Internal
             }
             else
             {
-                contentWidth = DimensionResolver.ResolveWidth(element.Style, containingWidth, box);
+                contentWidth = DimensionResolver.ResolveWidth(element.Style, containingWidth, box, context.Viewport);
             }
 
             // Inline-level boxes with auto width should shrink-to-fit
@@ -1828,7 +1828,7 @@ namespace Rend.Layout.Internal
                     var measureChildren = new List<StyledNode>(element.Children);
                     var measureElement = new StyledElement(element.Element, measureStyle, measureChildren);
                     var measureBox = new LayoutBox(measureElement, BoxType.InlineBlock);
-                    BoxModelCalculator.ApplyBoxModel(measureBox, element.Style, containingWidth);
+                    BoxModelCalculator.ApplyBoxModel(measureBox, element.Style, containingWidth, context.Viewport);
                     measureBox.ContentRect = new RectF(0, 0, contentWidth, 0);
                     var prevFloatM = context.FloatContext;
                     context.FloatContext = null;
@@ -1844,8 +1844,8 @@ namespace Rend.Layout.Internal
 
             // [CSS2 §10.4] Apply min-width/max-width constraints
             {
-                float ibMinW = DimensionResolver.ResolvePercentWidth(element.Style.MinWidth, containingWidth, element.Style, PropertyId.MinWidth);
-                float ibMaxW = DimensionResolver.ResolvePercentWidth(element.Style.MaxWidth, containingWidth, element.Style, PropertyId.MaxWidth);
+                float ibMinW = DimensionResolver.ResolvePercentWidth(element.Style.MinWidth, containingWidth, element.Style, PropertyId.MinWidth, context.Viewport);
+                float ibMaxW = DimensionResolver.ResolvePercentWidth(element.Style.MaxWidth, containingWidth, element.Style, PropertyId.MaxWidth, context.Viewport);
                 if (element.Style.BoxSizing == CssBoxSizing.BorderBox)
                 {
                     float hExtra = box.PaddingLeft + box.PaddingRight + box.BorderLeftWidth + box.BorderRightWidth;
@@ -1911,7 +1911,7 @@ namespace Rend.Layout.Internal
 
                 // Layout contents (dispatch based on display type: flex, grid, table, etc.)
                 BlockFormattingContext.LayoutChildren(box, context);
-                contentHeight = DimensionResolver.ResolveHeight(element.Style, float.NaN, box);
+                contentHeight = DimensionResolver.ResolveHeight(element.Style, float.NaN, box, context.Viewport);
                 if (float.IsNaN(contentHeight))
                 {
                     // [CSS-GRID §12.4 / CSS-TABLES §4] Grid and table containers
@@ -2288,7 +2288,7 @@ namespace Rend.Layout.Internal
             if (isRelative)
             {
                 ApplyInlineRelativeOffset(inlineStyle, parent, lineBoxes,
-                    lineBoxCountBefore, fragmentCountBefore, currentLine);
+                    lineBoxCountBefore, fragmentCountBefore, currentLine, context.Viewport);
             }
         }
 
@@ -2300,7 +2300,7 @@ namespace Rend.Layout.Internal
         private static void ApplyInlineRelativeOffset(
             ComputedStyle style, LayoutBox parent,
             List<LineBox> lineBoxes, int lineBoxCountBefore,
-            int fragmentCountBefore, LineBox currentLine)
+            int fragmentCountBefore, LineBox currentLine, Rend.Core.Values.SizeF viewport)
         {
             float cbWidth = parent.ContentRect.Width;
 
@@ -2319,10 +2319,10 @@ namespace Rend.Layout.Internal
             float dx = 0;
             float dy = 0;
 
-            float left = ResolveInlinePositionValue(style.Left, cbWidth, style, PropertyId.Left);
-            float right = ResolveInlinePositionValue(style.Right, cbWidth, style, PropertyId.Right);
-            float top = ResolveInlinePositionValue(style.Top, cbHeight, style, PropertyId.Top);
-            float bottom = ResolveInlinePositionValue(style.Bottom, cbHeight, style, PropertyId.Bottom);
+            float left = ResolveInlinePositionValue(style.Left, cbWidth, style, PropertyId.Left, viewport);
+            float right = ResolveInlinePositionValue(style.Right, cbWidth, style, PropertyId.Right, viewport);
+            float top = ResolveInlinePositionValue(style.Top, cbHeight, style, PropertyId.Top, viewport);
+            float bottom = ResolveInlinePositionValue(style.Bottom, cbHeight, style, PropertyId.Bottom, viewport);
 
             if (!float.IsNaN(left))
             {
@@ -2393,7 +2393,7 @@ namespace Rend.Layout.Internal
         /// Handles deferred percentages and deferred calc() expressions.
         /// </summary>
         private static float ResolveInlinePositionValue(
-            float value, float containingDimension, ComputedStyle style, int propertyId)
+            float value, float containingDimension, ComputedStyle style, int propertyId, Rend.Core.Values.SizeF viewport)
         {
             if (float.IsNaN(value))
             {
@@ -2408,7 +2408,7 @@ namespace Rend.Layout.Internal
                 var refVal = style.GetRefValue(propertyId);
                 if (refVal is CssFunctionValue calcFn)
                 {
-                    return ValueResolver.EvaluateDeferredCalc(calcFn, containingDimension);
+                    return ValueResolver.EvaluateDeferredCalc(calcFn, containingDimension, viewport.Width, viewport.Height);
                 }
                 return 0;
             }

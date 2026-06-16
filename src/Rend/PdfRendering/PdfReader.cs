@@ -7,6 +7,18 @@ using SkiaSharp;
 
 namespace Rend
 {
+    /// <summary>
+    /// Reads an existing PDF and renders its pages to images / extracts text.
+    /// </summary>
+    /// <remarks>
+    /// A single <see cref="PdfReader"/> instance is NOT thread-safe: its underlying
+    /// document reader performs lazy, read-time object parsing (mutating a shared parse
+    /// cursor and object cache) and the page renderer reuses a per-instance typeface cache,
+    /// so concurrent calls (<see cref="RenderPage"/>/<see cref="RenderPageToBitmap"/>/
+    /// <see cref="ExtractText"/>) on one instance must be serialized. Two separate
+    /// <see cref="PdfReader"/> instances on different threads are safe — there is no shared
+    /// static state in the read/render path. Dispose each instance when done.
+    /// </remarks>
     public sealed class PdfReader : IDisposable
     {
         private readonly PdfDocumentReader _reader;

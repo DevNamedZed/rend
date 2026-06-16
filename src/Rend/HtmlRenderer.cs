@@ -68,7 +68,7 @@ namespace Rend
                 DocumentOptions = options.PdfOptions ?? DefaultPdfDocumentOptions()
             };
 
-            var target = new PdfRenderTarget(pdfOptions);
+            using var target = new PdfRenderTarget(pdfOptions);
             var pipeline = new RenderPipeline(options);
             var result = pipeline.Execute(html, target);
             return result.Data;
@@ -129,7 +129,7 @@ namespace Rend
                 DocumentOptions = options.PdfOptions ?? DefaultPdfDocumentOptions()
             };
 
-            var target = new PdfRenderTarget(pdfOptions);
+            using var target = new PdfRenderTarget(pdfOptions);
             var pipeline = new RenderPipeline(options);
             var result = await pipeline.ExecuteAsync(html, target, cancellationToken).ConfigureAwait(false);
             return result.Data;

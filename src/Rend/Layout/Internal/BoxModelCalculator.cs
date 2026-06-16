@@ -11,13 +11,14 @@ namespace Rend.Layout.Internal
     /// </summary>
     internal static class BoxModelCalculator
     {
-        public static void ApplyBoxModel(LayoutBox box, ComputedStyle style, float containingBlockWidth)
+        public static void ApplyBoxModel(LayoutBox box, ComputedStyle style, float containingBlockWidth,
+            Rend.Core.Values.SizeF viewport)
         {
             // Padding (percentages resolve against containing block width)
-            box.PaddingTop = ResolveLength(style.PaddingTop, containingBlockWidth, style, PropertyId.PaddingTop);
-            box.PaddingRight = ResolveLength(style.PaddingRight, containingBlockWidth, style, PropertyId.PaddingRight);
-            box.PaddingBottom = ResolveLength(style.PaddingBottom, containingBlockWidth, style, PropertyId.PaddingBottom);
-            box.PaddingLeft = ResolveLength(style.PaddingLeft, containingBlockWidth, style, PropertyId.PaddingLeft);
+            box.PaddingTop = ResolveLength(style.PaddingTop, containingBlockWidth, style, PropertyId.PaddingTop, viewport);
+            box.PaddingRight = ResolveLength(style.PaddingRight, containingBlockWidth, style, PropertyId.PaddingRight, viewport);
+            box.PaddingBottom = ResolveLength(style.PaddingBottom, containingBlockWidth, style, PropertyId.PaddingBottom, viewport);
+            box.PaddingLeft = ResolveLength(style.PaddingLeft, containingBlockWidth, style, PropertyId.PaddingLeft, viewport);
 
 
             // Border
@@ -27,20 +28,21 @@ namespace Rend.Layout.Internal
             box.BorderLeftWidth = style.BorderLeftStyle != CssBorderStyle.None ? style.BorderLeftWidth : 0;
 
             // Margins (auto is represented as float.NaN in ComputedStyle)
-            box.MarginTop = ResolveMargin(style.MarginTop, containingBlockWidth, style, PropertyId.MarginTop);
-            box.MarginRight = ResolveMargin(style.MarginRight, containingBlockWidth, style, PropertyId.MarginRight);
-            box.MarginBottom = ResolveMargin(style.MarginBottom, containingBlockWidth, style, PropertyId.MarginBottom);
-            box.MarginLeft = ResolveMargin(style.MarginLeft, containingBlockWidth, style, PropertyId.MarginLeft);
+            box.MarginTop = ResolveMargin(style.MarginTop, containingBlockWidth, style, PropertyId.MarginTop, viewport);
+            box.MarginRight = ResolveMargin(style.MarginRight, containingBlockWidth, style, PropertyId.MarginRight, viewport);
+            box.MarginBottom = ResolveMargin(style.MarginBottom, containingBlockWidth, style, PropertyId.MarginBottom, viewport);
+            box.MarginLeft = ResolveMargin(style.MarginLeft, containingBlockWidth, style, PropertyId.MarginLeft, viewport);
         }
 
-        private static float ResolveLength(float value, float containingBlockWidth, ComputedStyle style, int propertyId)
+        private static float ResolveLength(float value, float containingBlockWidth, ComputedStyle style, int propertyId,
+            Rend.Core.Values.SizeF viewport)
         {
             if (float.IsNaN(value)) return 0;
             if (float.IsNegativeInfinity(value))
             {
                 var refVal = style.GetRefValue(propertyId);
                 if (refVal is CssFunctionValue calcFn)
-                    return Math.Max(0, ValueResolver.EvaluateDeferredCalc(calcFn, containingBlockWidth));
+                    return Math.Max(0, ValueResolver.EvaluateDeferredCalc(calcFn, containingBlockWidth, viewport.Width, viewport.Height));
                 return 0;
             }
             // Deferred percentage encoded with sentinel offset
@@ -51,14 +53,15 @@ namespace Rend.Layout.Internal
             return Math.Max(0, value);
         }
 
-        private static float ResolveMargin(float value, float containingBlockWidth, ComputedStyle style, int propertyId)
+        private static float ResolveMargin(float value, float containingBlockWidth, ComputedStyle style, int propertyId,
+            Rend.Core.Values.SizeF viewport)
         {
             if (float.IsNaN(value)) return 0; // auto margins handled separately
             if (float.IsNegativeInfinity(value))
             {
                 var refVal = style.GetRefValue(propertyId);
                 if (refVal is CssFunctionValue calcFn)
-                    return ValueResolver.EvaluateDeferredCalc(calcFn, containingBlockWidth);
+                    return ValueResolver.EvaluateDeferredCalc(calcFn, containingBlockWidth, viewport.Width, viewport.Height);
                 return 0;
             }
             // Deferred percentage encoding: resolve against the containing block width.

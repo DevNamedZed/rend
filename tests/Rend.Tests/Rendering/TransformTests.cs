@@ -31,7 +31,7 @@ namespace Rend.Tests.Rendering
                 new CssDimensionValue(20, "px"),
             });
 
-            var m = TransformHandler.BuildTransformMatrix(fn);
+            var m = TransformHandler.BuildTransformMatrix(fn, default);
 
             Assert.Equal(1f, m.M11, Tolerance);
             Assert.Equal(0f, m.M12, Tolerance);
@@ -49,7 +49,7 @@ namespace Rend.Tests.Rendering
                 new CssDimensionValue(15, "px"),
             });
 
-            var m = TransformHandler.BuildTransformMatrix(fn);
+            var m = TransformHandler.BuildTransformMatrix(fn, default);
 
             Assert.Equal(15f, m.M31, Tolerance);
             Assert.Equal(0f, m.M32, Tolerance);
@@ -63,7 +63,7 @@ namespace Rend.Tests.Rendering
                 new CssDimensionValue(25, "px"),
             });
 
-            var m = TransformHandler.BuildTransformMatrix(fn);
+            var m = TransformHandler.BuildTransformMatrix(fn, default);
 
             Assert.Equal(0f, m.M31, Tolerance);
             Assert.Equal(25f, m.M32, Tolerance);
@@ -78,7 +78,7 @@ namespace Rend.Tests.Rendering
                 new CssNumberValue(3),
             });
 
-            var m = TransformHandler.BuildTransformMatrix(fn);
+            var m = TransformHandler.BuildTransformMatrix(fn, default);
 
             Assert.Equal(2f, m.M11, Tolerance);
             Assert.Equal(3f, m.M22, Tolerance);
@@ -93,7 +93,7 @@ namespace Rend.Tests.Rendering
                 new CssNumberValue(2),
             });
 
-            var m = TransformHandler.BuildTransformMatrix(fn);
+            var m = TransformHandler.BuildTransformMatrix(fn, default);
 
             Assert.Equal(2f, m.M11, Tolerance);
             Assert.Equal(2f, m.M22, Tolerance);
@@ -107,7 +107,7 @@ namespace Rend.Tests.Rendering
                 new CssDimensionValue(90, "deg"),
             });
 
-            var m = TransformHandler.BuildTransformMatrix(fn);
+            var m = TransformHandler.BuildTransformMatrix(fn, default);
 
             // cos(90°) ≈ 0, sin(90°) ≈ 1
             Assert.Equal(0f, m.M11, Tolerance);
@@ -124,7 +124,7 @@ namespace Rend.Tests.Rendering
                 new CssDimensionValue((float)Math.PI, "rad"),
             });
 
-            var m = TransformHandler.BuildTransformMatrix(fn);
+            var m = TransformHandler.BuildTransformMatrix(fn, default);
 
             // cos(π) = -1, sin(π) ≈ 0
             Assert.Equal(-1f, m.M11, Tolerance);
@@ -139,7 +139,7 @@ namespace Rend.Tests.Rendering
                 new CssDimensionValue(45, "deg"),
             });
 
-            var m = TransformHandler.BuildTransformMatrix(fn);
+            var m = TransformHandler.BuildTransformMatrix(fn, default);
 
             Assert.Equal(1f, m.M11, Tolerance);
             Assert.Equal(1f, m.M21, Tolerance); // tan(45°) = 1
@@ -157,7 +157,7 @@ namespace Rend.Tests.Rendering
                 new CssNumberValue(5), new CssNumberValue(6),
             });
 
-            var m = TransformHandler.BuildTransformMatrix(fn);
+            var m = TransformHandler.BuildTransformMatrix(fn, default);
 
             Assert.Equal(1f, m.M11, Tolerance);
             Assert.Equal(2f, m.M12, Tolerance);
@@ -172,7 +172,7 @@ namespace Rend.Tests.Rendering
         {
             var value = new CssKeywordValue("none");
             // This is handled in Apply(), but BuildTransformMatrix returns identity for non-function values
-            var m = TransformHandler.BuildTransformMatrix(value);
+            var m = TransformHandler.BuildTransformMatrix(value, default);
             Assert.Equal(Matrix3x2.Identity, m);
         }
 
@@ -195,7 +195,7 @@ namespace Rend.Tests.Rendering
             });
             var combined = new CssListValue(new List<CssValue> { translateFn, scaleFn }, ' ');
 
-            var m = TransformHandler.BuildTransformMatrix(combined);
+            var m = TransformHandler.BuildTransformMatrix(combined, default);
 
             // translate(10,0) * scale(2) → M31 = 10*2 = 20 (translation is scaled)
             Assert.Equal(2f, m.M11, Tolerance);
@@ -213,7 +213,7 @@ namespace Rend.Tests.Rendering
             var target = new TransformRecordingTarget();
             var box = CreateBoxWithTransform(null);
 
-            bool applied = TransformHandler.Apply(box, target);
+            bool applied = TransformHandler.Apply(box, target, default);
 
             Assert.False(applied);
             Assert.Empty(target.Transforms);
@@ -225,7 +225,7 @@ namespace Rend.Tests.Rendering
             var target = new TransformRecordingTarget();
             var box = CreateBoxWithTransform(new CssKeywordValue("none"));
 
-            bool applied = TransformHandler.Apply(box, target);
+            bool applied = TransformHandler.Apply(box, target, default);
 
             Assert.False(applied);
         }
@@ -241,7 +241,7 @@ namespace Rend.Tests.Rendering
             });
             var box = CreateBoxWithTransform(transformValue, 50, 50, 100, 100);
 
-            bool applied = TransformHandler.Apply(box, target);
+            bool applied = TransformHandler.Apply(box, target, default);
 
             Assert.True(applied);
             Assert.Equal(1, target.SaveCount);
@@ -254,7 +254,7 @@ namespace Rend.Tests.Rendering
             var target = new TransformRecordingTarget();
             var box = new LayoutBox(null, BoxType.Block);
 
-            bool applied = TransformHandler.Apply(box, target);
+            bool applied = TransformHandler.Apply(box, target, default);
 
             Assert.False(applied);
         }

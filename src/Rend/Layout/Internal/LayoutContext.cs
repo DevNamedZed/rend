@@ -36,6 +36,9 @@ namespace Rend.Layout.Internal
         /// <summary>The viewport height in CSS pixels.</summary>
         public float ViewportHeight => Options.ViewportHeight;
 
+        /// <summary>Viewport size carrier for threading into deferred calc()/length resolution.</summary>
+        public Rend.Core.Values.SizeF Viewport => new Rend.Core.Values.SizeF(Options.ViewportWidth, Options.ViewportHeight);
+
         /// <summary>Current float context from the enclosing BFC, if any.</summary>
         public FloatContext? FloatContext { get; set; }
 

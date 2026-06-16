@@ -10,27 +10,13 @@ namespace Rend.Rendering.Internal
     /// </summary>
     internal static class PaintOrderSorter
     {
-        // ThreadStatic cached lists to avoid allocating 6 temporary lists per call.
-        // These are cleared and reused across calls on the same thread.
-        [System.ThreadStatic] private static List<LayoutBox>? t_negativeZIndex;
-        [System.ThreadStatic] private static List<LayoutBox>? t_blockNonPositioned;
-        [System.ThreadStatic] private static List<LayoutBox>? t_floats;
-        [System.ThreadStatic] private static List<LayoutBox>? t_inlines;
-        [System.ThreadStatic] private static List<LayoutBox>? t_positionedZeroAuto;
-        [System.ThreadStatic] private static List<LayoutBox>? t_positiveZIndex;
-
-        // [CSS2 §E.2] Positioned descendants promoted from non-stacking-context
-        // subtrees. These paint at step 6 of the current level and must be
-        // skipped during their normal parent's recursive paint.
-        [System.ThreadStatic] private static HashSet<LayoutBox>? t_promotedBoxes;
-
         /// <summary>
         /// Returns true if the box was promoted to a higher paint level and
         /// should be skipped during its parent's normal recursive paint.
         /// </summary>
-        public static bool IsPromoted(LayoutBox box)
+        public static bool IsPromoted(PaintContext context, LayoutBox box)
         {
-            return t_promotedBoxes != null && t_promotedBoxes.Contains(box);
+            return context.PromotedBoxes.Contains(box);
         }
 
         /// <summary>
@@ -45,9 +31,10 @@ namespace Rend.Rendering.Internal
         ///   <item>Descendants with positive z-index stacking contexts</item>
         /// </list>
         /// </summary>
+        /// <param name="context">Per-paint scratch (bucket lists + promoted-box set).</param>
         /// <param name="root">The parent layout box whose children to sort.</param>
         /// <returns>A list of child boxes in paint order.</returns>
-        public static List<LayoutBox> GetPaintOrder(LayoutBox root)
+        public static List<LayoutBox> GetPaintOrder(PaintContext context, LayoutBox root)
         {
             // Fast path: check if all children are simple block non-positioned (most common case).
             // If so, return children directly without any classification.
@@ -84,13 +71,13 @@ namespace Rend.Rendering.Internal
                 return new List<LayoutBox>(children);
             }
 
-            // General path: classify into buckets using thread-static lists.
-            var negativeZIndex = t_negativeZIndex ??= new List<LayoutBox>();
-            var blockNonPositioned = t_blockNonPositioned ??= new List<LayoutBox>();
-            var floats = t_floats ??= new List<LayoutBox>();
-            var inlines = t_inlines ??= new List<LayoutBox>();
-            var positionedZeroAuto = t_positionedZeroAuto ??= new List<LayoutBox>();
-            var positiveZIndex = t_positiveZIndex ??= new List<LayoutBox>();
+            // General path: classify into the per-paint bucket lists owned by the PaintContext.
+            var negativeZIndex = context.NegativeZIndex;
+            var blockNonPositioned = context.BlockNonPositioned;
+            var floats = context.Floats;
+            var inlines = context.Inlines;
+            var positionedZeroAuto = context.PositionedZeroAuto;
+            var positiveZIndex = context.PositiveZIndex;
 
             negativeZIndex.Clear();
             blockNonPositioned.Clear();
@@ -108,7 +95,7 @@ namespace Rend.Rendering.Internal
             // [CSS2 §E.2] Promote positioned descendants from non-stacking-context
             // subtrees. These elements should paint at step 6 of this level, not
             // buried inside their parent's recursive paint.
-            var promoted = t_promotedBoxes ??= new HashSet<LayoutBox>();
+            var promoted = context.PromotedBoxes;
             promoted.Clear();
             for (int i = 0; i < blockNonPositioned.Count; i++)
             {

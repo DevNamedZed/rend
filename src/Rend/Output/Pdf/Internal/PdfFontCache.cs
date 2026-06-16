@@ -7,7 +7,7 @@ namespace Rend.Output.Pdf.Internal
 {
     internal sealed class PdfFontCache
     {
-        private static readonly ConditionalWeakTable<byte[], PdfFontData> ParsedFontDataCache =
+        private readonly ConditionalWeakTable<byte[], PdfFontData> _parsedFontDataCache =
             new ConditionalWeakTable<byte[], PdfFontData>();
 
         private readonly Dictionary<FontDescriptor, PdfFont> _cache = new Dictionary<FontDescriptor, PdfFont>();
@@ -46,10 +46,10 @@ namespace Rend.Output.Pdf.Internal
             return pdfFont;
         }
 
-        private static PdfFont AddFontWithCache(byte[] fontData, PdfDocument doc,
-                                                 FontEmbedMode embedMode)
+        private PdfFont AddFontWithCache(byte[] fontData, PdfDocument doc,
+                                         FontEmbedMode embedMode)
         {
-            var parsedData = ParsedFontDataCache.GetValue(fontData,
+            var parsedData = _parsedFontDataCache.GetValue(fontData,
                 bytes => PdfFontData.FromBytes(bytes, FontEmbedMode.Subset));
             return doc.AddFont(parsedData, embedMode);
         }

@@ -21,7 +21,7 @@ namespace Rend.Tests.Layout
                 new CssDimensionValue(200, "px"),
                 new CssDimensionValue(300, "px"));
 
-            var result = GridLayout.ResolveTrackList(list, 600);
+            var result = GridLayout.ResolveTrackList(list, 600, default);
 
             Assert.NotNull(result);
             Assert.Equal(3, result!.Length);
@@ -38,7 +38,7 @@ namespace Rend.Tests.Layout
                 new CssDimensionValue(2, "fr"),
                 new CssDimensionValue(1, "fr"));
 
-            var result = GridLayout.ResolveTrackList(list, 400);
+            var result = GridLayout.ResolveTrackList(list, 400, default);
 
             Assert.NotNull(result);
             Assert.Equal(3, result!.Length);
@@ -55,7 +55,7 @@ namespace Rend.Tests.Layout
                 new CssDimensionValue(1, "fr"),
                 new CssDimensionValue(2, "fr"));
 
-            var result = GridLayout.ResolveTrackList(list, 400);
+            var result = GridLayout.ResolveTrackList(list, 400, default);
 
             Assert.NotNull(result);
             Assert.Equal(3, result!.Length);
@@ -69,7 +69,7 @@ namespace Rend.Tests.Layout
         {
             var list = L(new CssPercentageValue(25), new CssPercentageValue(75));
 
-            var result = GridLayout.ResolveTrackList(list, 400);
+            var result = GridLayout.ResolveTrackList(list, 400, default);
 
             Assert.NotNull(result);
             Assert.Equal(2, result!.Length);
@@ -85,7 +85,7 @@ namespace Rend.Tests.Layout
                 Fn("minmax", new CssDimensionValue(150, "px"), new CssDimensionValue(1, "fr")),
                 Fn("minmax", new CssDimensionValue(150, "px"), new CssDimensionValue(1, "fr")));
 
-            var result = GridLayout.ResolveTrackList(list, 200);
+            var result = GridLayout.ResolveTrackList(list, 200, default);
 
             Assert.NotNull(result);
             Assert.Equal(2, result!.Length);
@@ -101,7 +101,7 @@ namespace Rend.Tests.Layout
                 Fn("minmax", new CssDimensionValue(100, "px"), new CssDimensionValue(1, "fr")),
                 Fn("minmax", new CssDimensionValue(100, "px"), new CssDimensionValue(2, "fr")));
 
-            var result = GridLayout.ResolveTrackList(list, 600);
+            var result = GridLayout.ResolveTrackList(list, 600, default);
 
             Assert.NotNull(result);
             Assert.Equal(2, result!.Length);
@@ -115,7 +115,7 @@ namespace Rend.Tests.Layout
             // minmax(100px, 200px) → 200px
             var list = Fn("minmax", new CssDimensionValue(100, "px"), new CssDimensionValue(200, "px"));
 
-            var result = GridLayout.ResolveTrackList(list, 500);
+            var result = GridLayout.ResolveTrackList(list, 500, default);
 
             Assert.NotNull(result);
             Assert.Single(result!);
@@ -127,7 +127,7 @@ namespace Rend.Tests.Layout
         {
             var list = Fn("repeat", new CssNumberValue(3), new CssDimensionValue(100, "px"));
 
-            var result = GridLayout.ResolveTrackList(list, 300);
+            var result = GridLayout.ResolveTrackList(list, 300, default);
 
             Assert.NotNull(result);
             Assert.Equal(3, result!.Length);
@@ -141,7 +141,7 @@ namespace Rend.Tests.Layout
             // repeat(auto-fill, 100px) in 350px → 3 cols
             var list = Fn("repeat", new CssKeywordValue("auto-fill"), new CssDimensionValue(100, "px"));
 
-            var result = GridLayout.ResolveTrackList(list, 350);
+            var result = GridLayout.ResolveTrackList(list, 350, default);
 
             Assert.NotNull(result);
             Assert.Equal(3, result!.Length);
@@ -157,7 +157,7 @@ namespace Rend.Tests.Layout
                 new CssKeywordValue("auto-fill"),
                 Fn("minmax", new CssDimensionValue(80, "px"), new CssDimensionValue(1, "fr")));
 
-            var result = GridLayout.ResolveTrackList(list, 500);
+            var result = GridLayout.ResolveTrackList(list, 500, default);
 
             Assert.NotNull(result);
             Assert.Equal(6, result!.Length);
@@ -168,13 +168,13 @@ namespace Rend.Tests.Layout
         [Fact]
         public void ResolveTrackList_None_ReturnsNull()
         {
-            Assert.Null(GridLayout.ResolveTrackList(new CssKeywordValue("none"), 400));
+            Assert.Null(GridLayout.ResolveTrackList(new CssKeywordValue("none"), 400, default));
         }
 
         [Fact]
         public void ResolveTrackList_Null_ReturnsNull()
         {
-            Assert.Null(GridLayout.ResolveTrackList(null, 400));
+            Assert.Null(GridLayout.ResolveTrackList(null, 400, default));
         }
 
         [Fact]
@@ -186,7 +186,7 @@ namespace Rend.Tests.Layout
                 Fn("fit-content", new CssDimensionValue(200, "px")),
                 new CssDimensionValue(1, "fr"));
 
-            var result = GridLayout.ResolveTrackList(list, 400);
+            var result = GridLayout.ResolveTrackList(list, 400, default);
 
             Assert.NotNull(result);
             Assert.Equal(2, result!.Length);
@@ -199,7 +199,7 @@ namespace Rend.Tests.Layout
             // repeat(4, 1fr) in 400px → 4 x 100px
             var list = Fn("repeat", new CssNumberValue(4), new CssDimensionValue(1, "fr"));
 
-            var result = GridLayout.ResolveTrackList(list, 400);
+            var result = GridLayout.ResolveTrackList(list, 400, default);
 
             Assert.NotNull(result);
             Assert.Equal(4, result!.Length);

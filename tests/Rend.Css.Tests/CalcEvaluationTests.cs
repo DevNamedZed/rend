@@ -216,7 +216,7 @@ namespace Rend.Css.Tests
             {
                 // Deferred calc: sentinel means percentages need layout-time resolution
                 if (float.IsNegativeInfinity(pv.FloatValue) && refVal is CssFunctionValue calcFn)
-                    return ValueResolver.EvaluateDeferredCalc(calcFn, percentBase);
+                    return ValueResolver.EvaluateDeferredCalc(calcFn, percentBase, 800, 600);
 
                 return pv.FloatValue;
             }
