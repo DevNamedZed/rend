@@ -24,9 +24,43 @@ namespace Rend.Pdf.Parsing
                     return AsciiHexDecode(data);
                 case "ASCII85Decode":
                     return Ascii85Decode(data);
+                case "CCITTFaxDecode":
+                case "CCF":
+                    return CcittFaxDecode(data, resolvedParams);
                 default:
                     return data;
             }
+        }
+
+        // [SPEC §7.4.6] CCITTFaxDecode. Group 4 (K < 0) is supported; Group 3 (K >= 0) is not yet
+        // implemented and is passed through unchanged so callers degrade rather than crash.
+        private static byte[] CcittFaxDecode(byte[] data, PdfObj resolvedParams)
+        {
+            int k = 0;
+            int columns = 1728;
+            int rows = 0;
+            bool blackIs1 = false;
+            if (!resolvedParams.IsNull)
+            {
+                if (!resolvedParams["K"].IsNull) { k = (int)resolvedParams["K"].AsInt(); }
+                if (!resolvedParams["Columns"].IsNull) { columns = (int)resolvedParams["Columns"].AsInt(); }
+                if (!resolvedParams["Rows"].IsNull) { rows = (int)resolvedParams["Rows"].AsInt(); }
+                if (!resolvedParams["BlackIs1"].IsNull) { blackIs1 = resolvedParams["BlackIs1"].AsBool(); }
+            }
+            if (k < 0 && columns > 0)
+            {
+                try
+                {
+                    return Rend.Pdf.Images.CcittFaxCodec.DecodeG4(data, columns, rows, blackIs1);
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    // Malformed/hostile dimensions (out-of-range Columns/Rows): degrade to an empty
+                    // image rather than crash the reader. The image renderer then draws nothing.
+                    return Array.Empty<byte>();
+                }
+            }
+            return data;
         }
 
         public static byte[] FlateDecode(byte[] data, PdfObj resolvedParams)

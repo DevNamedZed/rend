@@ -59,6 +59,26 @@ namespace Rend.PdfRendering
             var defaultWidthObj = reader.Resolve(cidFontDict["DW"]);
             state.FontDefaultWidth = defaultWidthObj.IsNull ? 1000f : defaultWidthObj.AsFloat();
 
+            // [SPEC §9.6.5] Type3 fonts have no font program — each glyph is a PDF content stream
+            // in /CharProcs, drawn through the FontMatrix. They are rendered by executing those
+            // streams, not by loading a typeface, so resolve the Type3 state and stop here.
+            if (fontType == "Type3")
+            {
+                state.IsType3Font = true;
+                state.Type3CharProcs = reader.Resolve(fontDict["CharProcs"]);
+                var type3Resources = reader.Resolve(fontDict["Resources"]);
+                state.Type3FontResources = type3Resources.IsNull ? null : type3Resources;
+                state.Type3FontMatrix = ReadType3FontMatrix(reader, fontDict);
+                state.Type3GlyphNames = ResolveType3GlyphNames(reader, fontDict);
+                state.Typeface = null;
+                return;
+            }
+
+            state.IsType3Font = false;
+            state.Type3CharProcs = null;
+            state.Type3FontResources = null;
+            state.Type3GlyphNames = null;
+
             int cacheKey = GetFontCacheKey(fontDict);
             bool isSystemFallback = false;
 
@@ -517,6 +537,60 @@ namespace Rend.PdfRendering
             if (bold) { return SKFontStyle.Bold; }
             if (italic) { return SKFontStyle.Italic; }
             return SKFontStyle.Normal;
+        }
+
+        // [SPEC §9.6.5] Maps each code to its /CharProcs glyph name via the font /Encoding's
+        // /Differences. Unlike ResolveEncoding (which maps codes to Unicode for text extraction),
+        // Type3 needs the raw glyph name to look up the glyph's content stream.
+        private static Dictionary<int, string>? ResolveType3GlyphNames(PdfDocumentReader reader, PdfObj fontDict)
+        {
+            var encoding = reader.Resolve(fontDict["Encoding"]);
+            if (!encoding.IsDict || !encoding.ContainsKey("Differences"))
+            {
+                return null;
+            }
+
+            var differences = reader.Resolve(encoding["Differences"]);
+            if (!differences.IsArray)
+            {
+                return null;
+            }
+
+            var glyphNames = new Dictionary<int, string>();
+            int code = 0;
+            for (int i = 0; i < differences.Count; i++)
+            {
+                var item = reader.Resolve(differences[i]);
+                if (item.IsInt || item.IsReal)
+                {
+                    code = (int)item.AsInt();
+                }
+                else if (item.IsName)
+                {
+                    string glyphName = item.AsName();
+                    if (glyphName.StartsWith("/"))
+                    {
+                        glyphName = glyphName.Substring(1);
+                    }
+                    glyphNames[code] = glyphName;
+                    code++;
+                }
+            }
+            return glyphNames;
+        }
+
+        // [SPEC §9.6.5] /FontMatrix maps glyph space to text space (Type3 is required to have one).
+        private static SKMatrix ReadType3FontMatrix(PdfDocumentReader reader, PdfObj fontDict)
+        {
+            var matrix = reader.Resolve(fontDict["FontMatrix"]);
+            if (matrix.IsArray && matrix.Count >= 6)
+            {
+                return new SKMatrix(
+                    matrix[0].AsFloat(), matrix[2].AsFloat(), matrix[4].AsFloat(),
+                    matrix[1].AsFloat(), matrix[3].AsFloat(), matrix[5].AsFloat(),
+                    0f, 0f, 1f);
+            }
+            return new SKMatrix(0.001f, 0f, 0f, 0f, 0.001f, 0f, 0f, 0f, 1f);
         }
 
         private static Dictionary<int, string>? ResolveEncoding(PdfDocumentReader reader, PdfObj fontDict)

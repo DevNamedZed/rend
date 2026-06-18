@@ -406,15 +406,15 @@ namespace Rend.Output.Image
         /// as unpremultiplied RGBA8888 pixels. <paramref name="geometryScale"/> should equal the
         /// supersample factor so blur/drop-shadow distances match the bitmap resolution.
         /// </summary>
-        internal byte[] ExtractFilteredRgba(CssFilterEffect[] effects, float geometryScale, out int width, out int height)
+        internal FilteredCaptureResult ExtractFilteredCapture(CssFilterEffect[] effects, float geometryScale)
         {
             EnsureCanvas();
             _currentCanvas!.Flush();
-            width = _currentBitmap!.Width;
-            height = _currentBitmap.Height;
+            int fullWidth = _currentBitmap!.Width;
+            int fullHeight = _currentBitmap.Height;
 
             SKImageFilter? imageFilter = BuildCombinedFilter(effects, geometryScale, out byte alpha);
-            var premulInfo = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+            var premulInfo = new SKImageInfo(fullWidth, fullHeight, SKColorType.Rgba8888, SKAlphaType.Premul);
             using (var rendered = new SKBitmap(premulInfo))
             {
                 using (var canvas = new SKCanvas(rendered))
@@ -432,22 +432,69 @@ namespace Rend.Output.Image
                 }
                 imageFilter?.Dispose();
 
-                byte[] rgba = new byte[width * height * 4];
-                var unpremulInfo = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+                byte[] fullRgba = new byte[fullWidth * fullHeight * 4];
+                var unpremulInfo = new SKImageInfo(fullWidth, fullHeight, SKColorType.Rgba8888, SKAlphaType.Unpremul);
                 using (var snapshot = SKImage.FromBitmap(rendered))
                 {
-                    GCHandle handle = GCHandle.Alloc(rgba, GCHandleType.Pinned);
+                    GCHandle handle = GCHandle.Alloc(fullRgba, GCHandleType.Pinned);
                     try
                     {
-                        snapshot.ReadPixels(unpremulInfo, handle.AddrOfPinnedObject(), width * 4, 0, 0);
+                        snapshot.ReadPixels(unpremulInfo, handle.AddrOfPinnedObject(), fullWidth * 4, 0, 0);
                     }
                     finally
                     {
                         handle.Free();
                     }
                 }
-                return rgba;
+
+                return CropToOpaqueBounds(fullRgba, fullWidth, fullHeight);
             }
+        }
+
+        // Crop the full-page capture to its non-transparent content (the filter result already
+        // includes any blur/shadow spread), so a small filtered element embeds as a small image
+        // instead of a page-sized one. The crop offset + full size let the caller place it exactly.
+        private static FilteredCaptureResult CropToOpaqueBounds(byte[] fullRgba, int fullWidth, int fullHeight)
+        {
+            int minX = fullWidth;
+            int minY = fullHeight;
+            int maxX = -1;
+            int maxY = -1;
+            for (int y = 0; y < fullHeight; y++)
+            {
+                int rowBase = y * fullWidth * 4;
+                for (int x = 0; x < fullWidth; x++)
+                {
+                    if (fullRgba[rowBase + x * 4 + 3] != 0)
+                    {
+                        if (x < minX) { minX = x; }
+                        if (x > maxX) { maxX = x; }
+                        if (y < minY) { minY = y; }
+                        if (y > maxY) { maxY = y; }
+                    }
+                }
+            }
+
+            if (maxX < 0)
+            {
+                return FilteredCaptureResult.Empty(fullWidth, fullHeight);
+            }
+
+            int width = maxX - minX + 1;
+            int height = maxY - minY + 1;
+            if (minX == 0 && minY == 0 && width == fullWidth && height == fullHeight)
+            {
+                return new FilteredCaptureResult(fullRgba, fullWidth, fullHeight, 0, 0, fullWidth, fullHeight);
+            }
+
+            byte[] cropped = new byte[width * height * 4];
+            for (int row = 0; row < height; row++)
+            {
+                int sourceStart = ((minY + row) * fullWidth + minX) * 4;
+                int destinationStart = row * width * 4;
+                System.Array.Copy(fullRgba, sourceStart, cropped, destinationStart, width * 4);
+            }
+            return new FilteredCaptureResult(cropped, width, height, minX, minY, fullWidth, fullHeight);
         }
 
         /// <inheritdoc />

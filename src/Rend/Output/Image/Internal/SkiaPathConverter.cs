@@ -33,7 +33,7 @@ namespace Rend.Output.Image.Internal
                     new SKPoint(rr.BrRx, rr.BrRy),
                     new SKPoint(rr.BlRx, rr.BlRy),
                 };
-                var skRRect = new SKRoundRect();
+                using var skRRect = new SKRoundRect();
                 skRRect.SetRectRadii(rect, radii);
                 skPath.AddRoundRect(skRRect);
 

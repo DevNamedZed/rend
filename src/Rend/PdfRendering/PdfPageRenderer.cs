@@ -16,12 +16,19 @@ namespace Rend.PdfRendering
         private readonly ContentStreamParser _parser = new ContentStreamParser();
         private readonly Dictionary<int, SKTypeface> _typefaceCache = new Dictionary<int, SKTypeface>();
         private readonly List<string> _warnings = new List<string>();
+        private readonly AnnotationRenderer _annotationRenderer;
+
+        // Bounds recursive content execution (nested Form XObjects, Type3 glyphs, annotation
+        // appearances) so a self-referential PDF can't overflow the stack and crash the process.
+        private const int MaxContentRecursionDepth = 16;
+        private int _contentRecursionDepth;
 
         public IReadOnlyList<string> Warnings => _warnings;
 
         public PdfPageRenderer(PdfDocumentReader reader)
         {
             _reader = reader ?? throw new ArgumentNullException(nameof(reader));
+            _annotationRenderer = new AnnotationRenderer(_reader, RenderAppearanceStream, _warnings.Add);
         }
 
         public void Dispose()
@@ -80,10 +87,21 @@ namespace Rend.PdfRendering
             canvas.Scale(scale, -scale);
             canvas.Translate(-cropBox.Left, -cropBox.Top);
 
+            // The page coordinate transform; captured so annotations render from a clean baseline
+            // even if the content stream left an unbalanced q/Q on the canvas matrix stack.
+            SKMatrix pageMatrix = canvas.TotalMatrix;
+
             var state = new GraphicsState();
             var stateStack = new Stack<GraphicsState>();
             var path = new SKPath();
 
+            // Render content inside its own save level so unbalanced q/Q — or a leaked clip
+            // (a `W n`, whether or not inside a `q`) — in the content stream cannot bleed into the
+            // annotation pass. SetMatrix alone resets the CTM but not the clip. The explicit Save
+            // here means even a TOP-LEVEL clip lands on a poppable level; RestoreToCount then unwinds
+            // it (and any leaked saves) back to the page baseline.
+            int contentSaveCount = canvas.SaveCount;
+            canvas.Save();
             foreach (var op in operators)
             {
                 try
@@ -95,10 +113,16 @@ namespace Rend.PdfRendering
                     _warnings.Add($"Operator '{op.Name}': {ex.Message}");
                 }
             }
+            canvas.RestoreToCount(contentSaveCount);
 
             path.Dispose();
             state.TextClipPath?.Dispose();
             state.TextClipPath = null;
+
+            canvas.Save();
+            canvas.SetMatrix(pageMatrix);
+            _annotationRenderer.RenderAnnotations(canvas, pageDict);
+            canvas.Restore();
             return bitmap;
         }
 
@@ -487,10 +511,10 @@ namespace Rend.PdfRendering
                 case "TD": OpTextMoveTD(state, args); break;
                 case "Tm": OpSetTextMatrix(state, args); break;
                 case "T*": OpTextNextLine(state); break;
-                case "Tj": OpShowText(canvas, state, args); break;
-                case "TJ": OpShowTextArray(canvas, state, args); break;
-                case "'": OpTextNextLine(state); OpShowText(canvas, state, args); break;
-                case "\"": OpShowTextQuoteDbl(canvas, state, args); break;
+                case "Tj": OpShowText(canvas, state, args, pageDict); break;
+                case "TJ": OpShowTextArray(canvas, state, args, pageDict); break;
+                case "'": OpTextNextLine(state); OpShowText(canvas, state, args, pageDict); break;
+                case "\"": OpShowTextQuoteDbl(canvas, state, args, pageDict); break;
                 case "Tc": state.CharSpacing = ContentStreamParser.GetFloat(args, 0); break;
                 case "Tw": state.WordSpacing = ContentStreamParser.GetFloat(args, 0); break;
                 case "TL": state.TextLeading = ContentStreamParser.GetFloat(args, 0); break;
@@ -515,6 +539,9 @@ namespace Rend.PdfRendering
                 case "EMC": break;
                 case "MP": break;
                 case "DP": break;
+                // [SPEC §9.6.5.2] Type3 glyph metric operators; width comes from /Widths, so no-op here.
+                case "d0": break;
+                case "d1": break;
                 default: break;
             }
         }
@@ -752,7 +779,7 @@ namespace Rend.PdfRendering
             state.TextMatrix = state.TextLineMatrix;
         }
 
-        private void OpShowText(SKCanvas canvas, GraphicsState state, List<object> args)
+        private void OpShowText(SKCanvas canvas, GraphicsState state, List<object> args, PdfObj pageDict)
         {
             if (args.Count < 1)
             {
@@ -760,11 +787,11 @@ namespace Rend.PdfRendering
             }
             if (args[0] is byte[] textBytes)
             {
-                DrawTextBytes(canvas, state, textBytes);
+                DrawTextBytes(canvas, state, textBytes, pageDict);
             }
         }
 
-        private void OpShowTextArray(SKCanvas canvas, GraphicsState state, List<object> args)
+        private void OpShowTextArray(SKCanvas canvas, GraphicsState state, List<object> args, PdfObj pageDict)
         {
             if (args.Count < 1 || !(args[0] is List<object> array))
             {
@@ -775,7 +802,7 @@ namespace Rend.PdfRendering
             {
                 if (item is byte[] textBytes)
                 {
-                    DrawTextBytes(canvas, state, textBytes);
+                    DrawTextBytes(canvas, state, textBytes, pageDict);
                 }
                 else if (item is double num)
                 {
@@ -787,7 +814,7 @@ namespace Rend.PdfRendering
             }
         }
 
-        private void OpShowTextQuoteDbl(SKCanvas canvas, GraphicsState state, List<object> args)
+        private void OpShowTextQuoteDbl(SKCanvas canvas, GraphicsState state, List<object> args, PdfObj pageDict)
         {
             if (args.Count >= 3)
             {
@@ -797,12 +824,12 @@ namespace Rend.PdfRendering
 
                 if (args[2] is byte[] textBytes)
                 {
-                    DrawTextBytes(canvas, state, textBytes);
+                    DrawTextBytes(canvas, state, textBytes, pageDict);
                 }
             }
         }
 
-        private void DrawTextBytes(SKCanvas canvas, GraphicsState state, byte[] textBytes)
+        private void DrawTextBytes(SKCanvas canvas, GraphicsState state, byte[] textBytes, PdfObj pageDict)
         {
             var typeface = state.Typeface ?? SKTypeface.Default;
             float fontSize = Math.Abs(state.FontSize);
@@ -810,6 +837,13 @@ namespace Rend.PdfRendering
             float textRise = state.TextRise;
 
             int[] codes = PdfFontResolver.GetCharCodes(state, textBytes);
+
+            if (state.IsType3Font)
+            {
+                DrawType3Text(canvas, state, codes, pageDict);
+                return;
+            }
+
             string[] decodedPerCode = PdfFontResolver.DecodeTextBytesPerCode(state, textBytes);
 
             bool doFill = state.TextRenderMode == 0 || state.TextRenderMode == 2 ||
@@ -996,6 +1030,125 @@ namespace Rend.PdfRendering
                 var translateAdv = SKMatrix.CreateTranslation(displacement, 0);
                 state.TextMatrix = SKMatrix.Concat(state.TextMatrix, translateAdv);
             }
+        }
+
+        // [SPEC §9.6.5] Renders a run of Type3 glyphs. Each glyph is a /CharProcs content stream
+        // drawn through the FontMatrix and text rendering matrix; the advance comes from /Widths in
+        // glyph space (scaled by the FontMatrix), matching the standard text-space displacement.
+        private void DrawType3Text(SKCanvas canvas, GraphicsState state, int[] codes, PdfObj pageDict)
+        {
+            SKMatrix savedCtm = canvas.TotalMatrix;
+            float hScale = state.HorizontalScaling / 100f;
+            bool invisible = state.TextRenderMode == 3;
+            PdfObj charProcs = state.Type3CharProcs ?? PdfObj.Null;
+            PdfObj effectivePage = BuildType3ResourcePage(state, pageDict);
+
+            foreach (int code in codes)
+            {
+                string? glyphName = state.Type3GlyphNames != null && state.Type3GlyphNames.TryGetValue(code, out string? name)
+                    ? name : null;
+
+                if (!invisible && glyphName != null && !charProcs.IsNull)
+                {
+                    PdfObj charProc = _reader.Resolve(charProcs[glyphName]);
+                    if (charProc.IsStream)
+                    {
+                        RenderType3Glyph(canvas, state, savedCtm, charProc, effectivePage);
+                    }
+                }
+
+                float glyphWidth = state.FontWidths != null && state.FontWidths.TryGetValue(code, out float width)
+                    ? width : 0f;
+                float advance = glyphWidth * state.Type3FontMatrix.ScaleX;
+                float displacement = (advance * state.FontSize + state.CharSpacing) * hScale;
+                if (code == 32)
+                {
+                    displacement += state.WordSpacing * hScale;
+                }
+                state.TextMatrix = SKMatrix.Concat(state.TextMatrix, SKMatrix.CreateTranslation(displacement, 0));
+            }
+        }
+
+        // glyph → device = FontMatrix → [Tfs·Th, Tfs, Trise] param matrix → TextMatrix → current CTM.
+        // No Y negation here (unlike the Skia DrawText path): the CharProc is an ordinary PDF content
+        // stream and the page CTM captured in savedCtm already maps PDF y-up to device y-down.
+        private void RenderType3Glyph(SKCanvas canvas, GraphicsState state, SKMatrix savedCtm,
+            PdfObj charProc, PdfObj effectivePage)
+        {
+            if (_contentRecursionDepth >= MaxContentRecursionDepth)
+            {
+                _warnings.Add("Type3 glyph recursion limit reached; skipping nested glyph.");
+                return;
+            }
+            _contentRecursionDepth++;
+            try
+            {
+                RenderType3GlyphCore(canvas, state, savedCtm, charProc, effectivePage);
+            }
+            finally
+            {
+                _contentRecursionDepth--;
+            }
+        }
+
+        private void RenderType3GlyphCore(SKCanvas canvas, GraphicsState state, SKMatrix savedCtm,
+            PdfObj charProc, PdfObj effectivePage)
+        {
+            byte[] procData = _reader.GetStreamBytes(charProc);
+            if (procData == null || procData.Length == 0)
+            {
+                return;
+            }
+
+            float hScale = state.HorizontalScaling / 100f;
+            var parameterMatrix = new SKMatrix(
+                state.FontSize * hScale, 0f, 0f,
+                0f, state.FontSize, state.TextRise,
+                0f, 0f, 1f);
+            SKMatrix glyphToText = SKMatrix.Concat(parameterMatrix, state.Type3FontMatrix);
+            SKMatrix glyphToUser = SKMatrix.Concat(state.TextMatrix, glyphToText);
+            SKMatrix glyphMatrix = SKMatrix.Concat(savedCtm, glyphToUser);
+
+            canvas.Save();
+            canvas.SetMatrix(glyphMatrix);
+
+            // d1 glyphs take their colour from the text graphics state; d0 glyphs may set their own.
+            var glyphState = new GraphicsState
+            {
+                FillColor = state.FillColor,
+                StrokeColor = state.StrokeColor,
+                FillAlpha = state.FillAlpha,
+                StrokeAlpha = state.StrokeAlpha,
+            };
+            var glyphStack = new Stack<GraphicsState>();
+            var glyphPath = new SKPath();
+
+            foreach (var op in _parser.Parse(procData))
+            {
+                try
+                {
+                    ExecuteOperator(canvas, op, glyphState, glyphStack, glyphPath, effectivePage);
+                }
+                catch (Exception ex)
+                {
+                    _warnings.Add($"Type3 glyph operator '{op.Name}': {ex.Message}");
+                }
+            }
+
+            glyphPath.Dispose();
+            glyphState.TextClipPath?.Dispose();
+            glyphState.TextClipPath = null;
+            canvas.Restore();
+        }
+
+        private PdfObj BuildType3ResourcePage(GraphicsState state, PdfObj pageDict)
+        {
+            if (state.Type3FontResources != null && !state.Type3FontResources.IsNull)
+            {
+                PdfObj pageResources = _reader.Resolve(pageDict["Resources"]);
+                return new MergedResourcePage(_reader, state.Type3FontResources, pageResources);
+            }
+            return pageDict;
         }
 
         private static float GetCharAdvance(GraphicsState state, SKFont measureFont, float fontSize,
@@ -1341,7 +1494,38 @@ namespace Rend.PdfRendering
             }
         }
 
+        // Entry point for annotation appearance streams (§12.5.5). The appearance is a Form XObject,
+        // so it reuses the form executor with a fresh default graphics state; the caller has already
+        // applied the BBox→Rect alignment matrix to the canvas.
+        private void RenderAppearanceStream(SKCanvas canvas, PdfObj appearanceStream, PdfObj pageDict)
+        {
+            var state = new GraphicsState();
+            var stateStack = new Stack<GraphicsState>();
+            DrawFormXObject(canvas, state, stateStack, appearanceStream, pageDict);
+            state.TextClipPath?.Dispose();
+            state.TextClipPath = null;
+        }
+
         private void DrawFormXObject(SKCanvas canvas, GraphicsState state,
+            Stack<GraphicsState> stateStack, PdfObj formDict, PdfObj pageDict)
+        {
+            if (_contentRecursionDepth >= MaxContentRecursionDepth)
+            {
+                _warnings.Add("Form XObject recursion limit reached; skipping nested form.");
+                return;
+            }
+            _contentRecursionDepth++;
+            try
+            {
+                DrawFormXObjectCore(canvas, state, stateStack, formDict, pageDict);
+            }
+            finally
+            {
+                _contentRecursionDepth--;
+            }
+        }
+
+        private void DrawFormXObjectCore(SKCanvas canvas, GraphicsState state,
             Stack<GraphicsState> stateStack, PdfObj formDict, PdfObj pageDict)
         {
             // [SPEC §8.11.4.2] Skip forms with Optional Content (OC) that are hidden
@@ -1400,6 +1584,26 @@ namespace Rend.PdfRendering
 
             var formState = new GraphicsState();
             formState.CopyFrom(state);
+
+            // [SPEC §11.4.7] A transparency group is composited as a unit: the incoming fill alpha
+            // (ca) applies to the whole group, not to each element. Without a group layer, overlapping
+            // elements would double-composite (darker seams). When the form is a transparency group
+            // and ca < 1, render it into a SaveLayer at the group alpha and draw its content opaque.
+            var group = _reader.Resolve(formDict["Group"]);
+            bool isTransparencyGroup = group.IsDict
+                && StripLeadingSlash(_reader.Resolve(group["S"]).AsName()) == "Transparency";
+            SKPaint? groupLayerPaint = null;
+            if (isTransparencyGroup && state.FillAlpha < 1f)
+            {
+                groupLayerPaint = new SKPaint
+                {
+                    Color = new SKColor(255, 255, 255, PdfColorHelper.ClampByte(state.FillAlpha * 255f)),
+                };
+                canvas.SaveLayer(groupLayerPaint);
+                formState.FillAlpha = 1f;
+                formState.StrokeAlpha = 1f;
+            }
+
             var formStateStack = new Stack<GraphicsState>();
             var formPath = new SKPath();
 
@@ -1431,7 +1635,18 @@ namespace Rend.PdfRendering
             formPath.Dispose();
             formState.TextClipPath?.Dispose();
             formState.TextClipPath = null;
+
+            if (groupLayerPaint != null)
+            {
+                canvas.Restore(); // composite the group layer at the group alpha
+                groupLayerPaint.Dispose();
+            }
             canvas.Restore();
+        }
+
+        private static string StripLeadingSlash(string name)
+        {
+            return name.StartsWith("/", StringComparison.Ordinal) ? name.Substring(1) : name;
         }
 
         private static SKStrokeCap GetLineCap(int value)

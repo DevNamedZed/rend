@@ -50,14 +50,15 @@ namespace Rend.Pdf.Internal
             int nextObjNum = existingSize;
             var xrefEntries = new List<(int objNum, long offset)>();
 
-            // Track which fonts we need in resources
-            var usedFonts = new HashSet<string>();
-
             foreach (var kvp in byPage)
             {
                 int pageIndex = kvp.Key;
                 var pageStamps = kvp.Value;
                 var pageInfo = pages[pageIndex];
+
+                // Fonts used by THIS page's stamps. Must be per-page: a shared set would leak each
+                // page's overlay fonts into every later page's /Font resource dictionary.
+                var usedFonts = new HashSet<string>();
 
                 // Build content stream for this page's stamps
                 string contentStreamData = BuildContentStream(pageStamps, pageInfo.Height, usedFonts);
@@ -113,14 +114,17 @@ namespace Rend.Pdf.Internal
                     imageResources.AppendFormat("/Img{0} {1} 0 R ", imgRef.Key, imgRef.Value);
                 }
 
-                // Write new page object that references original contents + our overlay
-                int newPageObjNum = nextObjNum++;
+                // Rewrite the page under its ORIGINAL object number so the incremental xref
+                // supersedes it in place. Allocating a fresh number would leave the merged page
+                // unreferenced (the page tree still points at the original), so the overlay would
+                // never render. [SPEC §7.5.6 incremental updates]
+                int newPageObjNum = pageInfo.ObjNum;
                 long newPageOffset = ms.Position;
                 xrefEntries.Add((newPageObjNum, newPageOffset));
 
                 string originalPageContent = PdfTextParser.ExtractObjectContent(pdfText, pageInfo.ObjNum);
                 WriteUpdatedPage(ms, newPageObjNum, originalPageContent, streamObjNum,
-                    fontResources.ToString(), imageResources.ToString(), latin1);
+                    fontResources.ToString(), imageResources.ToString(), pdfText, latin1);
             }
 
             // Write xref
@@ -512,7 +516,7 @@ namespace Rend.Pdf.Internal
         private static void WriteUpdatedPage(MemoryStream ms, int newPageObjNum,
             string originalContent, int newStreamObjNum,
             string fontResources, string imageResources,
-            Encoding latin1)
+            string pdfText, Encoding latin1)
         {
             // Extract the inner content of the original page dictionary
             string inner = originalContent.Trim();
@@ -531,6 +535,7 @@ namespace Rend.Pdf.Internal
                 while (afterKey < inner.Length && (inner[afterKey] == ' ' || inner[afterKey] == '\n' || inner[afterKey] == '\r'))
                     afterKey++;
 
+                int contentsEnd = afterKey;
                 if (afterKey < inner.Length && inner[afterKey] == '[')
                 {
                     // Array of streams
@@ -538,6 +543,7 @@ namespace Rend.Pdf.Internal
                     if (arrayEnd > 0)
                     {
                         contentsValue = inner.Substring(afterKey + 1, arrayEnd - afterKey - 1).Trim();
+                        contentsEnd = arrayEnd + 1;
                     }
                 }
                 else
@@ -547,48 +553,36 @@ namespace Rend.Pdf.Internal
                     if (refEnd > 0)
                     {
                         contentsValue = inner.Substring(afterKey, refEnd - afterKey + 1).Trim();
+                        contentsEnd = refEnd + 1;
                     }
                 }
 
-                // Remove /Contents from inner
-                inner = PdfTextParser.RemoveDictEntry(inner, "/Contents");
+                // Remove the whole "/Contents <value>" span. A line-based removal would, on a
+                // single-line page dictionary, delete everything after /Contents (including the
+                // page's own /Resources), dropping the page's fonts.
+                inner = (inner.Substring(0, contentsIdx) + inner.Substring(contentsEnd)).Trim();
             }
 
-            // Remove existing /Resources if we're adding new ones
-            // (We'll merge by adding our font/image resources)
-            // Actually, we should preserve existing resources and add ours.
-            // For simplicity, extract existing resources and extend them.
+            // Extract the existing /Resources value so we can merge ours into it, and remove the
+            // whole entry from the page dictionary.
             string existingResources = "";
-            int resIdx = inner.IndexOf("/Resources", StringComparison.Ordinal);
-            if (resIdx >= 0)
+            if (PdfTextParser.TryGetInlineDictEntry(inner, "/Resources", out string resourcesInner, out int resStart, out int resEnd))
             {
-                int afterRes = resIdx + 10;
-                while (afterRes < inner.Length && inner[afterRes] == ' ')
-                    afterRes++;
-
-                if (afterRes < inner.Length && inner[afterRes] == '<' && afterRes + 1 < inner.Length && inner[afterRes + 1] == '<')
+                // Inline dictionary — remove the entire "/Resources << ... >>" span (string-literal
+                // aware; a line-based removal would corrupt a multi-line dict).
+                existingResources = "<< " + resourcesInner + " >>";
+                inner = (inner.Substring(0, resStart) + inner.Substring(resEnd)).Trim();
+            }
+            else if (TryGetIndirectRefValue(inner, "/Resources", out int resObjNum, out int refStart, out int refEndPos))
+            {
+                // Indirect reference (/Resources N 0 R): resolve and inline obj N so the page's
+                // original resources are preserved through the merge instead of being discarded.
+                inner = (inner.Substring(0, refStart) + inner.Substring(refEndPos)).Trim();
+                string resolved = PdfTextParser.ExtractObjectContent(pdfText, resObjNum);
+                if (!string.IsNullOrEmpty(resolved) && resolved.IndexOf("<<", StringComparison.Ordinal) >= 0)
                 {
-                    // Inline dictionary — find matching >>
-                    int depth = 0;
-                    int scanPos = afterRes;
-                    while (scanPos + 1 < inner.Length)
-                    {
-                        if (inner[scanPos] == '<' && inner[scanPos + 1] == '<') { depth++; scanPos += 2; }
-                        else if (inner[scanPos] == '>' && inner[scanPos + 1] == '>') { depth--; scanPos += 2; if (depth == 0) break; }
-                        else scanPos++;
-                    }
-                    existingResources = inner.Substring(afterRes, scanPos - afterRes);
+                    existingResources = resolved.Trim();
                 }
-                else
-                {
-                    // Indirect reference — keep as is
-                    int refEnd = inner.IndexOf('R', afterRes);
-                    if (refEnd > 0)
-                    {
-                        existingResources = inner.Substring(afterRes, refEnd - afterRes + 1).Trim();
-                    }
-                }
-                inner = PdfTextParser.RemoveDictEntry(inner, "/Resources");
             }
 
             var sb = new StringBuilder();
@@ -606,32 +600,21 @@ namespace Rend.Pdf.Internal
             sb.Append("/Resources ");
             if (existingResources.StartsWith("<<", StringComparison.Ordinal))
             {
-                // Inline existing resources — inject our font/image resources
+                // Inline existing resources — merge our font/image resources into the existing
+                // /Font and /XObject sub-dictionaries. Appending a second /Font (or /XObject) key
+                // would be an invalid duplicate-key dictionary, so a reader would drop either the
+                // page's own fonts or the overlay's.
                 string resInner = existingResources.Substring(2);
                 if (resInner.EndsWith(">>", StringComparison.Ordinal))
                     resInner = resInner.Substring(0, resInner.Length - 2);
 
-                sb.Append("<< ");
-                sb.Append(resInner.Trim()).Append(' ');
-
+                string merged = resInner.Trim();
                 if (!string.IsNullOrEmpty(fontResources))
-                {
-                    // Check if /Font already exists in resources
-                    if (resInner.Contains("/Font"))
-                    {
-                        // TODO: merge font dicts. For now, add with unique names.
-                        sb.AppendFormat("/Font << {0} >> ", fontResources);
-                    }
-                    else
-                    {
-                        sb.AppendFormat("/Font << {0} >> ", fontResources);
-                    }
-                }
-
+                    merged = MergeResourceCategory(merged, "/Font", fontResources, pdfText);
                 if (!string.IsNullOrEmpty(imageResources))
-                    sb.AppendFormat("/XObject << {0} >> ", imageResources);
+                    merged = MergeResourceCategory(merged, "/XObject", imageResources, pdfText);
 
-                sb.Append(">>\n");
+                sb.Append("<< ").Append(merged.Trim()).Append(" >>\n");
             }
             else if (!string.IsNullOrEmpty(existingResources))
             {
@@ -659,6 +642,110 @@ namespace Rend.Pdf.Internal
 
             sb.Append(">>\nendobj\n");
             WriteString(ms, sb.ToString(), latin1);
+        }
+
+        // Merges overlay entries into a resource sub-dictionary (/Font or /XObject) so the result
+        // has a single key for that category. Handles an inline sub-dict, an indirect reference to
+        // one (resolved and inlined), and an absent category.
+        private static string MergeResourceCategory(string resInner, string category,
+            string newEntries, string pdfText)
+        {
+            if (PdfTextParser.TryGetInlineDictEntry(resInner, category, out string existing, out int start, out int end))
+            {
+                string mergedDict = category + " << " + existing.Trim() + " " + newEntries.Trim() + " >>";
+                return (resInner.Substring(0, start) + mergedDict + resInner.Substring(end)).Trim();
+            }
+
+            if (TryGetIndirectRefValue(resInner, category, out int objNum, out int refStart, out int refEnd))
+            {
+                string resolved = PdfTextParser.ExtractObjectContent(pdfText, objNum);
+                if (!string.IsNullOrEmpty(resolved) && resolved.Contains("<<"))
+                {
+                    string resolvedInner = StripDictDelimiters(resolved);
+                    string mergedDict = category + " << " + resolvedInner.Trim() + " " + newEntries.Trim() + " >>";
+                    return (resInner.Substring(0, refStart) + mergedDict + resInner.Substring(refEnd)).Trim();
+                }
+            }
+
+            return (resInner.Trim() + " " + category + " << " + newEntries.Trim() + " >>").Trim();
+        }
+
+        private static bool TryGetIndirectRefValue(string content, string key,
+            out int objNum, out int matchStart, out int matchEnd)
+        {
+            objNum = 0;
+            matchStart = -1;
+            matchEnd = -1;
+
+            int searchFrom = 0;
+            while (true)
+            {
+                int idx = content.IndexOf(key, searchFrom, StringComparison.Ordinal);
+                if (idx < 0)
+                {
+                    return false;
+                }
+
+                int after = idx + key.Length;
+                searchFrom = after;
+                if (after < content.Length && char.IsLetterOrDigit(content[after]))
+                {
+                    continue; // partial match such as /FontMatrix
+                }
+
+                int cursor = after;
+                if (!TryReadInteger(content, ref cursor, out int parsedObjNum)
+                    || !TryReadInteger(content, ref cursor, out _))
+                {
+                    continue; // not "N G R"
+                }
+
+                while (cursor < content.Length && char.IsWhiteSpace(content[cursor]))
+                {
+                    cursor++;
+                }
+                if (cursor >= content.Length || content[cursor] != 'R')
+                {
+                    continue;
+                }
+
+                objNum = parsedObjNum;
+                matchStart = idx;
+                matchEnd = cursor + 1;
+                return true;
+            }
+        }
+
+        private static bool TryReadInteger(string content, ref int cursor, out int value)
+        {
+            value = 0;
+            while (cursor < content.Length && char.IsWhiteSpace(content[cursor]))
+            {
+                cursor++;
+            }
+            int start = cursor;
+            while (cursor < content.Length && char.IsDigit(content[cursor]))
+            {
+                cursor++;
+            }
+            if (cursor == start)
+            {
+                return false;
+            }
+            value = int.Parse(content.Substring(start, cursor - start), CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        private static string StripDictDelimiters(string content)
+        {
+            string trimmed = content.Trim();
+            int open = trimmed.IndexOf("<<", StringComparison.Ordinal);
+            int close = trimmed.LastIndexOf(">>", StringComparison.Ordinal);
+            if (open >= 0 && close > open)
+            {
+                return trimmed.Substring(open + 2, close - (open + 2));
+            }
+            return trimmed;
         }
 
         private struct PageInfo

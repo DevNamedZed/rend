@@ -164,6 +164,13 @@ namespace Rend
         public IProgress<RenderProgress>? Progress { get; set; }
 
         /// <summary>
+        /// Optional sink for render diagnostics. When set, receives a <see cref="RenderDiagnostic"/>
+        /// for conditions that would otherwise be silent — most notably a requested font that could
+        /// not be resolved and was substituted with a system font or the Helvetica fallback.
+        /// </summary>
+        public Action<RenderDiagnostic>? OnDiagnostic { get; set; }
+
+        /// <summary>
         /// Optional shared text shaper. When set, the pipeline reuses this shaper
         /// instead of creating a new one per render call. This avoids repeated
         /// font data pinning and native memory allocation. The caller owns disposal.

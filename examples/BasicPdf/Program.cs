@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using Rend;
 using Rend.Core.Values;
+using Rend.Pdf;
 
 // Simple HTML to PDF
 using (var output = File.Create("hello.pdf"))
@@ -140,3 +141,37 @@ using (var output = File.Create("filters.png"))
 }
 
 Console.WriteLine("Created filters.png");
+
+// CCITT Group 4 bilevel image — a distinctive diamond + border, written by the new CCITT
+// encoder. Decode is verified both by MuPDF (independent, spec-check) and our own reader.
+int ccittWidth = 240;
+int ccittHeight = 240;
+int ccittRowBytes = (ccittWidth + 7) / 8;
+var ccittPacked = new byte[ccittRowBytes * ccittHeight];
+for (int i = 0; i < ccittPacked.Length; i++)
+{
+    ccittPacked[i] = 0xFF; // all-white (blackIs1=false: bit 1 = white, bit 0 = black)
+}
+for (int y = 0; y < ccittHeight; y++)
+{
+    for (int x = 0; x < ccittWidth; x++)
+    {
+        bool border = x < 6 || x >= ccittWidth - 6 || y < 6 || y >= ccittHeight - 6;
+        bool diamond = Math.Abs(x - ccittWidth / 2) + Math.Abs(y - ccittHeight / 2) < 90;
+        if (border || diamond)
+        {
+            ccittPacked[y * ccittRowBytes + (x >> 3)] &= (byte)~(1 << (7 - (x & 7)));
+        }
+    }
+}
+
+using (var ccittDoc = new PdfDocument())
+{
+    var ccittImage = ccittDoc.AddCcittImage(ccittPacked, ccittWidth, ccittHeight, blackIs1: false);
+    var ccittPage = ccittDoc.AddPage(ccittWidth, ccittHeight);
+    ccittPage.Content.DrawImage(ccittImage, ccittWidth, 0f, 0f, ccittHeight, 0f, 0f);
+    using var output = File.Create("ccitt.pdf");
+    ccittDoc.Save(output);
+}
+
+Console.WriteLine("Created ccitt.pdf");

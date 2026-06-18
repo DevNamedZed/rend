@@ -91,18 +91,24 @@ namespace Rend.Output.Image
                         _typefaceCache[dataKey] = typeface;
                         RetainTypeface(typeface);
                     }
+                    _cache[descriptor] = typeface;
                 }
-                _cache[descriptor] = typeface;
                 return typeface;
             }
 
-            if (_cache.TryGetValue(descriptor, out var existing))
+            lock (_lock)
             {
-                return existing;
+                if (_cache.TryGetValue(descriptor, out var existing))
+                {
+                    return existing;
+                }
             }
 
             var resolved = ResolveByFamilyName(descriptor);
-            _cache[descriptor] = resolved;
+            lock (_lock)
+            {
+                _cache[descriptor] = resolved;
+            }
             return resolved;
         }
 

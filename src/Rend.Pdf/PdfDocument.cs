@@ -237,6 +237,24 @@ namespace Rend.Pdf
             return image;
         }
 
+        /// <summary>
+        /// Add a bilevel (1bpp) image compressed with CCITT Group 4. <paramref name="packedRows"/>
+        /// is MSB-first 1bpp packed rows (rowBytes = (width+7)/8 per row). With
+        /// <paramref name="blackIs1"/> = false (PDF default) a 0 bit is black; true reverses it.
+        /// </summary>
+        public PdfImage AddCcittImage(byte[] packedRows, int width, int height, bool blackIs1 = false)
+        {
+            if (packedRows == null) throw new ArgumentNullException(nameof(packedRows));
+            if (width <= 0 || height <= 0) throw new ArgumentOutOfRangeException(nameof(width));
+
+            _imageCounter++;
+            string resourceName = "Im" + _imageCounter;
+            byte[] g4 = Images.CcittFaxCodec.EncodeG4(packedRows, width, height, blackIs1);
+            var image = Images.CcittHandler.CreateImage(g4, width, height, blackIs1, resourceName, _objectTable);
+            _images.Add(image);
+            return image;
+        }
+
         // ═══════════════════════════════════════════
         // Spot Colors (Separation Color Space)
         // ═══════════════════════════════════════════

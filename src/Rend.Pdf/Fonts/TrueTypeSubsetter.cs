@@ -3,7 +3,6 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.CompilerServices;
 
 namespace Rend.Pdf.Fonts
 {
@@ -13,42 +12,12 @@ namespace Rend.Pdf.Fonts
     /// </summary>
     internal static class TrueTypeSubsetter
     {
-        private static readonly ConditionalWeakTable<byte[], SubsetCacheEntry> SubsetResultCache =
-            new ConditionalWeakTable<byte[], SubsetCacheEntry>();
-
-        private sealed class SubsetCacheEntry
-        {
-            private HashSet<ushort>? _cachedGlyphs;
-            private byte[]? _cachedResult;
-            private readonly object _lock = new object();
-
-            public byte[]? TryGet(IReadOnlyCollection<ushort> glyphs)
-            {
-                lock (_lock)
-                {
-                    if (_cachedGlyphs != null && _cachedResult != null &&
-                        _cachedGlyphs.Count == glyphs.Count && _cachedGlyphs.SetEquals(glyphs))
-                    {
-                        return _cachedResult;
-                    }
-                    return null;
-                }
-            }
-
-            public void Store(IReadOnlyCollection<ushort> glyphs, byte[] result)
-            {
-                lock (_lock)
-                {
-                    _cachedGlyphs = new HashSet<ushort>(glyphs);
-                    _cachedResult = result;
-                }
-            }
-        }
-
         /// <summary>
         /// Subset a TrueType font to include only the specified glyphs.
-        /// Always includes glyph 0 (.notdef).
-        /// Returns the subset font file bytes.
+        /// Always includes glyph 0 (.notdef). Returns the subset font file bytes.
+        /// Stateless: each font is subset once per document save. Cross-document
+        /// memoization, if ever needed for batch throughput, belongs in a caller-owned
+        /// cache — not a process-global static here.
         /// </summary>
         public static byte[] Subset(byte[] originalFont, IReadOnlyCollection<ushort> usedGlyphs)
         {
@@ -56,17 +25,7 @@ namespace Rend.Pdf.Fonts
             {
                 return originalFont;
             }
-
-            var cacheEntry = SubsetResultCache.GetOrCreateValue(originalFont);
-            var cached = cacheEntry.TryGet(usedGlyphs);
-            if (cached != null)
-            {
-                return cached;
-            }
-
-            var result = SubsetCore(originalFont, usedGlyphs);
-            cacheEntry.Store(usedGlyphs, result);
-            return result;
+            return SubsetCore(originalFont, usedGlyphs);
         }
 
         private static byte[] SubsetCore(byte[] originalFont, IReadOnlyCollection<ushort> usedGlyphs)

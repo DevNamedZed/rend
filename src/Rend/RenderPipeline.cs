@@ -69,6 +69,7 @@ namespace Rend
             if (target is Output.Pdf.PdfRenderTarget pdfTarget)
             {
                 pdfTarget.SetFontProvider(fontProvider);
+                pdfTarget.SetDiagnosticSink(_options.OnDiagnostic);
             }
 
             // 5. Create or reuse text shaper (before style resolver so ch unit can use shaped advances)
@@ -235,6 +236,7 @@ namespace Rend
             if (target is Output.Pdf.PdfRenderTarget pdfTarget)
             {
                 pdfTarget.SetFontProvider(fontProvider);
+                pdfTarget.SetDiagnosticSink(_options.OnDiagnostic);
             }
 
             // 5. Create or reuse text shaper (before style resolver so ch unit can use shaped advances)

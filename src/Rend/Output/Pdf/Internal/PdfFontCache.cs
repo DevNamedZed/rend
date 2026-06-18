@@ -13,6 +13,11 @@ namespace Rend.Output.Pdf.Internal
         private readonly Dictionary<FontDescriptor, PdfFont> _cache = new Dictionary<FontDescriptor, PdfFont>();
         private PdfFont? _fallbackFont;
 
+        internal bool TryGet(FontDescriptor descriptor, out PdfFont font)
+        {
+            return _cache.TryGetValue(descriptor, out font!);
+        }
+
         internal PdfFont GetOrAdd(FontDescriptor descriptor, byte[]? fontData,
                                   PdfDocument doc, FontEmbedMode embedMode)
         {

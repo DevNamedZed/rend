@@ -15,6 +15,8 @@ namespace Rend.Pdf.Parsing
         private readonly Dictionary<int, PdfObj> _objectCache = new Dictionary<int, PdfObj>();
         private readonly List<PdfObj> _pages = new List<PdfObj>();
         private PdfObj _trailer = PdfObj.Null;
+        private PdfDecryptor? _decryptor;
+        private int _encryptObjNum = -1;
         private PdfObj _catalog = PdfObj.Null;
         #pragma warning disable CS0414
         private bool _disposed;
@@ -84,6 +86,7 @@ namespace Rend.Pdf.Parsing
                         var parsed = ParseObjectAt(entry.offset);
                         if (!parsed.IsNull)
                         {
+                            ApplyDecryption(parsed, r.ObjNum, entry.gen);
                             _objectCache[r.ObjNum] = parsed;
                             return parsed;
                         }
@@ -131,6 +134,11 @@ namespace Rend.Pdf.Parsing
             else
             {
                 return Array.Empty<byte>();
+            }
+
+            if (_decryptor != null && stream.OwnerObjNum >= 0 && stream.OwnerObjNum != _encryptObjNum)
+            {
+                raw = _decryptor.Decrypt(raw, stream.OwnerObjNum, stream.OwnerGen);
             }
 
             var filterObj = Resolve(stream["Filter"]);
@@ -204,7 +212,139 @@ namespace Rend.Pdf.Parsing
         {
             long startXRef = FindStartXRef();
             ParseXRef(startXRef);
+            SetupEncryption();
             LoadCatalogAndPages();
+        }
+
+        // [SPEC §7.6] Standard Security Handler. Builds a decryptor from the /Encrypt dict
+        // (empty user password) before any content objects are resolved. The /Encrypt dict,
+        // the /ID and xref streams are themselves never encrypted.
+        private void SetupEncryption()
+        {
+            var encryptRef = _trailer["Encrypt"];
+            if (encryptRef.IsNull)
+            {
+                return;
+            }
+            if (encryptRef is PdfRef encryptReference)
+            {
+                _encryptObjNum = encryptReference.ObjNum;
+            }
+
+            var encrypt = Resolve(encryptRef);
+            if (encrypt.IsNull)
+            {
+                return;
+            }
+            if (StripName(Resolve(encrypt["Filter"]).AsName()) != "Standard")
+            {
+                _parseWarnings.Add("Unsupported PDF security handler (only Standard is supported)");
+                return;
+            }
+
+            int version = (int)Resolve(encrypt["V"]).AsInt();
+            int revision = (int)Resolve(encrypt["R"]).AsInt();
+            if (version >= 5)
+            {
+                _parseWarnings.Add("AES-256 (V5/R6) PDF encryption is not yet supported");
+                return;
+            }
+
+            int keyLength = encrypt["Length"].IsNull ? 40 : (int)Resolve(encrypt["Length"]).AsInt();
+            byte[] oValue = Resolve(encrypt["O"]).AsBytes();
+            byte[] uValue = Resolve(encrypt["U"]).AsBytes();
+            int permissions = (int)Resolve(encrypt["P"]).AsInt();
+            byte[] fileId = GetFirstFileId();
+            bool useAes = UsesAesV2(encrypt, version);
+
+            try
+            {
+                var decryptor = new PdfDecryptor(revision, keyLength, oValue, permissions, fileId, useAes);
+                if (decryptor.IsUserPasswordValid(uValue))
+                {
+                    _decryptor = decryptor;
+                }
+                else
+                {
+                    _parseWarnings.Add("PDF requires a user password; cannot decrypt with the empty password");
+                }
+            }
+            catch (Exception encryptionException)
+            {
+                _parseWarnings.Add($"Failed to initialize PDF decryption: {encryptionException.Message}");
+                _decryptor = null;
+            }
+        }
+
+        private bool UsesAesV2(PdfObj encrypt, int version)
+        {
+            if (version < 4)
+            {
+                return false;
+            }
+            string streamFilter = StripName(Resolve(encrypt["StmF"]).AsName());
+            if (streamFilter.Length == 0 || streamFilter == "Identity")
+            {
+                return false;
+            }
+            var cryptFilters = Resolve(encrypt["CF"]);
+            var filterDict = Resolve(cryptFilters[streamFilter]);
+            return StripName(Resolve(filterDict["CFM"]).AsName()).Contains("AESV2");
+        }
+
+        private byte[] GetFirstFileId()
+        {
+            var id = _trailer["ID"];
+            if (id is PdfArray idArray && idArray.Count > 0)
+            {
+                return Resolve(idArray[0]).AsBytes();
+            }
+            return Array.Empty<byte>();
+        }
+
+        private static string StripName(string name)
+        {
+            return name.StartsWith("/") ? name.Substring(1) : name;
+        }
+
+        // Decrypts the strings of a freshly-parsed indirect object in place and tags any
+        // stream with its owner so GetStreamBytes can decrypt it. Runs once per object,
+        // before it is cached. Not called for objects inside an object stream (those are
+        // already decrypted as part of the containing stream).
+        private void ApplyDecryption(PdfObj obj, int objectNumber, int generation)
+        {
+            if (_decryptor == null || objectNumber == _encryptObjNum)
+            {
+                return;
+            }
+            if (obj is PdfStream stream)
+            {
+                stream.OwnerObjNum = objectNumber;
+                stream.OwnerGen = generation;
+            }
+            DecryptStringsIn(obj, objectNumber, generation);
+        }
+
+        private void DecryptStringsIn(PdfObj obj, int objectNumber, int generation)
+        {
+            switch (obj)
+            {
+                case PdfString str:
+                    str.Bytes = _decryptor!.Decrypt(str.Bytes, objectNumber, generation);
+                    break;
+                case PdfDict dict:
+                    foreach (var value in dict.Entries.Values)
+                    {
+                        DecryptStringsIn(value, objectNumber, generation);
+                    }
+                    break;
+                case PdfArray array:
+                    for (int i = 0; i < array.Count; i++)
+                    {
+                        DecryptStringsIn(array[i], objectNumber, generation);
+                    }
+                    break;
+            }
         }
 
         private void LoadCatalogAndPages()

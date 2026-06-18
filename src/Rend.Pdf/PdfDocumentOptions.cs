@@ -114,7 +114,9 @@ namespace Rend.Pdf
         /// <summary>JPEG — passthrough (no re-encoding).</summary>
         Jpeg,
         /// <summary>PNG — decoded, alpha separated to SMask, re-compressed.</summary>
-        Png
+        Png,
+        /// <summary>CCITT Group 4 — bilevel (1bpp) fax compression.</summary>
+        Ccitt
     }
 
     /// <summary>The 14 standard PDF fonts that don't require embedding.</summary>

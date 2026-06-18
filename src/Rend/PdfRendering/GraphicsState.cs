@@ -32,6 +32,11 @@ namespace Rend.PdfRendering
         public int FontFirstChar;
         public float FontDefaultWidth = 1000f;
         public bool IsCIDFont;
+        public bool IsType3Font;
+        public PdfObj? Type3CharProcs;
+        public PdfObj? Type3FontResources;
+        public SKMatrix Type3FontMatrix = SKMatrix.Identity;
+        public Dictionary<int, string>? Type3GlyphNames;
         public float HorizontalScaling = 100f;
         public string BlendMode = "Normal";
         public SKMatrix TextMatrix = SKMatrix.Identity;
@@ -76,6 +81,11 @@ namespace Rend.PdfRendering
                 FontFirstChar = FontFirstChar,
                 FontDefaultWidth = FontDefaultWidth,
                 IsCIDFont = IsCIDFont,
+                IsType3Font = IsType3Font,
+                Type3CharProcs = Type3CharProcs,
+                Type3FontResources = Type3FontResources,
+                Type3FontMatrix = Type3FontMatrix,
+                Type3GlyphNames = Type3GlyphNames,
                 HorizontalScaling = HorizontalScaling,
                 BlendMode = BlendMode,
                 TextMatrix = TextMatrix,
@@ -119,6 +129,11 @@ namespace Rend.PdfRendering
             FontFirstChar = other.FontFirstChar;
             FontDefaultWidth = other.FontDefaultWidth;
             IsCIDFont = other.IsCIDFont;
+            IsType3Font = other.IsType3Font;
+            Type3CharProcs = other.Type3CharProcs;
+            Type3FontResources = other.Type3FontResources;
+            Type3FontMatrix = other.Type3FontMatrix;
+            Type3GlyphNames = other.Type3GlyphNames;
             HorizontalScaling = other.HorizontalScaling;
             BlendMode = other.BlendMode;
             TextMatrix = other.TextMatrix;

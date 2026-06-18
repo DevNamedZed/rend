@@ -22,6 +22,8 @@ namespace Rend.Output.Pdf
         private readonly PdfFontCache _fontCache = new PdfFontCache();
         private readonly PdfImageCache _imageCache = new PdfImageCache();
         private IFontProvider? _fontProvider;
+        private Action<RenderDiagnostic>? _onDiagnostic;
+        private readonly HashSet<string> _warnedFonts = new HashSet<string>();
 
         private PdfPage? _currentPage;
         private float _currentPageHeight;
@@ -37,6 +39,7 @@ namespace Rend.Output.Pdf
         private int _filterEndDepth;
         private Rend.Output.Image.SkiaRenderTarget? _filterCapture;
         private Rend.Rendering.CssFilterEffect[]? _filterEffects;
+        private bool _maskCaptureOwned;
 
         /// <summary>
         /// Creates a new <see cref="PdfRenderTarget"/> with the specified options.
@@ -225,20 +228,27 @@ namespace Rend.Output.Pdf
 
             try
             {
-                byte[] rgba = capture.ExtractFilteredRgba(effects, FilterSupersampleScale,
-                    out int pixelWidth, out int pixelHeight);
-                if (pixelWidth <= 0 || pixelHeight <= 0)
+                Rend.Output.Image.FilteredCaptureResult result =
+                    capture.ExtractFilteredCapture(effects, FilterSupersampleScale);
+                if (result.IsEmpty)
                 {
                     return;
                 }
 
-                byte[] pngBytes = EncodePngRgba(rgba, pixelWidth, pixelHeight);
+                byte[] pngBytes = EncodePngRgba(result.Rgba, result.Width, result.Height);
                 PdfImage image = _doc.AddImage(pngBytes, ImageFormat.Png);
 
-                // Place the filtered raster over the whole page. The page CTM flips Y, so negate
-                // the height (matching DrawImage) to draw it right-side-up.
-                _currentPage!.Content.DrawImage(image,
-                    _currentPageWidth, 0f, 0f, -_currentPageHeight, 0f, _currentPageHeight);
+                // The capture spans the whole page; map the cropped region (PDF-B7) back to page
+                // points. Points-per-pixel comes from the full raster size. The page CTM flips Y,
+                // so negate the height and anchor at the crop's top edge. When the crop equals the
+                // full page this reduces to the original full-page placement.
+                float pointsPerPixelX = _currentPageWidth / result.FullWidth;
+                float pointsPerPixelY = _currentPageHeight / result.FullHeight;
+                float drawWidth = result.Width * pointsPerPixelX;
+                float drawHeight = result.Height * pointsPerPixelY;
+                float drawX = result.OffsetX * pointsPerPixelX;
+                float topY = (result.OffsetY + result.Height) * pointsPerPixelY;
+                _currentPage!.Content.DrawImage(image, drawWidth, 0f, 0f, -drawHeight, drawX, topY);
             }
             finally
             {
@@ -260,23 +270,42 @@ namespace Rend.Output.Pdf
         /// <inheritdoc />
         public void BeginMask()
         {
-            if (_filterCapture != null)
+            // A CSS gradient mask needs per-stop alpha, which PDF axial/radial shadings cannot
+            // carry. As with CSS filters (PDF-B1), rasterize the masked element's subtree to an
+            // offscreen Skia target — whose DstIn-based EndMask applies the mask correctly — and
+            // embed the result as an image. If a capture is already active (e.g. an enclosing
+            // filter), the mask just composites inside it.
+            if (_filterCapture == null)
             {
-                _filterCapture.BeginMask();
-                return;
+                BeginMaskCapture();
             }
-            // PDF does not natively support gradient masks; graceful degradation.
+            _filterCapture!.BeginMask();
         }
 
         /// <inheritdoc />
         public void EndMask(Rendering.GradientInfo gradient, Core.Values.RectF bounds)
         {
-            if (_filterCapture != null)
+            if (_filterCapture == null)
             {
-                _filterCapture.EndMask(gradient, bounds);
                 return;
             }
-            // PDF does not natively support gradient masks; graceful degradation.
+            _filterCapture.EndMask(gradient, bounds);
+            if (_maskCaptureOwned)
+            {
+                _maskCaptureOwned = false;
+                FinalizeFilterCapture();
+            }
+        }
+
+        private void BeginMaskCapture()
+        {
+            EnsurePage();
+            _filterEffects = System.Array.Empty<Rendering.CssFilterEffect>();
+            _filterEndDepth = int.MinValue; // mask finalize is explicit (EndMask), never depth-driven
+            _maskCaptureOwned = true;
+            var options = new Rend.Output.Image.SkiaRenderOptions { Dpi = 96f * FilterSupersampleScale };
+            _filterCapture = new Rend.Output.Image.SkiaRenderTarget(options);
+            _filterCapture.BeginTransparentPage(_currentPageWidth, _currentPageHeight);
         }
 
         /// <inheritdoc />
@@ -587,8 +616,43 @@ namespace Rend.Output.Pdf
         public void FillRectWithTiledGradient(GradientInfo gradient, RectF fillArea, RectF tileRect)
         {
             if (_filterCapture != null) { _filterCapture.FillRectWithTiledGradient(gradient, fillArea, tileRect); return; }
-            // PDF: fall back to filling the entire area with the gradient (no tiling).
-            FillRect(fillArea, BrushInfo.FromGradient(gradient));
+
+            float tileWidth = tileRect.Width;
+            float tileHeight = tileRect.Height;
+            if (tileWidth <= 0f || tileHeight <= 0f)
+            {
+                // No meaningful tile size: fill the whole area once.
+                FillRect(fillArea, BrushInfo.FromGradient(gradient));
+                return;
+            }
+
+            // Walk back from the tile origin to the first tile covering the fill area, then repeat
+            // the gradient at tile scale across it (mirrors DrawTiledImage). Each FillRect renders
+            // the gradient sized to its tile; an outer clip to the fill area trims edge tiles.
+            float startX = tileRect.X;
+            while (startX > fillArea.X) { startX -= tileWidth; }
+            float startY = tileRect.Y;
+            while (startY > fillArea.Y) { startY -= tileHeight; }
+            float endX = fillArea.X + fillArea.Width;
+            float endY = fillArea.Y + fillArea.Height;
+
+            EnsurePage();
+            var content = _currentPage!.Content;
+            content.SaveState();
+            content.Rectangle(fillArea.X, fillArea.Y, fillArea.Width, fillArea.Height);
+            content.Clip();
+            content.EndPath();
+
+            var brush = BrushInfo.FromGradient(gradient);
+            for (float ty = startY; ty < endY; ty += tileHeight)
+            {
+                for (float tx = startX; tx < endX; tx += tileWidth)
+                {
+                    FillRect(new RectF(tx, ty, tileWidth, tileHeight), brush);
+                }
+            }
+
+            content.RestoreState();
         }
 
         /// <inheritdoc />
@@ -892,17 +956,65 @@ namespace Rend.Output.Pdf
             _fontProvider = fontProvider;
         }
 
+        /// <summary>
+        /// Sets the diagnostic sink that receives font-substitution and other render warnings.
+        /// Called by the render pipeline after construction.
+        /// </summary>
+        internal void SetDiagnosticSink(Action<RenderDiagnostic>? onDiagnostic)
+        {
+            _onDiagnostic = onDiagnostic;
+        }
+
         private PdfFont ResolvePdfFont(FontDescriptor descriptor)
         {
-            byte[]? fontData = null;
-            if (_fontProvider != null)
+            if (_fontCache.TryGet(descriptor, out PdfFont cached))
             {
-                var entry = _fontProvider.ResolveFont(descriptor);
-                if (entry != null)
-                    fontData = entry.FontData;
+                return cached;
             }
+
             var embedMode = _options.DocumentOptions?.FontEmbedMode ?? Rend.Pdf.FontEmbedMode.Subset;
+            byte[]? fontData = _fontProvider?.ResolveFont(descriptor)?.FontData;
+            bool unresolved = fontData == null || fontData.Length == 0;
+
+            // The provider's registered/system fonts didn't match. Before dropping to Helvetica —
+            // which has no non-Latin coverage — ask the platform font manager for the closest real
+            // font and embed that, so the document keeps correct glyphs.
+            if (unresolved && embedMode != Rend.Pdf.FontEmbedMode.None)
+            {
+                byte[]? systemData = SkiaSystemFontMatcher.TryResolveFontData(descriptor, out string matchedFamily);
+                if (systemData != null && systemData.Length > 0)
+                {
+                    try
+                    {
+                        PdfFont systemFont = _fontCache.GetOrAdd(descriptor, systemData, _doc, embedMode);
+                        EmitFontDiagnostic(descriptor, RenderDiagnosticSeverity.Info,
+                            $"Font '{descriptor.Family}' was not available; substituted system font '{matchedFamily}'.");
+                        return systemFont;
+                    }
+                    catch (Exception embedError)
+                    {
+                        // Embedding the matched system font failed (e.g. an unsupported format).
+                        // Surface it (no silent failure) and fall through to the Helvetica fallback
+                        // below rather than crash or mis-embed.
+                        EmitFontDiagnostic(descriptor, RenderDiagnosticSeverity.Warning,
+                            $"System font '{matchedFamily}' for '{descriptor.Family}' could not be embedded ({embedError.Message}); falling back.");
+                    }
+                }
+
+                EmitFontDiagnostic(descriptor, RenderDiagnosticSeverity.Warning,
+                    $"Font '{descriptor.Family}' could not be resolved; fell back to Helvetica (glyphs may be incorrect).");
+            }
+
             return _fontCache.GetOrAdd(descriptor, fontData, _doc, embedMode);
+        }
+
+        private void EmitFontDiagnostic(FontDescriptor descriptor, RenderDiagnosticSeverity severity, string message)
+        {
+            if (_onDiagnostic == null || !_warnedFonts.Add(descriptor.Family))
+            {
+                return;
+            }
+            _onDiagnostic(new RenderDiagnostic(severity, message));
         }
 
         private PdfFont ResolvePdfFont(FontDescriptor descriptor, byte[]? fontData)

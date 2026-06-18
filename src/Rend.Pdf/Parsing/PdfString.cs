@@ -6,7 +6,9 @@ namespace Rend.Pdf.Parsing
 {
     public sealed class PdfString : PdfObj
     {
-        public byte[] Bytes { get; }
+        // Settable internally so the document reader can replace the bytes in place after
+        // decrypting an encrypted PDF (the string is decrypted exactly once, on first resolve).
+        public byte[] Bytes { get; internal set; }
         public bool IsHex { get; }
 
         public PdfString(byte[] bytes, bool isHex = false)
