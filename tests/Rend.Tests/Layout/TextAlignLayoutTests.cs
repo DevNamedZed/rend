@@ -11,9 +11,10 @@ namespace Rend.Tests.Layout
     public class TextAlignLayoutTests
     {
         [Fact]
-        public void JustifyAll_ParsedCorrectly()
+        public void JustifyAll_NotSupported_FallsBackToStart()
         {
-            // text-align: justify-all should be parsed and stored as JustifyAll
+            // [COMPAT] Chrome does not support text-align: justify-all (CSS Text L3 §7.4).
+            // The declaration is dropped, so text-align stays at its initial value (start).
             var root = LayoutTestHelper.Layout(@"
                 <div id='test' style='text-align: justify-all; width: 200px;'>text</div>");
 
@@ -21,7 +22,7 @@ namespace Rend.Tests.Layout
             Assert.NotNull(div);
             var styled = div!.StyledNode as StyledElement;
             Assert.NotNull(styled);
-            Assert.Equal(CssTextAlign.JustifyAll, styled!.Style.TextAlign);
+            Assert.Equal(CssTextAlign.Start, styled!.Style.TextAlign);
         }
 
         [Fact]

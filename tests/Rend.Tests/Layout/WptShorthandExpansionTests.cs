@@ -49,19 +49,19 @@ namespace Rend.Tests.Layout
         [Fact] public void Margin_2Values() {
             var r = LayoutTestHelper.Layout("<body style='margin:0;overflow:hidden'><div id='t' style='margin:10px 20px;width:50px;height:50px'></div></body>");
             var t = LayoutTestHelper.FindById(r,"t")!;
-            Assert.Equal(10, t.MarginTop);
-            Assert.Equal(20, t.MarginRight);
-            Assert.Equal(10, t.MarginBottom);
-            Assert.Equal(20, t.MarginLeft);
+            Assert.Equal(10, t.StyledNode!.Style.MarginTop);
+            Assert.Equal(20, t.StyledNode!.Style.MarginRight);
+            Assert.Equal(10, t.StyledNode!.Style.MarginBottom);
+            Assert.Equal(20, t.StyledNode!.Style.MarginLeft);
         }
 
         [Fact] public void Margin_4Values() {
             var r = LayoutTestHelper.Layout("<body style='margin:0;overflow:hidden'><div id='t' style='margin:5px 10px 15px 20px;width:50px;height:50px'></div></body>");
             var t = LayoutTestHelper.FindById(r,"t")!;
-            Assert.Equal(5, t.MarginTop);
-            Assert.Equal(10, t.MarginRight);
-            Assert.Equal(15, t.MarginBottom);
-            Assert.Equal(20, t.MarginLeft);
+            Assert.Equal(5, t.StyledNode!.Style.MarginTop);
+            Assert.Equal(10, t.StyledNode!.Style.MarginRight);
+            Assert.Equal(15, t.StyledNode!.Style.MarginBottom);
+            Assert.Equal(20, t.StyledNode!.Style.MarginLeft);
         }
 
         // ======= PADDING SHORTHAND =======

@@ -39,6 +39,17 @@ namespace Rend.VisualRegression.Infrastructure
         /// measured difference.
         /// </summary>
         public bool FuzzyAccepted { get; set; }
+        /// <summary>
+        /// Anti-aliasing-only verdict for this diff (label only — NEVER affects <see cref="Outcome"/>).
+        /// Used for the parallel "pass rate excluding provably-AA-only diffs" report.
+        /// </summary>
+        public AntiAliasingClassifier.AaVerdict AaVerdict { get; set; } = AntiAliasingClassifier.AaVerdict.Real;
+        /// <summary>Human-readable explanation of the AA verdict (which gate(s) decided it).</summary>
+        public string AaReason { get; set; } = "";
+        /// <summary>True only when every AA gate passed — the diff is provably AA-only.</summary>
+        public bool IsAaOnly => AaVerdict == AntiAliasingClassifier.AaVerdict.AaOnly;
+        /// <summary>Edge-concentration ratio (diffs' gradient ÷ image gradient) used by the AA classifier.</summary>
+        public double AaEdgeBias { get; set; }
         public string? ChromeImagePath { get; set; }
         public string? RendImagePath { get; set; }
         public string? DiffImagePath { get; set; }

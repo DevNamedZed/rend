@@ -138,10 +138,10 @@ namespace Rend.Tests.Layout
                 </body>");
             var target = LayoutTestHelper.FindById(root, "t");
             Assert.NotNull(target);
-            Assert.Equal(10, target!.MarginTop);
-            Assert.Equal(20, target.MarginRight);
-            Assert.Equal(30, target.MarginBottom);
-            Assert.Equal(40, target.MarginLeft);
+            Assert.Equal(10, target!.StyledNode!.Style.MarginTop);
+            Assert.Equal(20, target.StyledNode!.Style.MarginRight);
+            Assert.Equal(30, target.StyledNode!.Style.MarginBottom);
+            Assert.Equal(40, target.StyledNode!.Style.MarginLeft);
         }
 
         // [CSS2 §8.3] margin shorthand with 4 values: X position = marginLeft
@@ -241,10 +241,10 @@ namespace Rend.Tests.Layout
                 </body>");
             var target = LayoutTestHelper.FindById(root, "t");
             Assert.NotNull(target);
-            Assert.Equal(15, target!.MarginTop);
-            Assert.Equal(15, target.MarginRight);
-            Assert.Equal(15, target.MarginBottom);
-            Assert.Equal(15, target.MarginLeft);
+            Assert.Equal(15, target!.StyledNode!.Style.MarginTop);
+            Assert.Equal(15, target.StyledNode!.Style.MarginRight);
+            Assert.Equal(15, target.StyledNode!.Style.MarginBottom);
+            Assert.Equal(15, target.StyledNode!.Style.MarginLeft);
         }
 
         // [CSS2 §8.3] margin shorthand 2 values: vertical horizontal
@@ -257,10 +257,10 @@ namespace Rend.Tests.Layout
                 </body>");
             var target = LayoutTestHelper.FindById(root, "t");
             Assert.NotNull(target);
-            Assert.Equal(10, target!.MarginTop);
-            Assert.Equal(25, target.MarginRight);
-            Assert.Equal(10, target.MarginBottom);
-            Assert.Equal(25, target.MarginLeft);
+            Assert.Equal(10, target!.StyledNode!.Style.MarginTop);
+            Assert.Equal(25, target.StyledNode!.Style.MarginRight);
+            Assert.Equal(10, target.StyledNode!.Style.MarginBottom);
+            Assert.Equal(25, target.StyledNode!.Style.MarginLeft);
         }
 
         // [CSS2 §8.3] margin shorthand 3 values: top horizontal bottom
@@ -273,10 +273,10 @@ namespace Rend.Tests.Layout
                 </body>");
             var target = LayoutTestHelper.FindById(root, "t");
             Assert.NotNull(target);
-            Assert.Equal(10, target!.MarginTop);
-            Assert.Equal(20, target.MarginRight);
-            Assert.Equal(30, target.MarginBottom);
-            Assert.Equal(20, target.MarginLeft);
+            Assert.Equal(10, target!.StyledNode!.Style.MarginTop);
+            Assert.Equal(20, target.StyledNode!.Style.MarginRight);
+            Assert.Equal(30, target.StyledNode!.Style.MarginBottom);
+            Assert.Equal(20, target.StyledNode!.Style.MarginLeft);
         }
 
         // [CSS2 §8.3.1] adjacent sibling margins collapse: max(30, 20) = 30

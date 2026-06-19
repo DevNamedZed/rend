@@ -104,7 +104,8 @@ namespace Rend.Tests.Layout
 
         [Fact] public void TextAlign_JustifyAll() {
             var r = LayoutTestHelper.Layout("<body style='margin:0'><div id='t' style='text-align:justify-all;width:200px'>x</div></body>");
-            Assert.Equal(CssTextAlign.JustifyAll, ((LayoutTestHelper.FindById(r,"t")!.StyledNode as StyledElement)!).Style.TextAlign);
+            // [COMPAT] Chrome drops text-align: justify-all → falls back to initial value (start).
+            Assert.Equal(CssTextAlign.Start, ((LayoutTestHelper.FindById(r,"t")!.StyledNode as StyledElement)!).Style.TextAlign);
         }
 
         [Fact] public void TextAlign_Start() {

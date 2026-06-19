@@ -29,6 +29,13 @@ namespace Rend.Text
         /// </summary>
         internal Fonts.IFontProvider? FallbackFontProvider { get; set; }
 
+        /// <summary>
+        /// Optional sink for render diagnostics. When font fallback for a missing glyph
+        /// fails (e.g. no system font manager in WASM), a warning is reported here instead
+        /// of the failure being swallowed.
+        /// </summary>
+        internal Action<RenderDiagnostic>? OnDiagnostic { get; set; }
+
         /// <inheritdoc />
         public ShapedTextRun Shape(string text, byte[] fontData, float fontSize,
             string? language = null, string? script = null, string? fontFeatures = null)
@@ -121,17 +128,32 @@ namespace Rend.Text
                 return new ShapedTextRun(glyphs, text, fontSize, fontData);
 
             // Font fallback: find alternative fonts for .notdef glyphs.
-            // Guard with try-catch — SKFontManager may not work in all environments (e.g., WASM).
+            // SKFontManager may not work in all environments (e.g., WASM). If fallback
+            // fails, surface a warning and degrade to the unshaped run with .notdef
+            // glyphs — never swallow the failure silently.
             try
             {
                 return ShapeWithFallback(glyphs, count, text, fontSize, fontData, notdefAdvance);
             }
-            catch
+            catch (Exception fallbackException)
             {
-                // Fallback failed (e.g., no system font manager in WASM).
-                // Return the run as-is with .notdef glyphs.
+                OnDiagnostic?.Invoke(new RenderDiagnostic(
+                    RenderDiagnosticSeverity.Warning,
+                    $"Font fallback failed for missing glyph(s) in text \"{TruncateForDiagnostic(text)}\": " +
+                    $"{fallbackException.GetType().Name}: {fallbackException.Message}. " +
+                    "Rendering with .notdef glyphs."));
                 return new ShapedTextRun(glyphs, text, fontSize, fontData);
             }
+        }
+
+        private static string TruncateForDiagnostic(string text)
+        {
+            const int maxLength = 40;
+            if (text.Length <= maxLength)
+            {
+                return text;
+            }
+            return text.Substring(0, maxLength) + "…";
         }
 
         private ShapedTextRun ShapeWithFallback(ShapedGlyph[] glyphs, int count, string text, float fontSize, byte[] fontData, float notdefAdvance)

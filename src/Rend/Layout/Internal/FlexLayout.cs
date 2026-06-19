@@ -187,11 +187,13 @@ namespace Rend.Layout.Internal
                     var textNode = (StyledText)child;
                     if (string.IsNullOrWhiteSpace(textNode.Text)) continue;
 
-                    // Create anonymous block with display:block (not flex!) to avoid recursion
+                    // Create anonymous block with display:block (not flex!) to avoid recursion.
+                    // The text keeps its OWN inherited style (identical to the container's for a direct
+                    // child; preserves a display:contents element's inherited style for hoisted text).
                     var blockStyle = CloneStyleAsBlock(styledElement.Style);
                     var doc = styledElement.Element.OwnerDocument;
                     var anonElement = doc!.CreateElement("div");
-                    var anonChildren = new List<StyledNode> { new StyledText(textNode.Text, blockStyle) };
+                    var anonChildren = new List<StyledNode> { new StyledText(textNode.Text, textNode.Style) };
                     var anonStyled = new StyledElement(anonElement, blockStyle, anonChildren);
 
                     var textBox = new LayoutBox(anonStyled, BoxType.Block);
@@ -1559,6 +1561,33 @@ namespace Rend.Layout.Internal
             return contentWidth;
         }
 
+        /// <summary>
+        /// Extracts a replaced element's raw intrinsic dimensions — form-control intrinsic size,
+        /// or for img/svg the data-URI dimensions, else the width/height presentation attributes.
+        /// Does not derive a missing dimension from the aspect ratio; callers decide that.
+        /// </summary>
+        private static void GetReplacedRawIntrinsicSize(StyledElement element,
+            out float intrinsicWidth, out float intrinsicHeight)
+        {
+            intrinsicWidth = ReplacedElementLayout.GetFormControlIntrinsicWidth(element);
+            intrinsicHeight = ReplacedElementLayout.GetFormControlIntrinsicHeight(element);
+            if (element.TagName == "img" || element.TagName == "svg")
+            {
+                if (ReplacedElementLayout.TryGetDataUriDimensions(element, out float dataWidth, out float dataHeight))
+                {
+                    intrinsicWidth = dataWidth;
+                    intrinsicHeight = dataHeight;
+                }
+                else
+                {
+                    string widthAttr = element.GetAttribute("width") ?? "";
+                    string heightAttr = element.GetAttribute("height") ?? "";
+                    if (float.TryParse(widthAttr, out float attrWidth)) { intrinsicWidth = attrWidth; }
+                    if (float.TryParse(heightAttr, out float attrHeight)) { intrinsicHeight = attrHeight; }
+                }
+            }
+        }
+
         private static float ResolveFlexBasis(ComputedStyle style, bool isColumn, float containerWidth,
             float containerHeight, LayoutBox box, StyledElement element, LayoutContext context,
             bool isAutoMainSize = false,
@@ -1737,6 +1766,7 @@ namespace Rend.Layout.Internal
             // but cross dimension is definite and aspect-ratio is set, derive main size
             // from cross dimension and ratio.
             float arRatio = DimensionResolver.GetAspectRatio(style);
+            bool ratioFromCss = arRatio > 0;
             // [CSS-SIZING-4 §5.1] When the element has no CSS aspect-ratio but is a
             // replaced element with an intrinsic aspect ratio (SVG viewBox, img
             // width/height attrs), fall back to the intrinsic ratio so the
@@ -1744,6 +1774,28 @@ namespace Rend.Layout.Internal
             if (arRatio <= 0 && element != null && ReplacedElementLayout.IsReplaced(element))
             {
                 arRatio = ReplacedElementLayout.GetIntrinsicRatio(element);
+            }
+            // [CSS-SIZING-4 §5.1] A broken/sourceless <img> that carries explicit width AND height
+            // presentation attributes is a fixed attribute-sized box: Chrome uses those dimensions
+            // directly and does NOT cross-stretch it in a flex container, so its flex base (main)
+            // size is the intrinsic main size — it must NOT transfer a stretched cross size through
+            // the ratio. Verified via a Chrome layout dump: a column flex <img width=100 height=40>
+            // (no src) keeps base height 40, not containerWidth/ratio.
+            // This is scoped narrowly: a LOADED image (real or data-URI src) with an auto cross size
+            // IS stretched and transfers via the ratio (e.g. WPT flex-aspect-ratio-028: a 200x200
+            // src image becomes 100x100 in a 100px column), so the src must be empty for the guard
+            // to fire. Also limited to the intrinsic-ratio fallback (not a CSS aspect-ratio) and the
+            // both-axes-definite case, so one-axis data-URI SVGs still take the transfer path.
+            if (!ratioFromCss && arRatio > 0 && element != null && ReplacedElementLayout.IsReplaced(element))
+            {
+                GetReplacedRawIntrinsicSize(element, out float rawIntrinsicWidth, out float rawIntrinsicHeight);
+                bool bothIntrinsicDimensionsDefinite = rawIntrinsicWidth > 0 && rawIntrinsicHeight > 0;
+                bool cssCrossSizeAuto = isColumn ? float.IsNaN(style.Width) : float.IsNaN(style.Height);
+                bool hasNoImageSource = string.IsNullOrEmpty(element.GetAttribute("src"));
+                if (bothIntrinsicDimensionsDefinite && cssCrossSizeAuto && hasNoImageSource)
+                {
+                    arRatio = 0;
+                }
             }
             if (arRatio > 0)
             {
@@ -1918,24 +1970,9 @@ namespace Rend.Layout.Internal
             // Use those instead of trial layout.
             if (element != null && ReplacedElementLayout.IsReplaced(element))
             {
-                float intrW = ReplacedElementLayout.GetFormControlIntrinsicWidth(element);
-                float intrH = ReplacedElementLayout.GetFormControlIntrinsicHeight(element);
+                GetReplacedRawIntrinsicSize(element, out float intrW, out float intrH);
                 if (element.TagName == "img" || element.TagName == "svg")
                 {
-                    // For images, check data URI or attributes
-                    if (ReplacedElementLayout.TryGetDataUriDimensions(element, out float dw, out float dh))
-                    {
-                        intrW = dw;
-                        intrH = dh;
-                    }
-                    else
-                    {
-                        string widthAttr = element.GetAttribute("width") ?? "";
-                        string heightAttr = element.GetAttribute("height") ?? "";
-                        if (float.TryParse(widthAttr, out float aw)) { intrW = aw; }
-                        if (float.TryParse(heightAttr, out float ah)) { intrH = ah; }
-                    }
-
                     // [CSS-IMAGES-3 §6] If the SVG/img has one intrinsic dimension plus
                     // a natural aspect ratio (viewBox or explicit aspect-ratio), derive
                     // the missing dimension from the ratio. Used by WPT tests such as

@@ -6,24 +6,24 @@ namespace Rend.Html.Selectors.Internal
     /// CSS selector matching engine. Parses the selector string, then walks the DOM
     /// tree testing each element against the parsed selector AST.
     /// </summary>
+    /// <remarks>
+    /// Stateless: parsed-selector memoization is owned by the caller's
+    /// <see cref="SelectorParseCache"/> (the document the query runs against), passed in per
+    /// call. A null cache parses without memoizing (e.g. an element detached from any document).
+    /// </remarks>
     internal static class SelectorMatcher
     {
-        // Simple LRU cache for parsed selectors
-        private static readonly Dictionary<string, List<ComplexSelector>> _cache =
-            new Dictionary<string, List<ComplexSelector>>();
-        private static readonly object _cacheLock = new object();
-
-        internal static Element? QuerySelector(Node root, string selector)
+        internal static Element? QuerySelector(Node root, string selector, SelectorParseCache? cache)
         {
-            var parsed = GetParsed(selector);
+            var parsed = GetParsed(selector, cache);
             if (parsed.Count == 0) return null;
 
             return FindFirst(root, parsed);
         }
 
-        internal static List<Element> QuerySelectorAll(Node root, string selector)
+        internal static List<Element> QuerySelectorAll(Node root, string selector, SelectorParseCache? cache)
         {
-            var parsed = GetParsed(selector);
+            var parsed = GetParsed(selector, cache);
             var results = new List<Element>();
             if (parsed.Count == 0) return results;
 
@@ -34,24 +34,19 @@ namespace Rend.Html.Selectors.Internal
         /// <summary>
         /// Test if an element matches a selector string.
         /// </summary>
-        internal static bool Matches(Element element, string selector)
+        internal static bool Matches(Element element, string selector, SelectorParseCache? cache)
         {
-            var parsed = GetParsed(selector);
+            var parsed = GetParsed(selector, cache);
             return MatchesAny(element, parsed);
         }
 
-        private static List<ComplexSelector> GetParsed(string selector)
+        private static List<ComplexSelector> GetParsed(string selector, SelectorParseCache? cache)
         {
-            lock (_cacheLock)
+            if (cache != null)
             {
-                if (_cache.TryGetValue(selector, out var cached))
-                    return cached;
-
-                var parsed = SelectorParser.Parse(selector);
-                if (_cache.Count < 1024) // Limit cache size
-                    _cache[selector] = parsed;
-                return parsed;
+                return cache.GetParsed(selector);
             }
+            return SelectorParser.Parse(selector);
         }
 
         private static bool MatchesAny(Element element, List<ComplexSelector> selectors)

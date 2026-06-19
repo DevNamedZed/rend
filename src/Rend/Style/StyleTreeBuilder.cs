@@ -142,8 +142,12 @@ namespace Rend.Style
 
             // ::before pseudo-element (inserted as first child)
             var beforeStyle = _resolver.ResolvePseudoElement(adapter, "before", computedStyle);
-            if (beforeStyle != null)
+            if (beforeStyle != null && PseudoGeneratesBox(beforeStyle))
             {
+                // [CSS-LISTS-3 §4.4] A generated ::before box applies its OWN counter-reset/
+                // increment/set, in document order (after the originating element's increment, before
+                // its real children); content's counter()/counters() then read the post-increment value.
+                ApplyPseudoCounterOps(beforeStyle);
                 var content = GetContentText(beforeStyle, element, _counterTracker);
                 if (content != null)
                     children.Add(new StyledPseudoElement("before", content, beforeStyle));
@@ -170,8 +174,11 @@ namespace Rend.Style
 
             // ::after pseudo-element (inserted as last child)
             var afterStyle = _resolver.ResolvePseudoElement(adapter, "after", computedStyle);
-            if (afterStyle != null)
+            if (afterStyle != null && PseudoGeneratesBox(afterStyle))
             {
+                // [CSS-LISTS-3 §4.4] A generated ::after box applies its own counter ops here, after
+                // the originating element's real children, in document order.
+                ApplyPseudoCounterOps(afterStyle);
                 var content = GetContentText(afterStyle, element, _counterTracker);
                 if (content != null)
                     children.Add(new StyledPseudoElement("after", content, afterStyle));
@@ -234,6 +241,42 @@ namespace Rend.Style
             if (content == null) return null;
             if (content == "none" || content == "normal") return null;
             return content;
+        }
+
+        /// <summary>
+        /// [CSS2 §12.1] True when a ::before/::after generates a box, i.e. its 'content' is not
+        /// 'none'/'normal'. Mirrors the null-returns of <see cref="GetContentText"/> but reads only
+        /// the content property (independent of counter values), so it can gate the pseudo's counter
+        /// ops which must run BEFORE its content is resolved.
+        /// </summary>
+        private static bool PseudoGeneratesBox(ComputedStyle style)
+        {
+            var rawContent = style.ContentRaw;
+            if (rawContent != null)
+            {
+                if (rawContent is CssKeywordValue kw && (kw.Keyword == "none" || kw.Keyword == "normal"))
+                {
+                    return false;
+                }
+                return true;
+            }
+            var content = style.Content;
+            return content != null && content != "none" && content != "normal";
+        }
+
+        /// <summary>
+        /// Applies a generated pseudo-element's own counter-reset, counter-increment, and counter-set
+        /// to the tracker, in that document order. [CSS-LISTS-3 §4.4]
+        /// </summary>
+        private void ApplyPseudoCounterOps(ComputedStyle pseudoStyle)
+        {
+            var resets = CounterTracker.GetCounterResetEntries(pseudoStyle);
+            if (resets != null)
+            {
+                _counterTracker.ApplyCounterResetEntries(resets);
+            }
+            _counterTracker.ProcessCounterIncrement(pseudoStyle);
+            _counterTracker.ProcessCounterSet(pseudoStyle);
         }
 
         private static string? ResolveContentFunction(CssFunctionValue fn, Element element,

@@ -930,7 +930,9 @@ namespace Rend.Layout.Internal
                 bool[] wasIntrinsic = new bool[finalCols];
                 for (int c = 0; c < finalCols; c++)
                 {
-                    if (colWidths[c] >= -3.5f && colWidths[c] < 0)
+                    // -4.5f lower bound so the max-content sentinel (-4) is also treated as intrinsic
+                    // for spanning-item distribution.
+                    if (colWidths[c] >= -4.5f && colWidths[c] < 0)
                     {
                         wasIntrinsic[c] = true;
                     }
@@ -1033,7 +1035,10 @@ namespace Rend.Layout.Internal
                 // Replace intrinsic sentinels with measured widths
                 for (int c = 0; c < finalCols; c++)
                 {
-                    if (colWidths[c] >= -3.5f && colWidths[c] < 0)
+                    // -4.5f lower bound so the max-content sentinel (-4) is replaced by its measured
+                    // max-content width here (isMinContent at the measure pass is == -1, so -4 measures
+                    // max-content). It is NOT in the isImplicitAuto set, so the §11.8 stretch leaves it.
+                    if (colWidths[c] >= -4.5f && colWidths[c] < 0)
                     {
                         float measured = intrinsicWidths[c];
                         // [CSS-GRID §7.2.4.1] fit-content: max(auto_min, min(max_content, limit))
@@ -1415,7 +1420,16 @@ namespace Rend.Layout.Internal
                                 effectiveJustifySelf = (CssAlignItems)Css.CssAlignmentFlags.StripSafe(
                                     (int)style.JustifyItems);
                             }
-                            if (IsStretch(effectiveJustifySelf))
+                            // [CSS-ALIGN-3 §10] An auto margin in the inline axis takes precedence
+                            // over justify-self:stretch — the auto margin absorbs the free space and
+                            // the item is sized to its content, not stretched to the track. (The
+                            // free space is later split across the auto margins in pass 2.) This
+                            // mirrors the block axis and the flex cross-axis (FlexLayout
+                            // hasCrossAutoMargin); without it an auto-width item with margin:auto was
+                            // force-stretched to the track width while Chrome centers it content-sized.
+                            bool hasInlineAutoMargin = float.IsNaN(item.StyledElement.Style.MarginLeft)
+                                || float.IsNaN(item.StyledElement.Style.MarginRight);
+                            if (IsStretch(effectiveJustifySelf) && !hasInlineAutoMargin)
                             {
                                 contentWidth = DimensionResolver.ResolveWidth(item.StyledElement.Style, cellWidth, item.Box, context.Viewport);
                             }
@@ -1756,6 +1770,20 @@ namespace Rend.Layout.Internal
                 }
             }
 
+            // [CSS-GRID §6.5] minmax(min, auto) lower bound: an auto-max row track must be at least its
+            // min track sizing function even when its content is smaller. explicitRowTracks holds an
+            // intrinsic sentinel for auto-max tracks, so the floor comes from minmaxRowFloors.
+            if (minmaxRowFloors != null)
+            {
+                for (int r = 0; r < Math.Min(finalRows, minmaxRowFloors.Length); r++)
+                {
+                    if (minmaxRowFloors[r] > rowHeights[r])
+                    {
+                        rowHeights[r] = minmaxRowFloors[r];
+                    }
+                }
+            }
+
             // [CSS-GRID §11.4] Maximize row tracks: when the grid container has a
             // definite block size and intrinsic row tracks exceed it, cap them.
             if (containerHeight > 0)
@@ -1833,11 +1861,20 @@ namespace Rend.Layout.Internal
                 if (autoRowTracks != null && autoRowTracks.Length > 0)
                 {
                     float autoRowSize = autoRowTracks[0];
+                    // [CSS-GRID §6.5] For grid-auto-rows: minmax(min, auto) the resolved size is an
+                    // intrinsic sentinel (auto max), so also enforce the min track sizing function as a
+                    // floor on the implicit rows.
+                    float[]? autoRowFloors = ExtractMinmaxFloors(
+                        autoRowRaw, autoRowTracks.Length, containerHeight, 0f, context.Viewport);
+                    float autoRowFloor = (autoRowFloors != null && autoRowFloors.Length > 0)
+                        ? autoRowFloors[0] : 0f;
                     int implicitStart = explicitRows;
                     for (int r = implicitStart; r < finalRows; r++)
                     {
                         if (autoRowSize > rowHeights[r])
                             rowHeights[r] = autoRowSize;
+                        if (autoRowFloor > rowHeights[r])
+                            rowHeights[r] = autoRowFloor;
                     }
                 }
             }
@@ -4047,7 +4084,11 @@ namespace Rend.Layout.Internal
                 if (kwVal.Keyword == "min-content")
                     return (-1, false); // sentinel: resolved by content measurement
                 if (kwVal.Keyword == "max-content")
-                    return (-2, false); // sentinel: resolved by content measurement
+                    // sentinel -4: max-content is measured (like auto's max), but unlike auto it is NOT
+                    // stretchable — its growth limit is the max-content size, so §11.8 must not expand it
+                    // into leftover free space. Distinct from auto's -2 precisely so it is excluded from
+                    // the isImplicitAuto stretch set. [CSS-GRID §11.6/§11.8]
+                    return (-4, false);
             }
             if (val is CssFunctionValue fn)
             {

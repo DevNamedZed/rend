@@ -124,12 +124,14 @@ namespace Rend.Tests.Layout
             var root = LayoutTestHelper.Layout(@"
                 <body style='margin:0'>
                 <table id='t' style='width:200px; border-collapse:collapse; border:4px solid black'>
-                    <tr><td style='height:30px'>A</td></tr>
+                    <tr><td id='c' style='height:30px'>A</td></tr>
                 </table></body>");
             var table = LayoutTestHelper.FindById(root, "t")!;
-            // In collapsed mode, table border is halved (shared with cells)
-            _output.WriteLine($"borderTop={table.BorderTopWidth} borderLeft={table.BorderLeftWidth}");
-            Assert.True(table.BorderTopWidth >= 1, $"Table border should exist (got {table.BorderTopWidth})");
+            var cell = LayoutTestHelper.FindById(root, "c")!;
+            // Collapsed mode: the table's 4px border collapses onto the edge cell (halved);
+            // the table box itself carries no separate border (it's represented on the cells).
+            _output.WriteLine($"table.borderTop={table.BorderTopWidth} cell.borderTop={cell.BorderTopWidth}");
+            Assert.True(cell.BorderTopWidth >= 1, $"Collapsed table border lands on the edge cell (got {cell.BorderTopWidth})");
         }
 
         [Fact]
@@ -233,7 +235,7 @@ namespace Rend.Tests.Layout
             // CSS 2.1 §17.6.2: wider border wins in collapsed mode
             // Table has 6px, cell has 2px — table's 6px should win on outer edges
             _output.WriteLine($"table.borderTop={table.BorderTopWidth} cell.borderTop={cell.BorderTopWidth}");
-            Assert.True(table.BorderTopWidth >= 2, $"Winning border should be at least 2px (got {table.BorderTopWidth})");
+            Assert.True(cell.BorderTopWidth >= 2, $"Wider collapsed border (6px table beats 2px cell, halved) lands on the cell (got {cell.BorderTopWidth})");
         }
 
         [Fact]
@@ -362,9 +364,10 @@ namespace Rend.Tests.Layout
             _output.WriteLine($"outer.borderTop={outer.BorderTopWidth} inner.borderTop={inner.BorderTopWidth}");
             Assert.True(System.Math.Abs(outer.BorderTopWidth - 2) < 1,
                 $"Outer keeps separate 2px border (got {outer.BorderTopWidth})");
-            // Inner table uses collapse mode independently
-            Assert.True(inner.BorderTopWidth >= 1,
-                $"Inner table has collapsed border (got {inner.BorderTopWidth})");
+            // Inner table uses collapse mode independently — its collapsed border lands on the edge cell.
+            var innerCell = LayoutTestHelper.FindById(root, "ic")!;
+            Assert.True(innerCell.BorderTopWidth >= 1,
+                $"Inner collapsed border lands on its edge cell (got {innerCell.BorderTopWidth})");
         }
 
         [Fact]
@@ -389,21 +392,28 @@ namespace Rend.Tests.Layout
         }
 
         [Fact]
-        public void Collapse_TableWidthIncludesBorders()
+        public void Collapse_BorderBoxAbsorbsCollapsedBorders()
         {
             var root = LayoutTestHelper.Layout(@"
                 <body style='margin:0'>
                 <table id='t' style='width:200px; border-collapse:collapse; border:4px solid black'>
-                    <tr><td style='height:30px'>A</td></tr>
+                    <tr><td id='c' style='height:30px'>A</td></tr>
                 </table></body>");
             var table = LayoutTestHelper.FindById(root, "t")!;
-            _output.WriteLine($"contentW={table.ContentRect.Width} borderBoxW={table.BorderRect.Width}");
-            // CSS width:200px is content-box; content width should be 200px
+            var cell = LayoutTestHelper.FindById(root, "c")!;
+            _output.WriteLine($"contentW={table.ContentRect.Width} borderBoxW={table.BorderRect.Width} cellX={cell.ContentRect.X} cellW={cell.ContentRect.Width}");
+            // [CSS 2.1 §17.6.2] In border-collapse the table paints no separate border; the
+            // collapsed border's outer half is absorbed INSIDE the table box (it insets the cell
+            // grid by half the border), so the table's border-box width EQUALS the specified
+            // width:200px — it does NOT grow to 204. The table box's own per-side borders are
+            // zero (the border is carried by the cells). Verified via Chrome 116 layout dump:
+            // table getBoundingClientRect width = 200, cell inset to x=2 w=196.
             Assert.True(System.Math.Abs(table.ContentRect.Width - 200) < 2,
                 $"Table content width should be 200px (got {table.ContentRect.Width})");
-            // Border-box adds the collapsed borders
-            Assert.True(table.BorderRect.Width > 200,
-                $"Border-box should exceed content width (got {table.BorderRect.Width})");
+            Assert.True(System.Math.Abs(table.BorderRect.Width - 200) < 2,
+                $"Collapse border-box equals specified width 200 (got {table.BorderRect.Width})");
+            Assert.True(System.Math.Abs(table.BorderLeftWidth) < 1 && System.Math.Abs(table.BorderRightWidth) < 1,
+                $"Table box carries no separate border in collapse mode (got L={table.BorderLeftWidth} R={table.BorderRightWidth})");
         }
 
         [Fact]

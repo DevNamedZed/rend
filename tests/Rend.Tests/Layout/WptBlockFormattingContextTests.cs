@@ -299,8 +299,13 @@ namespace Rend.Tests.Layout
                 </div></body>");
             var bfc = LayoutTestHelper.FindById(root, "bfc")!;
             _output.WriteLine($"bfc height={bfc.ContentRect.Height}");
-            Assert.True(bfc.ContentRect.Height >= 79,
-                $"column-count BFC should contain float (height={bfc.ContentRect.Height})");
+            // [CSS-MULTICOL §2/§3] A multicol container is a BFC AND a fragmentation context, so
+            // it CONTAINS its float — but the float is FRAGMENTED across the balanced columns,
+            // not kept at its full un-fragmented height. An 80px float in 2 columns balances to
+            // 40px per column => container height = 40. Verified via Chrome layout dump
+            // (height must be contained/non-zero, but it is 40, NOT the full float height 80).
+            Assert.True(bfc.ContentRect.Height > 1 && System.Math.Abs(bfc.ContentRect.Height - 40) < 2,
+                $"multicol BFC fragments the float across columns => height 40 (got {bfc.ContentRect.Height})");
         }
 
         // [CSS2 §17.5.4] table-cell establishes BFC

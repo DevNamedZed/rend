@@ -22,7 +22,8 @@ namespace Rend.VisualRegression.Infrastructure
 
             if (expectedBitmap == null || actualBitmap == null)
             {
-                return new CompareAndDiffResult(1.0, 1, 1.0, 1, 1, 255, null);
+                return new CompareAndDiffResult(1.0, 1, 1.0, 1, 1, 255, null,
+                    AntiAliasingClassifier.AaClassification.Real("decode failure"));
             }
 
             int expectedWidth = expectedBitmap.Width;
@@ -67,7 +68,8 @@ namespace Rend.VisualRegression.Infrastructure
 
                 if (allMatch)
                 {
-                    return new CompareAndDiffResult(0.0, 0, 0.0, 0, totalPixels, 0, null);
+                    return new CompareAndDiffResult(0.0, 0, 0.0, 0, totalPixels, 0, null,
+                        AntiAliasingClassifier.AaClassification.Real("no strict diff"));
                 }
             }
 
@@ -146,6 +148,14 @@ namespace Rend.VisualRegression.Infrastructure
 
             double shiftFraction = totalPixels > 0 ? (double)shiftDiff / totalPixels : 0.0;
 
+            // Anti-aliasing classification (post-analysis, while the pixel spans are still alive).
+            // Pure label for a parallel report; it never affects pass/fail. Only meaningful when
+            // there is a strict diff; same-dimension only (the classifier rejects mismatches).
+            AntiAliasingClassifier.AaClassification aa = strictDiff > 0
+                ? AntiAliasingClassifier.Classify(expectedPixels, actualPixels, width, height,
+                    sameDimensions, strictDiff, maxChannelDiff, shiftFraction, perChannelThreshold)
+                : AntiAliasingClassifier.AaClassification.Real("no strict diff");
+
             // Generate diff PNG only for failing tests
             byte[]? diffPng = null;
             if (strictDiff > 0)
@@ -155,7 +165,7 @@ namespace Rend.VisualRegression.Infrastructure
                     width, height, perChannelThreshold);
             }
 
-            return new CompareAndDiffResult(strictFraction, strictDiff, shiftFraction, shiftDiff, totalPixels, maxChannelDiff, diffPng);
+            return new CompareAndDiffResult(strictFraction, strictDiff, shiftFraction, shiftDiff, totalPixels, maxChannelDiff, diffPng, aa);
         }
 
         /// <summary>
@@ -270,10 +280,12 @@ namespace Rend.VisualRegression.Infrastructure
         /// </summary>
         public readonly int MaxChannelDiff;
         public readonly byte[]? DiffPng;
+        /// <summary>Anti-aliasing-only classification of this diff (label only; never affects pass/fail).</summary>
+        public readonly AntiAliasingClassifier.AaClassification Aa;
 
         public CompareAndDiffResult(double strictFraction, int strictPixels,
             double shiftFraction, int shiftPixels, int totalPixels,
-            int maxChannelDiff, byte[]? diffPng)
+            int maxChannelDiff, byte[]? diffPng, AntiAliasingClassifier.AaClassification aa)
         {
             StrictDiffFraction = strictFraction;
             StrictDiffPixels = strictPixels;
@@ -282,6 +294,7 @@ namespace Rend.VisualRegression.Infrastructure
             TotalPixels = totalPixels;
             MaxChannelDiff = maxChannelDiff;
             DiffPng = diffPng;
+            Aa = aa;
         }
     }
 }

@@ -21,6 +21,12 @@ class Program
         Console.WriteLine("Visual Regression: Chrome vs Rend");
         Console.WriteLine();
 
+        // AA-classifier self-test: synthetic ground truth, no Chrome / no network needed.
+        if (args.Length > 0 && args[0] == "--aa-selftest")
+        {
+            return AaSelfTest.Run();
+        }
+
         // Create output directories:
         //   output/{runId}/            — per-run output (report + resources/)
         //   output/{runId}/resources/  — images, layout JSON, test HTML
@@ -237,8 +243,17 @@ class Program
         int errorCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Error);
         int fuzzyPassCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Pass && r.FuzzyAccepted);
 
+        // Provably-AA-only failures (excluded from the parallel report) and uncertain candidates.
+        // This NEVER affects pass/fail — it is a measurement of the rasterizer-AA floor.
+        int aaOnlyFailCount = sortedResults.Count(r => r.Outcome == ComparisonOutcome.Fail && r.IsAaOnly);
+        int aaUncertainFailCount = sortedResults.Count(r =>
+            r.Outcome == ComparisonOutcome.Fail && r.AaVerdict == AntiAliasingClassifier.AaVerdict.Uncertain);
+        int passExclAa = passCount + aaOnlyFailCount;
+        double passExclAaPct = sortedResults.Count > 0 ? 100.0 * passExclAa / sortedResults.Count : 0.0;
+
         Console.WriteLine();
         Console.WriteLine($"Results: {sortedResults.Count} tests, {passCount} passed ({fuzzyPassCount} fuzzy), {failCount} failed, {errorCount} errors, avg diff {avgDiff:F4}%");
+        Console.WriteLine($"Pass excl. AA-only: {passExclAa} ({passExclAaPct:F1}%)  [{aaOnlyFailCount} provably AA-only excluded; {aaUncertainFailCount} uncertain, NOT excluded]");
         Console.WriteLine($"Duration: {totalSw.Elapsed.TotalSeconds:F1}s");
 
         if (!fastMode)
@@ -401,6 +416,9 @@ class Program
             result.ShiftTolerantDiffPixels = cmpResult.ShiftTolerantDiffPixels;
             result.TotalPixels = cmpResult.TotalPixels;
             result.MaxChannelDiff = cmpResult.MaxChannelDiff;
+            result.AaVerdict = cmpResult.Aa.Verdict;
+            result.AaReason = cmpResult.Aa.Reason;
+            result.AaEdgeBias = cmpResult.Aa.EdgeBias;
 
             bool passed = diffPercent < testCase.Tolerance;
             if (!passed && testCase.Fuzzy != null &&
@@ -501,6 +519,9 @@ class Program
         int fuzzyPassCount = results.Count(r => r.Outcome == ComparisonOutcome.Pass && r.FuzzyAccepted);
         int failCount = results.Count(r => r.Outcome == ComparisonOutcome.Fail);
         int errorCount = results.Count(r => r.Outcome == ComparisonOutcome.Error);
+        int aaOnlyFailCount = results.Count(r => r.Outcome == ComparisonOutcome.Fail && r.IsAaOnly);
+        int aaUncertainFailCount = results.Count(r =>
+            r.Outcome == ComparisonOutcome.Fail && r.AaVerdict == AntiAliasingClassifier.AaVerdict.Uncertain);
         double avgDiff = results.Where(r => r.Outcome != ComparisonOutcome.Error)
             .Select(r => r.DiffPercentage).DefaultIfEmpty(0).Average();
 
@@ -517,6 +538,10 @@ class Program
                 failed = failCount,
                 errors = errorCount,
                 avgDiffPercentage = Math.Round(avgDiff, 4),
+                // Parallel AA-floor metric (never affects pass/fail).
+                aaOnlyExcluded = aaOnlyFailCount,
+                passExcludingAaOnly = passCount + aaOnlyFailCount,
+                aaUncertain = aaUncertainFailCount,
             },
             tests = results.Select(r => new
             {
@@ -532,6 +557,9 @@ class Program
                 shiftTolerantDiffPixels = r.ShiftTolerantDiffPixels,
                 maxChannelDiff = r.MaxChannelDiff,
                 totalPixels = r.TotalPixels,
+                aaVerdict = r.AaVerdict.ToString(),
+                aaReason = r.AaReason,
+                aaEdgeBias = Math.Round(r.AaEdgeBias, 2),
                 durationMs = (int)r.Duration.TotalMilliseconds,
                 errorMessage = r.ErrorMessage,
             }).ToList(),

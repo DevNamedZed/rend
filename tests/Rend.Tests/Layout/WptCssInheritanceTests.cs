@@ -259,10 +259,10 @@ namespace Rend.Tests.Layout
             var target = LayoutTestHelper.FindById(root, "target");
             Assert.NotNull(target);
             _output.WriteLine($"margins: T={target!.MarginTop} R={target.MarginRight} B={target.MarginBottom} L={target.MarginLeft}");
-            Assert.True(System.Math.Abs(target.MarginTop - 15) < 2);
-            Assert.True(System.Math.Abs(target.MarginRight - 15) < 2);
-            Assert.True(System.Math.Abs(target.MarginBottom - 15) < 2);
-            Assert.True(System.Math.Abs(target.MarginLeft - 15) < 2);
+            Assert.True(System.Math.Abs(target.StyledNode!.Style.MarginTop - 15) < 2);
+            Assert.True(System.Math.Abs(target.StyledNode!.Style.MarginRight - 15) < 2);
+            Assert.True(System.Math.Abs(target.StyledNode!.Style.MarginBottom - 15) < 2);
+            Assert.True(System.Math.Abs(target.StyledNode!.Style.MarginLeft - 15) < 2);
         }
 
         [Fact]

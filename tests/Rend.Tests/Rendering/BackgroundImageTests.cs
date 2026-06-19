@@ -440,12 +440,11 @@ namespace Rend.Tests.Rendering
 
             values[PropertyId.BackgroundRepeat] = PropertyValue.FromKeyword(bgRepeat);
 
-            // The painter reads the repeat REF value (keyword) via GetLayerRepeatModes,
-            // so round/space detection needs the keyword set, not just the enum value.
-            if (bgRepeatKeyword != null)
-            {
-                refValues[PropertyId.BackgroundRepeat] = new CssKeywordValue(bgRepeatKeyword);
-            }
+            // The painter reads the repeat keyword from refValues (GetLayerRepeatModes),
+            // not the enum in values. Mirror the real style pipeline: set the keyword to
+            // match the enum unless an explicit keyword was supplied (e.g. round/space).
+            refValues[PropertyId.BackgroundRepeat] = new CssKeywordValue(
+                bgRepeatKeyword ?? RepeatModeKeyword((CssBackgroundRepeat)bgRepeat));
 
             if (bgPosition != null)
             {
@@ -474,6 +473,16 @@ namespace Rend.Tests.Rendering
 
             return box;
         }
+
+        private static string RepeatModeKeyword(CssBackgroundRepeat repeat) => repeat switch
+        {
+            CssBackgroundRepeat.NoRepeat => "no-repeat",
+            CssBackgroundRepeat.RepeatX => "repeat-x",
+            CssBackgroundRepeat.RepeatY => "repeat-y",
+            CssBackgroundRepeat.Round => "round",
+            CssBackgroundRepeat.Space => "space",
+            _ => "repeat",
+        };
 
         private sealed class BgRecordingTarget : IRenderTarget
         {

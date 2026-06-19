@@ -95,6 +95,18 @@ namespace Rend.Layout.Internal
                     return svgRatio;
                 }
             }
+            else if (tag == "canvas")
+            {
+                // [HTML §4.12.5] The canvas element's intrinsic dimensions are its
+                // `width`/`height` content attributes (defaulting to 300x150), so its
+                // intrinsic ratio is width/height of those attributes.
+                float canvasWidth = GetCanvasIntrinsicDimension(element, "width", 300f);
+                float canvasHeight = GetCanvasIntrinsicDimension(element, "height", 150f);
+                if (canvasHeight > 0)
+                {
+                    return canvasWidth / canvasHeight;
+                }
+            }
             // CSS aspect-ratio property
             float cssRatio = DimensionResolver.GetAspectRatio(element.Style);
             if (cssRatio > 0)
@@ -102,6 +114,24 @@ namespace Rend.Layout.Internal
                 return cssRatio;
             }
             return 0;
+        }
+
+        /// <summary>
+        /// [HTML §4.12.5] Returns a canvas intrinsic dimension from its <c>width</c>/<c>height</c>
+        /// content attribute (a non-negative integer in CSS pixels), falling back to the HTML
+        /// default (300x150) when the attribute is absent or invalid.
+        /// </summary>
+        private static float GetCanvasIntrinsicDimension(StyledElement element, string attributeName, float defaultValue)
+        {
+            string? attributeValue = element.GetAttribute(attributeName);
+            if (attributeValue != null
+                && float.TryParse(attributeValue, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float parsed)
+                && parsed >= 0)
+            {
+                return parsed;
+            }
+            return defaultValue;
         }
 
         /// <summary>
@@ -201,7 +231,10 @@ namespace Rend.Layout.Internal
             if (tag == "meter" || tag == "progress")
                 return 80f; // Default width per WHATWG spec
 
-            if (tag == "video" || tag == "canvas")
+            if (tag == "canvas")
+                return GetCanvasIntrinsicDimension(element, "width", 300f);
+
+            if (tag == "video")
                 return 300f; // Default 300x150 per HTML spec
 
             if (tag == "audio")
@@ -261,7 +294,10 @@ namespace Rend.Layout.Internal
             if (tag == "meter" || tag == "progress")
                 return 16f; // Default height per WHATWG spec
 
-            if (tag == "video" || tag == "canvas")
+            if (tag == "canvas")
+                return GetCanvasIntrinsicDimension(element, "height", 150f);
+
+            if (tag == "video")
                 return 150f; // Default 300x150 per HTML spec
 
             if (tag == "audio")

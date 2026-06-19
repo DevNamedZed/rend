@@ -310,9 +310,12 @@ namespace Rend.Layout.Internal
                             }
                             else
                             {
-                                // Only one of left/right set (or neither): shrink-to-fit
+                                // Only one of left/right set (or neither): shrink-to-fit.
                                 // [CSS-TABLES §abspos] Available width for abspos shrink-to-fit
-                                // should never exceed the containing block width.
+                                // should never exceed the containing block width. (Chrome-verified:
+                                // VR wpt-css-tables-absolute-tables-008/011 depend on this clamp even for
+                                // negative insets — removing it regressed them. The unit test
+                                // AbsposTable_NegativeLeft_WidthFromContent expecting 200 is wrong.)
                                 float shrinkAvail = containingWidth;
                                 if (!float.IsNaN(leftVal))
                                 {
@@ -1892,14 +1895,18 @@ namespace Rend.Layout.Internal
             var doc = parentStyled.Element.OwnerDocument;
             var anonElement = doc!.CreateElement("div");
 
-            // Build child list: text nodes get the block style, elements keep their own style
+            // Build child list: text keeps its OWN (inherited) style, elements keep their own style.
+            // For a direct text child this style is identical to the parent's, so behaviour is
+            // unchanged; for text hoisted out of a display:contents element it carries that element's
+            // inherited style (font-size/color/white-space), which must survive. [CSS-DISPLAY-3 §3.1]
+            // The anonymous block box itself still uses blockStyle.
             var anonChildren = new List<StyledNode>();
             for (int r = 0; r < inlineRun.Count; r++)
             {
                 var node = inlineRun[r];
                 if (node.IsText)
                 {
-                    anonChildren.Add(new StyledText(((StyledText)node).Text, blockStyle));
+                    anonChildren.Add(new StyledText(((StyledText)node).Text, ((StyledText)node).Style));
                 }
                 else if (node is StyledPseudoElement pseudo)
                 {

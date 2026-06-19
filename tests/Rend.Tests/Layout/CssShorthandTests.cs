@@ -110,10 +110,10 @@ namespace Rend.Tests.Layout
             var box = LayoutTestHelper.FindById(root, "test");
             Assert.NotNull(box);
             _output.WriteLine($"margins: T={box!.MarginTop} R={box.MarginRight} B={box.MarginBottom} L={box.MarginLeft}");
-            Assert.Equal(10, box.MarginTop);
-            Assert.Equal(20, box.MarginRight);
-            Assert.Equal(10, box.MarginBottom);
-            Assert.Equal(20, box.MarginLeft);
+            Assert.Equal(10, box.StyledNode!.Style.MarginTop);
+            Assert.Equal(20, box.StyledNode!.Style.MarginRight);
+            Assert.Equal(10, box.StyledNode!.Style.MarginBottom);
+            Assert.Equal(20, box.StyledNode!.Style.MarginLeft);
         }
         [Fact]
         public void Flex_Shorthand_TwoNumbers_BasisIsZero()

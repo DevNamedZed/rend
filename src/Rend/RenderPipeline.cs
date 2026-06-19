@@ -86,6 +86,7 @@ namespace Rend
             if (textShaper is Text.HarfBuzzTextShaper harfBuzzShaper)
             {
                 harfBuzzShaper.FallbackFontProvider = fontProvider;
+                harfBuzzShaper.OnDiagnostic = _options.OnDiagnostic;
             }
 
             // 6. Set up style resolver
@@ -252,6 +253,7 @@ namespace Rend
             if (textShaper is Text.HarfBuzzTextShaper harfBuzzShaper2)
             {
                 harfBuzzShaper2.FallbackFontProvider = fontProvider;
+                harfBuzzShaper2.OnDiagnostic = _options.OnDiagnostic;
             }
 
             // 6. Set up style resolver

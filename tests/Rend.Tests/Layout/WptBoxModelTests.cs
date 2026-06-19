@@ -123,22 +123,22 @@ namespace Rend.Tests.Layout
         [Fact] public void Margin_1Value() {
             var r = LayoutTestHelper.Layout("<body style='margin:0;overflow:hidden'><div id='t' style='margin:15px;width:50px;height:50px'></div></body>");
             var t = LayoutTestHelper.FindById(r,"t")!;
-            Assert.Equal(15, t.MarginTop); Assert.Equal(15, t.MarginRight);
-            Assert.Equal(15, t.MarginBottom); Assert.Equal(15, t.MarginLeft);
+            Assert.Equal(15, t.StyledNode!.Style.MarginTop); Assert.Equal(15, t.StyledNode!.Style.MarginRight);
+            Assert.Equal(15, t.StyledNode!.Style.MarginBottom); Assert.Equal(15, t.StyledNode!.Style.MarginLeft);
         }
 
         [Fact] public void Margin_3Values() {
             var r = LayoutTestHelper.Layout("<body style='margin:0;overflow:hidden'><div id='t' style='margin:10px 20px 30px;width:50px;height:50px'></div></body>");
             var t = LayoutTestHelper.FindById(r,"t")!;
-            Assert.Equal(10, t.MarginTop); Assert.Equal(20, t.MarginRight);
-            Assert.Equal(30, t.MarginBottom); Assert.Equal(20, t.MarginLeft);
+            Assert.Equal(10, t.StyledNode!.Style.MarginTop); Assert.Equal(20, t.StyledNode!.Style.MarginRight);
+            Assert.Equal(30, t.StyledNode!.Style.MarginBottom); Assert.Equal(20, t.StyledNode!.Style.MarginLeft);
         }
 
         [Fact] public void Margin_4Values() {
             var r = LayoutTestHelper.Layout("<body style='margin:0;overflow:hidden'><div id='t' style='margin:10px 20px 30px 40px;width:50px;height:50px'></div></body>");
             var t = LayoutTestHelper.FindById(r,"t")!;
-            Assert.Equal(10, t.MarginTop); Assert.Equal(20, t.MarginRight);
-            Assert.Equal(30, t.MarginBottom); Assert.Equal(40, t.MarginLeft);
+            Assert.Equal(10, t.StyledNode!.Style.MarginTop); Assert.Equal(20, t.StyledNode!.Style.MarginRight);
+            Assert.Equal(30, t.StyledNode!.Style.MarginBottom); Assert.Equal(40, t.StyledNode!.Style.MarginLeft);
         }
 
         // [CSS2 §10.6.7] auto height includes float bottom

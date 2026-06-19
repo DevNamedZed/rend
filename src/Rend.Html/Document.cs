@@ -7,7 +7,16 @@ namespace Rend.Html
     /// </summary>
     public sealed class Document : Node
     {
+        private readonly Selectors.Internal.SelectorParseCache _selectorCache =
+            new Selectors.Internal.SelectorParseCache();
+
         public override NodeType NodeType => NodeType.Document;
+
+        /// <summary>
+        /// Per-document cache of parsed selectors, shared by this document's own
+        /// query methods and by its elements' <c>QuerySelector</c>/<c>Matches</c> calls.
+        /// </summary>
+        internal Selectors.Internal.SelectorParseCache SelectorCache => _selectorCache;
 
         /// <summary>The document's DOCTYPE node, if present.</summary>
         public DocumentType? Doctype
@@ -148,7 +157,7 @@ namespace Rend.Html
         /// </summary>
         public Element? QuerySelector(string selector)
         {
-            return Selectors.Internal.SelectorMatcher.QuerySelector(this, selector);
+            return Selectors.Internal.SelectorMatcher.QuerySelector(this, selector, SelectorCache);
         }
 
         /// <summary>
@@ -156,7 +165,7 @@ namespace Rend.Html
         /// </summary>
         public System.Collections.Generic.List<Element> QuerySelectorAll(string selector)
         {
-            return Selectors.Internal.SelectorMatcher.QuerySelectorAll(this, selector);
+            return Selectors.Internal.SelectorMatcher.QuerySelectorAll(this, selector, SelectorCache);
         }
 
         /// <summary>Finds an element by its id attribute.</summary>

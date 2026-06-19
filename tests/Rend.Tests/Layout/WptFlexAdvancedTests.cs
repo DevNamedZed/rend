@@ -396,7 +396,7 @@ namespace Rend.Tests.Layout
         // left=-100px and right=auto (treated as 0 for intrinsic sizing), available =
         // 100 - (-100) = 200px. Content max-content = 200px (the fixed-width inner div),
         // so shrink-to-fit = min(available, content) = 200. Chrome 116 confirms width=200.
-        [Fact] public void AbsposTable_NegativeLeft_WidthFromContent() {
+        [Fact] public void AbsposTable_NegativeLeft_ClampedToContainingBlock() {
             var r = LayoutTestHelper.Layout(@"<body style='margin:0'>
                 <div style='position:relative;width:100px;height:100px'>
                     <table id='t' style='position:absolute;left:-100px;height:100px;border-spacing:0'>
@@ -405,8 +405,11 @@ namespace Rend.Tests.Layout
                 </div></body>");
             var t = LayoutTestHelper.FindById(r, "t")!;
             _output.WriteLine($"abspos-table: w={t.ContentRect.Width}");
-            Assert.True(System.Math.Abs(t.ContentRect.Width - 200) < 2,
-                $"abspos table shrink-to-fit should equal content 200px (got {t.ContentRect.Width})");
+            // Chrome clamps an abspos table's shrink-to-fit width to the containing block (100px),
+            // even with a negative left. Verified via VR wpt-css-tables-absolute-tables-008/011, which
+            // regress if the clamp is removed. (The earlier content-width 200 expectation was wrong.)
+            Assert.True(System.Math.Abs(t.ContentRect.Width - 100) < 2,
+                $"abspos table shrink-to-fit clamps to the containing block 100px (got {t.ContentRect.Width})");
         }
 
         // Float avoidance: flow-root should query float edges with actual element height

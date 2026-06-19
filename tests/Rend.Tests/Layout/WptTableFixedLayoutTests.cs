@@ -702,10 +702,11 @@ namespace Rend.Tests.Layout
             Assert.NotNull(row2Cell1);
             Assert.NotNull(row2Cell2);
             _output.WriteLine($"r2c1={row2Cell1!.ContentRect.Width} r2c2={row2Cell2!.ContentRect.Width}");
-            // Colspan=2 with no width: equalWidth=400/4=100, divided by colSpan=2 gives slot=50
-            // UA padding 1px each side: content = 48
-            Assert.True(System.Math.Abs(row2Cell1.ContentRect.Width - 48) < 2);
-            Assert.True(System.Math.Abs(row2Cell2.ContentRect.Width - 48) < 2);
+            // Fixed layout distributes width per COLUMN: 400/4 = 100px each. The row-1 colspan=2
+            // cell covers two 100px columns; the row-2 single cells are 100px each, minus UA
+            // padding (1px per side) → content = 98. (The earlier "slot/colSpan=50" was wrong.)
+            Assert.True(System.Math.Abs(row2Cell1.ContentRect.Width - 98) < 2);
+            Assert.True(System.Math.Abs(row2Cell2.ContentRect.Width - 98) < 2);
         }
 
         // [CSS-TABLES §17.5.2.1] Fixed layout with padding + border-collapse

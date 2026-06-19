@@ -274,21 +274,36 @@ namespace Rend.Tests.Layout
         }
 
         [Fact]
-        public void GridItemMarginAutoWithoutExplicitSize_AutoMarginsResolveToZero()
+        public void GridItemMarginAutoWithoutExplicitSize_CentersContentSizedItem()
         {
-            // [CSS-GRID §11.1] margin:auto on a grid item without explicit size:
-            // auto margins resolve to 0 and the item stretches to fill the track.
+            // [CSS-ALIGN-3 §10] An auto margin on an axis takes precedence over the default
+            // justify-self/align-self:stretch: the item is sized to its content (0x0 for an
+            // empty div) and the auto margins absorb the track's free space, centering it.
+            // Verified against a Chrome 116 layout dump (item content-sized + centered, NOT
+            // stretched to the 200x80 track).
             var root = LayoutTestHelper.Layout(
                 "<body style='margin:0'>" +
                 "<div style='display:grid;grid-template-columns:200px;grid-template-rows:80px;width:200px'>" +
                 "<div id='t' style='margin:auto'></div>" +
                 "</div></body>");
             var box = LayoutTestHelper.FindById(root, "t")!;
-            _output.WriteLine($"ContentRect.Width={box.ContentRect.Width} ContentRect.Height={box.ContentRect.Height}");
-            Assert.True(System.Math.Abs(box.ContentRect.Width - 200) < 2,
-                $"No explicit width + margin:auto => auto margins resolve to 0, item stretches to 200 (got {box.ContentRect.Width})");
-            Assert.True(System.Math.Abs(box.ContentRect.Height - 80) < 2,
-                $"No explicit height + margin:auto => stretches to row height 80 (got {box.ContentRect.Height})");
+            _output.WriteLine($"W={box.ContentRect.Width} H={box.ContentRect.Height} X={box.ContentRect.X} Y={box.ContentRect.Y} mL={box.MarginLeft} mR={box.MarginRight} mT={box.MarginTop} mB={box.MarginBottom}");
+            Assert.True(box.ContentRect.Width < 2,
+                $"auto inline margins suppress stretch => content-sized width ~0 (got {box.ContentRect.Width})");
+            Assert.True(box.ContentRect.Height < 2,
+                $"auto block margins suppress stretch => content-sized height ~0 (got {box.ContentRect.Height})");
+            Assert.True(System.Math.Abs(box.MarginLeft - 100) < 2,
+                $"inline auto margins split the 200px free space => 100 each (got {box.MarginLeft})");
+            Assert.True(System.Math.Abs(box.MarginRight - 100) < 2,
+                $"inline auto margins split the 200px free space => 100 each (got {box.MarginRight})");
+            Assert.True(System.Math.Abs(box.MarginTop - 40) < 2,
+                $"block auto margins split the 80px free space => 40 each (got {box.MarginTop})");
+            Assert.True(System.Math.Abs(box.MarginBottom - 40) < 2,
+                $"block auto margins split the 80px free space => 40 each (got {box.MarginBottom})");
+            Assert.True(System.Math.Abs(box.ContentRect.X - 100) < 2,
+                $"centered horizontally => X=100 (got {box.ContentRect.X})");
+            Assert.True(System.Math.Abs(box.ContentRect.Y - 40) < 2,
+                $"centered vertically => Y=40 (got {box.ContentRect.Y})");
         }
 
         [Fact]

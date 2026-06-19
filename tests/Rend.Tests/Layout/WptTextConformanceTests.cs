@@ -15,7 +15,8 @@ namespace Rend.Tests.Layout
         [Fact] public void TextAlign_Right() { AssertTextAlign("right", CssTextAlign.Right); }
         [Fact] public void TextAlign_Center() { AssertTextAlign("center", CssTextAlign.Center); }
         [Fact] public void TextAlign_Justify() { AssertTextAlign("justify", CssTextAlign.Justify); }
-        [Fact] public void TextAlign_JustifyAll() { AssertTextAlign("justify-all", CssTextAlign.JustifyAll); }
+        // [COMPAT] Chrome does not support justify-all (CSS Text L3 §7.4) → dropped, stays start.
+        [Fact] public void TextAlign_JustifyAll() { AssertTextAlign("justify-all", CssTextAlign.Start); }
         [Fact] public void TextAlign_Start() { AssertTextAlign("start", CssTextAlign.Start); }
         [Fact] public void TextAlign_End() { AssertTextAlign("end", CssTextAlign.End); }
 

@@ -25,10 +25,10 @@ namespace Rend.Tests.Layout
                   </body>");
             var target = LayoutTestHelper.FindById(root, "t")!;
             _output.WriteLine($"margins: T={target.MarginTop} R={target.MarginRight} B={target.MarginBottom} L={target.MarginLeft}");
-            Assert.Equal(15, target.MarginTop);
-            Assert.Equal(15, target.MarginRight);
-            Assert.Equal(15, target.MarginBottom);
-            Assert.Equal(15, target.MarginLeft);
+            Assert.Equal(15, target.StyledNode!.Style.MarginTop);
+            Assert.Equal(15, target.StyledNode!.Style.MarginRight);
+            Assert.Equal(15, target.StyledNode!.Style.MarginBottom);
+            Assert.Equal(15, target.StyledNode!.Style.MarginLeft);
         }
 
         [Fact]
@@ -39,10 +39,10 @@ namespace Rend.Tests.Layout
                   <div id='t' style='margin:10px 25px;width:50px;height:50px'></div>
                   </body>");
             var target = LayoutTestHelper.FindById(root, "t")!;
-            Assert.Equal(10, target.MarginTop);
-            Assert.Equal(25, target.MarginRight);
-            Assert.Equal(10, target.MarginBottom);
-            Assert.Equal(25, target.MarginLeft);
+            Assert.Equal(10, target.StyledNode!.Style.MarginTop);
+            Assert.Equal(25, target.StyledNode!.Style.MarginRight);
+            Assert.Equal(10, target.StyledNode!.Style.MarginBottom);
+            Assert.Equal(25, target.StyledNode!.Style.MarginLeft);
         }
 
         [Fact]
@@ -53,10 +53,10 @@ namespace Rend.Tests.Layout
                   <div id='t' style='margin:5px 15px 25px;width:50px;height:50px'></div>
                   </body>");
             var target = LayoutTestHelper.FindById(root, "t")!;
-            Assert.Equal(5, target.MarginTop);
-            Assert.Equal(15, target.MarginRight);
-            Assert.Equal(25, target.MarginBottom);
-            Assert.Equal(15, target.MarginLeft);
+            Assert.Equal(5, target.StyledNode!.Style.MarginTop);
+            Assert.Equal(15, target.StyledNode!.Style.MarginRight);
+            Assert.Equal(25, target.StyledNode!.Style.MarginBottom);
+            Assert.Equal(15, target.StyledNode!.Style.MarginLeft);
         }
 
         [Fact]
@@ -67,10 +67,10 @@ namespace Rend.Tests.Layout
                   <div id='t' style='margin:4px 8px 12px 16px;width:50px;height:50px'></div>
                   </body>");
             var target = LayoutTestHelper.FindById(root, "t")!;
-            Assert.Equal(4, target.MarginTop);
-            Assert.Equal(8, target.MarginRight);
-            Assert.Equal(12, target.MarginBottom);
-            Assert.Equal(16, target.MarginLeft);
+            Assert.Equal(4, target.StyledNode!.Style.MarginTop);
+            Assert.Equal(8, target.StyledNode!.Style.MarginRight);
+            Assert.Equal(12, target.StyledNode!.Style.MarginBottom);
+            Assert.Equal(16, target.StyledNode!.Style.MarginLeft);
         }
 
         // ======= PADDING SHORTHAND (CSS2 §8.4) =======

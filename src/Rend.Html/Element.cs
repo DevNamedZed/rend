@@ -157,19 +157,19 @@ namespace Rend.Html
         /// <summary>Finds the first descendant element matching the CSS selector.</summary>
         public Element? QuerySelector(string selector)
         {
-            return Selectors.Internal.SelectorMatcher.QuerySelector(this, selector);
+            return Selectors.Internal.SelectorMatcher.QuerySelector(this, selector, OwnerDocument?.SelectorCache);
         }
 
         /// <summary>Finds all descendant elements matching the CSS selector.</summary>
         public System.Collections.Generic.List<Element> QuerySelectorAll(string selector)
         {
-            return Selectors.Internal.SelectorMatcher.QuerySelectorAll(this, selector);
+            return Selectors.Internal.SelectorMatcher.QuerySelectorAll(this, selector, OwnerDocument?.SelectorCache);
         }
 
         /// <summary>Returns true if this element matches the given CSS selector.</summary>
         public bool Matches(string selector)
         {
-            return Selectors.Internal.SelectorMatcher.Matches(this, selector);
+            return Selectors.Internal.SelectorMatcher.Matches(this, selector, OwnerDocument?.SelectorCache);
         }
 
         public override string ToString() => $"<{TagName}>";
