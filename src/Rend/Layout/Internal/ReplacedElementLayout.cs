@@ -107,6 +107,18 @@ namespace Rend.Layout.Internal
                     return canvasWidth / canvasHeight;
                 }
             }
+            else if (tag == "object" || tag == "embed")
+            {
+                // [CSS-IMAGES-3 §6] An <object>/<embed> referencing an SVG data: URI carries its
+                // intrinsic ratio in the embedded root <svg> (width/height lengths or viewBox).
+                // This is the natural ratio for `aspect-ratio: auto <ratio>`, which must prefer the
+                // intrinsic ratio over the supplied fallback.
+                float svgRatio = GetSvgDataUriRatio(element);
+                if (svgRatio > 0)
+                {
+                    return svgRatio;
+                }
+            }
             // CSS aspect-ratio property
             float cssRatio = DimensionResolver.GetAspectRatio(element.Style);
             if (cssRatio > 0)
@@ -455,11 +467,13 @@ namespace Rend.Layout.Internal
         /// </summary>
         public static float GetSvgDataUriRatio(StyledElement element)
         {
-            if (element.TagName != "img")
+            string tag = element.TagName;
+            if (tag != "img" && tag != "object" && tag != "embed")
             {
                 return 0f;
             }
-            string? src = element.GetAttribute("src");
+            // <object> references its resource via `data`; <img>/<embed> via `src`.
+            string? src = tag == "object" ? element.GetAttribute("data") : element.GetAttribute("src");
             if (src == null || !src.StartsWith("data:image/svg", StringComparison.OrdinalIgnoreCase))
             {
                 return 0f;
@@ -693,9 +707,13 @@ namespace Rend.Layout.Internal
             // no explicit ratio — the element has no aspect ratio and constraints on one
             // axis must NOT transfer to the other axis. Chrome's
             // LayoutReplaced::ComputeReplacedLogicalWidth follows the same rule.
+            // [CSS-SIZING-4 §4] A bare `aspect-ratio: <ratio>` overrides the intrinsic ratio, but
+            // `aspect-ratio: auto <ratio>` prefers the element's natural ratio and uses the supplied
+            // <ratio> only as a fallback when there is no natural one.
             float cssRatio = DimensionResolver.GetAspectRatio(style);
+            bool aspectRatioIsAuto = DimensionResolver.IsAspectRatioAuto(style);
             float ratio;
-            if (cssRatio > 0)
+            if (cssRatio > 0 && !aspectRatioIsAuto)
             {
                 ratio = cssRatio;
             }
@@ -705,11 +723,13 @@ namespace Rend.Layout.Internal
             }
             else if (box.StyledNode is StyledElement ratioElement)
             {
+                // GetIntrinsicRatio returns the natural ratio (svg/img/canvas/object), falling back
+                // to the `auto <ratio>` value when the element exposes no natural ratio.
                 ratio = GetIntrinsicRatio(ratioElement);
             }
             else
             {
-                ratio = 0;
+                ratio = cssRatio > 0 ? cssRatio : 0;
             }
 
             // Form controls (input, select, textarea, meter, progress) do NOT have an
